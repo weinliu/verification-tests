@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -68,6 +69,51 @@ type bridgevlanPolicyResource struct {
 	state      string
 	port       string
 	template   string
+}
+
+type bridgehostnamePolicyResource struct {
+	name       string
+	nodelabel  string
+	labelvalue string
+	ifacename  string
+	state      string
+	template   string
+}
+
+type ovnMappingPolicyResource struct {
+	name       string
+	nodelabel  string
+	labelvalue string
+	localnet1  string
+	bridge1    string
+	template   string
+}
+
+type ovsDBGlobalPolicyResource struct {
+	name       string
+	nodelabel  string
+	labelvalue string
+	ovsconfig  string
+	ovsvalue   string
+	template   string
+}
+
+type staticHostnamePolicyResource struct {
+	name       string
+	nodelabel  string
+	labelvalue string
+	hostdomain string
+	template   string
+}
+
+type staticDNSPolicyResource struct {
+	name      string
+	namespace string
+	nodeName  string
+	dnsdomain string
+	serverip1 string
+	serverip2 string
+	template  string
 }
 
 type stIPRoutePolicyResource struct {
@@ -163,7 +209,12 @@ func checkNmstateCR(oc *exutil.CLI, namespace string) (bool, error) {
 		e2e.Logf("nmstate-console-plugin pod did not transition to ready state %v", err)
 		return false, err
 	}
-	e2e.Logf("nmstate-handler, nmstate-webhook and nmstate-console-plugin pods created successfully")
+	err = waitForPodWithLabelReady(oc, namespace, "component=kubernetes-nmstate-metrics")
+	if err != nil {
+		e2e.Logf("nmstate-metrics pod did not transition to ready state %v", err)
+		return false, err
+	}
+	e2e.Logf("nmstate-handler, nmstate-webhook, nmstate-console-plugin and nmstate-metrics pods created successfully")
 	return true, nil
 }
 
@@ -221,6 +272,54 @@ func (bvpr *bridgevlanPolicyResource) configNNCP(oc *exutil.CLI) error {
 	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bvpr.template, "-p", "NAME="+bvpr.name, "NODELABEL="+bvpr.nodelabel, "LABELVALUE="+bvpr.labelvalue, "IFACENAME="+bvpr.ifacename, "DESCR="+bvpr.descr, "STATE="+bvpr.state, "PORT="+bvpr.port)
 	if err != nil {
 		e2e.Logf("Error configure bridge %v", err)
+		return err
+	}
+	return nil
+}
+
+func (bvpr *bridgehostnamePolicyResource) configNNCP(oc *exutil.CLI) error {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bvpr.template, "-p", "NAME="+bvpr.name, "NODELABEL="+bvpr.nodelabel, "LABELVALUE="+bvpr.labelvalue, "IFACENAME="+bvpr.ifacename, "STATE="+bvpr.state)
+	if err != nil {
+		e2e.Logf("Error configure bridge %v", err)
+		return err
+	}
+	return nil
+}
+
+func (bvpr *ovnMappingPolicyResource) configNNCP(oc *exutil.CLI) error {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bvpr.template, "-p", "NAME="+bvpr.name, "NODELABEL="+bvpr.nodelabel, "LABELVALUE="+bvpr.labelvalue,
+		"LOCALNET1="+bvpr.localnet1, "BRIDGE1="+bvpr.bridge1)
+	if err != nil {
+		e2e.Logf("Error configure ovnmapping %v", err)
+		return err
+	}
+	return nil
+}
+
+func (bvpr *ovsDBGlobalPolicyResource) configNNCP(oc *exutil.CLI) error {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bvpr.template, "-p", "NAME="+bvpr.name, "NODELABEL="+bvpr.nodelabel, "LABELVALUE="+bvpr.labelvalue,
+		"OVSCONFIG="+bvpr.ovsconfig, "OVSVALUE="+bvpr.ovsvalue)
+	if err != nil {
+		e2e.Logf("Error configure ovsDBGlobal %v", err)
+		return err
+	}
+	return nil
+}
+
+func (bvpr *staticHostnamePolicyResource) configNNCP(oc *exutil.CLI) error {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bvpr.template, "-p", "NAME="+bvpr.name, "NODELABEL="+bvpr.nodelabel, "LABELVALUE="+bvpr.labelvalue, "HOSTDOMAIN="+bvpr.hostdomain)
+	if err != nil {
+		e2e.Logf("Error configure staticHostname %v", err)
+		return err
+	}
+	return nil
+}
+
+func (bvpr *staticDNSPolicyResource) configNNCP(oc *exutil.CLI) error {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bvpr.template, "-p", "NAME="+bvpr.name, "NAMESPACE="+bvpr.namespace, "NODE="+bvpr.nodeName,
+		"DNSDOMAIN="+bvpr.dnsdomain, "SERVERIP1="+bvpr.serverip1, "SERVERIP2="+bvpr.serverip2)
+	if err != nil {
+		e2e.Logf("Error configure staticDNS %v", err)
 		return err
 	}
 	return nil
@@ -534,4 +633,26 @@ func getAvaliableNameServer(oc *exutil.CLI, nodeName string) string {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(output).NotTo(o.BeEmpty())
 	return output
+}
+
+func extractMetricValue(metrics string, featureNames []string, expectValues []int) bool {
+	for i, featureName := range featureNames {
+		re := regexp.MustCompile(fmt.Sprintf(`kubernetes_nmstate_features_applied{name="%s"} (\d+)`, regexp.QuoteMeta(featureName)))
+		match := re.FindStringSubmatch(metrics)
+		if len(match) < 2 {
+			e2e.Logf("Metric not found for name: %s", featureName)
+			return false
+		}
+
+		value, err := strconv.Atoi(match[1])
+		if err != nil {
+			e2e.Logf("Failed to convert value to int for name: %s, error: %v", featureName, err)
+			return false
+		}
+		if value != expectValues[i] {
+			e2e.Logf("%s Metric does not match the expected value of %d", featureName, expectValues[i])
+			return false
+		}
+	}
+	return true
 }

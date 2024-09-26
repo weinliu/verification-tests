@@ -2,6 +2,8 @@
 package networking
 
 import (
+	"fmt"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -1130,6 +1132,288 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(vlanInfo2, "Fail to reactive vlan with the original ip addresses")
+	})
+
+	g.It("Author:meinli-NonHyperShiftHOST-High-76212-Validate Metrics collection for kubernetes-nmstate [Disruptive]", func() {
+		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		o.Expect(nodeName).NotTo(o.BeEmpty())
+
+		exutil.By("1. Create NMState CR")
+		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		result, crErr := createNMStateCR(oc, nmstateCR, opNamespace)
+		exutil.AssertWaitPollNoErr(crErr, "create nmstate cr failed")
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("SUCCESS - NMState CR Created")
+
+		exutil.By("2. Configure two NNCP for creating linux-bridge with hostname")
+		policyName := "br-test"
+		bridgePolicyTemplate1 := generateTemplateAbsolutePath("bridge-with-hostname-policy-template.yaml")
+		bridgePolicy := bridgehostnamePolicyResource{
+			name:       policyName,
+			nodelabel:  "kubernetes.io/hostname",
+			labelvalue: nodeName,
+			ifacename:  "linux-br0",
+			state:      "up",
+			template:   bridgePolicyTemplate1,
+		}
+		defer deleteNNCP(oc, policyName)
+		defer func() {
+			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			if strings.Contains(ifaces, bridgePolicy.ifacename) {
+				_, err := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "delete", bridgePolicy.ifacename)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}()
+		configErr1 := bridgePolicy.configNNCP(oc)
+		o.Expect(configErr1).NotTo(o.HaveOccurred())
+		nncpErr1 := checkNNCPStatus(oc, policyName, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr1, fmt.Sprintf("%s policy applied failed", policyName))
+
+		exutil.By("3. check the metrics value with proper gauge increased")
+		featureNames := []string{"dhcpv4-custom-hostname"}
+		expectedValues := []int{1}
+		metricPod := getPodName(oc, opNamespace, "component=kubernetes-nmstate-metrics")
+		o.Expect(metricPod).ShouldNot(o.BeEmpty())
+		metricCmd := "curl http://127.0.0.1:8089/metrics | grep kubernetes_nmstate_features_applied"
+		o.Eventually(func() bool {
+			metricOutput, err := exutil.RemoteShPodWithBash(oc, opNamespace, metricPod[0], metricCmd)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return extractMetricValue(metricOutput, featureNames, expectedValues)
+		}, 10*time.Second, 2*time.Second).Should(o.BeTrue(), "Metric does not match the expected value!!")
+
+		// validate the metrics value increased to 2 after applying again
+		deleteNNCP(oc, policyName)
+		configErr2 := bridgePolicy.configNNCP(oc)
+		o.Expect(configErr2).NotTo(o.HaveOccurred())
+		nncpErr2 := checkNNCPStatus(oc, policyName, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr2, fmt.Sprintf("%s policy applied failed", policyName))
+		expectedValues = []int{2}
+		o.Eventually(func() bool {
+			metricOutput, err := exutil.RemoteShPodWithBash(oc, opNamespace, metricPod[0], metricCmd)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return extractMetricValue(metricOutput, featureNames, expectedValues)
+		}, 10*time.Second, 2*time.Second).Should(o.BeTrue(), "Metric does not match the expected value!!")
+
+		exutil.By("4. metrics value will decrease after update nncp with absent state")
+		patchCmd := `[{"op": "replace", "path": "/spec/desiredState/interfaces/0/state", "value": "absent" }]`
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("nncp", policyName, "--type=json", "-p", patchCmd).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkErr := checkNNCPStatus(oc, policyName, "Available")
+		exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("%s policy updated failed", policyName))
+
+		// check the metrics value will decrease 1
+		expectedValues = []int{1}
+		o.Eventually(func() bool {
+			metricOutput, err := exutil.RemoteShPodWithBash(oc, opNamespace, metricPod[0], metricCmd)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return extractMetricValue(metricOutput, featureNames, expectedValues)
+		}, 10*time.Second, 2*time.Second).Should(o.BeTrue(), "Metric does not match the expected value!!")
+	})
+
+	g.It("Author:meinli-NonHyperShiftHOST-High-76372-Check NMstate Features Metrics Value collection [Disruptive]", func() {
+		var (
+			buildPruningBaseDir          = exutil.FixturePath("testdata", "networking/nmstate")
+			nmstateCRTemplate            = filepath.Join(buildPruningBaseDir, "nmstate-cr-template.yaml")
+			dhcpHostnamePolicyTemplate   = filepath.Join(buildPruningBaseDir, "dhcp-hostname-policy-template.yaml")
+			lldpPolicyTemplate           = filepath.Join(buildPruningBaseDir, "lldp-policy-template.yaml")
+			ovnMappingPolicyTemplate     = filepath.Join(buildPruningBaseDir, "ovn-mapping-policy-template.yaml")
+			ovsDBGlobalPolicyTemplate    = filepath.Join(buildPruningBaseDir, "ovs-db-global-policy-template.yaml")
+			staticHostnamePolicyTemplate = filepath.Join(buildPruningBaseDir, "static-hostname-policy-template.yaml")
+			staticDNSPolicyTemplate      = filepath.Join(buildPruningBaseDir, "global-dns-nncp-template.yaml")
+			dnsClearNncpTemplate         = filepath.Join(buildPruningBaseDir, "global-dns-nncp-recover-template.yaml")
+			nodeSelectLabel              = "kubernetes.io/hostname"
+			featureNames                 = []string{"dhcpv4-custom-hostname", "dhcpv6-custom-hostname", "lldp", "ovn-mapping", "ovs-db-global",
+				"static-hostname", "static-dns-name-server", "static-dns-search"}
+			expectedValues = []int{1, 1, 1, 1, 1, 1, 1, 1}
+			ipAddr         string
+		)
+
+		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		o.Expect(nodeName).NotTo(o.BeEmpty())
+
+		exutil.By("1. Create NMState CR")
+		nmstateCR := nmstateCRResource{
+			name:     "nmstate",
+			template: nmstateCRTemplate,
+		}
+		defer deleteNMStateCR(oc, nmstateCR)
+		result, crErr := createNMStateCR(oc, nmstateCR, opNamespace)
+		exutil.AssertWaitPollNoErr(crErr, "create nmstate cr failed")
+		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("SUCCESS - NMState CR Created")
+
+		exutil.By("2. Configure NNCPs for NMstate Features")
+		exutil.By("2.1 Configure NNCP for creating DhcpCustomHostname NMstate Feature")
+		dhcpHostnamePolicy := bridgehostnamePolicyResource{
+			name:       "dhcphostname-test",
+			nodelabel:  nodeSelectLabel,
+			labelvalue: nodeName,
+			ifacename:  "dummy_dhcp",
+			state:      "up",
+			template:   dhcpHostnamePolicyTemplate,
+		}
+		defer deleteNNCP(oc, dhcpHostnamePolicy.name)
+		defer func() {
+			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			if strings.Contains(ifaces, dhcpHostnamePolicy.ifacename) {
+				_, err := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "delete", dhcpHostnamePolicy.ifacename)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}()
+		configErr1 := dhcpHostnamePolicy.configNNCP(oc)
+		o.Expect(configErr1).NotTo(o.HaveOccurred())
+		nncpErr1 := checkNNCPStatus(oc, dhcpHostnamePolicy.name, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr1, fmt.Sprintf("%s policy applied failed", dhcpHostnamePolicy.name))
+
+		exutil.By("2.2 Configure NNCP for creating Lldp NMstate Feature")
+		lldpPolicy := bridgehostnamePolicyResource{
+			name:       "lldp-test",
+			nodelabel:  nodeSelectLabel,
+			labelvalue: nodeName,
+			ifacename:  "dummy_lldp",
+			state:      "up",
+			template:   lldpPolicyTemplate,
+		}
+		defer deleteNNCP(oc, lldpPolicy.name)
+		defer func() {
+			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "show")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			if strings.Contains(ifaces, lldpPolicy.ifacename) {
+				_, err := exutil.DebugNodeWithChroot(oc, nodeName, "nmcli", "con", "delete", lldpPolicy.ifacename)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}()
+		configErr2 := lldpPolicy.configNNCP(oc)
+		o.Expect(configErr2).NotTo(o.HaveOccurred())
+		nncpErr2 := checkNNCPStatus(oc, lldpPolicy.name, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr2, fmt.Sprintf("%s policy applied failed", lldpPolicy.name))
+
+		exutil.By("2.3 Configure NNCP for creating OvnMapping NMstate Feature")
+		ovnMappingPolicy := ovnMappingPolicyResource{
+			name:       "ovnmapping-test",
+			nodelabel:  nodeSelectLabel,
+			labelvalue: nodeName,
+			localnet1:  "blue",
+			bridge1:    "ovsbr1",
+			template:   ovnMappingPolicyTemplate,
+		}
+		defer deleteNNCP(oc, ovnMappingPolicy.name)
+		defer func() {
+			ovnmapping, deferErr := exutil.DebugNodeWithChroot(oc, nodeName, "ovs-vsctl", "get", "Open_vSwitch", ".", "external_ids:ovn-bridge-mappings")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			if strings.Contains(ovnmapping, ovnMappingPolicy.localnet1) {
+				// ovs-vsctl can only use "set" to reserve some fields
+				_, err := exutil.DebugNodeWithChroot(oc, nodeName, "ovs-vsctl", "set", "Open_vSwitch", ".", "external_ids:ovn-bridge-mappings=\"physnet:br-ex\"")
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}()
+		configErr3 := ovnMappingPolicy.configNNCP(oc)
+		o.Expect(configErr3).NotTo(o.HaveOccurred())
+		nncpErr3 := checkNNCPStatus(oc, ovnMappingPolicy.name, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr3, fmt.Sprintf("%s policy applied failed", ovnMappingPolicy.name))
+
+		exutil.By("2.4 Configure NNCP for creating OvsDBGlobal NMstate Feature")
+		ovsDBGlobalPolicy := ovsDBGlobalPolicyResource{
+			name:       "ovsdbglobal-test",
+			nodelabel:  nodeSelectLabel,
+			labelvalue: nodeName,
+			ovsconfig:  "n-handler-threads",
+			ovsvalue:   "2",
+			template:   ovsDBGlobalPolicyTemplate,
+		}
+		defer deleteNNCP(oc, ovsDBGlobalPolicy.name)
+		defer func() {
+			ovsdb, deferErr := exutil.DebugNodeWithChroot(oc, nodeName, "ovs-vsctl", "get", "Open_vSwitch", ".", "other_config")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			if strings.Contains(ovsdb, ovsDBGlobalPolicy.ovsconfig) {
+				_, err := exutil.DebugNodeWithChroot(oc, nodeName, "ovs-vsctl", "remove", "Open_vSwitch", ".", "other_config", ovsDBGlobalPolicy.ovsconfig)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}()
+		configErr4 := ovsDBGlobalPolicy.configNNCP(oc)
+		o.Expect(configErr4).NotTo(o.HaveOccurred())
+		nncpErr4 := checkNNCPStatus(oc, ovsDBGlobalPolicy.name, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr4, fmt.Sprintf("%s policy applied failed", ovsDBGlobalPolicy.name))
+
+		exutil.By("2.5 Configure NNCP for creating StaticHostname NMstate Feature")
+		staticHostnamePolicy := staticHostnamePolicyResource{
+			name:       "statichostname-test",
+			nodelabel:  nodeSelectLabel,
+			labelvalue: nodeName,
+			hostdomain: nodeName,
+			template:   staticHostnamePolicyTemplate,
+		}
+		defer deleteNNCP(oc, staticHostnamePolicy.name)
+		defer func() {
+			hostname, deferErr := exutil.DebugNodeWithChroot(oc, nodeName, "hostnamectl")
+			o.Expect(deferErr).NotTo(o.HaveOccurred())
+			if !strings.Contains(hostname, nodeName) {
+				_, err := exutil.DebugNodeWithChroot(oc, nodeName, "hostnamectl", "set-hostname", nodeName)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}()
+		configErr5 := staticHostnamePolicy.configNNCP(oc)
+		o.Expect(configErr5).NotTo(o.HaveOccurred())
+		ncpErr5 := checkNNCPStatus(oc, staticHostnamePolicy.name, "Available")
+		exutil.AssertWaitPollNoErr(ncpErr5, fmt.Sprintf("%s policy applied failed", staticHostnamePolicy.name))
+
+		exutil.By("2.6 Configure NNCP for creating StaticDNS NMstate Feature")
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" || ipStackType == "ipv6single" {
+			ipAddr = "2003::3"
+		}
+		if ipStackType == "ipv4single" {
+			ipAddr = "8.8.8.8"
+		}
+
+		dnsServerIP1 := getAvaliableNameServer(oc, nodeName)
+		staticDNSPolicy := staticDNSPolicyResource{
+			name:      "staticdns-test",
+			nodeName:  nodeName,
+			dnsdomain: "example.com",
+			serverip1: dnsServerIP1,
+			serverip2: ipAddr,
+			template:  staticDNSPolicyTemplate,
+		}
+		defer deleteNNCP(oc, staticDNSPolicy.name)
+		defer func() {
+			//configure nncp with empty dns server to clear configuration
+			nncpDns_clear := networkingRes{
+				name:      "dns-" + getRandomString(),
+				namespace: opNamespace,
+				kind:      "NodeNetworkConfigurationPolicy",
+				tempfile:  dnsClearNncpTemplate,
+			}
+			nncpDns_clear.create(oc, "NAME="+nncpDns_clear.name, "NAMESPACE="+nncpDns_clear.namespace, "NODE="+nodeName)
+			nncpErr1 := checkNNCPStatus(oc, nncpDns_clear.name, "Available")
+			exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
+			e2e.Logf("SUCCESS - policy is applied")
+
+			removeResource(oc, true, true, nncpDns_clear.kind, nncpDns_clear.name, "-n", nncpDns_clear.namespace)
+		}()
+		configErr6 := staticDNSPolicy.configNNCP(oc)
+		o.Expect(configErr6).NotTo(o.HaveOccurred())
+		ncpErr6 := checkNNCPStatus(oc, staticDNSPolicy.name, "Available")
+		exutil.AssertWaitPollNoErr(ncpErr6, fmt.Sprintf("%s policy applied failed", staticDNSPolicy.name))
+
+		exutil.By("3. Check Metrics value for above NMstate Features")
+		metricPod := getPodName(oc, opNamespace, "component=kubernetes-nmstate-metrics")
+		o.Expect(metricPod).ShouldNot(o.BeEmpty())
+		metricCmd := "curl http://127.0.0.1:8089/metrics | grep kubernetes_nmstate_features_applied"
+		o.Eventually(func() bool {
+			metricOutput, err := exutil.RemoteShPodWithBash(oc, opNamespace, metricPod[0], metricCmd)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return extractMetricValue(metricOutput, featureNames, expectedValues)
+		}, 10*time.Second, 2*time.Second).Should(o.BeTrue(), "Metric does not match the expected value!!")
 	})
 })
 
