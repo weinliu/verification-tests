@@ -46,6 +46,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 
 		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform) // Scale up using 4.1 is only supported in AWS. GCP is only supported in versions 4.6+
 		skipTestIfFIPSIsEnabled(oc.AsAdmin())                  // fips was supported for the first time in 4.3, hence it is not supported to scale 4.1 and 4.2 base images in clusters with fips=true
+		architecture.SkipNonAmd64SingleArch(oc)                // arm64 is not supported until 4.12
 
 		// Apply workaround
 		// Because of https://issues.redhat.com/browse/OCPBUGS-27273 this test case fails when the cluster has imagecontentsourcepolicies
@@ -107,7 +108,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		)
 
 		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform) // Scale up using 4.5 is only supported for AWS. GCP is only supported in versions 4.6+
-
+		architecture.SkipNonAmd64SingleArch(oc)                // arm64 is not supported until 4.12
 		initialNumWorkers := len(wMcp.GetNodesOrFail())
 
 		defer func() {

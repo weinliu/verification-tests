@@ -1189,6 +1189,8 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		mcp, nodes := GetPoolAndNodesForArchitectureOrFail(oc.AsAdmin(), createdCustomPoolName, architecture.ARM64, 1)
 		node := nodes[0]
 
+		mcp.SetWaitingTimeForKernelChange() // Increase waiting time
+
 		// Create a MC to use 64k-pages kernel
 		exutil.By("Create machine config to enable 64k-pages kernel")
 		mcName64k := fmt.Sprintf("tc-67789-64k-pages-kernel-%s", mcp.GetName())
@@ -1217,9 +1219,11 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 		layeringMcName := fmt.Sprintf("tc-67789-layering-64kpages-%s", mcp.GetName())
 		layeringMC := NewMachineConfig(oc.AsAdmin(), layeringMcName, mcp.GetName())
 		layeringMC.parameters = []string{"OS_IMAGE=" + digestedImage}
+		layeringMC.skipWaitForMcp = true
 
 		defer layeringMC.deleteNoWait()
 		layeringMC.create()
+		mcp.waitForComplete()
 		logger.Infof("OK!\n")
 
 		// Check that the expected (zsh+64k-pages kernel) rpms are installed

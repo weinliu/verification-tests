@@ -4009,6 +4009,7 @@ nulla pariatur.`
 
 		exutil.By("Wait for configurations to be applied in worker pool")
 		wMcp.waitForComplete()
+		infraMcp.waitForComplete()
 		logger.Infof("OK!\n")
 
 		logger.Infof("Create first infra KubeletConfig")
