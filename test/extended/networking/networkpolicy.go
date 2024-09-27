@@ -1049,7 +1049,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 
 	})
 	// author: asood@redhat.com
-	g.It("NonPreRelease-Longduration-Author:asood-Medium-41080-Check network policy ACL audit messages are logged to journald", func() {
+	g.It("Author:asood-NonPreRelease-Longduration-Medium-41080-V-BR.10-Check network policy ACL audit messages are logged to journald", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			allowFromSameNS     = filepath.Join(buildPruningBaseDir, "networkpolicy/allow-from-same-namespace.yaml")

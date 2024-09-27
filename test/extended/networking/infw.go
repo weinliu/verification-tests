@@ -76,7 +76,7 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 
 	})
 
-	g.It("Author:anusaxen-High-54714-Check Ingress Firewall Allow/Deny functionality for TCP via Nodeport svc [Serial][Disruptive]", func() {
+	g.It("Author:anusaxen-High-54714-V-BR.53-Check Ingress Firewall Allow/Deny functionality for TCP via Nodeport svc [Serial][Disruptive]", func() {
 		var (
 			buildPruningBaseDir           = exutil.FixturePath("testdata", "networking")
 			testDataDirInfw               = exutil.FixturePath("testdata", "networking/ingressnodefirewall")
@@ -246,7 +246,7 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 
 	})
 
-	g.It("Author:anusaxen-High-54992-Check Ingress Firewall Allow/Deny functionality for UDP via Nodeport svc [Serial]", func() {
+	g.It("Author:anusaxen-High-54992-V-BR.53-Check Ingress Firewall Allow/Deny functionality for UDP via Nodeport svc [Serial]", func() {
 		var (
 			buildPruningBaseDir           = exutil.FixturePath("testdata", "networking")
 			testDataDirInfw               = exutil.FixturePath("testdata", "networking/ingressnodefirewall")
@@ -406,7 +406,7 @@ var _ = g.Describe("[sig-networking] SDN infw", func() {
 
 	})
 
-	g.It("Author:anusaxen-ROSA-High-55411-Check Ingress Firewall Allow/Deny functionality for ICMP [Serial]", func() {
+	g.It("Author:anusaxen-ROSA-High-55411-V-BR.53-Check Ingress Firewall Allow/Deny functionality for ICMP [Serial]", func() {
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
 			testDataDirInfw        = exutil.FixturePath("testdata", "networking/ingressnodefirewall")
