@@ -224,6 +224,11 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 				msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", cmUrl).Output()
 				o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("issue applying podvm image configmap %v: %v, %v", cmUrl, msg, err))
 				patchPodvmEnableGPU(oc, opNamespace, cmName, "yes")
+				if cloudPlatform == "azure" {
+					msg, err = oc.AsAdmin().Run("patch").Args("configmap", cmName, "-n", opNamespace, "--type", "merge",
+						"--patch", "{\"data\":{\"IMAGE_GALLERY_NAME\":\"ginkgo"+getRandomString()+"\"}}").Output()
+					o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not patch IMAGE_GALLERY_NAME\n error: %v %v", msg, err))
+				}
 			}
 		}
 		// should check kataconfig here & already have checked subscription
