@@ -74,6 +74,10 @@ export const Pages = {
   gotoDeploymentConfigDetailsTab: (namespace: string, dcname: string)=> {
     cy.visit(`/k8s/ns/${namespace}/deploymentconfigs/${dcname}`);
   },
+  gotoPodsList: () => {
+    cy.visit('/k8s/all-namespaces/core~v1~Pod');
+    listPage.rows.shouldBeLoaded();
+  },
   gotoOneContainerPage: (namespace, podname, containername) => {
     cy.visit(`/k8s/ns/${namespace}/pods/${podname}/containers/${containername}`);
   },
