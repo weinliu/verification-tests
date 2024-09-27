@@ -1558,4 +1558,26 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		e2e.Logf("gpus:%s", gpus)
 		o.Expect(strings.Contains(gpus, "Tesla T4 compute")).To(o.BeTrue())
 	})
+
+	// author: huliu@redhat.com
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-76366-[MAPI] Allow creating Nutanix VMs with multiple disks [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Nutanix)
+		g.By("Create a new machineset")
+		machinesetName := infrastructureName + "-76366"
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+		g.By("Update machineset with data disks")
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"dataDisks":[{"deviceProperties":{"deviceType":"Disk","adapterType":"SCSI","deviceIndex":1},"diskSize":"1Gi","storageConfig":{"diskMode":"Standard"}}]}}}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+
+		g.By("Check machine with data disks")
+		dataDisks, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.dataDisks}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("dataDisks:%s", dataDisks)
+		o.Expect(strings.Contains(dataDisks, "SCSI")).To(o.BeTrue())
+	})
 })
