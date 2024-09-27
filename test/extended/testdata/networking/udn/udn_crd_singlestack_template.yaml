@@ -15,7 +15,7 @@ objects:
       mtu: ${{MTU}}
       subnets:
       - cidr: "${CIDR}"
-        hostsubnet: ${{PREFIX}}
+        hostSubnet: ${{PREFIX}}
 parameters:
 - name: CRDNAME
 - name: NAMESPACE

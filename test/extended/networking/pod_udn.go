@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -1870,5 +1871,58 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 				o.Expect(strings.Contains(pingResponse, "0% packet loss")).To(o.BeTrue())
 			}
 		}
+	})
+
+	g.It("Author:meinli-High-75995-Verify pods failed status when NAD subnets overlapping with UDN default join subnet value(Layer3)", func() {
+		var (
+			buildPruningBaseDir                   = exutil.FixturePath("testdata", "networking")
+			udnCRDSingleStack                     = filepath.Join(buildPruningBaseDir, "udn/udn_crd_singlestack_template.yaml")
+			udnPodTemplate                        = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
+			UserDefinedPrimaryNetworkJoinSubnetV4 = "100.65.0.0/16"
+		)
+
+		ipStackType := checkIPStackType(oc)
+		exutil.By("1. Create namespace")
+		ns := oc.Namespace()
+
+		if ipStackType == "ipv6single" {
+			g.Skip("This case is not suitable for IPv6, as cluster subnet length must be shorter than host subnet length and IPv6 host subnet only support 64. Skip it!")
+		}
+
+		exutil.By("2. Create CRD for UDN")
+		var udncrd udnCRDResource
+		udncrd = udnCRDResource{
+			crdname:   "udn-network-75995",
+			namespace: ns,
+			role:      "Primary",
+			mtu:       1400,
+			cidr:      UserDefinedPrimaryNetworkJoinSubnetV4,
+			prefix:    24,
+			template:  udnCRDSingleStack,
+		}
+		udncrd.createUdnCRDSingleStack(oc)
+		err := waitUDNCRDApplied(oc, ns, udncrd.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3. Create a udn hello pod in ns")
+		pod := udnPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			label:     "hello-pod",
+			template:  udnPodTemplate,
+		}
+		pod.createUdnPod(oc)
+
+		exutil.By("4. Check pod status")
+		o.Consistently(func() string {
+			podStatus, _ := getPodStatus(oc, ns, pod.name)
+			return podStatus
+		}, 20*time.Second, 5*time.Second).Should(o.Equal("Pending"), fmt.Sprintf("Pod: %s should not be in Running state", pod.name))
+
+		// pod description should report an error about ovn
+		o.Eventually(func() string {
+			podDescribe := describePod(oc, pod.namespace, pod.name)
+			return podDescribe
+		}, 20*time.Second, 5*time.Second).Should(o.ContainSubstring(UserDefinedPrimaryNetworkJoinSubnetV4), "UDN default Join Subnet IPv4 isn't in the pod description")
 	})
 })

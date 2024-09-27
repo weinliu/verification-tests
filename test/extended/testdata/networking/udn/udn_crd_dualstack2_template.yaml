@@ -15,9 +15,9 @@ objects:
       mtu: ${{MTU}}
       subnets:
       - cidr: "${IPv4CIDR}"
-        hostsubnet: ${{IPv4PREFIX}}
+        hostSubnet: ${{IPv4PREFIX}}
       - cidr: "${IPv6CIDR}"
-        hostsubnet: ${{IPv6PREFIX}}
+        hostSubnet: ${{IPv6PREFIX}}
 parameters:
 - name: CRDNAME
 - name: NAMESPACE
