@@ -165,4 +165,30 @@ machineautoscalers.autoscaling.openshift.io`
 		}
 
 	})
+
+	// author: miyadav@redhat.com
+	g.It("Author:miyadav-NonHyperShiftHOST-High-76187-Add Paused condition to Machine and MachineSet resources", func() {
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Azure, clusterinfra.OpenStack, clusterinfra.VSphere, clusterinfra.AWS, clusterinfra.GCP)
+
+		featuregate, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if featuregate != "{}" {
+			if strings.Contains(featuregate, "TechPreviewNoUpgrade") {
+				g.Skip("This case is only suitable for non-techpreview cluster!")
+			} else if strings.Contains(featuregate, "CustomNoUpgrade") {
+				g.By("Check if MachineAPIMigration enabled, project openshift-cluster-api exists")
+				project, err := oc.AsAdmin().WithoutNamespace().Run("project").Args(clusterAPINamespace).Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if strings.Contains(project, "Now using project \"openshift-cluster-api\" on server") {
+					machinesetauthpritativeAPI, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, "-n", machineAPINamespace, "-o=jsonpath={.items[0].status.conditions[0]}").Output()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(strings.Contains(machinesetauthpritativeAPI, "\"AuthoritativeAPI is set to MachineAPI\",\"severity\":\"The AuthoritativeAPI is set to %%s\",\"status\":\"False\",\"type\":\"Paused\"")).To(o.BeTrue())
+				}
+			}
+		} else {
+			g.Skip("This case is only suitable for non-techpreview cluster with Mapimigration enabled !")
+		}
+	})
+
 })
