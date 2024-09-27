@@ -1658,6 +1658,11 @@ func gatherSosreports(fqdnName string, user string, sosReportCmd string, tmpdir 
 }
 
 func clusterSanityCheck(oc *exutil.CLI) error {
+	var (
+		project_ns    = exutil.GetRandomString()
+		errCreateProj error
+	)
+
 	statusNode, errNode := getResource(oc, asAdmin, withoutNamespace, "node")
 	if errNode != nil {
 		e2e.Logf("Error fetching Node Status: %s :: %s", statusNode, errNode.Error())
@@ -1676,14 +1681,14 @@ func clusterSanityCheck(oc *exutil.CLI) error {
 		}
 	}
 
-	project_ns := exutil.GetRandomString()
-	errCreateProj := oc.AsAdmin().WithoutNamespace().Run("new-project").Args(project_ns, "--skip-config-write").Execute()
-	if errCreateProj != nil {
-		e2e.Logf("Error creating project %s: %s", project_ns, errCreateProj.Error())
-		if strings.ContainsAny(errCreateProj.Error(), "the server is currently unable to handle the request") {
-			status, _ := getResource(oc, asAdmin, withoutNamespace, "co")
-			e2e.Logf("cluster Operators Status :: %s", status)
-		}
+	// retry to create new project to avoid transient ServiceUnavailable of openshift-apiserver
+	o.Eventually(func() bool {
+		errCreateProj = oc.AsAdmin().WithoutNamespace().Run("new-project").Args(project_ns, "--skip-config-write").Execute()
+		return errCreateProj == nil
+	}, 9*time.Second, 3*time.Second).Should(o.BeTrue(), fmt.Sprintf("Failed to create project %s with error %v", project_ns, errCreateProj))
+	if errCreateProj != nil && strings.ContainsAny(errCreateProj.Error(), "the server is currently unable to handle the request") {
+		status, _ := getResource(oc, asAdmin, withoutNamespace, "co")
+		e2e.Logf("cluster Operators Status :: %s", status)
 	}
 
 	errDeleteProj := oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", project_ns, "--ignore-not-found").Execute()
@@ -1692,7 +1697,7 @@ func clusterSanityCheck(oc *exutil.CLI) error {
 	}
 
 	if errCO != nil || errCreateProj != nil || errDeleteProj != nil {
-		return fmt.Errorf("Cluster sanity check failed")
+		return fmt.Errorf("cluster sanity check failed")
 	}
 
 	e2e.Logf("Cluster sanity check passed")
