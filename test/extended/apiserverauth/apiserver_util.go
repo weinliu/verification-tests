@@ -1804,3 +1804,38 @@ func kasOperatorCheckForStep(oc *exutil.CLI, preConfigKasStatus map[string]strin
 		}
 	}
 }
+
+// createSecretsWithQuotaValidation creates secrets until the quota is reached
+func createSecretsWithQuotaValidation(oc *exutil.CLI, namespace, clusterQuotaName string, crqLimits map[string]string, caseID string) {
+	// Step 1: Retrieve current secret count
+	secretCount, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", `jsonpath={.status.namespaces[*].status.used.secrets}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	usedCount, _ := strconv.Atoi(secretCount)
+	limits, _ := strconv.Atoi(crqLimits["secrets"])
+	steps := 1
+
+	// Step 2: Create secrets and check if quota limit is reached
+	for i := usedCount; i <= limits; i++ {
+		secretName := fmt.Sprintf("%v-secret-%d", caseID, steps)
+		e2e.Logf("Creating secret %s", secretName)
+
+		// Attempt to create the secret
+		output, err := oc.Run("create").Args("-n", namespace, "secret", "generic", secretName).Output()
+
+		// Step 3: Expect failure when reaching the quota limit
+		if i < limits {
+			output1, _ := oc.Run("get").Args("-n", namespace, "secret").Output()
+			e2e.Logf("Get total secrets created to debug :: %s", output1)
+			o.Expect(err).NotTo(o.HaveOccurred()) // Expect success before quota is reached
+		} else {
+			// Expect the specific "exceeded quota" error message
+			if err != nil && strings.Contains(output, "secrets.*forbidden: exceeded quota") {
+				e2e.Logf("Quota limit reached, as expected.")
+			} else {
+				o.Expect(err).To(o.HaveOccurred()) // Fail if any other error occurs
+			}
+		}
+		steps++
+	}
+}

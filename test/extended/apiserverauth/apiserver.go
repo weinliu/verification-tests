@@ -3815,28 +3815,14 @@ EOF`, dcpolicyrepo)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("3) Create multiple secrets to test created ClusterResourceQuota, expect failure for secrets creations that exceed quota limit")
-		secretCount, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", `jsonpath={.status.namespaces[*].status.used.secrets}`).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		usedCount, _ := strconv.Atoi(secretCount)
-		limits, _ := strconv.Atoi(crqLimits["secrets"])
-		steps := 1
-		for i := usedCount; i <= limits; i++ {
-			secretName := fmt.Sprintf("%v-secret-%d", caseID, steps)
-			exutil.By(fmt.Sprintf("3.%d) creating secret %s", steps, secretName))
-			output, err := oc.Run("create").Args("-n", namespace, "secret", "generic", secretName).Output()
-			if i < limits {
-				o.Expect(err).NotTo(o.HaveOccurred())
-			} else {
-				o.Expect(output).To(o.MatchRegexp("secrets.*forbidden: exceeded quota"))
-			}
-			steps += 1
-		}
+		// Run the function to create secrets
+		createSecretsWithQuotaValidation(oc, namespace, clusterQuotaName, crqLimits, caseID)
 
 		exutil.By("4) Create few pods before upgrade to check ClusterResourceQuota, Remaining Quota pod will create after upgrade.")
 		podsCount, err := oc.Run("get").Args("-n", namespace, "clusterresourcequota", clusterQuotaName, "-o", `jsonpath={.status.namespaces[*].status.used.pods}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		existingPodCount, _ := strconv.Atoi(podsCount)
-		limits, _ = strconv.Atoi(crqLimits["pods"])
+		limits, _ := strconv.Atoi(crqLimits["pods"])
 		podTemplate := getTestDataFilePath("ocp54745-pod.yaml")
 		for i := existingPodCount; i < limits-2; i++ {
 			podname := fmt.Sprintf("%v-pod-%d", caseID, i)
