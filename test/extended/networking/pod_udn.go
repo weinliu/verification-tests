@@ -45,95 +45,36 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 		oc.SetupProject()
 		ns2 := oc.Namespace()
 
+		nadResourcename := []string{"l3-network-" + ns1, "l3-network-" + ns2}
+		nadNS := []string{ns1, ns2}
+		var subnet []string
 		if ipStackType == "ipv4single" {
-			g.By("create NAD for ns1")
-			nad1 := udnNetDefResource{
-				nadname:             "l3-network-" + ns1,
-				namespace:           ns1,
-				nad_network_name:    "l3-network-" + ns1,
-				topology:            "layer3",
-				subnet:              "10.150.0.0/16/24",
-				mtu:                 mtu,
-				net_attach_def_name: ns1 + "/l3-network-" + ns1,
-				role:                "primary",
-				template:            udnNadtemplate,
-			}
-			nad1.createUdnNad(oc)
-
-			g.By("create NAD for ns2")
-			nad2 := udnNetDefResource{
-				nadname:             "l3-network-" + ns2,
-				namespace:           ns2,
-				nad_network_name:    "l3-network-" + ns2,
-				topology:            "layer3",
-				subnet:              "10.151.0.0/16/24",
-				mtu:                 mtu,
-				net_attach_def_name: ns2 + "/l3-network-" + ns2,
-				role:                "primary",
-				template:            udnNadtemplate,
-			}
-			nad2.createUdnNad(oc)
-
+			subnet = []string{"10.150.0.0/16/24", "10.151.0.0/16/24"}
 		} else {
 			if ipStackType == "ipv6single" {
-				g.By("create NAD for ns1")
-				nad1 := udnNetDefResource{
-					nadname:             "l3-network-" + ns1,
-					namespace:           ns1,
-					nad_network_name:    "l3-network-" + ns1,
-					topology:            "layer3",
-					subnet:              "2010:100:200::0/60",
-					mtu:                 mtu,
-					net_attach_def_name: ns1 + "/l3-network-" + ns1,
-					role:                "primary",
-					template:            udnNadtemplate,
-				}
-				nad1.createUdnNad(oc)
-
-				g.By("create NAD for ns2")
-				nad2 := udnNetDefResource{
-					nadname:             "l3-network-" + ns2,
-					namespace:           ns2,
-					nad_network_name:    "l3-network-" + ns2,
-					topology:            "layer3",
-					subnet:              "2011:100:200::0/60",
-					mtu:                 mtu,
-					net_attach_def_name: ns2 + "/l3-network-" + ns2,
-					role:                "primary",
-					template:            udnNadtemplate,
-				}
-				nad2.createUdnNad(oc)
-
+				subnet = []string{"2010:100:200::0/60", "2011:100:200::0/60"}
 			} else {
-				g.By("create NAD for ns1")
-				nad1 := udnNetDefResource{
-					nadname:             "l3-network-" + ns1,
-					namespace:           ns1,
-					nad_network_name:    "l3-network-" + ns1,
-					topology:            "layer3",
-					subnet:              "10.150.0.0/16/24,2010:100:200::0/60",
-					mtu:                 mtu,
-					net_attach_def_name: ns1 + "/l3-network-" + ns1,
-					role:                "primary",
-					template:            udnNadtemplate,
-				}
-				nad1.createUdnNad(oc)
-
-				g.By("create NAD for ns2")
-				nad2 := udnNetDefResource{
-					nadname:             "l3-network-" + ns2,
-					namespace:           ns2,
-					nad_network_name:    "l3-network-" + ns2,
-					topology:            "layer3",
-					subnet:              "10.151.0.0/16/24,2011:100:200::0/60",
-					mtu:                 mtu,
-					net_attach_def_name: ns2 + "/l3-network-" + ns2,
-					role:                "primary",
-					template:            udnNadtemplate,
-				}
-				nad2.createUdnNad(oc)
+				subnet = []string{"10.150.0.0/16/24,2010:100:200::0/60", "10.151.0.0/16/24,2011:100:200::0/60"}
 			}
 		}
+
+		nad := make([]udnNetDefResource, 2)
+		for i := 0; i < 2; i++ {
+			exutil.By(fmt.Sprintf("create NAD %s in namespace %s", nadResourcename[i], nadNS[i]))
+			nad[i] = udnNetDefResource{
+				nadname:             nadResourcename[i],
+				namespace:           nadNS[i],
+				nad_network_name:    nadResourcename[i],
+				topology:            "layer3",
+				subnet:              subnet[i],
+				mtu:                 mtu,
+				net_attach_def_name: nadNS[i] + "/" + nadResourcename[i],
+				role:                "primary",
+				template:            udnNadtemplate,
+			}
+			nad[i].createUdnNad(oc)
+		}
+
 		g.By("create a udn hello pod in ns1")
 		pod1 := udnPodResource{
 			name:      "hello-pod-ns1",
@@ -177,95 +118,36 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 		oc.SetupProject()
 		ns2 := oc.Namespace()
 
+		nadResourcename := []string{"l3-network-" + ns1, "l3-network-" + ns2}
+		nadNS := []string{ns1, ns2}
+		var subnet []string
 		if ipStackType == "ipv4single" {
-			g.By("create NAD for ns1")
-			nad1 := udnNetDefResource{
-				nadname:             "l3-network-" + ns1,
-				namespace:           ns1,
-				nad_network_name:    "l3-network-" + ns1,
-				topology:            "layer3",
-				subnet:              "10.150.0.0/16/24",
-				mtu:                 mtu,
-				net_attach_def_name: ns1 + "/l3-network-" + ns1,
-				role:                "primary",
-				template:            udnNadtemplate,
-			}
-			nad1.createUdnNad(oc)
-
-			g.By("create NAD for ns2")
-			nad2 := udnNetDefResource{
-				nadname:             "l3-network-" + ns2,
-				namespace:           ns2,
-				nad_network_name:    "l3-network-" + ns1, //network name is same as in ns1
-				topology:            "layer3",
-				subnet:              "10.150.0.0/16/24",
-				mtu:                 mtu,
-				net_attach_def_name: ns2 + "/l3-network-" + ns2,
-				role:                "primary",
-				template:            udnNadtemplate,
-			}
-			nad2.createUdnNad(oc)
-
+			subnet = []string{"10.150.0.0/16/24", "10.150.0.0/16/24"}
 		} else {
 			if ipStackType == "ipv6single" {
-				g.By("create NAD for ns1")
-				nad1 := udnNetDefResource{
-					nadname:             "l3-network-" + ns1,
-					namespace:           ns1,
-					nad_network_name:    "l3-network-" + ns1,
-					topology:            "layer3",
-					subnet:              "2010:100:200::0/60",
-					mtu:                 mtu,
-					net_attach_def_name: ns1 + "/l3-network-" + ns1,
-					role:                "primary",
-					template:            udnNadtemplate,
-				}
-				nad1.createUdnNad(oc)
-
-				g.By("create NAD for ns2")
-				nad2 := udnNetDefResource{
-					nadname:             "l3-network-" + ns2,
-					namespace:           ns2,
-					nad_network_name:    "l3-network-" + ns1, //network name is same as in ns1
-					topology:            "layer3",
-					subnet:              "2010:100:200::0/60",
-					mtu:                 mtu,
-					net_attach_def_name: ns2 + "/l3-network-" + ns2,
-					role:                "primary",
-					template:            udnNadtemplate,
-				}
-				nad2.createUdnNad(oc)
-
+				subnet = []string{"2010:100:200::0/60", "2010:100:200::0/60"}
 			} else {
-				g.By("create NAD for ns1")
-				nad1 := udnNetDefResource{
-					nadname:             "l3-network-" + ns1,
-					namespace:           ns1,
-					nad_network_name:    "l3-network-" + ns1,
-					topology:            "layer3",
-					subnet:              "10.150.0.0/16/24,2010:100:200::0/60",
-					mtu:                 mtu,
-					net_attach_def_name: ns1 + "/l3-network-" + ns1,
-					role:                "primary",
-					template:            udnNadtemplate,
-				}
-				nad1.createUdnNad(oc)
-
-				g.By("create NAD for ns2")
-				nad2 := udnNetDefResource{
-					nadname:             "l3-network-" + ns2,
-					namespace:           ns2,
-					nad_network_name:    "l3-network-" + ns1, //network name is same as in ns1
-					topology:            "layer3",
-					subnet:              "10.150.0.0/16/24,2010:100:200::0/60",
-					mtu:                 mtu,
-					net_attach_def_name: ns2 + "/l3-network-" + ns2,
-					role:                "primary",
-					template:            udnNadtemplate,
-				}
-				nad2.createUdnNad(oc)
+				subnet = []string{"10.150.0.0/16/24,2010:100:200::0/60", "10.150.0.0/16/24,2010:100:200::0/60"}
 			}
 		}
+
+		nad := make([]udnNetDefResource, 2)
+		for i := 0; i < 2; i++ {
+			exutil.By(fmt.Sprintf("create NAD %s in namespace %s", nadResourcename[i], nadNS[i]))
+			nad[i] = udnNetDefResource{
+				nadname:             nadResourcename[i],
+				namespace:           nadNS[i],
+				nad_network_name:    "l3-network-ns1", //Keeping same nad network name across all which is l3-network-ns1
+				topology:            "layer3",
+				subnet:              subnet[i],
+				mtu:                 mtu,
+				net_attach_def_name: nadNS[i] + "/" + nadResourcename[i],
+				role:                "primary",
+				template:            udnNadtemplate,
+			}
+			nad[i].createUdnNad(oc)
+		}
+
 		g.By("create a udn hello pod in ns1")
 		pod1 := udnPodResource{
 			name:      "hello-pod-ns1",
@@ -1924,5 +1806,123 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 			podDescribe := describePod(oc, pod.namespace, pod.name)
 			return podDescribe
 		}, 20*time.Second, 5*time.Second).Should(o.ContainSubstring(UserDefinedPrimaryNetworkJoinSubnetV4), "UDN default Join Subnet IPv4 isn't in the pod description")
+	})
+
+	g.It("Author:anusaxen-Critical-75984-Check udn pods isolation on user defined networks post OVN gateway migration", func() {
+		var (
+			udnNadtemplate       = filepath.Join(testDataDirUDN, "udn_nad_template.yaml")
+			udnPodTemplate       = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
+			mtu            int32 = 1300
+		)
+
+		ipStackType := checkIPStackType(oc)
+
+		g.By("1. Create first namespace")
+		ns1 := oc.Namespace()
+
+		g.By("2. Create 2nd namespace")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+		g.By("3. Create 3rd namespace")
+		oc.SetupProject()
+		ns3 := oc.Namespace()
+
+		g.By("4. Create 4th namespace")
+		oc.SetupProject()
+		ns4 := oc.Namespace()
+
+		nadResourcename := []string{"l3-network-" + ns1, "l3-network-" + ns2, "l2-network-" + ns3, "l2-network-" + ns4}
+		nadNS := []string{ns1, ns2, ns3, ns4}
+		topo := []string{"layer3", "layer3", "layer2", "layer2"}
+
+		var subnet []string
+		if ipStackType == "ipv4single" {
+			subnet = []string{"10.150.0.0/16/24", "10.151.0.0/16/24", "10.152.0.0/16", "10.153.0.0/16"}
+		} else {
+			if ipStackType == "ipv6single" {
+				subnet = []string{"2010:100:200::0/60", "2011:100:200::0/60", "2012:100:200::0/60", "2013:100:200::0/60"}
+			} else {
+				subnet = []string{"10.150.0.0/16/24,2010:100:200::0/60", "10.151.0.0/16/24,2011:100:200::0/60", "10.152.0.0/16,2012:100:200::0/60", "10.153.0.0/16,2013:100:200::0/60"}
+			}
+		}
+
+		nad := make([]udnNetDefResource, 4)
+		for i := 0; i < 4; i++ {
+			exutil.By(fmt.Sprintf("create NAD %s in namespace %s", nadResourcename[i], nadNS[i]))
+			nad[i] = udnNetDefResource{
+				nadname:             nadResourcename[i],
+				namespace:           nadNS[i],
+				nad_network_name:    nadResourcename[i],
+				topology:            topo[i],
+				subnet:              subnet[i],
+				mtu:                 mtu,
+				net_attach_def_name: nadNS[i] + "/" + nadResourcename[i],
+				role:                "primary",
+				template:            udnNadtemplate,
+			}
+			nad[i].createUdnNad(oc)
+		}
+
+		pod := make([]udnPodResource, 4)
+		for i := 0; i < 4; i++ {
+			g.By("create a udn hello pods in ns1 ns2 ns3 and ns4")
+			pod[i] = udnPodResource{
+				name:      "hello-pod",
+				namespace: nadNS[i],
+				label:     "hello-pod",
+				template:  udnPodTemplate,
+			}
+			pod[i].createUdnPod(oc)
+			waitPodReady(oc, pod[i].namespace, pod[i].name)
+		}
+
+		g.By("create another udn hello pod in ns1 to ensure layer3 conectivity post migration among'em")
+		pod_ns1 := udnPodResource{
+			name:      "hello-pod-ns1",
+			namespace: nadNS[0],
+			label:     "hello-pod",
+			template:  udnPodTemplate,
+		}
+		pod_ns1.createUdnPod(oc)
+		waitPodReady(oc, pod_ns1.namespace, pod_ns1.name)
+
+		g.By("create another udn hello pod in ns3 to ensure layer2 conectivity post migration among'em")
+		pod_ns3 := udnPodResource{
+			name:      "hello-pod-ns3",
+			namespace: nadNS[2],
+			label:     "hello-pod",
+			template:  udnPodTemplate,
+		}
+		pod_ns3.createUdnPod(oc)
+		waitPodReady(oc, pod_ns3.namespace, pod_ns3.name)
+
+		//need to find out original mode cluster is on so that we can revert back to same post test
+		var desiredMode string
+		origMode := getOVNGatewayMode(oc)
+		if origMode == "local" {
+			desiredMode = "shared"
+		} else {
+			desiredMode = "local"
+		}
+		e2e.Logf("Cluster is currently on gateway mode %s", origMode)
+		e2e.Logf("Desired mode is %s", desiredMode)
+
+		defer switchOVNGatewayMode(oc, origMode)
+		switchOVNGatewayMode(oc, desiredMode)
+
+		//udn network connectivity for layer3 should be isolated
+		CurlPod2PodFailUDN(oc, ns1, pod[0].name, ns2, pod[1].name)
+		//default network connectivity for layer3 should also be isolated
+		CurlPod2PodFail(oc, ns1, pod[0].name, ns2, pod[1].name)
+
+		//udn network connectivity for layer2 should be isolated
+		CurlPod2PodFailUDN(oc, ns3, pod[2].name, ns4, pod[3].name)
+		//default network connectivity for layer2 should also be isolated
+		CurlPod2PodFail(oc, ns3, pod[2].name, ns4, pod[3].name)
+
+		//ensure udn network connectivity for layer3 should be there
+		CurlPod2PodPassUDN(oc, ns1, pod[0].name, ns1, pod_ns1.name)
+		//ensure udn network connectivity for layer2 should be there
+		CurlPod2PodPassUDN(oc, ns3, pod[2].name, ns3, pod_ns3.name)
 	})
 })
