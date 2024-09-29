@@ -76,6 +76,13 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 		allCoreOsNodes := NewNodeList(oc).GetAllCoreOsNodesOrFail()
 		for _, node := range allCoreOsNodes {
+			// Some tests are intermittently leaking a "NoExecute" taint in the nodes. When it happens this test case fails because the "debug" pod cannot run in nodes with this taint
+			// In order to avoid this instability we make sure that we only check nodes where the "debug" pod can run
+			if node.HasTaintEffectOrFail("NoExecute") {
+				logger.Infof("Node %s is tainted with 'NoExecute'. Validation skipped.", node.GetName())
+				continue
+			}
+
 			exutil.By(fmt.Sprintf("check authorized key dir and file on %s", node.GetName()))
 			o.Eventually(func(gm o.Gomega) {
 				output, err := node.DebugNodeWithChroot("stat", oldAuthorizedKeyPath)
