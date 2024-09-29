@@ -231,7 +231,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: hongli@redhat.com
-	g.It("Author:hongli-High-75439-AWS CLB supports to choose subnets", func() {
+	g.It("Author:hongli-NonHyperShiftHOST-High-75439-AWS CLB supports to choose subnets", func() {
 		g.By("Pre-flight check for the platform type")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 
@@ -278,7 +278,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: hongli@redhat.com
-	g.It("Author:hongli-High-75440-AWS NLB supports to choose subnets", func() {
+	g.It("Author:hongli-NonHyperShiftHOST-High-75440-AWS NLB supports to choose subnets", func() {
 		g.By("Pre-flight check for the platform type")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 
@@ -329,5 +329,183 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		findAnnotation := getAnnotation(oc, ns, "service", "router-"+ingctrl.name)
 		e2e.Logf("all annotations are: %v", findAnnotation)
 		o.Expect(findAnnotation).To(o.ContainSubstring("service.beta.kubernetes.io/aws-load-balancer-subnets\":\"" + strings.Replace(strings.Join(publicSubnetList, ","), "\"", "", -1)))
+	})
+
+	g.It("Author:mjoseph-NonHyperShiftHOST-ROSA-OSD_CCS-High-75499-Allocating and updating EIPs on AWS NLB cluster", func() {
+		g.By("Pre-flight check for the platform type")
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-clb.yaml")
+		ns := "openshift-ingress"
+		var (
+			ingctrl = ingressControllerDescription{
+				name:      "ocp75499",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		exutil.By("1. Create the required elastic address")
+		var eipAllocationsList []string
+		defer ensureReleaseElaticIP(oc, &eipAllocationsList)
+		eipAllocationsList = allocateElaticIP(oc)
+		e2e.Logf("The allocated eip list is %s ", eipAllocationsList)
+
+		exutil.By("2. Create another set of elastic address")
+		var eipAllocationsList1 []string
+		defer ensureReleaseElaticIP(oc, &eipAllocationsList1)
+		eipAllocationsList1 = allocateElaticIP(oc)
+		e2e.Logf("The allocated second eip list is %s ", eipAllocationsList1)
+
+		exutil.By("3. Create the custom ingresscontroller with NLB")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		// Updating LB type from `Classic` to `NLB` in the yaml file
+		sedCmd := fmt.Sprintf(`sed -i'' -e 's|Classic|NLB|g' %s`, customTemp)
+		_, err := exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("4. Patch the custom ingresscontroller with the EIPs")
+		jsonPatch := fmt.Sprintf(`{"spec":{"endpointPublishingStrategy":{"type":"LoadBalancerService","loadBalancer":{"providerParameters":{"type":"AWS","aws":{"type":"NLB","networkLoadBalancer":{"eipAllocations":["%s"]}}}}}}}`, strings.Join(eipAllocationsList, "\",\""))
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, jsonPatch)
+
+		exutil.By("5: Ensure the status of ingress operator which is degraded with the below message")
+		jsonPath := `{.status.conditions[?(@.type=="Available")].status}{.status.conditions[?(@.type=="Progressing")].status}{.status.conditions[?(@.type=="Degraded")].status}`
+		waitForOutput(oc, ingctrl.namespace, "co/ingress", jsonPath, "TrueTrueFalse")
+		waitForOutput(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, `{.status.conditions[?(@.type == "Progressing")].message}`, "To effectuate this change, you must delete the service")
+
+		exutil.By("6. Delete the LB svc manually and check controller availability")
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "service", "router-"+ingctrl.name).Execute()
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("7. Ensure the eip annotation is added and ingress LB svc is provisioned")
+		findAnnotation := getAnnotation(oc, ns, "service", "router-"+ingctrl.name)
+		o.Expect(findAnnotation).To(o.ContainSubstring("service.beta.kubernetes.io/aws-load-balancer-eip-allocations\":\"" + strings.Replace(strings.Join(eipAllocationsList, ","), "\"", "", -1)))
+		externalLB := getByJsonPath(oc, ns, "service/router-"+ingctrl.name, "{.status.loadBalancer.ingress}")
+		o.Expect(externalLB).To(o.MatchRegexp(`"hostname":.*elb.*amazonaws.com`))
+
+		exutil.By("8: Ensure the status of ingress operator is not degraded")
+		waitForOutput(oc, ingctrl.name, "co/ingress", jsonPath, "TrueFalseFalse")
+
+		exutil.By("9:Patch the controller with a new set of EIP and observer the status of ingress operator is again degraded with the below message")
+		jsonPatch1 := fmt.Sprintf(`{"spec":{"endpointPublishingStrategy":{"type":"LoadBalancerService","loadBalancer":{"providerParameters":{"type":"AWS","aws":{"type":"NLB","networkLoadBalancer":{"eipAllocations":["%s"]}}}}}}}`, strings.Join(eipAllocationsList1, "\",\""))
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, jsonPatch1)
+		waitForOutput(oc, ingctrl.namespace, "co/ingress", jsonPath, "TrueTrueFalse")
+		waitForOutput(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, `{.status.conditions[?(@.type == "Progressing")].message}`, "To effectuate this change, you must delete the service")
+
+		exutil.By("10. Again delete the LB svc manually and check controller availability")
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "service", "router-"+ingctrl.name).Execute()
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("11. Ensure the new eip annotation is added and ingress LB svc is provisioned")
+		findAnnotation1 := getAnnotation(oc, ns, "service", "router-"+ingctrl.name)
+		o.Expect(findAnnotation1).To(o.ContainSubstring("service.beta.kubernetes.io/aws-load-balancer-eip-allocations\":\"" + strings.Replace(strings.Join(eipAllocationsList1, ","), "\"", "", -1)))
+		newExternalLB := getByJsonPath(oc, ns, "service/router-"+ingctrl.name, "{.status.loadBalancer.ingress}")
+		o.Expect(newExternalLB).To(o.MatchRegexp(`"hostname":.*elb.*amazonaws.com`))
+
+		exutil.By("12: Ensure the status of ingress operator is now working fine")
+		waitForOutput(oc, ingctrl.name, "co/ingress", jsonPath, "TrueFalseFalse")
+	})
+
+	g.It("Author:mjoseph-NonHyperShiftHOST-ROSA-OSD_CCS-High-75617-Update with 'auto-delete-loadbalancer' annotation and unmanaged EIP allocation annotation on AWS NLB cluster", func() {
+		g.By("Pre-flight check for the platform type")
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-clb.yaml")
+		ns := "openshift-ingress"
+
+		var (
+			ingctrl = ingressControllerDescription{
+				name:      "ocp75617one",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrl2 = ingressControllerDescription{
+				name:      "ocp75617two",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		exutil.By("1. Create the required elastic address")
+		var eipAllocationsList []string
+		defer ensureReleaseElaticIP(oc, &eipAllocationsList)
+		eipAllocationsList = allocateElaticIP(oc)
+		e2e.Logf("The allocated eip list is %s ", eipAllocationsList)
+
+		exutil.By("2. Create the custom ingresscontroller with NLB")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		// Updating LB type from `Classic` to `NLB` in the yaml file
+		sedCmd := fmt.Sprintf(`sed -i'' -e 's|Classic|NLB|g' %s`, customTemp)
+		_, err := exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("3. Annotate and patch the custom ingresscontroller, enabling LB svc to be auto deleted")
+		setAnnotationAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, `ingress.operator.openshift.io/auto-delete-load-balancer=`)
+		jsonPatch := fmt.Sprintf(`{"spec":{"endpointPublishingStrategy":{"type":"LoadBalancerService","loadBalancer":{"providerParameters":{"type":"AWS","aws":{"type":"NLB","networkLoadBalancer":{"eipAllocations":["%s"]}}}}}}}`, strings.Join(eipAllocationsList, "\",\""))
+		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, jsonPatch)
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("4. Ensure the ingress LB svc is provisioned and eip annotation is added")
+		externalLB := getByJsonPath(oc, ns, "service/router-"+ingctrl.name, "{.status.loadBalancer.ingress}")
+		o.Expect(externalLB).To(o.MatchRegexp(`"hostname":.*elb.*amazonaws.com`))
+		findAnnotation := getAnnotation(oc, ns, "service", "router-"+ingctrl.name)
+		o.Expect(findAnnotation).To(o.ContainSubstring("service.beta.kubernetes.io/aws-load-balancer-eip-allocations\":\"" + strings.Replace(strings.Join(eipAllocationsList, ","), "\"", "", -1)))
+
+		exutil.By("5: Ensure the status of ingress operator is not degraded")
+		jsonPath := `{.status.conditions[?(@.type=="Available")].status}{.status.conditions[?(@.type=="Progressing")].status}{.status.conditions[?(@.type=="Degraded")].status}`
+		waitForOutput(oc, ingctrl.name, "co/ingress", jsonPath, "TrueFalseFalse")
+
+		exutil.By("6. Create a new set of elastic address")
+		var eipAllocationsList1 []string
+		defer ensureReleaseElaticIP(oc, &eipAllocationsList1)
+		eipAllocationsList1 = allocateElaticIP(oc)
+		e2e.Logf("The allocated second eip list is %s ", eipAllocationsList1)
+
+		exutil.By("7. Create another custom ingresscontroller with NLB")
+		ingctrl2.domain = ingctrl2.name + "." + baseDomain
+		defer ingctrl2.delete(oc)
+		ingctrl2.create(oc)
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl2.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl2.name))
+
+		exutil.By("8. Set an EIP annotation on the LB service directly")
+		setAnnotationAsAdmin(oc, ns, "svc/router-"+ingctrl2.name, `service.beta.kubernetes.io/aws-load-balancer-eip-allocations=`+strings.Join(eipAllocationsList1, ","))
+		findAnnotation1 := getAnnotation(oc, ns, "service", "router-"+ingctrl2.name)
+		o.Expect(findAnnotation1).To(o.ContainSubstring(`"service.beta.kubernetes.io/aws-load-balancer-eip-allocations":"` + strings.Join(eipAllocationsList1, ",") + "\""))
+
+		exutil.By("9: Ensure the status of ingress operator is degraded with the below message")
+		waitForOutput(oc, ingctrl2.namespace, "co/ingress", jsonPath, "TrueTrueFalse")
+		waitForOutput(oc, ingctrl2.namespace, "ingresscontroller/"+ingctrl2.name, `{.status.conditions[?(@.type == "Progressing")].message}`, "To effectuate this change, you must delete the service")
+
+		exutil.By("10. Patch the custom ingresscontroller with same EIP values")
+		jsonPatch2 := fmt.Sprintf(`{"spec":{"endpointPublishingStrategy":{"type":"LoadBalancerService","loadBalancer":{"providerParameters":{"type":"AWS","aws":{"type":"NLB","networkLoadBalancer":{"eipAllocations":["%s"]}}}}}}}`, strings.Join(eipAllocationsList1, "\",\""))
+		patchResourceAsAdmin(oc, ingctrl2.namespace, "ingresscontroller/"+ingctrl2.name, jsonPatch2)
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl2.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl2.name))
+
+		exutil.By("11. Ensure the ingress LB svc is provisioned")
+		externalLB2 := getByJsonPath(oc, ns, "service/router-"+ingctrl2.name, "{.status.loadBalancer.ingress}")
+		o.Expect(externalLB2).To(o.MatchRegexp(`"hostname":.*elb.*amazonaws.com`))
+
+		exutil.By("12: Ensure the status of ingress operator is not degraded after the patching")
+		waitForOutput(oc, ingctrl2.name, "co/ingress", jsonPath, "TrueFalseFalse")
 	})
 })

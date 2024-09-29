@@ -5,14 +5,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ec2"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -253,4 +259,49 @@ func clearUpAlbOnStsCluster(oc *exutil.CLI) {
 	deleteNamespace(oc, ns)
 	// delete the credentialsrequest for ALB operator
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("credentialsrequest", "aws-load-balancer-operator", "-n", "openshift-cloud-credential-operator", "--ignore-not-found").Execute()
+}
+
+// Create as many as Elatic IPs as number of subnets that are attached to the load balancer
+func allocateElaticIP(oc *exutil.CLI) []string {
+	var eipAllocationsList []string
+	// get the aws region and subnet length
+	subnetLen := len(getPrivateSubnetList(oc))
+	clusterinfra.GetAwsCredentialFromCluster(oc)
+	mySession := session.Must(session.NewSession())
+	// Create an EC2 service client.
+	svc := ec2.New(mySession)
+	for i := 0; i < subnetLen; i++ {
+		// Attempt to allocate the Elastic IP address.
+		allocRes, err := svc.AllocateAddress(&ec2.AllocateAddressInput{Domain: aws.String("vpc")})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The eip allocation details for the %v element is %v", i, allocRes)
+		eipAllocationsList = append(eipAllocationsList, *allocRes.AllocationId)
+	}
+	return eipAllocationsList
+}
+
+// Delete the Elastic IP
+func ensureReleaseElaticIP(oc *exutil.CLI, eipList *[]string) {
+	var eipAllocationsList []string = *eipList
+	clusterinfra.GetAwsCredentialFromCluster(oc)
+	awsSession := session.Must(session.NewSession())
+	// Create an EC2 service client.
+	svc := ec2.New(awsSession)
+	for i := range eipAllocationsList {
+		waitErr := wait.Poll(10*time.Second, 150*time.Second, func() (bool, error) {
+			// Attempt to release the Elastic IP address.
+			_, err := svc.ReleaseAddress(&ec2.ReleaseAddressInput{AllocationId: aws.String(eipAllocationsList[i])})
+			if err != nil {
+				if aerr, ok := err.(awserr.Error); ok && aerr.Code() == "AuthFailure" {
+					e2e.Logf("Try again as EIP allocation %s is not yet released", eipAllocationsList[i])
+				} else {
+					e2e.Logf("Error releasing EIP %s: %v, keep polling", eipAllocationsList[i], err)
+				}
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time, but unable to delete the EIP %s", eipAllocationsList[i]))
+		e2e.Logf("EIP allocation %s is released", eipAllocationsList[i])
+	}
 }

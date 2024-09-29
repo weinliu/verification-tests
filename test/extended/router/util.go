@@ -379,6 +379,12 @@ func setAnnotation(oc *exutil.CLI, ns, resource, annotation string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+// this function will set the annotation for the given resource
+func setAnnotationAsAdmin(oc *exutil.CLI, ns, resource, annotation string) {
+	err := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("-n", ns, resource, annotation, "--overwrite").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 // this function will read the annotation from the given resource
 func getAnnotation(oc *exutil.CLI, ns, resource, resourceName string) string {
 	findAnnotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
@@ -1823,9 +1829,27 @@ func checkDomainReachability(oc *exutil.CLI, podName, ns, domainName string, pas
 	}
 }
 
+// Check whether the given cluster is a byo vpc cluster
+func isByoVpcCluster(oc *exutil.CLI) bool {
+	jsonPath := `{.items[*].spec.template.spec.providerSpec.value.subnet.id}`
+	subnet, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+		"-n", "openshift-machine-api", "machinesets.machine.openshift.io", "-o=jsonpath="+jsonPath).Output()
+	if len(subnet) > 0 {
+		e2e.Logf("This is a byo vpc cluster")
+		return true
+	}
+	return false
+}
+
 // get all private subnets from machinesets
+// this function will not work on Hypershift cluster
 func getPrivateSubnetList(oc *exutil.CLI) []string {
-	jsonPath := `{.items[*].spec.template.spec.providerSpec.value.subnet.filters[].values[]}`
+	var jsonPath string
+	if isByoVpcCluster(oc) {
+		jsonPath = `{.items[*].spec.template.spec.providerSpec.value.subnet.id}`
+	} else {
+		jsonPath = `{.items[*].spec.template.spec.providerSpec.value.subnet.filters[].values[]}`
+	}
 	privateSubnets := getByJsonPath(oc, "openshift-machine-api", "machinesets.machine.openshift.io", jsonPath)
 	privateSubnetList := strings.Split(privateSubnets, " ")
 	e2e.Logf("The private subnet list from machinesets is: %v", privateSubnetList)
