@@ -209,5 +209,18 @@ func (mcc Controller) GetPreviousLogs() (string, error) {
 		return "", err
 	}
 
-	return NewNamespacedResource(mcc.oc, "pod", MachineConfigNamespace, cachedPodName).Logs("-p")
+	prevLogs, err := NewNamespacedResource(mcc.oc, "pod", MachineConfigNamespace, cachedPodName).Logs("-p")
+	if err != nil {
+		exitError, ok := err.(*exutil.ExitError)
+		if ok {
+			if strings.Contains(exitError.StdErr, "not found") {
+				logger.Infof("There was no previous pod for %s", cachedPodName)
+				return "", nil
+			}
+			logger.Infof("An execution error happened, but was not expected: %s", exitError.StdErr)
+		}
+		logger.Infof("Unexpected error while getting MCC previous logs: %s", err)
+		return prevLogs, err
+	}
+	return prevLogs, nil
 }

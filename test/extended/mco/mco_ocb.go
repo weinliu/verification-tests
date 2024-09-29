@@ -186,7 +186,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
         RUN dnf install -y epel-release
 
         # Pull an image containing the yq utility.
-        FROM docker.io/mikefarah/yq:latest AS yq
+        FROM quay.io/multi-arch/yq:4.25.3 AS yq
 
         # Build the final OS image for this MachineConfigPool.
         FROM configs AS final

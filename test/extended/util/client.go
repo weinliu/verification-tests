@@ -878,7 +878,7 @@ func (c *CLI) Outputs() (string, string, error) {
 		return stdOut, stdErr, nil
 	case *exec.ExitError:
 		e2e.Logf("Error running %v:\nStdOut>\n%s\nStdErr>\n%s\n", cmd, stdOut, stdErr)
-		return stdOut, stdErr, err
+		return stdOut, stdErr, &ExitError{ExitError: err.(*exec.ExitError), Cmd: c.execPath + " " + strings.Join(c.finalArgs, " "), StdErr: stdErr}
 	default:
 		FatalErr(fmt.Errorf("unable to execute %q: %v", c.execPath, err))
 		// unreachable code
