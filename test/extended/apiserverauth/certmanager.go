@@ -19,6 +19,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	gcpcrm "google.golang.org/api/cloudresourcemanager/v1"
 	gcpiam "google.golang.org/api/iam/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -1567,6 +1568,105 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		err = waitForResourceReadiness(oc, sharedNamespace, "certificate", acmeCertName, 10*time.Second, 300*time.Second)
 		if err != nil {
 			dumpResource(oc, sharedNamespace, "certificate", acmeCertName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
+	})
+
+	// author: yuewu@redhat.com
+	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-65028-Vault issuer should work well when authenticating with Vault AppRole", func() {
+		const (
+			vaultReleaseName = "vault-65028"
+			vaultRoleName    = "cert-manager"
+			vaultSecretName  = "cert-manager-vault-approle"
+			issuerName       = "issuer-vault-approle"
+			certName         = "cert-from-issuer-vault-approle"
+		)
+
+		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
+		vaultPodName, _ := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
+
+		exutil.By("configure auth with Vault AppRole")
+		cmd := fmt.Sprintf(`vault auth enable approle && vault write auth/approle/role/%s token_policies="cert-manager" token_ttl=1h token_max_ttl=4h`, vaultRoleName)
+		_, err := exutil.RemoteShPod(oc, oc.Namespace(), vaultPodName, "sh", "-c", cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd = fmt.Sprintf(`vault read -format=json auth/approle/role/%s/role-id`, vaultRoleName)
+		output, err := exutil.RemoteShPod(oc, oc.Namespace(), vaultPodName, "sh", "-c", cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		vaultRoleId := gjson.Get(output, "data.role_id").String()
+		cmd = fmt.Sprintf(`vault write -format=json -force auth/approle/role/%s/secret-id`, vaultRoleName)
+		output, err = exutil.RemoteShPod(oc, oc.Namespace(), vaultPodName, "sh", "-c", cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		vaultSecretId := gjson.Get(output, "data.secret_id").String()
+
+		exutil.By("create the auth secret")
+		oc.NotShowInfo()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", oc.Namespace(), "secret", "generic", vaultSecretName, "--from-literal=secretId="+vaultSecretId).Execute()
+		oc.SetShowInfo()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("create an issuer using Vault AppRole")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+		issuerFile := filepath.Join(buildPruningBaseDir, "issuer-vault-approle.yaml")
+		params := []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "VAULT_SERVICE=" + vaultReleaseName, "VAULT_NAMESPACE=" + oc.Namespace(), "ROLE_ID=" + vaultRoleId, "SECRET_NAME=" + vaultSecretName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", issuerName, 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "issuer", issuerName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
+
+		exutil.By("create a certificate")
+		certFile := filepath.Join(buildPruningBaseDir, "cert-from-vault.yaml")
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
+	})
+
+	// author: yuewu@redhat.com
+	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-65029-Vault issuer should work well when authenticating with Vault token", func() {
+		const (
+			vaultReleaseName = "vault-65029"
+			vaultSecretName  = "cert-manager-vault-token"
+			issuerName       = "issuer-vault-token"
+			certName         = "cert-from-issuer-vault-token"
+		)
+
+		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
+		vaultPodName, vaultToken := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
+
+		exutil.By("configure auth with Vault token")
+		cmd := fmt.Sprintf(`vault token create -policy=cert-manager -ttl=720h`)
+		_, err := exutil.RemoteShPod(oc, oc.Namespace(), vaultPodName, "sh", "-c", cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("create the auth secret")
+		oc.NotShowInfo()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", oc.Namespace(), "secret", "generic", vaultSecretName, "--from-literal=token="+vaultToken).Execute()
+		oc.SetShowInfo()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("create an issuer using Vault token")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+		issuerFile := filepath.Join(buildPruningBaseDir, "issuer-vault-token.yaml")
+		params := []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "VAULT_SERVICE=" + vaultReleaseName, "VAULT_NAMESPACE=" + oc.Namespace(), "SECRET_NAME=" + vaultSecretName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", issuerName, 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "issuer", issuerName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
+
+		exutil.By("create a certificate")
+		certFile := filepath.Join(buildPruningBaseDir, "cert-from-vault.yaml")
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 	})

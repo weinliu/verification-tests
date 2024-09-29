@@ -317,8 +317,6 @@ func createIssuer(oc *exutil.CLI, ns string) {
 	issuerFile := filepath.Join(buildPruningBaseDir, "issuer-selfsigned.yaml")
 	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "-f", issuerFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
-
-	e2e.Logf("wait for the selfsigned issuer to become Ready")
 	err = waitForResourceReadiness(oc, ns, "issuer", "default-selfsigned", 10*time.Second, 120*time.Second)
 	if err != nil {
 		dumpResource(oc, ns, "issuer", "default-selfsigned", "-o=yaml")
@@ -333,8 +331,6 @@ func createCertificate(oc *exutil.CLI, ns string) {
 	certFile := filepath.Join(buildPruningBaseDir, "cert-selfsigned.yaml")
 	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "-f", certFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
-
-	e2e.Logf("wait for the selfsigned certificate to become Ready")
 	err = waitForResourceReadiness(oc, ns, "certificate", "default-selfsigned-cert", 10*time.Second, 300*time.Second)
 	if err != nil {
 		dumpResource(oc, ns, "certificate", "default-selfsigned-cert", "-o=yaml")
@@ -691,4 +687,165 @@ func waitForPodsToBeRedeployed(oc *exutil.CLI, namespace, label string, oldPodLi
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(statusErr, fmt.Sprintf("timed out after %v waiting all pods to be redeployed", timeout))
+}
+
+// setupVaultServer setups a single pod in-cluster Vault server and enable PKI secrets engine, returns server pod name and root token
+func setupVaultServer(oc *exutil.CLI, ns string, release string) (string, string) {
+	var (
+		issuerName           = "default-ca"
+		certName             = "vault-server-cert"
+		configMapName        = "helm-vault-tls-config"
+		installerSA          = "vault-installer-sa"
+		installerRolebinding = "vault-installer-binding-" + ns
+		installerPodName     = "vault-installer"
+		vaultPodLabel        = "app.kubernetes.io/name=vault"
+	)
+
+	e2e.Logf("=> perpare TLS certs to secure HTTPS traffic of Vault server")
+	createIssuer(oc, ns)
+	createCertificate(oc, ns)
+
+	e2e.Logf("create a CA issuer")
+	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+	issuerFile := filepath.Join(buildPruningBaseDir, "issuer-ca.yaml")
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "-f", issuerFile).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = waitForResourceReadiness(oc, ns, "issuer", issuerName, 10*time.Second, 120*time.Second)
+	if err != nil {
+		dumpResource(oc, ns, "issuer", issuerName, "-o=yaml")
+	}
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
+
+	e2e.Logf("create a certificate using the CA issuer")
+	certFile := filepath.Join(buildPruningBaseDir, "cert-selfsigned-vault.yaml")
+	params := []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "VAULT_SERVICE=" + release, "VAULT_NAMESPACE=" + ns, "ISSUER_NAME=" + issuerName}
+	exutil.ApplyNsResourceFromTemplate(oc, ns, params...)
+	err = waitForResourceReadiness(oc, ns, "certificate", certName, 10*time.Second, 300*time.Second)
+	if err != nil {
+		dumpResource(oc, ns, "certificate", certName, "-o=yaml")
+	}
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
+
+	e2e.Logf("=> create a pod to install Vault through Helm charts")
+	// store the Helm values regarding Vault TLS config into a configmap
+	helmConfigFile := filepath.Join(buildPruningBaseDir, "helm-vault-tls-config.yaml")
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "configmap", configMapName, "--from-file=custom-values.yaml="+helmConfigFile).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	// install a standalone TLS-enabled Vault with agent injector service disabled
+	cmd := fmt.Sprintf(`helm repo add hashicorp https://helm.releases.hashicorp.com && helm install %s hashicorp/vault -n %s --set injector.enabled=false --set global.openshift=true --values /helm/custom-values.yaml`, release, ns)
+	helmHelperFile := filepath.Join(buildPruningBaseDir, "exec-helm-helper.yaml")
+	params = []string{"-f", helmHelperFile, "-p", "SA_NAME=" + installerSA, "ROLEBINDING_NAME=" + installerRolebinding, "POD_NAME=" + installerPodName, "HELM_CMD=" + cmd, "CONFIGMAP_NAME=" + configMapName, "NAMESPACE=" + ns}
+	exutil.ApplyClusterResourceFromTemplate(oc, params...)
+	defer func() {
+		e2e.Logf("cleanup created clusterrolebinding resource")
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding", installerRolebinding).Execute()
+	}()
+	// wait for Vault installer pod completed
+	// TODO(yuewu): need to address potential error caused by Docker's image pull rate limit: https://docs.docker.com/docker-hub/download-rate-limit/
+	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(context.Context) (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "pod", installerPodName).Output()
+		if strings.Contains(output, "Completed") {
+			e2e.Logf("Vault installer pod completed successfully")
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		e2e.Logf("Dumping Vault installer pod...")
+		oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "pod", installerPodName, "-o=jsonpath={.status}").Execute()
+		oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ns, installerPodName, "--tail=10").Execute()
+	}
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for Vault installer pod completed")
+	// wait for Vault server pod to show up
+	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(context.Context) (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "pod", "-l", vaultPodLabel).Output()
+		if strings.Contains(output, "Running") && strings.Contains(output, "0/1") {
+			e2e.Logf("Vault server pod is up and running (waiting for unseal to become ready)")
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for Vault server pod to show up")
+
+	e2e.Logf("=> retrieve vault server pod name")
+	vaultPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "pod", "-l", vaultPodLabel, "-o=jsonpath={.items[0].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	e2e.Logf("=> init and unseal Vault")
+	// init Vault with one key share and one key threshold
+	cmd = fmt.Sprintf(`vault operator init -key-shares=1 -key-threshold=1 -format=json`)
+	output, err := exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	vaultUnsealKey := gjson.Get(output, "unseal_keys_b64.0").String()
+	vaultRootToken := gjson.Get(output, "root_token").String()
+	// unseal Vault with the VAULT_UNSEAL_KEY
+	cmd = fmt.Sprintf(`vault operator unseal -format=json %s`, vaultUnsealKey)
+	oc.NotShowInfo()
+	output, err = exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
+	oc.SetShowInfo()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	version := gjson.Get(output, "version").String()
+
+	// wait for Vault server pod to become ready
+	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(context.Context) (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "pod", vaultPodName).Output()
+		if strings.Contains(output, "Running") && strings.Contains(output, "1/1") {
+			e2e.Logf("Vault server pod is ready")
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for Vault server pod to become ready")
+	e2e.Logf("Vault server setup successfully! (version %s)", version)
+
+	e2e.Logf("=> configure Vault as a PKI secrets engine")
+	// login to Vault with the VAULT_ROOT_TOKEN
+	cmd = fmt.Sprintf(`vault login %s`, vaultRootToken)
+	oc.NotShowInfo()
+	_, err = exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
+	oc.SetShowInfo()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	// enable the PKI secrets engine and create a root CA
+	cmd = fmt.Sprintf(`vault secrets enable pki && vault secrets tune -max-lease-ttl=8760h pki && vault write -field=certificate pki/root/generate/internal common_name="cert-manager-issuer-root" issuer_name="vault-root" ttl=8760h`)
+	_, err = exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	// configure the CRL and CA endpoints
+	cmd = fmt.Sprintf(`vault write pki/config/urls issuing_certificates="https://%s.%s:8200/v1/pki/ca" crl_distribution_points="https://%s.%s:8200/v1/pki/crl"`, release, ns, release, ns)
+	_, err = exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	// create an intermediate CA
+	cmd = fmt.Sprintf(`vault secrets enable -path=pki_int pki && vault secrets tune -max-lease-ttl=2160h pki_int`)
+	_, err = exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	cmd = fmt.Sprintf(`vault write -format=json pki_int/intermediate/generate/internal common_name="cert-manager-issuer-int" issuer_name="vault-int" ttl=2160h`)
+	output, err = exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	pkiIntermediateCSR := gjson.Get(output, "data.csr").String()
+	cmd = fmt.Sprintf(`echo "%s" > /tmp/pki_intermediate.csr`, pkiIntermediateCSR)
+	_, err = exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	// sign the intermediate certificate with the root CA private key
+	cmd = fmt.Sprintf(`vault write -format=json pki/root/sign-intermediate issuer_ref="vault-root" csr=@/tmp/pki_intermediate.csr format=pem_bundle ttl=2160h`)
+	output, err = exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	intCertPemData := gjson.Get(output, "data.certificate").String()
+	cmd = fmt.Sprintf(`echo "%s" > /tmp/intermediate.cert.pem`, intCertPemData)
+	_, err = exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	cmd = fmt.Sprintf(`vault write pki_int/intermediate/set-signed certificate=@/tmp/intermediate.cert.pem`)
+	_, err = exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	// create a role that enables to create certificates with any commonName or dnsNames for test simplicity
+	cmd = fmt.Sprintf(`vault write pki_int/roles/cluster-dot-local require_cn=false allow_any_name=true max_ttl=720h`)
+	_, err = exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	// create a policy that enables needed permission to the PKI secrets engine paths
+	cmd = fmt.Sprintf(`vault policy write cert-manager - <<EOF
+path "pki_int/sign/cluster-dot-local"    { capabilities = ["update"] }
+EOF`)
+	_, err = exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	e2e.Logf("Vault PKI engine configured successfully!")
+	return vaultPodName, vaultRootToken
 }
