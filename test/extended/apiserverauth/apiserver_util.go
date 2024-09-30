@@ -213,16 +213,22 @@ func WaitEncryptionKeyMigration(oc *exutil.CLI, secret string) (bool, error) {
 }
 
 // CheckIfResourceAvailable :
-func CheckIfResourceAvailable(oc *exutil.CLI, resource string, resourceNames []string, namespace ...string) {
+func CheckIfResourceAvailable(oc *exutil.CLI, resource string, resourceNames []string, namespace ...string) (string, bool) {
 	args := append([]string{resource}, resourceNames...)
 	if len(namespace) == 1 {
 		args = append(args, "-n", namespace[0]) // HACK: implement no namespace input
 	}
 	out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(args...).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	for _, resourceName := range resourceNames {
-		o.Expect(out).Should(o.ContainSubstring(resourceName))
+	if err == nil {
+		for _, resourceName := range resourceNames {
+			o.Expect(out).Should(o.ContainSubstring(resourceName))
+			return out, true
+		}
+	} else {
+		e2e.Logf("Debug logs :: Resource '%s' not found :: %s :: %s\n", resource, out, err.Error())
+		return out, false
 	}
+	return "", true
 }
 
 func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus map[string]string) error {

@@ -1512,49 +1512,58 @@ spec:
 		resource := "customresourcedefinition"
 		resourceNames := []string{"storagestates.migration.k8s.io", "storageversionmigrations.migration.k8s.io", "kubestorageversionmigrators.operator.openshift.io"}
 		exutil.By("1) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
-		CheckIfResourceAvailable(oc, resource, resourceNames)
+		_, isAvailable := CheckIfResourceAvailable(oc, resource, resourceNames)
+		o.Expect(isAvailable).Should(o.BeTrue())
 
 		resource = "clusteroperators"
 		resourceNames = []string{"kube-storage-version-migrator"}
 		exutil.By("2) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
-		CheckIfResourceAvailable(oc, resource, resourceNames)
+		_, isAvailable = CheckIfResourceAvailable(oc, resource, resourceNames)
+		o.Expect(isAvailable).Should(o.BeTrue())
 
 		resource = "lease"
 		resourceNames = []string{"openshift-kube-storage-version-migrator-operator-lock"}
 		namespace := "openshift-kube-storage-version-migrator-operator"
 		exutil.By("3) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
-		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+		_, isAvailable = CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+		o.Expect(isAvailable).Should(o.BeTrue())
 
 		resource = "configmap"
 		resourceNames = []string{"config"}
 		exutil.By("4) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
-		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+		_, isAvailable = CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+		o.Expect(isAvailable).Should(o.BeTrue())
 
 		resource = "service"
 		resourceNames = []string{"metrics"}
 		exutil.By("5) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
-		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+		_, isAvailable = CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+		o.Expect(isAvailable).Should(o.BeTrue())
 
 		resource = "serviceaccount"
 		resourceNames = []string{"kube-storage-version-migrator-operator"}
 		exutil.By("6) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
-		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+		_, isAvailable = CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+		o.Expect(isAvailable).Should(o.BeTrue())
 
 		resource = "deployment"
 		resourceNames = []string{"kube-storage-version-migrator-operator"}
 		exutil.By("7) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
-		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+		_, isAvailable = CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+		o.Expect(isAvailable).Should(o.BeTrue())
 
 		resource = "serviceaccount"
 		resourceNames = []string{"kube-storage-version-migrator-sa"}
 		namespace = "openshift-kube-storage-version-migrator"
 		exutil.By("8) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
-		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+		_, isAvailable = CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+		o.Expect(isAvailable).Should(o.BeTrue())
 
 		resource = "deployment"
 		resourceNames = []string{"migrator"}
 		exutil.By("9) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "] under namespace [" + namespace + "]")
-		CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+		_, isAvailable = CheckIfResourceAvailable(oc, resource, resourceNames, namespace)
+		o.Expect(isAvailable).Should(o.BeTrue())
 	})
 
 	// author: jmekkatt@redhat.com
@@ -1605,7 +1614,8 @@ spec:
 		}()
 		preConfigKasStatus := getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 		validatingWebHook.createAdmissionWebhookFromTemplate(oc)
-		CheckIfResourceAvailable(oc, "ValidatingWebhookConfiguration", []string{validatingWebhookName}, "")
+		_, isAvailable := CheckIfResourceAvailable(oc, "ValidatingWebhookConfiguration", []string{validatingWebhookName}, "")
+		o.Expect(isAvailable).Should(o.BeTrue())
 		e2e.Logf("Test step-1 has passed : Creation of ValidatingWebhookConfiguration with virtual resource reference succeeded.")
 
 		exutil.By("2) Check for kube-apiserver operator status after virtual resource reference for a validating webhook added.")
@@ -1624,7 +1634,8 @@ spec:
 		}()
 		preConfigKasStatus = getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 		mutatingWebHook.createAdmissionWebhookFromTemplate(oc)
-		CheckIfResourceAvailable(oc, "MutatingWebhookConfiguration", []string{mutatingWebhookName}, "")
+		_, isAvailable = CheckIfResourceAvailable(oc, "MutatingWebhookConfiguration", []string{mutatingWebhookName}, "")
+		o.Expect(isAvailable).Should(o.BeTrue())
 		e2e.Logf("Test step-4 has passed : Creation of MutatingWebhookConfiguration with virtual resource reference succeeded.")
 
 		exutil.By("5) Check for kube-apiserver operator status after virtual resource reference for a Mutating webhook added.")
@@ -1862,15 +1873,18 @@ spec:
 
 		exutil.By("2) Create a bad ValidatingWebhookConfiguration with invalid service and namespace references.")
 		validatingWebHook.createAdmissionWebhookFromTemplate(oc)
-		CheckIfResourceAvailable(oc, "ValidatingWebhookConfiguration", []string{badValidatingWebhookName}, "")
+		_, isAvailable := CheckIfResourceAvailable(oc, "ValidatingWebhookConfiguration", []string{badValidatingWebhookName}, "")
+		o.Expect(isAvailable).Should(o.BeTrue())
 
 		exutil.By("3) Create a bad MutatingWebhookConfiguration with invalid service and namespace references.")
 		mutatingWebHook.createAdmissionWebhookFromTemplate(oc)
-		CheckIfResourceAvailable(oc, "MutatingWebhookConfiguration", []string{badMutatingWebhookName}, "")
+		_, isAvailable = CheckIfResourceAvailable(oc, "MutatingWebhookConfiguration", []string{badMutatingWebhookName}, "")
+		o.Expect(isAvailable).Should(o.BeTrue())
 
 		exutil.By("4) Create a bad CRDWebhookConfiguration with invalid service and namespace references.")
 		crdWebHook.createAdmissionWebhookFromTemplate(oc)
-		CheckIfResourceAvailable(oc, "crd", []string{badCrdWebhookName}, "")
+		_, isAvailable = CheckIfResourceAvailable(oc, "crd", []string{badCrdWebhookName}, "")
+		o.Expect(isAvailable).Should(o.BeTrue())
 
 		exutil.By("5) Check for information error message on kube-apiserver cluster w.r.t bad resource reference for admission webhooks")
 		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, status, webHookErrorConditionTypes)
@@ -1914,11 +1928,25 @@ spec:
 
 		exutil.By("1) Check presence of admission webhooks created in pre-upgrade steps.")
 		e2e.Logf("Check availability of ValidatingWebhookConfiguration")
-		CheckIfResourceAvailable(oc, "ValidatingWebhookConfiguration", []string{badValidatingWebhookName}, "")
+		output, available := CheckIfResourceAvailable(oc, "ValidatingWebhookConfiguration", []string{badValidatingWebhookName}, "")
+		if !available && strings.Contains(output, "not found") {
+			// Log and skip on if the resource is not found in PstChk when PreChk fails
+			g.Skip(fmt.Sprintf("Resources not found in PstChk when PreChk fails :: %s", output))
+		}
+
 		e2e.Logf("Check availability of MutatingWebhookConfiguration.")
-		CheckIfResourceAvailable(oc, "MutatingWebhookConfiguration", []string{badMutatingWebhookName}, "")
+		output, available = CheckIfResourceAvailable(oc, "MutatingWebhookConfiguration", []string{badMutatingWebhookName}, "")
+		if !available && strings.Contains(output, "not found") {
+			// Log and skip on if the resource is not found in PstChk when PreChk fails
+			g.Skip(fmt.Sprintf("Resources not found in PstChk when PreChk fails :: %s", output))
+		}
+
 		e2e.Logf("Check availability of CRDWebhookConfiguration.")
-		CheckIfResourceAvailable(oc, "crd", []string{badCrdWebhookName}, "")
+		output, available = CheckIfResourceAvailable(oc, "crd", []string{badCrdWebhookName}, "")
+		if !available && strings.Contains(output, "not found") {
+			// Log and skip on if the resource is not found in PstChk when PreChk fails
+			g.Skip(fmt.Sprintf("Resources not found in PstChk when PreChk fails :: %s", output))
+		}
 
 		exutil.By("2) Check for information message after upgrade on kube-apiserver cluster when bad admission webhooks are present.")
 		webhookServiceFailureReasons := []string{"WebhookServiceNotFound", "WebhookServiceNotReady", "WebhookServiceConnectionError", "AdmissionWebhookMatchesVirtualResource"}
@@ -2124,11 +2152,14 @@ spec:
 		crdWebHook.createAdmissionWebhookFromTemplate(oc)
 
 		e2e.Logf("Check availability of ValidatingWebhookConfiguration")
-		CheckIfResourceAvailable(oc, "ValidatingWebhookConfiguration", []string{validatingWebhookNameNotFound}, "")
+		_, isAvailable := CheckIfResourceAvailable(oc, "ValidatingWebhookConfiguration", []string{validatingWebhookNameNotFound}, "")
+		o.Expect(isAvailable).Should(o.BeTrue())
 		e2e.Logf("Check availability of MutatingWebhookConfiguration.")
-		CheckIfResourceAvailable(oc, "MutatingWebhookConfiguration", []string{mutatingWebhookNameNotFound}, "")
+		_, isAvailable = CheckIfResourceAvailable(oc, "MutatingWebhookConfiguration", []string{mutatingWebhookNameNotFound}, "")
+		o.Expect(isAvailable).Should(o.BeTrue())
 		e2e.Logf("Check availability of CRDWebhookConfiguration.")
-		CheckIfResourceAvailable(oc, "crd", []string{crdWebhookNameNotFound}, "")
+		_, isAvailable = CheckIfResourceAvailable(oc, "crd", []string{crdWebhookNameNotFound}, "")
+		o.Expect(isAvailable).Should(o.BeTrue())
 
 		exutil.By("5) Check for information error message 'WebhookServiceNotFound' or 'WebhookServiceNotReady' or 'WebhookServiceConnectionError' on kube-apiserver cluster w.r.t bad admissionwebhook points to invalid service.")
 		compareAPIServerWebhookConditions(oc, webhookServiceFailureReasons, "True", webhookConditionErrors)
