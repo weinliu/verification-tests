@@ -1755,7 +1755,7 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 		}
 	})
 
-	g.It("Author:meinli-High-75995-Verify pods failed status when NAD subnets overlapping with UDN default join subnet value(Layer3)", func() {
+	g.It("Author:meinli-High-75955-Verify pods failed status when NAD subnets overlapping with UDN default join subnet value(Layer3)", func() {
 		var (
 			buildPruningBaseDir                   = exutil.FixturePath("testdata", "networking")
 			udnCRDSingleStack                     = filepath.Join(buildPruningBaseDir, "udn/udn_crd_singlestack_template.yaml")
