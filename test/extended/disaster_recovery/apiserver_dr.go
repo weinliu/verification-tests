@@ -248,6 +248,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 				restartNum = int(getRandomNum(20, 50))
 			}
 		}
+		e2e.Logf("#### Total restart num:%d ####", restartNum)
 
 		restartCluster := func() bool {
 
@@ -259,18 +260,17 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			err := os.MkdirAll(dirname, 0755)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			e2e.Logf("Cluster should be healthy before running case.")
-			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=60s", "--timeout=30m").Execute()
+			_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=60s", "--timeout=30m").Output()
 			if err != nil {
 				g.Skip(fmt.Sprintf("Cluster health check failed before restart cluster :: %s ", err))
 			}
 
 			exutil.By("1. Get nodes of cluster")
-			masterNodes, cleanup := GetNodes(oc, "master")
+			masterNodes, cleanup := GetNodes(oc.NotShowInfo(), "master")
 			if cleanup != nil {
 				defer cleanup()
 			}
-			workerNodes, cleanup := GetNodes(oc, "worker")
+			workerNodes, cleanup := GetNodes(oc.NotShowInfo(), "worker")
 			if cleanup != nil {
 				defer cleanup()
 			}
@@ -280,12 +280,11 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 				// The method GetNodes returns short name list on GCP, have to handle with separately
 				var gcpNodeFullName []string
 				if exutil.CheckPlatform(oc) == "gcp" && shutdownType == 2 {
-					gcpMasters := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
-					gcpWorkers := getNodeListByLabel(oc, "node-role.kubernetes.io/worker=")
+					gcpMasters := getNodeListByLabel(oc.NotShowInfo(), "node-role.kubernetes.io/master=")
+					gcpWorkers := getNodeListByLabel(oc.NotShowInfo(), "node-role.kubernetes.io/worker=")
 					gcpNodeFullName = append(gcpMasters, gcpWorkers...)
 					for _, nodeName := range gcpNodeFullName {
-						e2e.Logf("Node %s is being soft shutdown on GCP cloud ...", nodeName)
-						_, err = exutil.DebugNodeWithChroot(oc, nodeName, "shutdown", "-h", "1")
+						_, err = exutil.DebugNodeWithChroot(oc.NotShowInfo(), nodeName, "shutdown", "-h", "1")
 					}
 					return
 				}
@@ -297,11 +296,9 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 					if _, ok := startStates[vmState]; ok {
 						if shutdownType == 1 {
-							e2e.Logf("Force node %s shutdown ...", nodeName)
 							stateErr = node.Stop()
 						} else {
-							e2e.Logf("Node %s is being soft shutdown ...", nodeName)
-							_, stateErr = exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeName, []string{"--to-namespace=openshift-kube-apiserver"}, "shutdown", "-h", "1")
+							_, stateErr = exutil.DebugNodeRetryWithOptionsAndChroot(oc.NotShowInfo(), nodeName, []string{"--to-namespace=openshift-kube-apiserver"}, "shutdown", "-h", "1")
 						}
 						o.Expect(stateErr).NotTo(o.HaveOccurred())
 					} else {
@@ -312,6 +309,11 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 
 			// Number 1 indicates indicates force shutdown, 2 indicates soft shutdown
 			shutdownType := rand.Intn(2-1+1) + 1
+			if shutdownType == 1 {
+				e2e.Logf("Force node shutdown ...")
+			} else {
+				e2e.Logf("Nodes are being soft shutdown ...")
+			}
 			// Keep this order, worker nodes first, then master nodes, especially soft shutdown
 			stopNodesOfCluster(workerNodes, shutdownType)
 			stopNodesOfCluster(masterNodes, shutdownType)
@@ -324,11 +326,10 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			if shutdownType == 2 {
 				duration = time.Duration(480)
 			}
-			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, duration*time.Second, false, func(cxt context.Context) (bool, error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 25*time.Second, duration*time.Second, false, func(cxt context.Context) (bool, error) {
 				poweroffDone := false
 				for i := 0; i < len(nodes); i++ {
 					vmState, stateErr := nodes[i].State()
-					nodeName := nodes[i].GetName()
 					if stateErr != nil {
 						return false, stateErr
 					}
@@ -337,7 +338,6 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 						// Remove completely stopped node
 						nodes = append(nodes[:i], nodes[i+1:]...)
 						i--
-						e2e.Logf("The node %s has been stopped completely!", nodeName)
 					}
 				}
 				if n == numOfNodes {
@@ -353,17 +353,14 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			nodes = append(masterNodes, workerNodes...)
 			for _, node := range nodes {
 				err = node.Start()
-				if err == nil {
-					e2e.Logf("Started node %s ...", node.GetName())
-				} else {
+				if err != nil {
 					e2e.Failf("Failed to start the node %s", node.GetName())
 				}
 			}
-			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, duration*time.Second, false, func(cxt context.Context) (bool, error) {
+			err = wait.PollUntilContextTimeout(context.Background(), 20*time.Second, duration*time.Second, false, func(cxt context.Context) (bool, error) {
 				poweronDone := false
 				for i := 0; i < len(nodes); i++ {
 					vmState, stateErr := nodes[i].State()
-					nodeName := nodes[i].GetName()
 					if stateErr != nil {
 						return false, stateErr
 					}
@@ -372,7 +369,6 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 						// Remove completely stopped node
 						nodes = append(nodes[:i], nodes[i+1:]...)
 						i--
-						e2e.Logf("The node %s has been started completely!", nodeName)
 					}
 				}
 				if n == numOfNodes {
@@ -384,20 +380,12 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			exutil.AssertWaitPollNoErr(err, "The clsuter was unable to start up!")
 
 			exutil.By("5. After restarted nodes of the cluster, verify the cluster availability")
-			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=60s", "--timeout=30m").Execute()
-			if err == nil {
-				// Output mem usage of top 3 system processes of work nodes for debugging
-				// cmd := "ps -o pid,user,%mem,vsz,rss,command ax | sort -b -k3 -r | head -3"
-				// workerNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/worker=")
-				// for _, node := range workerNodeList {
-				// 	out, _ := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", "openshift-kube-apiserver", "node/"+node, "--", "chroot", "/host", "bash", "-c", cmd).Output()
-				// 	e2e.Logf("-----------------\n%s", out)
-				// }
-				return true
-			} else {
+			_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=60s", "--timeout=30m").Output()
+			if err != nil {
 				e2e.Logf("Post restarting the cluster, cluster health check failed :: %s ", err)
 				return false
 			}
+			return true
 		}
 
 		for i := 0; i < restartNum; i++ {
