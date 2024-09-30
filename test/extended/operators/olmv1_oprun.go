@@ -490,21 +490,21 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		defer ceGVK.Delete(oc)
 		ceGVK.CreateWithoutCheck(oc)
 		// WA https://issues.redhat.com/browse/OCPBUGS-36798
-		ceGVK.CheckClusterExtensionCondition(oc, "Resolved", "message", "has a dependency declared via property \"olm.gvk.required\" which is currently not supported", 10, 180, 0)
+		ceGVK.CheckClusterExtensionCondition(oc, "Progressing", "message", "has a dependency declared via property \"olm.gvk.required\" which is currently not supported", 10, 180, 0)
 		ceGVK.Delete(oc)
 
 		exutil.By("check pkg dependency fails to be installed")
 		defer cePKG.Delete(oc)
 		cePKG.CreateWithoutCheck(oc)
 		// WA https://issues.redhat.com/browse/OCPBUGS-36798
-		cePKG.CheckClusterExtensionCondition(oc, "Resolved", "message", "has a dependency declared via property \"olm.package.required\" which is currently not supported", 10, 180, 0)
+		cePKG.CheckClusterExtensionCondition(oc, "Progressing", "message", "has a dependency declared via property \"olm.package.required\" which is currently not supported", 10, 180, 0)
 		cePKG.Delete(oc)
 
 		exutil.By("check cst dependency fails to be installed")
 		defer ceCST.Delete(oc)
 		ceCST.CreateWithoutCheck(oc)
 		// WA https://issues.redhat.com/browse/OCPBUGS-36798
-		ceCST.CheckClusterExtensionCondition(oc, "Resolved", "message", "has a dependency declared via property \"olm.constraint\" which is currently not supported", 10, 180, 0)
+		ceCST.CheckClusterExtensionCondition(oc, "Progressing", "message", "has a dependency declared via property \"olm.constraint\" which is currently not supported", 10, 180, 0)
 		ceCST.Delete(oc)
 
 		exutil.By("check webhook fails to be installed")
@@ -739,7 +739,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		exutil.By("3) Attempt to update to channel candidate-v2.1 with CatalogProvided policy, that should fail")
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v2.1"]}}}}`)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")]}`)
+			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")]}`)
 			if strings.Contains(message, "error upgrading") {
 				e2e.Logf("status is %s", message)
 				return true, nil
@@ -766,7 +766,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		exutil.By("5) Attempt to update to channel candidate-v1.0 with CatalogProvided policy, that should fail")
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v1.0"]}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")]}`)
+			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")]}`)
 			if strings.Contains(message, "error upgrading") {
 				e2e.Logf("status is %s", message)
 				return true, nil
@@ -803,7 +803,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		exutil.By("8) Attempt to update to channel candidate-v1.2 with CatalogProvided policy, that should fail")
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v1.2"]}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")]}`)
+			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")]}`)
 			if strings.Contains(message, "error upgrading") {
 				e2e.Logf("status is %s", message)
 				return true, nil
@@ -828,7 +828,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"upgradeConstraintPolicy": "CatalogProvided"}}}}`)
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v2.0"]}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")]}`)
+			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")]}`)
 			if strings.Contains(message, "error upgrading") {
 				e2e.Logf("status is %s", message)
 				return true, nil
@@ -1040,9 +1040,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		exutil.By("Create clusterextension with channel candidate-v2.1, version 2.1.0")
 		defer clusterextension.Delete(oc)
 		clusterextension.Create(oc)
-		status, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].status}`)
-		o.Expect(status).To(o.ContainSubstring("True"))
-		reason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].reason}`)
+		status, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].status}`)
+		o.Expect(status).To(o.ContainSubstring("False"))
+		reason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].reason}`)
 		o.Expect(reason).To(o.ContainSubstring("Succeeded"))
 		status, _ = olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].status}`)
 		o.Expect(status).To(o.ContainSubstring("True"))
@@ -1086,10 +1086,10 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Version = "3.0.0"
 		clusterextension.CreateWithoutCheck(oc)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-			resolvedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].status}`)
-			resolvedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].reason}`)
-			resolvedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].message}`)
-			if !strings.Contains(resolvedStatus, "False") || !strings.Contains(resolvedReason, "Failed") || !strings.Contains(resolvedMessage, "no package") {
+			resolvedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].status}`)
+			resolvedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].reason}`)
+			resolvedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].message}`)
+			if !strings.Contains(resolvedStatus, "True") || !strings.Contains(resolvedReason, "Failed") || !strings.Contains(resolvedMessage, "no package") {
 				return false, nil
 			}
 			return true, nil
@@ -1104,10 +1104,10 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.PackageName = "nginxfake"
 		clusterextension.CreateWithoutCheck(oc)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-			resolvedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].status}`)
-			resolvedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].reason}`)
-			resolvedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Resolved")].message}`)
-			if !strings.Contains(resolvedStatus, "False") || !strings.Contains(resolvedReason, "Failed") || !strings.Contains(resolvedMessage, "no package") {
+			resolvedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].status}`)
+			resolvedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].reason}`)
+			resolvedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].message}`)
+			if !strings.Contains(resolvedStatus, "True") || !strings.Contains(resolvedReason, "Failed") || !strings.Contains(resolvedMessage, "no package") {
 				return false, nil
 			}
 			return true, nil
