@@ -1270,8 +1270,9 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		testPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 		url := "www.example.com"
 
-		if checkDisconnect(oc) {
-			g.Skip("Skip the test on disconnected cluster.")
+		ipStackType := checkIPStackType(oc)
+		if checkDisconnect(oc) || ipStackType == "ipv6single" {
+			g.Skip("Skip the test on disconnected cluster or singlev6 cluster.")
 		}
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
