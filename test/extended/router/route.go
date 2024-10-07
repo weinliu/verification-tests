@@ -201,6 +201,46 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(output4).To(o.ContainSubstring(`tcp-request content reject if { src_http_req_rate ge 3 }`))
 	})
 
+	// author: iamin@redhat.com
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-11635-NetworkEdge Set timeout server for passthough route", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "httpbin")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-pod.json")
+			unSecSvcName        = "service-secure"
+			svcFileDir          = filepath.Join(buildPruningBaseDir, "service_secure.json")
+		)
+
+		exutil.By("1.0: Deploy a project with single pod and the service")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		createResourceFromFile(oc, project1, svcFileDir)
+		err := waitForPodWithLabelReady(oc, project1, "name=httpbin-pod")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=httpbin-pod Ready status not met")
+
+		exutil.By("2.0: Create a passthrough route")
+		routeName := "route-passthrough11635"
+		routehost := routeName + "-" + project1 + ".apps." + getBaseDomain(oc)
+
+		createRoute(oc, project1, "passthrough", "route-passthrough11635", unSecSvcName, []string{})
+		waitForOutput(oc, project1, "route/route-passthrough11635", "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("3.0: Annotate passthrough route")
+		setAnnotation(oc, project1, "route/"+routeName, "haproxy.router.openshift.io/timeout=3s")
+		findAnnotation := getAnnotation(oc, project1, "route", routeName)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout":"3s`))
+
+		exutil.By("4.0: Curl the edge route for two times, one with normal delay and other above timeout delay")
+		waitForOutsideCurlContains("https://"+routehost+"/delay/2", "-kl", `"Host": "route-passthrough11635`)
+		waitForOutsideCurlContains("https://"+routehost+"/delay/2", "-kl", `delay/2`)
+		waitForOutsideCurlContains("https://"+routehost+"/delay/5", "-kl", `exit status`)
+
+		exutil.By("5.0: Check HAProxy file for timeout tunnel")
+		routerpod := getNewRouterPod(oc, "default")
+		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", routeName)
+		o.Expect(searchOutput).To(o.ContainSubstring(`timeout tunnel  3s`))
+
+	})
+
 	// merge OCP-15874(NetworkEdge can set cookie name for reencrypt routes by annotation) to OCP-15873
 	g.It("Author:shudili-ROSA-OSD_CCS-ARO-Critical-15873-NetworkEdge can set cookie name for edge/reen routes by annotation", func() {
 		var (
@@ -709,4 +749,5 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("ExternalCertificateValidationFailed"))
 	})
+
 })

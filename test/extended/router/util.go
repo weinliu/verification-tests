@@ -1307,6 +1307,11 @@ func waitForOutsideCurlContains(url string, curlOptions string, expected string)
 				e2e.Logf("the expected string is included in err: %v", err)
 				return true, nil
 			} else {
+				// route timeout case, curl returns an execution error which is expected
+				if strings.Contains(err.Error(), expected) {
+					e2e.Logf("Execution Error expected: %v", err)
+					return true, nil
+				}
 				e2e.Logf("hit execution error: %v, retrying...", err)
 				return false, nil
 			}
