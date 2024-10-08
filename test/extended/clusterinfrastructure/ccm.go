@@ -417,8 +417,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 	// author: zhsun@redhat.com
 	g.It("Author:zhsun-NonHyperShiftHOST-High-72119-Pull images from GCR repository should succeed [Disruptive]", func() {
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
+		projectID, err := exutil.GetGcpProjectID(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if projectID != "openshift-qe" {
+			g.Skip("Skip as no image in projectID" + projectID)
+		}
 		g.By("Create a new project for testing")
-		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", "hello-gcr72119").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", "hello-gcr72119").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "hello-gcr72119", "--ignore-not-found", "--force").Execute()
 		g.By("Create a new app using the image on GCR")
