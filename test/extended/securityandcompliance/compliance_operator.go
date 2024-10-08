@@ -2,8 +2,6 @@ package securityandcompliance
 
 import (
 	"fmt"
-	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -736,19 +734,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		}
 
 		g.By("Diff the failed rules between profiles without suffix and profiles of latest version.. !!!\n")
-		labelCISLatest := fmt.Sprintf("compliance.openshift.io/suite=%s,compliance.openshift.io/check-status=FAIL", ssb.name)
-		labelCISSuffix := fmt.Sprintf("compliance.openshift.io/suite=%s,compliance.openshift.io/check-status=FAIL", ssbWithVersionSuffix15.name)
-		failedCcrLatest, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-n", subD.namespace, "-l", labelCISLatest,
-			"-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		failedCcrsSuffix, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-n", subD.namespace, "-l", labelCISSuffix,
-			"-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		failedCcrLatestNew := strings.Fields(failedCcrLatest)
-		newFailedCcrsSuffixNew := strings.Fields(strings.ReplaceAll(failedCcrsSuffix, "-1-5", ""))
-		sort.Strings(failedCcrLatestNew)
-		sort.Strings(newFailedCcrsSuffixNew)
-		o.Expect(reflect.DeepEqual(newFailedCcrsSuffixNew, failedCcrLatestNew)).Should(o.BeTrue())
+		checkFailedRulesForTwoProfiles(oc, subD.namespace, ssb.name, ssbWithVersionSuffix15.name, "-1-5")
 
 		g.By("ocp-37121-61422 The ComplianceSuite generated successfully using scansetting CR and cis profile and default scansetting... !!!\n")
 	})
@@ -1923,8 +1909,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 				"ocp4-pci-dss-node-3-2",
 				"ocp4-pci-dss-node-4-0",
 				"ocp4-stig",
+				"ocp4-stig-node-v2r1",
 				"ocp4-stig-node",
 				"ocp4-stig-node-v1r1",
+				"ocp4-stig-node-v2r1",
 				"ocp4-stig-v1r1",
 				"rhcos4-e8",
 				"rhcos4-high",
@@ -1933,7 +1921,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 				"rhcos4-moderate-rev-4",
 				"rhcos4-nerc-cip",
 				"rhcos4-stig",
-				"rhcos4-stig-v1r1"},
+				"rhcos4-stig-v1r1",
+				"rhcos4-stig-v2r1"},
 		}
 
 		if profiles, ok := profilesByArch[arch]; ok {
@@ -3987,19 +3976,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbWithVersion40.name, "2")
 
 		g.By("Diff the failed rules between profiles without suffix and profiles of latest version.. !!!\n")
-		labelCISLatest := fmt.Sprintf("compliance.openshift.io/suite=%s,compliance.openshift.io/check-status=FAIL", ssb.name)
-		labelCISSuffix := fmt.Sprintf("compliance.openshift.io/suite=%s,compliance.openshift.io/check-status=FAIL", ssbWithVersion40.name)
-		failedCcrLatest, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-n", subD.namespace, "-l", labelCISLatest,
-			"-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		failedCcrsSuffix, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-n", subD.namespace, "-l", labelCISSuffix,
-			"-o=jsonpath={.items[*].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		failedCcrLatestNew := strings.Fields(failedCcrLatest)
-		newFailedCcrsSuffixNew := strings.Fields(strings.ReplaceAll(failedCcrsSuffix, "-4-0", ""))
-		sort.Strings(failedCcrLatestNew)
-		sort.Strings(newFailedCcrsSuffixNew)
-		o.Expect(reflect.DeepEqual(newFailedCcrsSuffixNew, failedCcrLatestNew)).Should(o.BeTrue())
+		checkFailedRulesForTwoProfiles(oc, subD.namespace, ssb.name, ssbWithVersion40.name, "-4-0")
 
 		g.By("ocp-66791 Check whether ocp4-pci-dss-routes-protected-by-tls ccr pass")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
@@ -5756,28 +5733,51 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Author:xiyuan-High-61324-Low-61325-Check scans and instructions work for ocp4-stig, ocp4-stig-node and rhcos4-stig profiles [Slow]", func() {
+	g.It("Author:xiyuan-NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-High-61324-Low-61325-Check scans and instructions work for ocp4-stig, ocp4-stig-node and rhcos4-stig profiles for v1r1 and v2r1 versions[Slow]", func() {
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		ssbNameStig := "ocp4-stig-" + getRandomString()
-		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssbNameStig})
+		ssbNameStigv2r1 := "ocp4-stig-v2r1-" + getRandomString()
+		ssbNameStigv1r1 := "ocp4-stig-v1r1-" + getRandomString()
+		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssbNameStig},
+			objectTableRef{"scansettingbinding", subD.namespace, ssbNameStigv2r1},
+			objectTableRef{"scansettingbinding", subD.namespace, ssbNameStigv1r1})
 
 		g.By("Verify scansettingbinding, ScanSetting, profile objects created..!!!\n")
 		_, err := OcComplianceCLI().Run("bind").Args("-N", ssbNameStig, "profile/ocp4-stig", "profile/ocp4-stig-node", "profile/rhcos4-stig", "-n", subD.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbNameStigv2r1, "profile/ocp4-stig-v2r1", "profile/ocp4-stig-node-v2r1", "profile/rhcos4-stig-v2r1", "-n", subD.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = OcComplianceCLI().Run("bind").Args("-N", ssbNameStigv1r1, "profile/ocp4-stig-v1r1", "profile/ocp4-stig-node-v1r1", "profile/rhcos4-stig-v1r1", "-n", subD.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Verify scansettingbinding, ScanSetting, profile objects created..!!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssbNameStig, ok, []string{"scansettingbinding", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "default", ok, []string{"scansettingbinding", ssbNameStig, "-n", subD.namespace,
-			"-o=jsonpath={.settingsRef}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbNameStigv2r1, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbNameStigv1r1, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssbNameStig, ok, []string{"compliancesuite", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbNameStigv2r1, ok, []string{"compliancesuite", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbNameStigv1r1, ok, []string{"compliancesuite", "-n", subD.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
 		assertKeywordsExists(oc, 300, "DONE", "compliancesuite", ssbNameStig, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
+		assertKeywordsExists(oc, 300, "DONE", "compliancesuite", ssbNameStigv2r1, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
+		assertKeywordsExists(oc, 300, "DONE", "compliancesuite", ssbNameStigv1r1, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
 		subD.complianceSuiteResult(oc, ssbNameStig, "NON-COMPLIANT INCONSISTENT")
+		subD.complianceSuiteResult(oc, ssbNameStigv2r1, "NON-COMPLIANT INCONSISTENT")
+		subD.complianceSuiteResult(oc, ssbNameStigv1r1, "NON-COMPLIANT INCONSISTENT")
 		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbNameStig, "2")
+		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbNameStigv2r1, "2")
+		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbNameStigv1r1, "2")
+
+		g.By("Diff the failed rules between profiles without suffix and profiles of latest version.. !!!\n")
+		checkFailedRulesForTwoProfiles(oc, subD.namespace, ssbNameStig, ssbNameStigv2r1, "-v2r1")
 
 		g.By("Check the instructions available for all rules.. !!")
 		//Add two rules in exemptRulesList due to bug https://issues.redhat.com/browse/OCPBUGS-18789

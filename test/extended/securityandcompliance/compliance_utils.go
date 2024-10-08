@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1305,4 +1306,20 @@ func clusterOperatorHealthcheck(oc *exutil.CLI, waitTime int) {
 		e2e.Logf("coLogs: %s", coLogs)
 	}
 	exutil.AssertWaitPollNoErr(errCmd, fmt.Sprintf("Failed to cluster health check::Abnormal cluster operators found: %s", coLogs))
+}
+
+func checkFailedRulesForTwoProfiles(oc *exutil.CLI, ns string, ssbName string, ssbNameWithSuffix string, versionSuffix string) {
+	labelCISLatest := fmt.Sprintf("compliance.openshift.io/suite=%s,compliance.openshift.io/check-status=FAIL", ssbName)
+	labelCISSuffix := fmt.Sprintf("compliance.openshift.io/suite=%s,compliance.openshift.io/check-status=FAIL", ssbNameWithSuffix)
+	failedCcrLatest, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-n", ns, "-l", labelCISLatest,
+		"-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	failedCcrsSuffix, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("compliancecheckresult", "-n", ns, "-l", labelCISSuffix,
+		"-o=jsonpath={.items[*].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	failedCcrLatestNew := strings.Fields(failedCcrLatest)
+	newFailedCcrsSuffixNew := strings.Fields(strings.ReplaceAll(failedCcrsSuffix, versionSuffix, ""))
+	sort.Strings(failedCcrLatestNew)
+	sort.Strings(newFailedCcrsSuffixNew)
+	o.Expect(reflect.DeepEqual(newFailedCcrsSuffixNew, failedCcrLatestNew)).Should(o.BeTrue())
 }
