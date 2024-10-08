@@ -1040,13 +1040,10 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		exutil.By("Create clusterextension with channel candidate-v2.1, version 2.1.0")
 		defer clusterextension.Delete(oc)
 		clusterextension.Create(oc)
+		olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
 		status, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].status}`)
 		o.Expect(status).To(o.ContainSubstring("False"))
 		reason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].reason}`)
-		o.Expect(reason).To(o.ContainSubstring("Succeeded"))
-		status, _ = olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].status}`)
-		o.Expect(status).To(o.ContainSubstring("True"))
-		reason, _ = olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].reason}`)
 		o.Expect(reason).To(o.ContainSubstring("Succeeded"))
 		status, _ = olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Installed")].status}`)
 		o.Expect(status).To(o.ContainSubstring("True"))
@@ -1068,10 +1065,10 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Version = "2.0.0"
 		clusterextension.CreateWithoutCheck(oc)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-			unpackedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].status}`)
-			unpackedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].reason}`)
-			unpackedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].message}`)
-			if !strings.Contains(unpackedStatus, "False") || !strings.Contains(unpackedReason, "Failed") || !strings.Contains(unpackedMessage, "error fetching") {
+			unpackedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].status}`)
+			unpackedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].reason}`)
+			unpackedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].message}`)
+			if !strings.Contains(unpackedStatus, "True") || !strings.Contains(unpackedReason, "Retrying") || !strings.Contains(unpackedMessage, "error resolving canonical reference") {
 				return false, nil
 			}
 			return true, nil
@@ -1085,11 +1082,11 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		exutil.By("Test ResolutionFailed, wrong version")
 		clusterextension.Version = "3.0.0"
 		clusterextension.CreateWithoutCheck(oc)
-		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			resolvedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].status}`)
 			resolvedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].reason}`)
 			resolvedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].message}`)
-			if !strings.Contains(resolvedStatus, "True") || !strings.Contains(resolvedReason, "Failed") || !strings.Contains(resolvedMessage, "no package") {
+			if !strings.Contains(resolvedStatus, "True") || !strings.Contains(resolvedReason, "Retrying") || !strings.Contains(resolvedMessage, "no bundles found for package") {
 				return false, nil
 			}
 			return true, nil
@@ -1103,11 +1100,11 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		exutil.By("Test ResolutionFailed, no package")
 		clusterextension.PackageName = "nginxfake"
 		clusterextension.CreateWithoutCheck(oc)
-		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			resolvedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].status}`)
 			resolvedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].reason}`)
 			resolvedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].message}`)
-			if !strings.Contains(resolvedStatus, "True") || !strings.Contains(resolvedReason, "Failed") || !strings.Contains(resolvedMessage, "no package") {
+			if !strings.Contains(resolvedStatus, "True") || !strings.Contains(resolvedReason, "Retrying") || !strings.Contains(resolvedMessage, "no bundles found for package") {
 				return false, nil
 			}
 			return true, nil

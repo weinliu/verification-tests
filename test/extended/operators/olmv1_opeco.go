@@ -84,9 +84,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		clustercatalog.WaitCatalogStatus(oc, "true", "Serving", 0)
 
 		exutil.By("Collect the initial image status information")
-		lastPollAttempt, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.lastPollAttempt}").Output()
+		lastPollAttempt, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.lastSuccessfulPollAttempt}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		resolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
+		resolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		v1bundlesDataOut, err := clustercatalog.UnmarshalContent(oc, "bundle")
@@ -104,9 +104,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		e2e.Logf("Successful tag v2")
 
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 90*time.Second, false, func(ctx context.Context) (bool, error) {
-			lastPollAttempt2, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.lastPollAttempt}").Output()
+			lastPollAttempt2, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.lastSuccessfulPollAttempt}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			resolvedRef2, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
+			resolvedRef2, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			if lastPollAttempt == lastPollAttempt2 || resolvedRef == resolvedRef2 {
@@ -817,38 +817,41 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.CheckClusterExtensionCondition(oc, "Installed", "message",
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
 			`scope changed from "Namespaced" to "Cluster"`, 10, 60, 0)
-		clusterextension.CheckClusterExtensionCondition(oc, "Installed", "message",
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
 			`.spec.field1 may not be removed`, 10, 60, 0)
-		clusterextension.CheckClusterExtensionCondition(oc, "Installed", "message",
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
 			`calculating schema diff for CRD version "v1alpha1"`, 10, 60, 0)
 
 		exutil.By("disabled crd upgrade safety check, it will not affect spec.scope: Invalid value: Cluster")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.2","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"disabled":true}}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.2","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"policy":"Disabled"}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		var message string
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 18*time.Second, false, func(ctx context.Context) (bool, error) {
-			message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
+			message = clusterextension.GetClusterExtensionMessage(oc, "Progressing")
 			if !strings.Contains(message, `CustomResourceDefinition.apiextensions.k8s.io "nginxolm75218s.cache.example.com" is invalid: spec.scope: Invalid value: "Cluster": field is immutable`) {
 				return false, nil
 			}
 			return true, nil
 		})
+		if errWait != nil {
+			olmv1util.GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o=jsonpath-as-json={.status}")
+		}
 		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("Unexpected results message: %v", message))
 
 		exutil.By("disabled crd upgrade safety check An existing stored version of the CRD is removed")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"disabled":true}}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"policy":"Disabled"}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.CheckClusterExtensionCondition(oc, "Installed", "message",
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
 			`must have exactly one version marked as storage version, status.storedVersions[0]: Invalid value: "v1alpha1": must appear in spec.versions`, 10, 60, 0)
 
 		exutil.By("disabled crd upgrade safety successfully")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.5","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"disabled":true}}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.5","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"policy":"Disabled"}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterextension.WaitClusterExtensionCondition(oc, "Progressing", "False", 0)
 		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
