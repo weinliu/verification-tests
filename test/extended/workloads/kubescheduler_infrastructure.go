@@ -804,7 +804,7 @@ var _ = g.Describe("[sig-scheduling] Workloads test predicates and priority work
 	})
 
 	// author: knarra@redhat.com
-	g.It("Author:knarra-ROSA-OSD_CCS-ARO-High-14479-pod will be scheduled to the node which matches node affinity", func() {
+	g.It("Author:knarra-High-14479-pod will be scheduled to the node which matches node affinity", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		deployNodeAffinity := filepath.Join(buildPruningBaseDir, "node-affinity-required-case14479.yaml")
 
@@ -866,7 +866,7 @@ var _ = g.Describe("[sig-scheduling] Workloads test predicates and priority work
 	})
 
 	// author: knarra@redhat.com
-	g.It("Author:knarra-ROSA-OSD_CCS-ARO-High-14488-pod will still run on the node if labels on the node change and affinity rules no longer met IgnoredDuringExecution", func() {
+	g.It("Author:knarra-High-14488-pod will still run on the node if labels on the node change and affinity rules no longer met IgnoredDuringExecution", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
 		nodeAffinityRequiredCase := filepath.Join(buildPruningBaseDir, "node-affinity-required-case14488.yaml")
 
