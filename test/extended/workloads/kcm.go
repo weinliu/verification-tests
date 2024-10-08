@@ -858,4 +858,19 @@ EOF`)
 
 	})
 
+	// author: knarra@redhat.com
+	g.It("Author:knarra-HyperShiftMGMT-ROSA-OSD_CCS-ARO-Medium-70877-Add annotation in the kube-controller-manager-guard static pod for workload partitioning", func() {
+		// Skip for SNO cluster as there is no guard pod present
+		exutil.SkipForSNOCluster(oc)
+
+		exutil.By("Retreive guard pods from kube-controller-manager namespace")
+		kcGuardPodName, kcGuardPodError := oc.WithoutNamespace().AsAdmin().Run("get").Args("po", "-n", "openshift-kube-controller-manager", "-l=app=guard", `-ojsonpath={.items[?(@.status.phase=="Running")].metadata.name}`).Output()
+		o.Expect(kcGuardPodError).NotTo(o.HaveOccurred())
+		kcGuardPodNames := strings.Fields(kcGuardPodName)
+		// Check if workload partioning annotation is added
+		wpAnnotation, wpAnnotationError := oc.WithoutNamespace().AsAdmin().Run("get").Args("po", "-n", "openshift-kube-controller-manager", kcGuardPodNames[0], `-ojsonpath={.metadata.annotations}`).Output()
+		o.Expect(wpAnnotationError).NotTo(o.HaveOccurred())
+		o.Expect(wpAnnotation).To(o.ContainSubstring(`"target.workload.openshift.io/management":"{\"effect\": \"PreferredDuringScheduling\"}"`))
+	})
+
 })
