@@ -573,14 +573,14 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		exutil.By("Create clusterextension with channel candidate-v0.0, version >=0.0.1")
 		defer clusterextension.Delete(oc)
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("v0.0.3"))
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v0.0.3"))
 		clusterextension.Delete(oc)
 
 		exutil.By("Create clusterextension with channel candidate-v1.0, version 1.0.x")
 		clusterextension.Channel = "candidate-v1.0"
 		clusterextension.Version = "1.0.x"
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("v1.0.2"))
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.2"))
 		clusterextension.Delete(oc)
 
 		exutil.By("Create clusterextension with channel empty, version >=0.0.1 !=1.1.0 <1.1.2")
@@ -588,7 +588,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Version = ">=0.0.1 !=1.1.0 <1.1.2"
 		clusterextension.Template = clusterextensionWithoutChannelTemplate
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("v1.0.2"))
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.2"))
 		clusterextension.Delete(oc)
 
 		exutil.By("Create clusterextension with channel empty, version empty")
@@ -596,7 +596,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Version = ""
 		clusterextension.Template = clusterextensionWithoutChannelVersionTemplate
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("v1.1.0"))
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.1.0"))
 		clusterextension.Delete(oc)
 
 		exutil.By("Create clusterextension with invalid version")
@@ -659,7 +659,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		exutil.By("update version to be >=1.0.1")
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": ">=1.0.1"}}}}`)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-			resolvedBundle, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolution.bundle.name}")
+			resolvedBundle, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.install.bundle.name}")
 			if !strings.Contains(resolvedBundle, "v1.0.2") {
 				e2e.Logf("clusterextension.resolvedBundle is %s, not v1.0.2, and try next", resolvedBundle)
 				return false, nil
@@ -674,7 +674,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		exutil.By("update channel to be candidate-v1.1")
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v1.1"]}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-			resolvedBundle, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolution.bundle.name}")
+			resolvedBundle, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.install.bundle.name}")
 			if !strings.Contains(resolvedBundle, "v1.1.0") {
 				e2e.Logf("clusterextension.resolvedBundle is %s, not v1.1.0, and try next", resolvedBundle)
 				return false, nil
@@ -734,7 +734,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		exutil.By("2) Install clusterextension with channel candidate-v0.0")
 		defer clusterextension.Delete(oc)
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("0.0.2"))
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("0.0.2"))
 
 		exutil.By("3) Attempt to update to channel candidate-v2.1 with CatalogProvided policy, that should fail")
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v2.1"]}}}}`)
@@ -755,8 +755,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v0.1"]}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
-			if strings.Contains(clusterextension.ResolvedBundle, "0.1.0") {
-				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+			if strings.Contains(clusterextension.InstalledBundle, "0.1.0") {
+				e2e.Logf("InstalledBundle is %s", clusterextension.InstalledBundle)
 				return true, nil
 			}
 			return false, nil
@@ -779,8 +779,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"upgradeConstraintPolicy": "SelfCertified"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
-			if strings.Contains(clusterextension.ResolvedBundle, "1.0.2") {
-				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+			if strings.Contains(clusterextension.InstalledBundle, "1.0.2") {
+				e2e.Logf("InstalledBundle is %s", clusterextension.InstalledBundle)
 				return true, nil
 			}
 			return false, nil
@@ -792,8 +792,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v1.1"]}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
-			if strings.Contains(clusterextension.ResolvedBundle, "1.1.0") {
-				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+			if strings.Contains(clusterextension.InstalledBundle, "1.1.0") {
+				e2e.Logf("InstalledBundle is %s", clusterextension.InstalledBundle)
 				return true, nil
 			}
 			return false, nil
@@ -816,8 +816,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"upgradeConstraintPolicy": "SelfCertified"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
-			if strings.Contains(clusterextension.ResolvedBundle, "1.2.0") {
-				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+			if strings.Contains(clusterextension.InstalledBundle, "1.2.0") {
+				e2e.Logf("InstalledBundle is %s", clusterextension.InstalledBundle)
 				return true, nil
 			}
 			return false, nil
@@ -841,8 +841,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v2.1"]}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
-			if strings.Contains(clusterextension.ResolvedBundle, "2.1.1") {
-				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+			if strings.Contains(clusterextension.InstalledBundle, "2.1.1") {
+				e2e.Logf("InstalledBundle is %s", clusterextension.InstalledBundle)
 				return true, nil
 			}
 			return false, nil
@@ -854,8 +854,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v1.0"],"version":"1.0.1"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
-			if strings.Contains(clusterextension.ResolvedBundle, "1.0.1") {
-				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+			if strings.Contains(clusterextension.InstalledBundle, "1.0.1") {
+				e2e.Logf("InstalledBundle is %s", clusterextension.InstalledBundle)
 				return true, nil
 			}
 			return false, nil
@@ -928,7 +928,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		exutil.By("2.3 Create clusterextension1")
 		defer clusterextension1.Delete(oc)
 		clusterextension1.Create(oc)
-		o.Expect(clusterextension1.ResolvedBundle).To(o.ContainSubstring("v1.0.2"))
+		o.Expect(clusterextension1.InstalledBundle).To(o.ContainSubstring("v1.0.2"))
 
 		exutil.By("3 Create clusterextension2")
 		exutil.By("3.1 Create namespace 2")
@@ -1056,9 +1056,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		o.Expect(installedBundleVersion).To(o.ContainSubstring("2.1.0"))
 		installedBundleName, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.install.bundle.name}`)
 		o.Expect(installedBundleName).To(o.ContainSubstring("nginx75501.v2.1.0"))
-		resolvedBundleVersion, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.resolution.bundle.version}`)
+		resolvedBundleVersion, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.install.bundle.version}`)
 		o.Expect(resolvedBundleVersion).To(o.ContainSubstring("2.1.0"))
-		resolvedBundleName, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.resolution.bundle.name}`)
+		resolvedBundleName, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.install.bundle.name}`)
 		o.Expect(resolvedBundleName).To(o.ContainSubstring("nginx75501.v2.1.0"))
 
 		clusterextension.Delete(oc)
@@ -1071,7 +1071,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 			unpackedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].status}`)
 			unpackedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].reason}`)
 			unpackedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Unpacked")].message}`)
-			if !strings.Contains(unpackedStatus, "False") || !strings.Contains(unpackedReason, "Failed") || !strings.Contains(unpackedMessage, "error fetching image") {
+			if !strings.Contains(unpackedStatus, "False") || !strings.Contains(unpackedReason, "Failed") || !strings.Contains(unpackedMessage, "error fetching") {
 				return false, nil
 			}
 			return true, nil
@@ -1167,7 +1167,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		exutil.By("2) Install version 0.0.1")
 		defer clusterextension.Delete(oc)
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("0.0.1"))
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("0.0.1"))
 
 		exutil.By("3) Attempt to update to version 0.0.2 with CatalogProvided policy, that should fail")
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": "0.0.2"}}}}`)
@@ -1186,8 +1186,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 			clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"SelfCertified"}}`)*/
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
-			if !strings.Contains(clusterextension.ResolvedBundle, "0.0.2") {
-				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+			if !strings.Contains(clusterextension.InstalledBundle, "0.0.2") {
+				e2e.Logf("InstalledBundle is %s", clusterextension.InstalledBundle)
 				return false, nil
 			}
 			return true, nil
@@ -1201,7 +1201,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Version = "0.1.0"
 		clusterextension.UpgradeConstraintPolicy = "CatalogProvided"
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("0.1.0"))
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("0.1.0"))
 
 		exutil.By("6) Attempt to update to version 0.2.0 with CatalogProvided policy, that should fail")
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version":"0.2.0","channels":["candidate-v0.2"]}}}}`)
@@ -1219,8 +1219,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"upgradeConstraintPolicy": "SelfCertified"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
-			if !strings.Contains(clusterextension.ResolvedBundle, "0.2.0") {
-				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+			if !strings.Contains(clusterextension.InstalledBundle, "0.2.0") {
+				e2e.Logf("InstalledBundle is %s", clusterextension.InstalledBundle)
 				return false, nil
 			}
 			return true, nil
@@ -1232,8 +1232,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": "0.2.2"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
-			if !strings.Contains(clusterextension.ResolvedBundle, "0.2.2") {
-				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+			if !strings.Contains(clusterextension.InstalledBundle, "0.2.2") {
+				e2e.Logf("InstalledBundle is %s", clusterextension.InstalledBundle)
 				return false, nil
 			}
 			return true, nil
@@ -1289,7 +1289,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		exutil.By("2) Install version 0.2.2")
 		defer clusterextension.Delete(oc)
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("0.2.2"))
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("0.2.2"))
 
 		exutil.By("3) Attempt to update to version 1.0.0 with CatalogProvided policy, that should fail")
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels":["candidate-v1"], "version":"1.0.0"}}}}`)
@@ -1307,8 +1307,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"upgradeConstraintPolicy": "SelfCertified"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
-			if !strings.Contains(clusterextension.ResolvedBundle, "1.0.0") {
-				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+			if !strings.Contains(clusterextension.InstalledBundle, "1.0.0") {
+				e2e.Logf("InstalledBundle is %s", clusterextension.InstalledBundle)
 				return false, nil
 			}
 			return true, nil
@@ -1320,8 +1320,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": "1.0.1"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
-			if !strings.Contains(clusterextension.ResolvedBundle, "1.0.1") {
-				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+			if !strings.Contains(clusterextension.InstalledBundle, "1.0.1") {
+				e2e.Logf("ResolvedBundle is %s", clusterextension.InstalledBundle)
 				return false, nil
 			}
 			return true, nil
@@ -1332,8 +1332,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": "1.2.1"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
-			if !strings.Contains(clusterextension.ResolvedBundle, "1.2.1") {
-				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+			if !strings.Contains(clusterextension.InstalledBundle, "1.2.1") {
+				e2e.Logf("InstalledBundle is %s", clusterextension.InstalledBundle)
 				return false, nil
 			}
 			return true, nil
@@ -1357,8 +1357,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 			clusterextension.Patch(oc, `{"spec":{"upgradeConstraintPolicy":"SelfCertified"}}`)*/
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
-			if !strings.Contains(clusterextension.ResolvedBundle, "2.0.0") {
-				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+			if !strings.Contains(clusterextension.InstalledBundle, "2.0.0") {
+				e2e.Logf("InstalledBundle is %s", clusterextension.InstalledBundle)
 				return false, nil
 			}
 			return true, nil
@@ -1415,7 +1415,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		exutil.By("2) Install version 2.2.1")
 		clusterextension.Create(oc)
 		defer clusterextension.Delete(oc)
-		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("2.2.1"))
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("2.2.1"))
 
 		exutil.By("3) Attempt to downgrade to version 2.0.0 with CatalogProvided policy, that should fail")
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": "2.0.0"}}}}`)
@@ -1433,8 +1433,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"upgradeConstraintPolicy": "SelfCertified"}}}}`)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			clusterextension.GetBundleResource(oc)
-			if !strings.Contains(clusterextension.ResolvedBundle, "2.0.0") {
-				e2e.Logf("ResolvedBundle is %s", clusterextension.ResolvedBundle)
+			if !strings.Contains(clusterextension.InstalledBundle, "2.0.0") {
+				e2e.Logf("InstalledBundle is %s", clusterextension.InstalledBundle)
 				return false, nil
 			}
 			return true, nil

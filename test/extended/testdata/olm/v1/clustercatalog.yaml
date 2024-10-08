@@ -15,5 +15,5 @@ objects:
 parameters:
 - name: NAME
 - name: TYPE
-  value: "image"
+  value: "Image"
 - name: IMAGE

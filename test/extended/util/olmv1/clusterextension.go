@@ -27,7 +27,6 @@ type ClusterExtensionDescription struct {
 	SourceType              string
 	Template                string
 	InstalledBundle         string
-	ResolvedBundle          string
 }
 
 func (clusterextension *ClusterExtensionDescription) Create(oc *exutil.CLI) {
@@ -155,25 +154,25 @@ func (clusterextension *ClusterExtensionDescription) GetClusterExtensionMessage(
 	return message
 }
 
-func (clusterextension *ClusterExtensionDescription) WaitResolvedBundleVersion(oc *exutil.CLI, version string) {
+func (clusterextension *ClusterExtensionDescription) WaitProgressingMessage(oc *exutil.CLI, expect string) {
 
-	e2e.Logf("========= wait clusterextension %v resolvedBundle version is %s =========", clusterextension.Name, version)
-	jsonpath := "jsonpath={.status.resolution.bundle.version}"
+	e2e.Logf("========= wait clusterextension %v Progressing message includes %s =========", clusterextension.Name, expect)
+	jsonpath := `jsonpath={.status.conditions[?(@.type=="Progressing")].message}`
 	errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", jsonpath)
 		if err != nil {
 			e2e.Logf("output is %v, error is %v, and try next", output, err)
 			return false, nil
 		}
-		if !strings.Contains(strings.ToLower(output), strings.ToLower(version)) {
-			e2e.Logf("version is %v, not %v, and try next", output, version)
+		if !strings.Contains(output, expect) {
+			e2e.Logf("message is %v, not include %v, and try next", output, expect)
 			return false, nil
 		}
 		return true, nil
 	})
 	if errWait != nil {
 		GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
-		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("clusterextension resolvedBundle version is not %s", version))
+		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("clusterextension progressing message does not include %s", expect))
 	}
 }
 
@@ -207,13 +206,6 @@ func (clusterextension *ClusterExtensionDescription) GetBundleResource(oc *exuti
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	clusterextension.InstalledBundle = installedBundle
-
-	resolvedBundle, err := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolution.bundle.name}")
-	if err != nil {
-		Get(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
-	}
-	o.Expect(err).NotTo(o.HaveOccurred())
-	clusterextension.ResolvedBundle = resolvedBundle
 }
 
 func (clusterextension *ClusterExtensionDescription) Patch(oc *exutil.CLI, patch string) {

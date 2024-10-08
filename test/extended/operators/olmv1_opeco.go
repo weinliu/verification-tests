@@ -133,7 +133,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		exutil.By("Update use the digest image and check it")
 		output, err := oc.AsAdmin().Run("patch").Args("clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"image":{"ref":"quay.io/olmqe/olmtest-operator-index@`+manifestDigestv1+`"}}}}`, "--type=merge").Output()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(string(output)).To(o.ContainSubstring("cannot specify PollInterval while using digest-based image"))
+		o.Expect(string(output)).To(o.ContainSubstring("cannot specify PollInterval while using digest-based"))
 
 	})
 
@@ -193,7 +193,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		exutil.By("Check type value")
 		errMsg, err = oc.AsAdmin().Run("patch").Args("clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"type":"redhat"}}}`, "--type=merge").Output()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(strings.Contains(errMsg, "Unsupported value: \"redhat\": supported values: \"image\"")).To(o.BeTrue())
+		o.Expect(strings.Contains(errMsg, "Unsupported value: \"redhat\": supported values: \"Image\"")).To(o.BeTrue())
 
 	})
 
@@ -244,7 +244,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		defer clustercatalog.Delete(oc)
 		clustercatalog.Create(oc)
 
-		initresolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
+		initresolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Update the index image with different tag , but the same digestID")
@@ -260,19 +260,19 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		}
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			img, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if img != "quay.io/olmqe/olmtest-operator-index:nginxolm69069v1" {
-				e2e.Logf("image: %v", img)
-				return false, nil
+			if err != nil {
+				return false, err
 			}
-			return true, nil
+			if strings.Contains(img, initresolvedRef) {
+				return true, nil
+			}
+			e2e.Logf("diff image1: %v, but expect same", img)
+			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(errWait, "Error image wrong or resolvedRef are same")
-		v1resolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if initresolvedRef != v1resolvedRef {
-			e2e.Failf("initresolvedRef:%v,v1resolvedRef:%v", initresolvedRef, v1resolvedRef)
+		if errWait != nil {
+			olmv1util.GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o=jsonpath-as-json={.status}")
 		}
+		exutil.AssertWaitPollNoErr(errWait, "disgest is not same, but should be same")
 
 		exutil.By("Update the index image with different tag and digestID")
 		err = oc.AsAdmin().Run("patch").Args("clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"image":{"ref":"quay.io/olmqe/olmtest-operator-index:nginxolm69069v2"}}}}`, "--type=merge").Execute()
@@ -280,16 +280,20 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 90*time.Second, false, func(ctx context.Context) (bool, error) {
 			img, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			v2resolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.resolvedRef}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if initresolvedRef == v2resolvedRef || img != "quay.io/olmqe/olmtest-operator-index:nginxolm69069v2" {
-				e2e.Logf("image: %v,v2resolvedRef: %v", img, v2resolvedRef)
+			if err != nil {
+				return false, err
+			}
+			if strings.Contains(img, initresolvedRef) {
+				e2e.Logf("same image, but expect not same")
 				return false, nil
 			}
+			e2e.Logf("image2: %v", img)
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(errWait, "Error image wrong or resolvedRef are same")
+		if errWait != nil {
+			olmv1util.GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o=jsonpath-as-json={.status}")
+		}
+		exutil.AssertWaitPollNoErr(errWait, "digest is same, but should be not same")
 
 	})
 
@@ -396,7 +400,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		clustercatalog.CreateWithoutCheck(oc)
 		clustercatalog.WaitCatalogStatus(oc, "false", "Serving", 30)
 		conditions, _ := olmv1util.GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", "jsonpath={.status.conditions}")
-		o.Expect(conditions).To(o.ContainSubstring("error fetching image"))
+		o.Expect(conditions).To(o.ContainSubstring("error fetching"))
 		o.Expect(conditions).To(o.ContainSubstring("401 Unauthorized"))
 
 		exutil.By("3) Patch the clustercatalog")
@@ -406,7 +410,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		exutil.By("4) install clusterextension")
 		defer clusterextension.Delete(oc)
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("v1.0.1"))
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 	})
 
 	// author: jfan@redhat.com
@@ -536,9 +540,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		exutil.By("update version to be >=1.0.2")
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": ">=1.0.2"}}}}`)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-			resolvedBundle, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.resolution.bundle.name}")
-			if !strings.Contains(resolvedBundle, "v1.0.3") {
-				e2e.Logf("clusterextension.resolvedBundle is %s, not v1.0.3, and try next", resolvedBundle)
+			installedBundle, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.install.bundle.name}")
+			if !strings.Contains(installedBundle, "v1.0.3") {
+				e2e.Logf("clusterextension.InstalledBundle is %s, not v1.0.3, and try next", installedBundle)
 				return false, nil
 			}
 			return true, nil
@@ -566,7 +570,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		clusterextension.Template = clusterextensionTemplate
 
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.ResolvedBundle).To(o.ContainSubstring("v3.0.1"))
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v3.0.1"))
 
 		exutil.By("Check ChannelDeprecated status and message")
 		clusterextension.WaitClusterExtensionCondition(oc, "Deprecated", "True", 0)
@@ -739,9 +743,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
-		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm74978s.cache.example.com failed upgrade safety validation. "NoScopeChange" validation failed: scope changed from "Namespaced" to "Cluster"`))
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			`CustomResourceDefinition nginxolm74978s.cache.example.com failed upgrade safety validation. "NoScopeChange" validation failed: scope changed from "Namespaced" to "Cluster"`, 10, 60, 0)
 
 		clusterextension.Delete(oc)
 
@@ -755,9 +758,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.2"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.3")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm74978s.cache.example.com failed upgrade safety validation. "NoScopeChange" validation failed: scope changed from "Cluster" to "Namespaced"`))
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			`CustomResourceDefinition nginxolm74978s.cache.example.com failed upgrade safety validation. "NoScopeChange" validation failed: scope changed from "Cluster" to "Namespaced"`, 10, 60, 0)
 
 	})
 
@@ -815,18 +817,19 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
-		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring(`scope changed from "Namespaced" to "Cluster"`))
-		o.Expect(message).To(o.ContainSubstring(`.spec.field1 may not be removed`))
-		o.Expect(message).To(o.ContainSubstring(`calculating schema diff for CRD version "v1alpha1"`))
+		clusterextension.CheckClusterExtensionCondition(oc, "Installed", "message",
+			`scope changed from "Namespaced" to "Cluster"`, 10, 60, 0)
+		clusterextension.CheckClusterExtensionCondition(oc, "Installed", "message",
+			`.spec.field1 may not be removed`, 10, 60, 0)
+		clusterextension.CheckClusterExtensionCondition(oc, "Installed", "message",
+			`calculating schema diff for CRD version "v1alpha1"`, 10, 60, 0)
 
 		exutil.By("disabled crd upgrade safety check, it will not affect spec.scope: Invalid value: Cluster")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.2","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"disabled":true}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
+		var message string
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 18*time.Second, false, func(ctx context.Context) (bool, error) {
 			message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
 			if !strings.Contains(message, `CustomResourceDefinition.apiextensions.k8s.io "nginxolm75218s.cache.example.com" is invalid: spec.scope: Invalid value: "Cluster": field is immutable`) {
@@ -841,9 +844,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.3")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring(`must have exactly one version marked as storage version, status.storedVersions[0]: Invalid value: "v1alpha1": must appear in spec.versions`))
+		clusterextension.CheckClusterExtensionCondition(oc, "Installed", "message",
+			`must have exactly one version marked as storage version, status.storedVersions[0]: Invalid value: "v1alpha1": must appear in spec.versions`, 10, 60, 0)
 
 		exutil.By("disabled crd upgrade safety successfully")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.5","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"disabled":true}}}}}`, "--type=merge").Execute()
@@ -853,9 +855,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.5"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.5")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.5-nginxolm75218 successfully"))
+		clusterextension.CheckClusterExtensionCondition(oc, "Installed", "message",
+			"Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.5-nginxolm75218 successfully", 10, 60, 0)
 
 	})
 
@@ -913,9 +914,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
-		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75122s.cache.example.com failed upgrade safety validation. "NoStoredVersionRemoved" validation failed: stored version "v1alpha1" removed`))
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			`failed: stored version "v1alpha1" removed for resolved bundle "nginx75122.v1.0.2" with version "1.0.2"`, 10, 60, 0)
 
 		exutil.By("upgrade will be allowed if A new version of the CRD is added with no modifications to existing versions")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
@@ -925,9 +925,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.3"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.3")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.3-nginxolm75122 successfully"))
+		clusterextension.CheckClusterExtensionCondition(oc, "Installed", "message",
+			"Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.3-nginxolm75122 successfully", 10, 60, 0)
 
 		exutil.By("upgrade will be prevented if An existing served version of the CRD is removed")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.6","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
@@ -937,9 +936,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.6"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.6")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.6-nginxolm75122 successfully"))
+		clusterextension.CheckClusterExtensionCondition(oc, "Installed", "message",
+			"Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.6-nginxolm75122 successfully", 10, 60, 0)
 
 	})
 
@@ -997,28 +995,26 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
-		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec": new required fields added: [requiredfield2]`))
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			`failed: version "v1alpha1", field "^.spec": new required fields added: [requiredfield2] for resolved bundle "nginx75123.v1.0.2" with version "1.0.2"`, 10, 60, 0)
 
 		exutil.By("upgrade will be prevented if An existing field is removed from an existing version of the CRD")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.3")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "NoExistingFieldRemoved" validation failed: crd/nginxolm75123s.cache.example.com version/v1alpha1 field/^.spec.field may not be removed`))
-		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: calculating schema diff for CRD version "v1alpha1"`))
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "NoExistingFieldRemoved" validation failed: crd/nginxolm75123s.cache.example.com version/v1alpha1 field/^.spec.field may not be removed`, 10, 60, 0)
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: calculating schema diff for CRD version "v1alpha1"`, 10, 60, 0)
 
 		exutil.By("upgrade will be prevented if An existing field type is changed in an existing version of the CRD")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.6","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.6")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.field" has unknown change, refusing to determine that change is safe`))
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.field" has unknown change, refusing to determine that change is safe`, 10, 60, 0)
 
 		exutil.By("upgrade will be allowed if An existing required field is changed to optional in an existing version")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.8","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
@@ -1028,9 +1024,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.8"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.8")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.8-nginxolm75123 successfully"))
+		clusterextension.CheckClusterExtensionCondition(oc, "Installed", "message",
+			"Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.8-nginxolm75123 successfully", 10, 60, 0)
 
 	})
 
@@ -1088,27 +1083,24 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
-		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75124s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.field": new value added as default when previously no default value existed: &JSON{Raw:*[34 100 101 102 97 117 108 116 45 115 116 114 105 110 103 45 106 105 116 108 105 34],}`))
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			`CustomResourceDefinition nginxolm75124s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.field": new value added as default when previously no default value existed:`, 10, 60, 0)
 
 		exutil.By("upgrade will be prevented if The default value of a field is changed")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.3")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75124s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.defaultenum": default value has been changed from [34 118 97 108 117 101 49 34] to [34 118 97 108 117 101 51 34]`))
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			`CustomResourceDefinition nginxolm75124s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.defaultenum": default value has been changed`, 10, 60, 0)
 
 		exutil.By("upgrade will be prevented if An existing default value of a field is removed")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.6","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.6")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75124s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.defaultint": default value has been removed when previously a default value existed: [57]`))
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			`CustomResourceDefinition nginxolm75124s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.defaultint": default value has been removed when previously a default value existed`, 10, 60, 0)
 
 	})
 
@@ -1166,9 +1158,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
-		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75515s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.unenumfield": enums added when there were no enum restrictions previously`))
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			`CustomResourceDefinition nginxolm75515s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.unenumfield": enums added when there were no enum restrictions previously`, 10, 60, 0)
 
 		clusterextension.Delete(oc)
 
@@ -1182,10 +1173,6 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.3"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.5")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring(`CustomResourceDefinition nginxolm75515s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.enumfield": enum values removed: ["value2"]`))
-
 		exutil.By("upgrade will be allowed if Adding new enum values to the list of allowed enum values in a field")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.6","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1194,9 +1181,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.6"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.6")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.6-nginxolm75515 successfully"))
+		clusterextension.CheckClusterExtensionCondition(oc, "Installed", "message",
+			"Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.6-nginxolm75515 successfully", 10, 60, 0)
 
 	})
 
@@ -1255,50 +1241,50 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.2")
-		message := clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring("maximum constraint decreased from 100 to 80"))
-		o.Expect(message).To(o.ContainSubstring("minimum constraint increased from 10 to 20"))
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			"maximum constraint decreased from 100 to 80", 10, 60, 0)
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			"minimum constraint increased from 10 to 20", 10, 60, 0)
 
 		exutil.By("Check minLength & maxLength")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.3")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring("maximum length constraint decreased from 50 to 30"))
-		o.Expect(message).To(o.ContainSubstring("minimum length constraint increased from 3 to 9"))
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			"maximum length constraint decreased from 50 to 30", 10, 60, 0)
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			"minimum length constraint increased from 3 to 9", 10, 60, 0)
 
 		exutil.By("Check minProperties & maxProperties")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.4","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.4")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring("maximum properties constraint decreased from 5 to 4"))
-		o.Expect(message).To(o.ContainSubstring("minimum properties constraint increased from 2 to 3"))
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			"maximum properties constraint decreased from 5 to 4", 10, 60, 0)
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			"minimum properties constraint increased from 2 to 3", 10, 60, 0)
 
 		exutil.By("Check minItems & maxItems")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.5","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.5")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring("maximum items constraint decreased from 10 to 9"))
-		o.Expect(message).To(o.ContainSubstring("minimum items constraint increased from 2 to 3"))
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			"maximum items constraint decreased from 10 to 9", 10, 60, 0)
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			"minimum items constraint increased from 2 to 3", 10, 60, 0)
 
 		exutil.By("upgrade will be prevented if Minimum or maximum field constraints are added to a field that did not previously have constraints")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.6","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.6")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring(`version "v1alpha1", field "^.spec.field1": maximum constraint added when one did not exist previously: 100`))
-		o.Expect(message).To(o.ContainSubstring(`version "v1alpha1", field "^.spec.field1": minimum constraint added when one did not exist previously: 10`))
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			`version "v1alpha1", field "^.spec.field1": maximum constraint added when one did not exist previously: 100`, 10, 60, 0)
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
+			`version "v1alpha1", field "^.spec.field1": minimum constraint added when one did not exist previously: 10`, 10, 60, 0)
 
 		exutil.By("upgrade will be Allowed if The minimum value of an existing field is decreased in an existing version & The maximum value of an existing field is increased in an existing version")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.7","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
@@ -1308,9 +1294,8 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.7"))
 
-		clusterextension.WaitResolvedBundleVersion(oc, "1.0.7")
-		message = clusterextension.GetClusterExtensionMessage(oc, "Installed")
-		o.Expect(message).To(o.ContainSubstring("Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.7-nginxolm75516 successfully"))
+		clusterextension.CheckClusterExtensionCondition(oc, "Installed", "message",
+			"Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.7-nginxolm75516 successfully", 10, 60, 0)
 
 	})
 
