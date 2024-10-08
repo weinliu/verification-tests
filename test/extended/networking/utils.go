@@ -1638,7 +1638,7 @@ func getPodMultiNetwork(oc *exutil.CLI, namespace string, podName string) (strin
 // Pinging pod's secondary interfaces should pass
 func curlPod2PodMultiNetworkPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPv4 string, podIPv6 string) {
 	// Poll to check IPv4 connectivity
-	err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 		msg, _ := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
 		if !strings.Contains(msg, "Hello OpenShift!") {
 			e2e.Logf("The curl should pass but fail, and try next round")
@@ -1649,7 +1649,7 @@ func curlPod2PodMultiNetworkPass(oc *exutil.CLI, namespaceSrc string, podNameSrc
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test fail with err:%s", err))
 
 	// Poll to check IPv6 connectivity
-	err1 := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
+	err1 := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 		msg1, _ := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -g -6 ["+podIPv6+"]:8080  --connect-timeout 5")
 		if !strings.Contains(msg1, "Hello OpenShift!") {
 			e2e.Logf("The curl should pass but fail, and try next round")
@@ -1663,7 +1663,7 @@ func curlPod2PodMultiNetworkPass(oc *exutil.CLI, namespaceSrc string, podNameSrc
 // Pinging pod's secondary interfaces should fail
 func curlPod2PodMultiNetworkFail(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPv4 string, podIPv6 string) {
 	// Poll to check IPv4 connectivity
-	err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 		msg, _ := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
 		if strings.Contains(msg, "Hello OpenShift!") {
 			e2e.Logf("The curl should fail but pass, and try next round")
@@ -1674,7 +1674,7 @@ func curlPod2PodMultiNetworkFail(oc *exutil.CLI, namespaceSrc string, podNameSrc
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test fail with err:%s", err))
 
 	// Poll to check IPv6 connectivity
-	err1 := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
+	err1 := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 		msg1, _ := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -g -6 ["+podIPv6+"]:8080  --connect-timeout 5")
 		if strings.Contains(msg1, "Hello OpenShift!") {
 			e2e.Logf("The curl should fail but pass, and try next round")
@@ -1685,32 +1685,53 @@ func curlPod2PodMultiNetworkFail(oc *exutil.CLI, namespaceSrc string, podNameSrc
 	exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("Test fail with err:%s", err1))
 }
 
+// This function is for testing MultiNetwork with IPBlock policy only
+func curlPod2PodMultiNetworkIPBlockPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPv4 string, podIPv6 string) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+		msg, _ := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
+		if !strings.Contains(msg, "Hello OpenShift!") {
+			e2e.Logf("The curl should pass but fail, and try next round")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test fail with err:%s", err))
+}
+
+// This function is for testing MultiNetwork with IPBlock policy only
+func curlPod2PodMultiNetworkIPBlockFail(oc *exutil.CLI, namespaceSrc string, podNameSrc string, podIPv4 string, podIPv6 string) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+		msg, _ := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl  "+podIPv4+":8080  --connect-timeout 5")
+		if strings.Contains(msg, "Hello OpenShift!") {
+			e2e.Logf("The curl should fail but pass, and try next round")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test fail with err:%s", err))
+}
+
 // This function will bring 2 namespaces, 5 pods and 2 NADs for all multus multinetworkpolicy cases
 func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo string) {
-
 	buildPruningBaseDir := exutil.FixturePath("testdata", "networking/multinetworkpolicy")
 	netAttachDefFile1 := filepath.Join(buildPruningBaseDir, "MultiNetworkPolicy-NAD1.yaml")
 	netAttachDefFile2 := filepath.Join(buildPruningBaseDir, "MultiNetworkPolicy-NAD2.yaml")
 	pingPodTemplate := filepath.Join(buildPruningBaseDir, "MultiNetworkPolicy-pod-template.yaml")
 	patchSResource := "networks.operator.openshift.io/cluster"
 
-	g.By("Enable MacvlanNetworkpolicy in the cluster")
+	exutil.By("Enable MacvlanNetworkpolicy in the cluster")
 	patchResourceAsAdmin(oc, patchSResource, patchInfo)
+	waitForNetworkOperatorState(oc, 20, 10, "True.*True.*False")
+	waitForNetworkOperatorState(oc, 20, 20, "True.*False.*False")
 
-	g.By("Create first namespace")
-	nserr1 := oc.Run("new-project").Args(ns1).Execute()
-	o.Expect(nserr1).NotTo(o.HaveOccurred())
-	_, proerr1 := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "user="+ns1).Output()
-	o.Expect(proerr1).NotTo(o.HaveOccurred())
-
-	g.By("Create MultiNetworkPolicy-NAD1 in ns1")
+	exutil.By("Create MultiNetworkPolicy-NAD1 in ns1")
 	err1 := oc.AsAdmin().Run("create").Args("-f", netAttachDefFile1, "-n", ns1).Execute()
 	o.Expect(err1).NotTo(o.HaveOccurred())
-	output, err2 := oc.Run("get").Args("net-attach-def", "-n", ns1).Output()
+	output, err2 := oc.AsAdmin().Run("get").Args("net-attach-def", "-n", ns1).Output()
 	o.Expect(err2).NotTo(o.HaveOccurred())
 	o.Expect(output).To(o.ContainSubstring("macvlan-nad1"))
 
-	g.By("Create 1st pod in ns1")
+	exutil.By("Create 1st pod in ns1")
 	pod1ns1 := testPodMultinetwork{
 		name:      "blue-pod-1",
 		namespace: ns1,
@@ -1722,7 +1743,7 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod1ns1.createTestPodMultinetwork(oc)
 	waitPodReady(oc, pod1ns1.namespace, pod1ns1.name)
 
-	g.By("Create second pod in ns1")
+	exutil.By("Create second pod in ns1")
 	pod2ns1 := testPodMultinetwork{
 		name:      "blue-pod-2",
 		namespace: ns1,
@@ -1734,7 +1755,7 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod2ns1.createTestPodMultinetwork(oc)
 	waitPodReady(oc, pod2ns1.namespace, pod2ns1.name)
 
-	g.By("Create third pod in ns1")
+	exutil.By("Create third pod in ns1")
 	pod3ns1 := testPodMultinetwork{
 		name:      "red-pod-1",
 		namespace: ns1,
@@ -1746,20 +1767,14 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod3ns1.createTestPodMultinetwork(oc)
 	waitPodReady(oc, pod3ns1.namespace, pod3ns1.name)
 
-	g.By("Create second namespace")
-	nserr2 := oc.Run("new-project").Args(ns2).Execute()
-	o.Expect(nserr2).NotTo(o.HaveOccurred())
-	_, proerr2 := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "user="+ns2).Output()
-	o.Expect(proerr2).NotTo(o.HaveOccurred())
-
-	g.By("Create MultiNetworkPolicy-NAD2 in ns2")
+	exutil.By("Create MultiNetworkPolicy-NAD2 in ns2")
 	err4 := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", netAttachDefFile2, "-n", ns2).Execute()
 	o.Expect(err4).NotTo(o.HaveOccurred())
-	output, err5 := oc.Run("get").Args("net-attach-def", "-n", ns2).Output()
+	output, err5 := oc.AsAdmin().Run("get").Args("net-attach-def", "-n", ns2).Output()
 	o.Expect(err5).NotTo(o.HaveOccurred())
 	o.Expect(output).To(o.ContainSubstring("macvlan-nad2"))
 
-	g.By("Create 1st pod in ns2")
+	exutil.By("Create 1st pod in ns2")
 	pod1ns2 := testPodMultinetwork{
 		name:      "blue-pod-3",
 		namespace: ns2,
@@ -1771,7 +1786,7 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod1ns2.createTestPodMultinetwork(oc)
 	waitPodReady(oc, pod1ns2.namespace, pod1ns2.name)
 
-	g.By("Create second pod in ns2")
+	exutil.By("Create second pod in ns2")
 	pod2ns2 := testPodMultinetwork{
 		name:      "red-pod-2",
 		namespace: ns2,
