@@ -1220,8 +1220,8 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 
 		//if any of value is null on exisiting cluster, it indicates that cluster came up with following default values assigned by OVNK
 		if (currentinternalJoinSubnetIPv4Value == "") || (currentinternalJoinSubnetIPv6Value == "") {
-			currentinternalJoinSubnetIPv4Value = "10.88.0.0/16"
-			currentinternalTransitSwSubnetIPv4Value = "10.64.0.0/16"
+			currentinternalJoinSubnetIPv4Value = "100.64.0.0/16"
+			currentinternalTransitSwSubnetIPv4Value = "100.88.0.0/16"
 			currentinternalJoinSubnetIPv6Value = "fd98::/64"
 			currentinternalTransitSwSubnetIPv6Value = "fd97::/64"
 		}
