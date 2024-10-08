@@ -999,7 +999,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(sslOutput).Should(o.ContainSubstring("TLSv1.3"))
 
 		exutil.By("verify whether the unsafe cipher is disabled")
-		cipherOutput, cipherErr := masterNode.DebugNodeWithOptions([]string{"--image=quay.io/openshifttest/testssl@sha256:ad6fb8002cb9cfce3ddc8829fd6e7e0d997aeb1faf972650f3e5d7603f90c6ef", "-n", MachineConfigNamespace}, "testssl.sh", "--quiet", "--sweet32", "localhost:6443")
+		cipherOutput, cipherErr := masterNode.DebugNodeWithOptions([]string{"--image=" + TestSSLImage, "-n", MachineConfigNamespace}, "testssl.sh", "--quiet", "--sweet32", "localhost:6443")
 		logger.Infof("test ssh script output:\n %s", cipherOutput)
 		o.Expect(cipherErr).NotTo(o.HaveOccurred())
 		o.Expect(cipherOutput).Should(o.ContainSubstring("not vulnerable (OK)"))
@@ -3424,7 +3424,7 @@ nulla pariatur.`
 		exutil.By("Connect to the rbac-proxy service to verify the cipher")
 		mMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 		masterNode := mMcp.GetNodesOrFail()[0]
-		cipherOutput, cipherErr := masterNode.DebugNodeWithOptions([]string{"--image=quay.io/openshifttest/testssl@sha256:ad6fb8002cb9cfce3ddc8829fd6e7e0d997aeb1faf972650f3e5d7603f90c6ef", "-n", MachineConfigNamespace}, "testssl.sh", "--color", "0", "localhost:9001")
+		cipherOutput, cipherErr := masterNode.DebugNodeWithOptions([]string{"--image=" + TestSSLImage, "-n", MachineConfigNamespace}, "testssl.sh", "--color", "0", "localhost:9001")
 		logger.Infof("test ssh script output:\n %s", cipherOutput)
 		o.Expect(cipherErr).NotTo(o.HaveOccurred())
 		o.Expect(cipherOutput).Should(o.MatchRegexp(`Obsoleted CBC ciphers \(AES, ARIA etc.\) +not offered`))

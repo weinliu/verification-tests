@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -682,6 +683,44 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		validateCorrectTlsProfileSecurityInKubeletConfig(oc.AsAdmin(), node, "VersionTLS12", csVersion12)
 		logger.Infof("OK!\n")
 
+	})
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-76587-Port number 22623 should not expose weak ciphers to external client from master node IP [Disruptive]", func() {
+		var (
+			node            = mcp.GetSortedNodesOrFail()[0]
+			port            = 22623
+			insecureCiphers = []string{"TLS_RSA_WITH_AES_128_GCM_SHA256", "TLS_RSA_WITH_AES_256_GCM_SHA384"}
+		)
+
+		exutil.By("Remove iptable rules")
+		logger.Infof("Remove the IPV4 iptables rules that block the ignition config")
+		removedRules, err := node.RemoveIPTablesRulesByRegexp(fmt.Sprintf("%d", port))
+		defer node.ExecIPTables(removedRules)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error removing the IPv4 iptables rules for port %s in node %s", port, node.GetName())
+
+		logger.Infof("Remove the IPV6 ip6tables rules that block the ignition config")
+		removed6Rules, err := node.RemoveIP6TablesRulesByRegexp(fmt.Sprintf("%d", port))
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error removing the IPv6 iptables rules for port %s in node %s", port, node.GetName())
+		defer node.ExecIP6Tables(removed6Rules)
+		logger.Infof("OK!\n")
+
+		internalAPIServerURI, err := GetAPIServerInternalURI(mcp.oc)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the internal apiserver URL")
+
+		exutil.By("Check that no weak cipher is exposed")
+		url := fmt.Sprintf("%s:%d", internalAPIServerURI, port)
+		cipherOutput, cipherErr := node.DebugNodeWithOptions([]string{"--image=" + TestSSLImage, "-n", MachineConfigNamespace}, "testssl.sh", "--color", "0", url)
+		logger.Infof("test ssh script output:\n %s", cipherOutput)
+		o.Expect(cipherErr).NotTo(o.HaveOccurred())
+		for _, insecureCipher := range insecureCiphers {
+			logger.Infof("Verify %s", insecureCipher)
+			o.Expect(cipherOutput).NotTo(o.ContainSubstring(insecureCipher),
+				"MCO is exposing weak ciphers in %s", internalAPIServerURI)
+			logger.Infof("OK")
+		}
+		logger.Infof("Verify SWEET32")
+		o.Expect(cipherOutput).To(o.MatchRegexp("SWEET32 .*"+regexp.QuoteMeta("not vulnerable (OK)")),
+			"%s is vulnerable to SWEET32", internalAPIServerURI)
+		logger.Infof("OK!\n")
 	})
 
 })
