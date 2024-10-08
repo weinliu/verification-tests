@@ -23,6 +23,7 @@ type lvmCluster struct {
 	deviceClassName  string
 	deviceClassName2 string
 	fsType           string
+	fsType2          string
 	paths            []string
 	optionalPaths    []string
 	namespace        string
@@ -53,9 +54,16 @@ func setLvmClusterDeviceClassName2(deviceClassName2 string) lvmClusterOption {
 }
 
 // Replace the default value of lvmsCluster fsType
-func setLvmClusterfsType(fsType string) lvmClusterOption {
+func setLvmClusterFsType(fsType string) lvmClusterOption {
 	return func(lvm *lvmCluster) {
 		lvm.fsType = fsType
+	}
+}
+
+// Replace the default value of lvmsCluster fsType2
+func setLvmClusterFsType2(fsType2 string) lvmClusterOption {
+	return func(lvm *lvmCluster) {
+		lvm.fsType2 = fsType2
 	}
 }
 
@@ -94,6 +102,7 @@ func newLvmCluster(opts ...lvmClusterOption) lvmCluster {
 		deviceClassName:  "vg1",
 		deviceClassName2: "vg2",
 		fsType:           "xfs",
+		fsType2:          "ext4",
 		paths:            make([]string, 5),
 		optionalPaths:    make([]string, 5),
 		template:         "/lvms/lvmcluster-with-paths-template.yaml",
@@ -144,7 +153,7 @@ func (lvm *lvmCluster) createWithNodeSelector(oc *exutil.CLI, key string, operat
 // Create a new customized LVMCluster with two device-classes
 func (lvm *lvmCluster) createWithMultiDeviceClasses(oc *exutil.CLI) {
 	err := applyResourceFromTemplateAsAdmin(oc, "--ignore-unknown-parameters=true", "-f", lvm.template, "-p", "NAME="+lvm.name, "NAMESPACE="+lvm.namespace, "DEVICECLASSNAME1="+lvm.deviceClassName,
-		"DEVICECLASSNAME2="+lvm.deviceClassName2, "FSTYPE="+lvm.fsType, "PATH1="+lvm.paths[0], "PATH2="+lvm.paths[1])
+		"DEVICECLASSNAME2="+lvm.deviceClassName2, "FSTYPE1="+lvm.fsType, "FSTYPE2="+lvm.fsType2, "PATH1="+lvm.paths[0], "PATH2="+lvm.paths[1])
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -503,4 +512,21 @@ func waitLVMSProvisionerReady(oc *exutil.CLI) {
 	for _, podName := range lvmsPodList {
 		waitPodReady(oc, lvmsNS, podName)
 	}
+}
+
+// Get LVMCluster device paths
+func getLvmClusterPaths(oc *exutil.CLI) []string {
+	currentLVMClusterName := getCurrentLVMClusterName(oc)
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", "-n", "openshift-storage", currentLVMClusterName, "-o=jsonpath={.status.deviceClassStatuses[*].nodeStatus[*].devices[*]}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("LVMCluster device paths are: %q", output)
+	return strings.Fields(output)
+}
+
+// Gets the LVMS provisioned volume located node's name
+func getLogicalVolumeSelectedNode(oc *exutil.CLI, namespace string, pvcName string) string {
+	nodeName, err := oc.WithoutNamespace().Run("get").Args("pvc", pvcName, "-n", namespace, "-ojsonpath={.metadata.annotations.volume\\.kubernetes\\.io/selected-node}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The nodename in namespace %s for pvc %s is %s", namespace, pvcName, nodeName)
+	return nodeName
 }
