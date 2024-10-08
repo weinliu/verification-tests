@@ -5498,7 +5498,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Multi-NIC", func() {
 
 		exutil.By("5. Start tcpdump on egress node \n")
 		exutil.SetNamespacePrivileged(oc, ns1)
-		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s", vrf.intfname)
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s icmp", vrf.intfname)
 		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+egressNode, "--", "bash", "-c", tcpdumpCmd).Background()
 		defer cmdTcpdump.Process.Kill()
 		exutil.AssertWaitPollNoErr(err, "FAILED to start tcmpdump on the egress node\n")
