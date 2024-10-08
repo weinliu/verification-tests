@@ -42,6 +42,12 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/BareMetal/Nutanix/Powervs cluster with ovn network plugin, skip for other platforms!!")
 		}
 
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "ipv6single" {
+			// Not able to run on IPv6 single cluster for now due to cluster disconnect limiation.
+			g.Skip("Skip IPv6 Single cluster.")
+		}
+
 		if !(strings.Contains(platform, "none") || strings.Contains(platform, "powervs")) && (checkProxy(oc) || checkDisconnect(oc)) {
 			g.Skip("This is proxy/disconnect cluster, skip the test.")
 		}
@@ -3725,6 +3731,12 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		if !acceptedPlatform {
 			g.Skip("Test cases should be run on AWS/GCP/Azure/Openstack/Vsphere/Baremetal/Nutanix/Powervs cluster with ovn network plugin, skip for other platforms ")
 		}
+
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "ipv6single" {
+			// Not able to run on IPv6 single cluster for now due to cluster disconnect limiation.
+			g.Skip("Skip IPv6 Single cluster.")
+		}
 	})
 
 	// author: huirwang@redhat.com
@@ -3894,9 +3906,6 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		podLabelErr := exutil.LabelPod(oc, ns1, statefulSetPodName[0], "color=purple")
 		exutil.AssertWaitPollNoErr(podLabelErr, "Was not able to apply pod label")
 
-		helloPodIPv4, _ := getPodIP(oc, ns1, statefulSetPodName[0])
-		e2e.Logf("Pod's IP for the statefulSet Hello Pod is:%v", helloPodIPv4)
-
 		exutil.By("5.2 Create a completed pod in the namespace, apply pod label to it. ")
 		createResourceFromFile(oc, ns1, completedPodTemplate)
 		completedPodName := getPodName(oc, ns1, "job-name=countdown")
@@ -3906,16 +3915,26 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		podLabelErr = exutil.LabelPod(oc, ns1, completedPodName[0], "color=purple")
 		exutil.AssertWaitPollNoErr(podLabelErr, "Was not able to apply pod label")
 
-		completedPodIPv4, _ := getPodIP(oc, ns1, completedPodName[0])
-		e2e.Logf("Pod's IP for the completed countdown pod is:%v", completedPodIPv4)
+		ipStackType := checkIPStackType(oc)
+		var helloPodIP, completedPodIP string
+		if ipStackType == "dualstack" {
+			_, helloPodIP = getPodIP(oc, ns1, statefulSetPodName[0])
+			_, completedPodIP = getPodIP(oc, ns1, completedPodName[0])
+		} else {
+			helloPodIP, _ = getPodIP(oc, ns1, statefulSetPodName[0])
+			completedPodIP, _ = getPodIP(oc, ns1, completedPodName[0])
+		}
+		e2e.Logf("Pod's IP for the statefulSet Hello Pod is:%v", helloPodIP)
+		e2e.Logf("Pod's IP for the completed countdown pod is:%v", completedPodIP)
 
 		exutil.By("6. Check SNATs of stateful pod and completed pod on the egressNode before rebooting it.\n")
 		snatIP, snatErr := getSNATofEgressIP(oc, nodeToBeRebooted, freeIPs[0])
+		e2e.Logf("snatIP:%v", snatIP)
 		o.Expect(snatErr).NotTo(o.HaveOccurred())
 		o.Expect(len(snatIP)).Should(o.Equal(1))
 		e2e.Logf("the SNAT IP for the egressIP is:%v", snatIP[0])
-		o.Expect(snatIP[0]).Should(o.Equal(helloPodIPv4))
-		o.Expect(snatIP[0]).ShouldNot(o.Equal(completedPodIPv4))
+		o.Expect(snatIP[0]).Should(o.Equal(helloPodIP))
+		o.Expect(snatIP[0]).ShouldNot(o.Equal(completedPodIP))
 
 		exutil.By("7. Reboot egress node.\n")
 		defer checkNodeStatus(oc, nodeToBeRebooted, "Ready")
@@ -3933,17 +3952,23 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		podLabelErr = exutil.LabelPod(oc, ns1, statefulSetPodName[0], "color=purple")
 		exutil.AssertWaitPollNoErr(podLabelErr, "Was not able to apply pod label")
 
-		newHelloPodIPv4, _ := getPodIP(oc, ns1, statefulSetPodName[0])
-		e2e.Logf("Pod's IP for the newly created Hello Pod is:%v", newHelloPodIPv4)
-
 		// get completed pod name again, relabel it, get its IP address
 		newCompletedPodName := getPodName(oc, ns1, "job-name=countdown")
 		waitPodReady(oc, ns1, newCompletedPodName[0])
 		defer exutil.LabelPod(oc, ns1, newCompletedPodName[0], "color-")
 		podLabelErr = exutil.LabelPod(oc, ns1, newCompletedPodName[0], "color=purple")
 		exutil.AssertWaitPollNoErr(podLabelErr, "Was not able to apply pod label")
-		newCompletedPodIPv4, _ := getPodIP(oc, ns1, newCompletedPodName[0])
-		e2e.Logf("Pod's IP for the new completed countdown pod is:%v", newCompletedPodIPv4)
+
+		var newCompletedPodIP, newHelloPodIP string
+		if ipStackType == "dualstack" {
+			_, newCompletedPodIP = getPodIP(oc, ns1, newCompletedPodName[0])
+			_, newHelloPodIP = getPodIP(oc, ns1, statefulSetPodName[0])
+		} else {
+			newCompletedPodIP, _ = getPodIP(oc, ns1, newCompletedPodName[0])
+			newHelloPodIP, _ = getPodIP(oc, ns1, statefulSetPodName[0])
+		}
+		e2e.Logf("Pod's IP for the new completed countdown pod is:%v", newCompletedPodIP)
+		e2e.Logf("Pod's IP for the newly created Hello Pod is:%v", newHelloPodIP)
 
 		exutil.By("9. Check egress node in egress object again, egressIP should fail to the second egressNode.\n")
 		egressIPMaps1 = getAssignedEIPInEIPObject(oc, egressip1.name)
@@ -3959,12 +3984,12 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 
 		e2e.Logf("After egressIP failover, the SNAT IP for the egressIP on second router is:%v", snatIP)
 		exutil.By("10.1 There should be the IP of the newly created statefulState hello pod, not the IP of old hello pod.\n")
-		o.Expect(snatIP[0]).Should(o.Equal(newHelloPodIPv4))
-		o.Expect(snatIP[0]).ShouldNot(o.Equal(helloPodIPv4))
+		o.Expect(snatIP[0]).Should(o.Equal(newHelloPodIP))
+		o.Expect(snatIP[0]).ShouldNot(o.Equal(helloPodIP))
 
 		exutil.By("10.2 There should be no SNAT for old or new completed pod's IP.\n")
 		o.Expect(snatIP[0]).ShouldNot(o.Equal(newEgressIPHostNode)) //there should be no SNAT for completed pod's old or new IP address
-		o.Expect(snatIP[0]).ShouldNot(o.Equal(completedPodIPv4))    //there should be no SNAT for completed pod's old or new IP address
+		o.Expect(snatIP[0]).ShouldNot(o.Equal(completedPodIP))      //there should be no SNAT for completed pod's old or new IP address
 
 		// Make sure the rebooted node is back to Ready state
 		checkNodeStatus(oc, egressIPMaps1[0]["node"], "Ready")
