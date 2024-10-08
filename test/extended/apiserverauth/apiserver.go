@@ -3238,9 +3238,10 @@ spec:
 		featureTech, err := getResource(oc, asAdmin, withoutNamespace, "featuregate", "cluster", "-o=jsonpath={.spec.featureSet}")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		httpProxy, _, _ := getGlobalProxy(oc)
-		if strings.Contains(httpProxy, "http") && strings.Contains(featureTech, "TechPreview") {
-			g.Skip("Skip for proxy platform with techpreview")
+		if (strings.Contains(httpProxy, "http") && strings.Contains(featureTech, "TechPreview")) || checkDisconnect(oc) {
+			g.Skip("Skip for proxy platform with techpreview or disconnected env")
 		}
+
 		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.By("1. Create certificates with SAN.")
 		opensslCMD := fmt.Sprintf("openssl genrsa -out %v 2048", caKeypem)
