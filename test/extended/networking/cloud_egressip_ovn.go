@@ -2787,6 +2787,12 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 			}
 		}
 
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "ipv6single" {
+			// Not able to run on IPv6 single cluster for now due to cluster disconneect limiation.
+			g.Skip("Skip IPv6 Single cluster.")
+		}
+
 	})
 
 	// author: huirwang@redhat.com
@@ -2885,6 +2891,17 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		exutil.By("2 Apply EgressLabel Key to one node. \n")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
+		// For dual stack cluster, it needs two nodes holding IPv4 and IPv6 seperately.
+		ipStackType := checkIPStackType(oc)
+		var egressNode2 string
+		if ipStackType == "dualstack" {
+			if len(nodeList.Items) < 2 {
+				g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+			}
+			egressNode2 = nodeList.Items[1].Name
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel)
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel, "true")
+		}
 
 		exutil.By("3. create new namespace\n")
 		ns1 := oc.Namespace()
@@ -2900,8 +2917,19 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
 
 		exutil.By("6. Create an egressip object\n")
-		freeIPs := findFreeIPs(oc, egressNode, 2)
-		o.Expect(len(freeIPs)).Should(o.Equal(2))
+
+		var freeIPs []string
+		switch ipStackType {
+		case "ipv4single":
+			freeIPs = findFreeIPs(oc, egressNode, 2)
+			o.Expect(len(freeIPs)).Should(o.Equal(2))
+		case "dualstack":
+			freeIPv6s := findFreeIPv6s(oc, egressNode2, 1)
+			o.Expect(len(freeIPv6s)).Should(o.Equal(1))
+			freeIPs = findFreeIPs(oc, egressNode, 1)
+			o.Expect(len(freeIPs)).Should(o.Equal(1))
+			freeIPs = append(freeIPs, freeIPv6s[0])
+		}
 		egressip1 := egressIPResource1{
 			name:      "egressip-47021",
 			template:  egressIP1Template,
@@ -2911,7 +2939,11 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		defer egressip1.deleteEgressIPObject1(oc)
 		egressip1.createEgressIPObject1(oc)
 		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
-		o.Expect(len(egressIPMaps1) == 1).Should(o.BeTrue())
+		if ipStackType == "dualstack" {
+			o.Expect(len(egressIPMaps1) == 2).Should(o.BeTrue())
+		} else {
+			o.Expect(len(egressIPMaps1) == 1).Should(o.BeTrue())
+		}
 
 		exutil.By("6. Restart ovnkube-node pod which is on egress node\n")
 		ovnPod := ovnkubeNodePod(oc, egressNode)
@@ -2933,8 +2965,8 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		})
 		exutil.AssertWaitPollNoErr(podsErr, fmt.Sprintf("The pods were not scaled to the expected number!"))
 		testPodName := getPodName(oc, ns1, "name=test-pods")
-		testPodIP1, _ := getPodIP(oc, ns1, testPodName[0])
-		e2e.Logf("testPodIP1: %v", testPodIP1)
+		testPodIP1, testPodIP2 := getPodIP(oc, ns1, testPodName[0])
+		e2e.Logf("testPodIP1: %v,testPodIP2: %v", testPodIP1, testPodIP2)
 		testPodNode, err := exutil.GetPodNodeName(oc, ns1, testPodName[0])
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("test pod %s is on node %s", testPodName, testPodNode)
@@ -2950,14 +2982,24 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 				return false, nil
 			}
 			e2e.Logf(lspOutput)
-			if strings.Contains(lspOutput, testPodIP1) && strings.Count(lspOutput, "100 ") == 1 {
-				return true, nil
+			if ipStackType == "dualstack" {
+				if strings.Contains(lspOutput, testPodIP1) && strings.Contains(lspOutput, testPodIP2) && strings.Count(lspOutput, "100 ") == 2 {
+					return true, nil
+				}
+			} else {
+				if strings.Contains(lspOutput, testPodIP1) && strings.Count(lspOutput, "100 ") == 1 {
+					return true, nil
+				}
 			}
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(checkLspErr, fmt.Sprintf("lr-policy-list was not synced correctly!"))
 
 		ovnPod = ovnkubeNodePod(oc, egressNode)
+		var ovnPod2 string
+		if ipStackType == "dualstack" {
+			ovnPod2 = ovnkubeNodePod(oc, egressNode2)
+		}
 		snatCmd := "ovn-nbctl --format=csv --no-heading find nat external_ids:name=" + egressip1.name
 		checkSnatErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
 			snatOutput, snatErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, snatCmd)
@@ -2965,14 +3007,30 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 				e2e.Logf("%v,Waiting for snat to be synced, try next ...,", snatErr)
 				return false, nil
 			}
-			e2e.Logf(snatOutput)
-			if strings.Contains(snatOutput, testPodIP1) && strings.Count(snatOutput, egressip1.name) == 1 {
-				e2e.Logf("The snat for egressip is as expected!")
-				return true, nil
+
+			if ipStackType == "dualstack" {
+				snatOutput2, snatErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod2, snatCmd)
+				if snatErr != nil {
+					e2e.Logf("%v,Waiting for snat to be synced, try next ...,", snatErr)
+					return false, nil
+				}
+				snatOutput = snatOutput + "\n" + snatOutput2
+				e2e.Logf(snatOutput)
+
+				if strings.Contains(snatOutput, testPodIP1) && strings.Contains(snatOutput, testPodIP2) && strings.Count(snatOutput, egressip1.name) == 2 {
+					e2e.Logf("The snat for egressip is as expected!")
+					return true, nil
+				}
+			} else {
+				if strings.Contains(snatOutput, testPodIP1) && strings.Count(snatOutput, egressip1.name) == 1 {
+					e2e.Logf("The snat for egressip is as expected!")
+					return true, nil
+				}
 			}
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(checkSnatErr, fmt.Sprintf("snat was not synced correctly!"))
+
 	})
 
 	// author: huirwang@redhat.com
