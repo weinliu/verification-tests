@@ -330,6 +330,55 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		checkFixedAlert(oc, mcp, expectedAlertName)
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-75862-Add alert for users of deprecating the Image Registry workaround [Disruptive]", func() {
+
+		var (
+			expectedAlertName                  = "MCODrainOverrideConfigMapAlert"
+			expectedAlertSeverity              = "warning"
+			expectedAlertAnnotationDescription = "Image Registry Drain Override configmap has been detected. Please use the Node Disruption Policy feature to control the cluster's drain behavior as the configmap method is currently deprecated and will be removed in a future release."
+			expectedAlertAnnotationSummary     = "Alerts the user to the presence of a drain override configmap that is being deprecated and removed in a future release."
+
+			overrideCMName = "image-registry-override-drain"
+		)
+
+		exutil.By("Create an image-registry-override-drain configmap")
+		defer oc.AsAdmin().Run("delete").Args("configmap", "-n", MachineConfigNamespace, overrideCMName).Execute()
+		o.Expect(
+			oc.AsAdmin().Run("create").Args("configmap", "-n", MachineConfigNamespace, overrideCMName).Execute(),
+		).To(o.Succeed(), "Error creating the image-registry override configmap")
+		logger.Infof("OK!\n")
+
+		expectedAlertLabels := expectedAlertValues{
+			"severity": o.Equal(expectedAlertSeverity),
+		}
+
+		expectedAlertAnnotations := expectedAlertValues{
+			"description": o.MatchRegexp(expectedAlertAnnotationDescription),
+			"summary":     o.Equal(expectedAlertAnnotationSummary),
+		}
+
+		params := checkFiredAlertParams{
+			expectedAlertName:        expectedAlertName,
+			expectedAlertLabels:      expectedAlertLabels,
+			expectedAlertAnnotations: expectedAlertAnnotations,
+			pendingDuration:          0,
+			stillPresentDuration:     0, // We skip this validation to make the test faster
+		}
+		checkFiredAlert(oc, nil, params)
+
+		exutil.By("Delete the image-registry-override-drain configmap")
+		o.Expect(
+			oc.AsAdmin().Run("delete").Args("configmap", "-n", MachineConfigNamespace, overrideCMName).Execute(),
+		).To(o.Succeed(), "Error deleting the image-registry override configmap")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the alert is not triggered anymore")
+		checkFixedAlert(oc, mcp, expectedAlertName)
+		logger.Infof("OK!\n")
+
+	})
+
 })
 
 type expectedAlertValues map[string]types.GomegaMatcher
