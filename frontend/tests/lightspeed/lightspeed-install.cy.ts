@@ -32,16 +32,19 @@ describe('Lightspeed related features', () => {
     cy.adminCLI(`oc delete namespace ${OLS.namespace}`, { failOnNonZeroExit: false });
 
     // Delete config
-    cy.exec(`oc delete ${OLS.config.kind} ${OLS.config.name} -n ${OLS.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false });
+    cy.exec(`oc delete ${OLS.config.kind} ${OLS.config.name} -n ${OLS.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
 
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
   it('(OLS-427,jfula,Lightspeed) Deploy OpenShift Lightspeed operator via web console', {tags: ['e2e','admin', '@smoke']}, () => {
-    operatorHubPage.installOperator(OLS.packageName, "redhat-operators");
-
-    cy.get('.co-clusterserviceversion-install__heading', { timeout: 2 * 60 * 1000 })
-      .should('include.text', 'ready for use');
+    if (Cypress.env('BUNDLE_IMAGE')){
+      cy.exec(`oc create namespace ${OLS.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
+      cy.exec(`operator-sdk run bundle --timeout=5m --namespace ${OLS.namespace} ${Cypress.env('BUNDLE_IMAGE')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} --verbose `, { timeout: 6 * 60 * 1000 });
+    } else {
+      operatorHubPage.installOperator(OLS.packageName, "redhat-operators");
+      cy.get('.co-clusterserviceversion-install__heading', { timeout: 5 * 60 * 1000 }).should('include.text', 'ready for use');
+    }
 
     const config = `apiVersion: ols.openshift.io/v1alpha1
 kind: ${OLS.config.kind}
@@ -61,7 +64,7 @@ spec:
     defaultModel: gpt-3.5-turbo
     defaultProvider: openai
     logLevel: INFO`;
-    cy.exec(`echo '${config}' | oc create -f -`);
+    cy.exec(`echo '${config}' | oc create -f - --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
 
     cy.get('.pf-v5-c-alert', { timeout: 2 * 60 * 1000 })
       .should('include.text', 'Web console update is available');
@@ -74,7 +77,7 @@ spec:
   it('(OLS-743,anpicker,Lightspeed) Test OpenShift Lightspeed with pod', {tags: ['e2e','admin', '@smoke']}, () => {
     Pages.gotoPodsList();
 
-    cy.get('.ols-plugin__popover-button', { timeout: 30 * 1000 })
+    cy.get('.ols-plugin__popover-button', { timeout: 5 * 30 * 1000 })
       .should('exist')
       .click();
 
