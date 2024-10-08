@@ -506,8 +506,8 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-High-43405-High-50508-node drain is not needed for mirror config change in container registry. Nodes not tainted. [Disruptive]", func() {
-		logger.Infof("Removing all MCO pods to clean the logs.")
-		o.Expect(RemoveAllMCOPods(oc)).To(o.Succeed(), "Error removing all MCO pods in %s namespace", MachineConfigNamespace)
+		logger.Infof("Removing all MCD pods to clean the logs.")
+		o.Expect(RemoveAllMCDPods(oc)).To(o.Succeed(), "Error removing all MCD pods in %s namespace", MachineConfigNamespace)
 		logger.Infof("OK!\n")
 
 		exutil.By("Create image content source policy for mirror changes")
@@ -3007,8 +3007,8 @@ nulla pariatur.`
 		o.Expect(node.IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
 			"Error getting the latest event in node %s", node.GetName())
 
-		logger.Infof("Removing all MCO pods to clean the logs.")
-		o.Expect(RemoveAllMCOPods(oc)).To(o.Succeed(), "Error removing all MCO pods in %s namespace", MachineConfigNamespace)
+		logger.Infof("Removing all MCD pods to clean the logs.")
+		o.Expect(RemoveAllMCDPods(oc)).To(o.Succeed(), "Error removing all MCD pods in %s namespace", MachineConfigNamespace)
 		logger.Infof("OK!\n")
 
 		exutil.By("Create new machine config to deploy a ImageDigestMirrorSet configuring a mirror registry")
@@ -3094,8 +3094,8 @@ nulla pariatur.`
 		o.Expect(node.IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
 			"Error getting the latest event in node %s", node.GetName())
 
-		logger.Infof("Removing all MCO pods to clean the logs.")
-		o.Expect(RemoveAllMCOPods(oc)).To(o.Succeed(), "Error removing all MCO pods in %s namespace", MachineConfigNamespace)
+		logger.Infof("Removing all MCD pods to clean the logs.")
+		o.Expect(RemoveAllMCDPods(oc)).To(o.Succeed(), "Error removing all MCD pods in %s namespace", MachineConfigNamespace)
 		logger.Infof("OK!\n")
 
 		exutil.By("Create new machine config to deploy a ImageTagMirrorSet configuring a mirror registry")
@@ -4147,8 +4147,8 @@ nulla pariatur.`
 		o.Expect(node.IgnoreEventsBeforeNow()).NotTo(o.HaveOccurred(),
 			"Error getting the latest event in node %s", node.GetName())
 
-		logger.Infof("Removing all MCO pods to clean the logs.")
-		o.Expect(RemoveAllMCOPods(oc)).To(o.Succeed(), "Error removing all MCO pods in %s namespace", MachineConfigNamespace)
+		logger.Infof("Removing all MCD pods to clean the logs.")
+		o.Expect(RemoveAllMCDPods(oc)).To(o.Succeed(), "Error removing all MCD pods in %s namespace", MachineConfigNamespace)
 		logger.Infof("OK!\n")
 
 		exutil.By("Create image-registry-override-drain configmap")
@@ -4205,8 +4205,8 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 
 		exutil.By("Delete the ImageDigestMirrorSet resource")
-		logger.Infof("Removing all MCO pods to clean the logs.")
-		o.Expect(RemoveAllMCOPods(oc)).To(o.Succeed(), "Error removing all MCO pods in %s namespace", MachineConfigNamespace)
+		logger.Infof("Removing all MCD pods to clean the logs.")
+		o.Expect(RemoveAllMCDPods(oc)).To(o.Succeed(), "Error removing all MCD pods in %s namespace", MachineConfigNamespace)
 		itms.Delete()
 		mcp.waitForComplete()
 		logger.Infof("OK!\n")

@@ -824,11 +824,6 @@ func PtrTo[T any](v T) *T {
 	return &v
 }
 
-// RemoveAllMCOPods removes all MCO pods in openshift-machine-config-operator namespace
-func RemoveAllMCOPods(oc *exutil.CLI) error {
-	return removeMCOPods(oc, "--all")
-}
-
 // RemoveAllMCDPods removes all MCD pods in openshift-machine-config-operator namespace
 func RemoveAllMCDPods(oc *exutil.CLI) error {
 	return removeMCOPods(oc, "-l", "k8s-app=machine-config-daemon")
