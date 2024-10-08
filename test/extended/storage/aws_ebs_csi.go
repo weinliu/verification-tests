@@ -115,7 +115,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: pewang@redhat.com
 	// OCP-57161-[AWS-EBS-CSI] [Snapshot] [Filesystem default] Provision volume with customer kms key, its snapshot restored volume should be encrypted with the same key
 	// https://issues.redhat.com/browse/OCPBUGS-5410
-	g.It("Author:pewang-ROSA-OSD_CCS-High-57161-V-CM.04-[AWS-EBS-CSI] [Snapshot] [Filesystem default] Provision volume with customer kms key, its snapshot restored volume should be encrypted with the same key", func() {
+	g.It("Author:pewang-WRS-ROSA-OSD_CCS-High-57161-V-CM.04-[AWS-EBS-CSI] [Snapshot] [Filesystem default] Provision volume with customer kms key, its snapshot restored volume should be encrypted with the same key", func() {
 
 		// Check whether the test cluster satisfy the test scenario
 		// STS, C2S etc. profiles the credentials don't have permission to create customer managed kms key, skipped for these profiles

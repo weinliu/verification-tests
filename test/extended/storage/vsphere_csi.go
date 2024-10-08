@@ -146,7 +146,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	// author: pewang@redhat.com
 	// OCP-62014 - [vSphere CSI Driver] using the encryption storage policy should provision encrypt volume which could be read and written data
-	g.It("Author:pewang-NonHyperShiftHOST-High-62014-V-CM.04-[vSphere CSI Driver] using the encryption storage policy should provision encrypt volume which could be read and written data", func() {
+	g.It("Author:pewang-WRS-NonHyperShiftHOST-High-62014-V-CM.04-[vSphere CSI Driver] using the encryption storage policy should provision encrypt volume which could be read and written data", func() {
 
 		// Currently the case only could be run on cucushift-installer-rehearse-vsphere-upi-encrypt CI profile
 		if !isSpecifiedResourceExist(oc, "sc/thin-csi-encryption", "") {
