@@ -15,12 +15,6 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-const (
-	prometheusQueryURL  string = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query?query="
-	prometheusNamespace string = "openshift-monitoring"
-	prometheusK8s       string = "prometheus-k8s"
-)
-
 // Define a monitor object
 type monitor struct {
 	token    string

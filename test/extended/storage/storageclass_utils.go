@@ -313,13 +313,6 @@ func getGidRangeStartValueFromStorageClass(oc *exutil.CLI, scName string) (int, 
 	return gidStartIntValue, nil
 }
 
-// Define CSI Driver Provisioners const
-const (
-	ebsCsiDriverProvisioner       string = "ebs.csi.aws.com"
-	efsCsiDriverProvisioner       string = "efs.csi.aws.com"
-	filestoreCSiDriverProvisioner string = "filestore.csi.storage.gke.io"
-)
-
 // Generate storageClass parameters by volume type
 func gererateCsiScExtraParametersByVolType(oc *exutil.CLI, csiProvisioner string, volumeType string) map[string]interface{} {
 	var (

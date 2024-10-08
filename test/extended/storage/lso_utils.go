@@ -18,13 +18,6 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-const (
-	qeCatalogSource          string = "qe-app-registry"
-	autoReleaseCatalogSource string = "auto-release-app-registry"
-	redhatCatalogSource      string = "redhat-operators"
-	sourceNameSpace          string = "openshift-marketplace"
-)
-
 // Define the localStorageOperator struct
 type localStorageOperator struct {
 	subName          string

@@ -590,22 +590,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner = range supportProvisioners {
 			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			exutil.By("Get the zone value with CSI topology key")
-			topologyPath := map[string]string{
-				"azure":        `topology\.disk\.csi\.azure\.com\/zone`,
-				"alibabacloud": `topology\.diskplugin\.csi\.alibabacloud\.com\/zone`,
-				"gcp":          `topology\.gke\.io\/zone`,
-			}
-			topologyKey := map[string]string{
-				"azure":        "topology.disk.csi.azure.com/zone",
-				"alibabacloud": "topology.diskplugin.csi.alibabacloud.com/zone",
-				"gcp":          "topology.gke.io/zone",
-			}
+			topologyLabel := getTopologyLabelByProvisioner(provisioner)
+			topologyPath := getTopologyPathByLabel(topologyLabel)
 
 			allNodes := getAllNodesInfo(oc)
 			node := getOneSchedulableWorker(allNodes)
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node.name, "-o=jsonpath={.metadata.labels}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			zone := gjson.Get(output, topologyPath[cloudProvider]).String()
+			zone := gjson.Get(output, topologyPath).String()
 
 			exutil.By("Create new storageClass with volumeBindingMode == Immediate")
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
@@ -617,7 +609,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				e2e.Logf("The AvailableZone of node \"%s\" is \"%s\"", node.name, zone)
 				zones := []string{zone}
 				labelExpressions := []map[string]interface{}{
-					{"key": topologyKey[cloudProvider], "values": zones},
+					{"key": topologyLabel, "values": zones},
 				}
 				matchLabelExpressions := []map[string]interface{}{
 					{"matchLabelExpressions": labelExpressions},
@@ -699,22 +691,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner = range supportProvisioners {
 			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			exutil.By("Get the zone value with CSI topology key")
-			topologyPath := map[string]string{
-				"azure":        `topology\.disk\.csi\.azure\.com\/zone`,
-				"alibabacloud": `topology\.diskplugin\.csi\.alibabacloud\.com\/zone`,
-				"gcp":          `topology\.gke\.io\/zone`,
-			}
-			topologyKey := map[string]string{
-				"azure":        "topology.disk.csi.azure.com/zone",
-				"alibabacloud": "topology.diskplugin.csi.alibabacloud.com/zone",
-				"gcp":          "topology.gke.io/zone",
-			}
+			topologyLabel := getTopologyLabelByProvisioner(provisioner)
+			topologyPath := getTopologyPathByLabel(topologyLabel)
 
 			allNodes := getAllNodesInfo(oc)
 			node := getOneSchedulableWorker(allNodes)
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node.name, "-o=jsonpath={.metadata.labels}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			zone := gjson.Get(output, topologyPath[cloudProvider]).String()
+			zone := gjson.Get(output, topologyPath).String()
 
 			exutil.By("Create new storageClass with volumeBindingMode == Immediate")
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
@@ -726,7 +710,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				e2e.Logf("The AvailableZone of node \"%s\" is \"%s\"", node.name, zone)
 				zones := []string{zone}
 				labelExpressions := []map[string]interface{}{
-					{"key": topologyKey[cloudProvider], "values": zones},
+					{"key": topologyLabel, "values": zones},
 				}
 				matchLabelExpressions := []map[string]interface{}{
 					{"matchLabelExpressions": labelExpressions},
@@ -2815,29 +2799,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner = range supportProvisioners {
 			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			exutil.By("Get the zone value with CSI topology key")
-			topologyPath := map[string]string{
-				"aws":          `topology\.ebs\.csi\.aws\.com\/zone`,
-				"azure":        `topology\.disk\.csi\.azure\.com\/zone`,
-				"alibabacloud": `topology\.diskplugin\.csi\.alibabacloud\.com\/zone`,
-				//Known issue(BZ2073617) for ibm CSI Driver
-				//"ibmcloud":      `failure-domain\.beta\.kubernetes\.io\/zone`,
-				"gcp": `topology\.gke\.io\/zone`,
-			}
-
-			topologyKey := map[string]string{
-				"aws":          "topology.ebs.csi.aws.com/zone",
-				"azure":        "topology.disk.csi.azure.com/zone",
-				"alibabacloud": "topology.diskplugin.csi.alibabacloud.com/zone",
-				//Known issue(BZ2073617) for ibm CSI Driver
-				//"ibmcloud":      "failure-domain.beta.kubernetes.io/zone",
-				"gcp": "topology.gke.io/zone",
-			}
-
+			topologyLabel := getTopologyLabelByProvisioner(provisioner)
+			topologyPath := getTopologyPathByLabel(topologyLabel)
 			allNodes := getAllNodesInfo(oc)
 			node := getOneSchedulableWorker(allNodes)
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node.name, "-o=jsonpath={.metadata.labels}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			zone := gjson.Get(output, topologyPath[cloudProvider]).String()
+			zone := gjson.Get(output, topologyPath).String()
 			if len(zone) == 0 {
 				g.Skip("Skip for no expected topology available zone value.")
 			} else {
@@ -2851,7 +2819,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			zones := []string{zone}
 			labelExpressions := []map[string]interface{}{
-				{"key": topologyKey[cloudProvider], "values": zones},
+				{"key": topologyLabel, "values": zones},
 			}
 			matchLabelExpressions := []map[string]interface{}{
 				{"matchLabelExpressions": labelExpressions},
@@ -2884,7 +2852,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			if provisioner != "filestore.csi.storage.gke.io" {
 				pvName := pvc.getVolumeName(oc)
 				oc.WithoutNamespace().Run("describe").Args("pv ", pvName).Output()
-				o.Expect(checkPvNodeAffinityContains(oc, pvName, topologyKey[cloudProvider])).To(o.BeTrue())
+				o.Expect(checkPvNodeAffinityContains(oc, pvName, topologyLabel)).To(o.BeTrue())
 				o.Expect(checkPvNodeAffinityContains(oc, pvName, zone)).To(o.BeTrue())
 			}
 
@@ -2896,7 +2864,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// Known issue(BZ2073617) for ibm CSI Driver
 	g.It("ROSA-OSD_CCS-ARO-Author:wduan-LEVEL0-Critical-50202-[CSI-Driver][Dynamic PV][Block] topology should provision a volume and schedule a pod with AllowedTopologies", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "vpc.block.csi.ibm.io"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
@@ -2920,29 +2888,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner = range supportProvisioners {
 			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 			exutil.By("Get the zone value with CSI topology key")
-			topologyPath := map[string]string{
-				"aws":          `topology\.ebs\.csi\.aws\.com\/zone`,
-				"azure":        `topology\.disk\.csi\.azure\.com\/zone`,
-				"alibabacloud": `topology\.diskplugin\.csi\.alibabacloud\.com\/zone`,
-				//Known issue(BZ2073617) for ibm CSI Driver
-				//"ibmcloud":      `failure-domain\.beta\.kubernetes\.io\/zone`,
-				"gcp": `topology\.gke\.io\/zone`,
-			}
-
-			topologyKey := map[string]string{
-				"aws":          "topology.ebs.csi.aws.com/zone",
-				"azure":        "topology.disk.csi.azure.com/zone",
-				"alibabacloud": "topology.diskplugin.csi.alibabacloud.com/zone",
-				//Known issue(BZ2073617) for ibm CSI Driver
-				//"ibmcloud":      "failure-domain.beta.kubernetes.io/zone",
-				"gcp": "topology.gke.io/zone",
-			}
-
+			topologyLabel := getTopologyLabelByProvisioner(provisioner)
+			topologyPath := getTopologyPathByLabel(topologyLabel)
 			allNodes := getAllNodesInfo(oc)
 			node := getOneSchedulableWorker(allNodes)
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node.name, "-o=jsonpath={.metadata.labels}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			zone := gjson.Get(output, topologyPath[cloudProvider]).String()
+			zone := gjson.Get(output, topologyPath).String()
 			if len(zone) == 0 {
 				g.Skip("Skip for no expected topology available zone value.")
 			} else {
@@ -2956,7 +2908,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			zones := []string{zone}
 			labelExpressions := []map[string]interface{}{
-				{"key": topologyKey[cloudProvider], "values": zones},
+				{"key": topologyLabel, "values": zones},
 			}
 			matchLabelExpressions := []map[string]interface{}{
 				{"matchLabelExpressions": labelExpressions},
@@ -2984,7 +2936,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 			exutil.By("Check nodeAffinity in pv info")
 			pvName := pvc.getVolumeName(oc)
-			o.Expect(checkPvNodeAffinityContains(oc, pvName, topologyKey[cloudProvider])).To(o.BeTrue())
+			o.Expect(checkPvNodeAffinityContains(oc, pvName, topologyLabel)).To(o.BeTrue())
 			o.Expect(checkPvNodeAffinityContains(oc, pvName, zone)).To(o.BeTrue())
 
 			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
@@ -3023,16 +2975,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for _, provisioner = range supportProvisioners {
 			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
 
-			topologyKey := map[string]string{
-				"aws":          "topology.ebs.csi.aws.com/zone",
-				"azure":        "topology.disk.csi.azure.com/zone",
-				"alibabacloud": "topology.diskplugin.csi.alibabacloud.com/zone",
-				"ibmcloud":     "failure-domain.beta.kubernetes.io/zone",
-				"gcp":          "topology.gke.io/zone",
-			}
-
 			labelExpressions := []map[string]interface{}{
-				{"key": topologyKey[cloudProvider], "values": []string{myWorkers[0].availableZone}},
+				{"key": getTopologyLabelByProvisioner(provisioner), "values": []string{myWorkers[0].availableZone}},
 			}
 			matchLabelExpressions := []map[string]interface{}{
 				{"matchLabelExpressions": labelExpressions},

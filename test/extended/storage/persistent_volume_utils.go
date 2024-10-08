@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -502,25 +503,43 @@ func checkPvNodeAffinityContains(oc *exutil.CLI, pvName string, content string) 
 	return strings.Contains(nodeAffinity, content)
 }
 
+// GetTopologyLabelByProvisioner gets the provisioner topology
+func getTopologyLabelByProvisioner(provisioner string) (topologyLabel string) {
+	switch provisioner {
+	case ebsCsiDriverProvisioner:
+		return standardTopologyLabel
+	case azureDiskCsiDriverProvisioner:
+		return "topology.disk.csi.azure.com/zone"
+	case gcpPdCsiDriverProvisioner:
+		return "topology.gke.io/zone"
+	case ibmVpcBlockCsiDriverProvisioner:
+		return "failure-domain.beta.kubernetes.io/zone"
+	case aliDiskpluginCsiDriverProvisioner:
+		return "topology.diskplugin.csi.alibabacloud.com/zone"
+	default:
+		e2e.Failf("Failed to get topology label for provisioner %q", provisioner)
+	}
+	return
+}
+
+// GetTopologyPathByLabel gets the topologyPath
+func getTopologyPathByLabel(topologyLabel string) (topologyPath string) {
+	re := regexp.MustCompile(`[./]`)
+	return re.ReplaceAllStringFunc(topologyLabel, func(match string) string {
+		return "\\" + match
+	})
+}
+
 // Get persistent volume nodeAffinity nodeSelectorTerms matchExpressions "topology.gke.io/zone" values
 func getPvNodeAffinityAvailableZones(oc *exutil.CLI, pvName string) []string {
-
-	topologyPath := map[string]string{
-		"aws":          `topology.ebs.csi.aws.com/zone`,
-		"azure":        `topology.disk.csi.azure.com/zone`,
-		"alibabacloud": `topology.diskplugin.csi.alibabacloud.com/zone`,
-		"ibmcloud":     `failure-domain.beta.kubernetes.io/zone`,
-		"gcp":          `topology.gke.io/zone`,
-	}
-
 	pvInfo, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o", "json").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	availableZonesStr := gjson.Get(pvInfo, `spec.nodeAffinity.required.nodeSelectorTerms.#.matchExpressions.#(key=`+topologyPath[cloudProvider]+`)#.values|@ugly|@flatten`).String()
+	availableZonesStr := gjson.Get(pvInfo, `spec.nodeAffinity.required.nodeSelectorTerms.#.matchExpressions.#(key=`+getTopologyLabelByProvisioner(provisioner)+`)#.values|@ugly|@flatten`).String()
 	delSybols := []string{"[", "]", "\""}
 	for _, delSybol := range delSybols {
 		availableZonesStr = strings.ReplaceAll(availableZonesStr, delSybol, "")
 	}
-	e2e.Logf("PV \"%s\" nodeAffinity \" %s \"values: %s", topologyPath[cloudProvider], pvName, availableZonesStr)
+	e2e.Logf("PV \"%s\" nodeAffinity \" %s \"values: %s", getTopologyLabelByProvisioner(provisioner), pvName, availableZonesStr)
 	return strings.Split(availableZonesStr, ",")
 }
 

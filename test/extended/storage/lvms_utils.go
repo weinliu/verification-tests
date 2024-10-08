@@ -487,7 +487,6 @@ func getTotalDiskSizeOnAllWorkers(oc *exutil.CLI, diskPath string) int {
 
 // Takes size in Bytes as string and returns equivalent int value in GiB
 func bytesToGiB(bytesStr string) int {
-	const bytesPerGiB = 1 << 30 // 1 GiB = 2^30 bytes
 	bytes, err := strconv.ParseUint(bytesStr, 10, 64)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return int(bytes / bytesPerGiB)

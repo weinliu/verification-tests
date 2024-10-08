@@ -28,18 +28,6 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-// Define the global cloudProvider
-var cloudProvider, provisioner string
-
-// Define test waiting time const
-const (
-	defaultMaxWaitingTime    = 300 * time.Second
-	defaultIterationTimes    = 20
-	longerMaxWaitingTime     = 15 * time.Minute
-	moreLongerMaxWaitingTime = 30 * time.Minute
-	longestMaxWaitingTime    = 1 * time.Hour
-)
-
 // Kubeadmin user use oc client apply yaml template
 func applyResourceFromTemplateAsAdmin(oc *exutil.CLI, parameters ...string) error {
 	var configFile string

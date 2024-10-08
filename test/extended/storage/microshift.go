@@ -15,8 +15,6 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-const topolvmProvisioner = "topolvm.io"
-
 var _ = g.Describe("[sig-storage] STORAGE", func() {
 	defer g.GinkgoRecover()
 
