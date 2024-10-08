@@ -66,6 +66,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		wordpressRouteYAML               string
 		resourceQuotaYAML                string
 		tprofileHypershfitTemplate       string
+		tpSingleVariableTemplate         string
 		tprofileTwoVariablesTemplate     string
 		tprofileWithoutDescriptionYAML   string
 		tprofileWithoutTitleYAML         string
@@ -92,6 +93,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		tprofileManualRuleTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-manual-rule.yaml")
 		tprofileTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile.yaml")
 		tprofileHypershfitTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-hypershift.yaml")
+		tpSingleVariableTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-single-variable.yaml")
 		tprofileTwoVariablesTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-two-variables.yaml")
 		tprofileWithoutVarTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-withoutvariable.yaml")
 		scansettingTemplate = filepath.Join(buildPruningBaseDir, "scansetting.yaml")
@@ -4167,6 +4169,110 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			"ocp4-cis" + "-scc-limit-container-allowed-capabilities", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 
 		g.By("Medium-74227-Medium-74437-Test variables ocp4-var-network-policies-namespaces-exempt-regex and ocp4-var-sccs-with-allowed-capabilities-regex done... !!!\n")
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("Author:xiyuan-NonHyperShiftHOST-NonPreRelease-Medium-76105-Check the variable ocp4-var-resource-requests-quota-per-project-exempt-regex works as expected for rule ocp4-resource-requests-quota-per-project [Serial]", func() {
+		var (
+			tpStig = tailoredProfileTwoVarsDescription{
+				name:      "tp-quota-" + getRandomString(),
+				namespace: subD.namespace,
+				extends:   "ocp4-stig",
+				varname1:  "ocp4-var-resource-requests-quota-per-project-exempt-regex",
+				value1:    "",
+				template:  tpSingleVariableTemplate,
+			}
+			tpModerate = tailoredProfileTwoVarsDescription{
+				name:      "tp-quota-m-" + getRandomString(),
+				namespace: subD.namespace,
+				extends:   "ocp4-moderate",
+				varname1:  "ocp4-var-resource-requests-quota-per-project-exempt-regex",
+				value1:    "",
+				template:  tpSingleVariableTemplate,
+			}
+			ssbStig = scanSettingBindingDescription{
+				name:            "moderate-test" + getRandomString(),
+				namespace:       "",
+				profilekind1:    "TailoredProfile",
+				profilename1:    tpStig.name,
+				scansettingname: "default",
+				template:        scansettingbindingSingleTemplate,
+			}
+			ssbModerate = scanSettingBindingDescription{
+				name:            "moderate-test" + getRandomString(),
+				namespace:       "",
+				profilekind1:    "TailoredProfile",
+				profilename1:    tpModerate.name,
+				scansettingname: "default",
+				template:        scansettingbindingSingleTemplate,
+			}
+			nsTest1 = "ns-76105-" + getRandomString()
+			nsTest2 = "ns-76105-" + getRandomString()
+		)
+
+		defer func() {
+			g.By("Remove ssb and tailoredprofile... !!!\n")
+			cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssbStig.name},
+				objectTableRef{"scansettingbinding", subD.namespace, ssbModerate.name},
+				objectTableRef{"tailoredprofile", subD.namespace, tpStig.name},
+				objectTableRef{"tailoredprofile", subD.namespace, tpModerate.name},
+				objectTableRef{"ns", nsTest1, nsTest1},
+				objectTableRef{"ns", nsTest2, nsTest2})
+		}()
+
+		g.By("Set value1 for tpStig .. !!!\n")
+		errGetNs1 := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", nsTest1).Execute()
+		o.Expect(errGetNs1).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, nsTest1, ok, []string{"ns", nsTest1, "-n", nsTest1, "-o=jsonpath={.metadata.name}"}).check(oc)
+		errGetNs2 := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", nsTest2).Execute()
+		o.Expect(errGetNs2).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, nsTest2, ok, []string{"ns", nsTest2, "-n", nsTest2, "-o=jsonpath={.metadata.name}"}).check(oc)
+		nonControlNamespacesList := getNonControlNamespacesWithoutStatusChecking(oc)
+		length := len(nonControlNamespacesList)
+		for i, ns := range nonControlNamespacesList {
+			if i == length-1 {
+				tpStig.value1 = tpStig.value1 + ns
+			} else {
+				tpStig.value1 = tpStig.value1 + ns + "|"
+			}
+		}
+		tpModerate.value1 = tpStig.value1
+
+		g.By("Create the tailoredprofile !!!\n")
+		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", tpStig.template, "-p", "NAME="+tpStig.name, "NAMESPACE="+tpStig.namespace,
+			"EXTENDS="+tpStig.extends, "VARNAME1="+tpStig.varname1, "VALUE1="+tpStig.value1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"tailoredprofile", "-n", subD.namespace, tpStig.name,
+			"-o=jsonpath={.status.state}"}).check(oc)
+		errApply := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", tpModerate.template, "-p", "NAME="+tpModerate.name, "NAMESPACE="+tpModerate.namespace,
+			"EXTENDS="+tpModerate.extends, "VARNAME1="+tpModerate.varname1, "VALUE1="+tpModerate.value1)
+		o.Expect(errApply).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"tailoredprofile", "-n", subD.namespace, tpModerate.name,
+			"-o=jsonpath={.status.state}"}).check(oc)
+
+		g.By("Create scansettingbinding !!!\n")
+		ssbStig.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbStig.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		ssbModerate.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssbModerate.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status and result !!!\n")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbStig.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbModerate.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		subD.complianceSuiteResult(oc, ssbStig.name, "NON-COMPLIANT INCONSISTENT")
+		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbStig.name, "2")
+		subD.complianceSuiteResult(oc, ssbModerate.name, "NON-COMPLIANT INCONSISTENT")
+		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbModerate.name, "2")
+
+		g.By("Verify the rule status through compliancecheckresult and value through apiservers cluster object... !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
+			tpStig.name + "-resource-requests-quota-per-project", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
+			tpModerate.name + "-resource-requests-quota", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+
+		g.By("Medium-76105-Check the variable ocp4-var-resource-requests-quota-per-project-exempt-regex works as expected for rule ocp4-resource-requests-quota-per-project done... !!!\n")
 	})
 
 	// author: pdhamdhe@redhat.com
