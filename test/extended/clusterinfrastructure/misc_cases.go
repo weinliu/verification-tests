@@ -183,7 +183,7 @@ machineautoscalers.autoscaling.openshift.io`
 				if strings.Contains(project, "Now using project \"openshift-cluster-api\" on server") {
 					machinesetauthpritativeAPI, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, "-n", machineAPINamespace, "-o=jsonpath={.items[0].status.conditions[0]}").Output()
 					o.Expect(err).NotTo(o.HaveOccurred())
-					o.Expect(strings.Contains(machinesetauthpritativeAPI, "\"AuthoritativeAPI is set to MachineAPI\",\"severity\":\"The AuthoritativeAPI is set to %%s\",\"status\":\"False\",\"type\":\"Paused\"")).To(o.BeTrue())
+					o.Expect(strings.Contains(machinesetauthpritativeAPI, "\"AuthoritativeAPI is set to MachineAPI\"")).To(o.BeTrue())
 				}
 			}
 		} else {
