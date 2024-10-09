@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -285,17 +286,52 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 		clusterinfra.SkipForAwsOutpostCluster(oc)
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if region != "us-east-2" && region != "us-east-1" {
-			g.Skip("Not support region " + region + " for the case for now.")
-		}
-		g.By("Add the AmazonEC2ContainerRegistryReadOnly policy to the worker nodes")
-		infrastructureName := clusterinfra.GetInfrastructureName(oc)
-		roleName := infrastructureName + "-worker-role"
-		policyArn := "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+
+		g.By("Create a ECR repository and get authorization token")
 		clusterinfra.GetAwsCredentialFromCluster(oc)
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		registryName := "ecr-" + infrastructureName
+		ecrClient := exutil.NewECRClient(region)
+		repositoryUri, err := ecrClient.CreateContainerRepository(registryName)
+		if err != nil {
+			g.Skip("unable to create container registry: " + err.Error())
+		}
+		defer func() {
+			err := ecrClient.DeleteContainerRepository(registryName)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		password, _ := ecrClient.GetAuthorizationToken()
+		o.Expect(password).NotTo(o.BeEmpty())
+		auth, err := exec.Command("bash", "-c", fmt.Sprintf("echo %s | base64 -d", password)).Output()
+		if err != nil {
+			g.Skip("unable to get authorization token: " + err.Error())
+		}
+
+		g.By("Mirror an image to ECR")
+		tempDataDir, err := extractPullSecret(oc)
+		defer os.RemoveAll(tempDataDir)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		originAuth := filepath.Join(tempDataDir, ".dockerconfigjson")
+		authFile, err := appendPullSecretAuth(originAuth, strings.Split(repositoryUri, "/")[0], "", string(auth))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("image").Args("mirror", "quay.io/openshifttest/pause@sha256:e481caec2eb984ce023673a3ec280bf57dea8c0305009e246b019b3eef044f9e", repositoryUri+":latest", "--insecure", "-a", authFile, "--keep-manifest-list=true").Execute()
+		if err != nil {
+			g.Skip("unable to mirror image to ECR: " + err.Error())
+		}
+
+		g.By("Add the AmazonEC2ContainerRegistryReadOnly policy to the worker nodes")
+		roleName := ""
+		if exutil.IsSNOCluster(oc) {
+			roleName = infrastructureName + "-master-role"
+		} else {
+			roleName = infrastructureName + "-worker-role"
+		}
+		policyArn := "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 		iamClient := exutil.NewIAMClient()
 		err = iamClient.AttachRolePolicy(roleName, policyArn)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			g.Skip("unable to attach role policy: " + err.Error())
+		}
 		defer iamClient.DetachRolePolicy(roleName, policyArn)
 
 		g.By("Create a new project for testing")
@@ -303,7 +339,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "hello-ecr70744", "--ignore-not-found", "--force").Execute()
 		g.By("Create a new app using the image on ECR")
-		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=hello-ecr", "--image=301721915996.dkr.ecr."+region+".amazonaws.com/hello-ecr:latest", "--allow-missing-images", "-n", "hello-ecr70744").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("--name=hello-ecr", "--image="+repositoryUri+":latest", "--allow-missing-images", "-n", "hello-ecr70744").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Wait the pod ready")
 		err = waitForPodWithLabelReady(oc, "hello-ecr70744", "deployment=hello-ecr")

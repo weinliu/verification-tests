@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/ecr"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -1164,4 +1165,53 @@ func NewDelegatingStsClient(wrappedClient *sts.STS) *StsClient {
 	return &StsClient{
 		STS: wrappedClient,
 	}
+}
+
+// ECRClient struct
+type ECRClient struct {
+	svc *ecr.ECR
+}
+
+// NewECRClient creates an ECRClient
+func NewECRClient(region string) *ECRClient {
+	mySession := session.Must(session.NewSession())
+	ecrClient := &ECRClient{
+		svc: ecr.New(mySession, aws.NewConfig().WithRegion(region)),
+	}
+
+	return ecrClient
+}
+
+// CreateContainerRepository create a container repository
+func (ecrClient *ECRClient) CreateContainerRepository(repositoryName string) (string, error) {
+	createRes, err := ecrClient.svc.CreateRepository(&ecr.CreateRepositoryInput{
+		RepositoryName: aws.String(repositoryName),
+	})
+	if err != nil {
+		e2e.Logf("Error creating repository %s", err.Error())
+		return "", err
+	}
+	e2e.Logf("Repository created: %s", *createRes.Repository.RepositoryUri)
+	return *createRes.Repository.RepositoryUri, nil
+}
+
+// DeleteContainerRepository delete container repository
+func (ecrClient *ECRClient) DeleteContainerRepository(repositoryName string) error {
+	_, err := ecrClient.svc.DeleteRepository(&ecr.DeleteRepositoryInput{
+		RepositoryName: aws.String(repositoryName),
+		Force:          aws.Bool(true),
+	})
+	return err
+}
+
+// GetAuthorizationToken get container repository credential
+func (ecrClient *ECRClient) GetAuthorizationToken() (string, error) {
+	loginRes, err := ecrClient.svc.GetAuthorizationToken(&ecr.GetAuthorizationTokenInput{})
+	if err != nil {
+		e2e.Logf("Error getting authorization token: %s", err.Error())
+		return "", err
+	}
+	authData := loginRes.AuthorizationData[0]
+	password := aws.StringValue(authData.AuthorizationToken)
+	return password, nil
 }

@@ -1,7 +1,11 @@
 package clusterinfrastructure
 
 import (
+	"encoding/base64"
+	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -214,4 +218,38 @@ func waitForLoadBalancerReady(oc *exutil.CLI, externalIP string) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(errWait, "Load balancer is not ready after waiting up to 5 minutes ...")
+}
+
+func appendPullSecretAuth(authFile, regRouter, newRegUser, newRegPass string) (string, error) {
+	fieldValue := ""
+	if newRegUser == "" {
+		fieldValue = newRegPass
+	} else {
+		fieldValue = newRegUser + ":" + newRegPass
+	}
+	regToken := base64.StdEncoding.EncodeToString([]byte(fieldValue))
+	authDir, _ := filepath.Split(authFile)
+	newAuthFile := filepath.Join(authDir, fmt.Sprintf("%s.json", getRandomString()))
+	jqCMD := fmt.Sprintf(`cat %s | jq '.auths += {"%s":{"auth":"%s"}}' > %s`, authFile, regRouter, regToken, newAuthFile)
+	_, err := exec.Command("bash", "-c", jqCMD).Output()
+	if err != nil {
+		e2e.Logf("Fail to extract dockerconfig: %v", err)
+		return newAuthFile, err
+	}
+	return newAuthFile, nil
+}
+
+func extractPullSecret(oc *exutil.CLI) (string, error) {
+	tempDataDir := filepath.Join("/tmp/", fmt.Sprintf("registry-%s", getRandomString()))
+	err := os.Mkdir(tempDataDir, 0o755)
+	if err != nil {
+		e2e.Logf("Fail to create directory: %v", err)
+		return tempDataDir, err
+	}
+	err = oc.AsAdmin().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--confirm", "--to="+tempDataDir).Execute()
+	if err != nil {
+		e2e.Logf("Fail to extract dockerconfig: %v", err)
+		return tempDataDir, err
+	}
+	return tempDataDir, nil
 }
