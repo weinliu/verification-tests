@@ -321,7 +321,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(packageName[0]).To(o.ContainSubstring("nginx69869"))
 
 		exutil.By("Get token and clusterIP")
-		promeEp, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("service", "-n", "openshift-catalogd", "catalogd-controller-manager-metrics-service", "-o=jsonpath={.spec.clusterIP}").Output()
+		promeEp, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("service", "-n", "openshift-catalogd", "catalogd-service", "-o=jsonpath={.spec.clusterIP}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(promeEp).NotTo(o.BeEmpty())
 
@@ -334,7 +334,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		o.Expect(clustercatalogPodname).NotTo(o.BeEmpty())
 
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-			queryContent := "https://" + promeEp + ":8443/metrics"
+			queryContent := "https://" + promeEp + ":7443/metrics"
 			metricsMsg, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-operator-lifecycle-manager", clustercatalogPodname, "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", metricsToken), queryContent).Output()
 			e2e.Logf("err:%v", err)
 			if strings.Contains(metricsMsg, "catalogd_http_request_duration_seconds_bucket{code=\"200\"") {
