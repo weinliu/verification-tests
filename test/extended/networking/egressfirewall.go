@@ -1602,6 +1602,9 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		if ipStackType == "dualstack" {
 			// Retest with ipv6 address
+			if !checkIPv6PublicAccess(oc) {
+				g.Skip("Not be able to access the public website with IPv6,skip below test steps!!")
+			}
 			o.Expect(len(ipv6) == 0).NotTo(o.BeTrue())
 			exutil.By("Create ANP with deny action to ipv6 cidr")
 			banpCR.cidr = "::/0"
