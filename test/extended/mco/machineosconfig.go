@@ -90,17 +90,12 @@ func CreateMachineOSConfigUsingInternalRegistry(oc *exutil.CLI, namespace, name,
 	}
 
 	// We use the builder SA secret in the namespace to push the images to the internal registry
-	saBuilder := NewNamespacedResource(oc, "sa", namespace, "builder")
-	renderedImagePushSecret := NewSecret(oc, namespace, saBuilder.GetOrFail(`{.secrets[0].name}`))
+	renderedImagePushSecret, err := CreateInternalRegistrySecretFromSA(oc, "builder", namespace, "cloned-push-secret"+exutil.GetRandomString(), MachineConfigNamespace)
+	if err != nil {
+		return NewMachineOSConfig(oc, name), err
+	}
 	if !renderedImagePushSecret.Exists() {
 		return NewMachineOSConfig(oc, name), fmt.Errorf("Rendered image push secret does not exist: %s", renderedImagePushSecret)
-	}
-
-	if namespace != MachineConfigNamespace { // If the secret is not in MCO, we copy it there
-		renderedImagePushSecret, err = CopySecretToMCONamespace(renderedImagePushSecret, renderedImagePushSecret.GetName()+"-testcloned")
-		if err != nil {
-			return NewMachineOSConfig(oc, name), err
-		}
 	}
 
 	// We use the default SA secret in MCO to pull the current image from the internal registry
@@ -290,4 +285,42 @@ func cleanupMOSCSecret(secret Secret) error {
 	}
 
 	return secret.Delete()
+}
+
+// CreateInternalRegistrySecretFromSA creates a secret containing the credentials to logint to the internal registry as a given service account
+func CreateInternalRegistrySecretFromSA(oc *exutil.CLI, saName, saNamespace, secretName, secretNamespace string) (*Secret, error) {
+	var (
+		tmpDockerConfigFile = generateTmpFile(oc, "tmp-config.json")
+		masterNode          = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster).GetNodesOrFail()[0]
+	)
+	logger.Infof("Create a new secret with the credentials to login to the internal registry using a SA")
+	saToken, err := oc.Run("create").Args("-n", saNamespace, "token", saName, "--duration=72h").Output()
+	if err != nil {
+		logger.Errorf("Error getting token for SA %s", saName)
+		return nil, err
+	}
+	logger.Debugf("SA TOKEN: %s", saToken)
+
+	logger.Infof("Use a master node to login to the internal registry using the new token")
+	loginOut, loginErr := masterNode.DebugNodeWithChroot("podman", "login", InternalRegistrySvcURL, "-u", saName, "-p", saToken, "--authfile", tmpDockerConfigFile)
+	if loginErr != nil {
+		return nil, fmt.Errorf("Error trying to login to internal registry:\nOutput:%s\nError:%s", loginOut, loginErr)
+	}
+
+	logger.Infof("Copy the docker.json file to local")
+	err = masterNode.CopyToLocal(tmpDockerConfigFile, tmpDockerConfigFile)
+	if err != nil {
+		return nil, fmt.Errorf("Error copying the resulting authorization file to local")
+	}
+
+	logger.Infof("OK!")
+
+	logger.Infof("Create the secret with the credentials to push images to the internal registry")
+	err = oc.Run("create").Args("secret", "-n", secretNamespace, "docker-registry", secretName, "--from-file=.dockerconfigjson="+tmpDockerConfigFile).Execute()
+	if err != nil {
+		return nil, err
+	}
+	logger.Infof("OK!")
+
+	return NewSecret(oc, secretNamespace, secretName), nil
 }
