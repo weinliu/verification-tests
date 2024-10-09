@@ -685,6 +685,11 @@ func skipTestIfExtensionsAreUsed(oc *exutil.CLI) {
 // skipTestIfWorkersCannotBeScaled skips the current test if the worker pool cannot be scaled via machineset
 func skipTestIfWorkersCannotBeScaled(oc *exutil.CLI) {
 	logger.Infof("Checking if in this cluster workers can be scaled using machinesets")
+
+	if !IsCapabilityEnabled(oc.AsAdmin(), "MachineAPI") {
+		g.Skip("MachineAPI capability is disabled. Nodes cannot be scaled!")
+	}
+
 	msl, err := NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAll()
 	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error getting a list of MachineSet resources")
 

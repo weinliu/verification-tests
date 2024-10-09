@@ -299,6 +299,14 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 	})
 
 	g.It("Author:sregidor-NonHyperShiftHOST-PstChkUpgrade-NonPreRelease-High-70813-ManagedBootImages update boot image of machineset [Serial]", func() {
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
+		// Bootimages Update functionality is only available in GCP(GA) and AWS(Techpreview)
+		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform, AWSPlatform)
+		if exutil.CheckPlatform(oc) == AWSPlatform {
+			skipIfNoTechPreview(oc)
+		}
+		SkipIfNoFeatureGate(oc.AsAdmin(), "ManagedBootImages")
+
 		var (
 			tmpNamespace       = NewResource(oc.AsAdmin(), "ns", "tc-70813-tmp-namespace")
 			tmpConfigMap       = NewConfigMap(oc.AsAdmin(), tmpNamespace.GetName(), "tc-70813-tmp-configmap")
