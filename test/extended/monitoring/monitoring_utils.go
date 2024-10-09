@@ -483,3 +483,20 @@ func getAllRunningPodsWithLabel(oc *exutil.CLI, namespace string, label string) 
 	}
 	return strings.Split(pods, " "), err
 }
+
+func monitoringPluginPodCheck(oc *exutil.CLI) {
+	podCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, true, func(context.Context) (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/component=monitoring-plugin").Output()
+		if err != nil || strings.Contains(output, "Terminating") {
+			e2e.Logf("pods not ready: \n%v", output)
+			return false, nil
+		}
+		if err != nil || strings.Contains(output, "ContainerCreating") {
+			e2e.Logf("pods not ready: \n%v", output)
+			return false, nil
+		}
+		e2e.Logf("pods are ready: \n%v", output)
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(podCheck, "some monitoring-plugin pods are not ready!")
+}

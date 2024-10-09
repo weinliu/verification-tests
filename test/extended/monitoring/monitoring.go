@@ -2279,7 +2279,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		cmd := "-ojsonpath={.spec.template.spec.containers[].resources}"
 		checkYamlconfig(oc, "openshift-monitoring", "deployment", "monitoring-plugin", cmd, `{"limits":{"cpu":"30m","memory":"120Mi"},"requests":{"cpu":"15m","memory":"60Mi"}}`, true)
 
-		exutil.By("check monitoring-plugin ConfigMap/ConsolePlugin/PodDisruptionBudget/ServiceAccount/Service are exist")
+		exutil.By("check monitoring-plugin ConsolePlugin/PodDisruptionBudget/ServiceAccount/Service are exist")
 		resourceNames := []string{"ConsolePlugin", "ServiceAccount", "Service"}
 		for _, resource := range resourceNames {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resource, "monitoring-plugin", "-n", "openshift-monitoring").Output()
@@ -2295,20 +2295,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		}
 
 		exutil.By("check monitoring-plugin pods are ready")
-		podCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, true, func(context.Context) (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/component=monitoring-plugin").Output()
-			if err != nil || strings.Contains(output, "Terminating") {
-				e2e.Logf("pods not ready: \n%v", output)
-				return false, nil
-			}
-			if err != nil || strings.Contains(output, "ContainerCreating") {
-				e2e.Logf("pods not ready: \n%v", output)
-				return false, nil
-			}
-			e2e.Logf("pods are ready: \n%v", output)
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(podCheck, "some monitoring-plugin pods are not ready!")
+		monitoringPluginPodCheck(oc)
 
 		exutil.By("get monitoring-plugin pod name")
 		monitoringPluginPodNames, err := getAllRunningPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/component=monitoring-plugin")
@@ -2837,6 +2824,34 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		exutil.By("check alert triggered")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusRemoteWriteBehind"}'`, token, `"alertname":"PrometheusRemoteWriteBehind"`, 2*uwmLoadTime)
+	})
+
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-76282-monitoring-plugin should reload cert/key files dynamically [Serial]", func() {
+		exutil.By("delete uwm-config/cm-config at the end of the case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		exutil.By("check openshift-monitoring/monitoring-plugin-cert secret exist")
+		//% oc -n openshift-monitoring get secret monitoring-plugin-cert -ojsonpath='{.data}'
+		cmd := "-ojsonpath={.data}"
+		checkYamlconfig(oc, "openshift-monitoring", "secret", "monitoring-plugin-cert", cmd, `tls.crt`, true)
+		checkYamlconfig(oc, "openshift-monitoring", "secret", "monitoring-plugin-cert", cmd, `tls.key`, true)
+		secretBefore, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "monitoring-plugin-cert", "-ojsonpath={.data}", "-n", "openshift-monitoring").Output()
+
+		exutil.By("delete openshift-monitoring/monitoring-plugin-cert secret")
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "monitoring-plugin-cert", "-n", "openshift-monitoring").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("check the secret re-created")
+		checkYamlconfig(oc, "openshift-monitoring", "secret", "monitoring-plugin-cert", cmd, `tls.crt`, true)
+		checkYamlconfig(oc, "openshift-monitoring", "secret", "monitoring-plugin-cert", cmd, `tls.key`, true)
+		secretAfter, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "monitoring-plugin-cert", "-ojsonpath={.data}", "-n", "openshift-monitoring").Output()
+
+		exutil.By("check the secret have a new hash")
+		if strings.Compare(secretBefore, secretAfter) == 0 {
+			e2e.Failf("secret not changed!")
+		}
 	})
 
 	// author: hongyli@redhat.com
