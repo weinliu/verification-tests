@@ -1670,4 +1670,173 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 	})
+
+	// author: yuewu@redhat.com
+	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Low-65030-Vault issuer should work well when authenticating with Kubernetes static service account", func() {
+		const (
+			vaultReleaseName   = "vault-65030"
+			serviceAccountName = "cert-manager-vault-static-serviceaccount"
+			issuerName         = "issuer-vault-static-serviceaccount"
+			certName           = "cert-from-issuer-vault-static-serviceaccount"
+		)
+
+		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
+		vaultPodName, _ := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
+
+		exutil.By("create a long-lived API token for a service account")
+		err := oc.Run("create").Args("serviceaccount", serviceAccountName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+		secretFile := filepath.Join(buildPruningBaseDir, "secret-vault-static-sa-token.yaml")
+		params := []string{"-f", secretFile, "-p", "SA_NAME=" + serviceAccountName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+
+		exutil.By("configure auth with Kubernetes static service account")
+		cmd := fmt.Sprintf(`vault auth enable kubernetes && vault write auth/kubernetes/config kubernetes_host="https://kubernetes.default.svc" kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt && \
+vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_service_account_namespaces=%s token_policies=cert-manager ttl=1h`, serviceAccountName, oc.Namespace())
+		_, err = exutil.RemoteShPod(oc, oc.Namespace(), vaultPodName, "sh", "-c", cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("create an issuer using Kubernetes static service account")
+		issuerFile := filepath.Join(buildPruningBaseDir, "issuer-vault-static-sa.yaml")
+		params = []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "VAULT_SERVICE=" + vaultReleaseName, "VAULT_NAMESPACE=" + oc.Namespace(), "SECRET_NAME=" + serviceAccountName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", issuerName, 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "issuer", issuerName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
+
+		exutil.By("create a certificate")
+		certFile := filepath.Join(buildPruningBaseDir, "cert-from-vault.yaml")
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
+	})
+
+	// author: yuewu@redhat.com
+	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-66907-Vault issuer should work well when authenticating with Kubernetes bound service account through Kubernetes auth", func() {
+		const (
+			minSupportedVersion = "1.12.0"
+			vaultReleaseName    = "vault-66907"
+			serviceAccountName  = "cert-manager-vault-bound-serviceaccount"
+			issuerName          = "issuer-vault-bound-serviceaccount"
+			certName            = "cert-from-issuer-vault-bound-serviceaccount"
+		)
+
+		skipUnsupportedVersion(oc, minSupportedVersion)
+
+		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
+		vaultPodName, _ := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
+
+		exutil.By("create RBAC resources for the service account to get tokens")
+		err := oc.Run("create").Args("serviceaccount", serviceAccountName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+		rbacFile := filepath.Join(buildPruningBaseDir, "rbac-vault-bound-sa.yaml")
+		params := []string{"-f", rbacFile, "-p", "SA_NAME=" + serviceAccountName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+
+		exutil.By("configure auth with Kubernetes bound service account")
+		cmd := fmt.Sprintf(`vault auth enable kubernetes && vault write auth/kubernetes/config kubernetes_host="https://kubernetes.default.svc" kubernetes_ca_cert=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt && \
+vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_service_account_namespaces=%s token_policies=cert-manager ttl=1h`, serviceAccountName, oc.Namespace())
+		_, err = exutil.RemoteShPod(oc, oc.Namespace(), vaultPodName, "sh", "-c", cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("create an issuer using Kubernetes bound service account")
+		issuerFile := filepath.Join(buildPruningBaseDir, "issuer-vault-bound-sa.yaml")
+		params = []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "VAULT_SERVICE=" + vaultReleaseName, "VAULT_NAMESPACE=" + oc.Namespace(), "VAULT_AUTH_PATH=kubernetes", "SA_NAME=" + serviceAccountName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", issuerName, 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "issuer", issuerName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
+
+		exutil.By("create a certificate")
+		certFile := filepath.Join(buildPruningBaseDir, "cert-from-vault.yaml")
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
+	})
+
+	// author: yuewu@redhat.com
+	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-76515-Vault issuer should work well when authenticating with Kubernetes bound service account through JWT/OIDC auth", func() {
+		const (
+			minSupportedVersion = "1.12.0"
+			vaultReleaseName    = "vault-76515"
+			serviceAccountName  = "cert-manager-vault-bound-serviceaccount"
+			issuerName          = "issuer-vault-bound-serviceaccount"
+			certName            = "cert-from-issuer-vault-bound-serviceaccount"
+		)
+
+		skipUnsupportedVersion(oc, minSupportedVersion)
+
+		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
+		vaultPodName, _ := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
+
+		exutil.By("create RBAC resources for the service account to get tokens")
+		err := oc.Run("create").Args("serviceaccount", serviceAccountName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+		rbacFile := filepath.Join(buildPruningBaseDir, "rbac-vault-bound-sa.yaml")
+		params := []string{"-f", rbacFile, "-p", "SA_NAME=" + serviceAccountName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+
+		exutil.By("configure the JWT auth in Vault")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("--raw", "/.well-known/openid-configuration").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		oidcIssuer := gjson.Get(output, "issuer").String()
+		cmd := fmt.Sprintf(`vault auth enable jwt && vault write auth/jwt/config oidc_discovery_url=%s`, oidcIssuer)
+
+		if !exutil.IsSTSCluster(oc) {
+			// This is an workaround for non-STS envs, otherwise vault issuer will run into 'fetching keys oidc: get keys failed: 403 Forbidden' error.
+			// The public keys under '/openid/v1/jwks' are non-sensitive, so there is no concern about granting access.
+			exutil.By("create RBAC resources for anonymous user (vault) to get 'jwks_uri' in non-STS env")
+			roleName := "vault-get-jwks-role-76515"
+			rolebindingName := "vault-get-jwks-rolebinding-76515"
+			err := oc.AsAdmin().WithoutNamespace().Run("create").Args("clusterrole", roleName, "--verb=get", "--non-resource-url=/openid/v1/jwks").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrole", roleName).Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("clusterrolebinding", rolebindingName, "--clusterrole="+roleName, "--group=system:unauthenticated").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding", rolebindingName).Execute()
+
+			// In non-STS envs, OIDC issuer would be the internal URL 'https://kubernetes.default.svc'. Thus explicitly setting the certificate to validate connections is required.
+			cmd += " oidc_discovery_ca_pem=@/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+		}
+		_, err = exutil.RemoteShPod(oc, oc.Namespace(), vaultPodName, "sh", "-c", cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd = fmt.Sprintf(`vault write auth/jwt/role/issuer role_type=jwt bound_audiences="vault://%s/%s" user_claim=sub bound_subject="system:serviceaccount:%s:%s" token_policies=cert-manager ttl=1m`, oc.Namespace(), issuerName, oc.Namespace(), serviceAccountName)
+		_, err = exutil.RemoteShPod(oc, oc.Namespace(), vaultPodName, "sh", "-c", cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("create an issuer using Kubernetes bound service account")
+		issuerFile := filepath.Join(buildPruningBaseDir, "issuer-vault-bound-sa.yaml")
+		params = []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "VAULT_SERVICE=" + vaultReleaseName, "VAULT_NAMESPACE=" + oc.Namespace(), "VAULT_AUTH_PATH=jwt", "SA_NAME=" + serviceAccountName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", issuerName, 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "issuer", issuerName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
+
+		exutil.By("create a certificate")
+		certFile := filepath.Join(buildPruningBaseDir, "cert-from-vault.yaml")
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
+	})
 })

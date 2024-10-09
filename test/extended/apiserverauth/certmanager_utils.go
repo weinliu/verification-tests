@@ -742,7 +742,7 @@ func setupVaultServer(oc *exutil.CLI, ns string, release string) (string, string
 	}()
 	// wait for Vault installer pod completed
 	// TODO(yuewu): need to address potential error caused by Docker's image pull rate limit: https://docs.docker.com/docker-hub/download-rate-limit/
-	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "pod", installerPodName).Output()
 		if strings.Contains(output, "Completed") {
 			e2e.Logf("Vault installer pod completed successfully")
@@ -757,7 +757,7 @@ func setupVaultServer(oc *exutil.CLI, ns string, release string) (string, string
 	}
 	exutil.AssertWaitPollNoErr(err, "timeout waiting for Vault installer pod completed")
 	// wait for Vault server pod to show up
-	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(context.Context) (bool, error) {
+	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "pod", "-l", vaultPodLabel).Output()
 		if strings.Contains(output, "Running") && strings.Contains(output, "0/1") {
 			e2e.Logf("Vault server pod is up and running (waiting for unseal to become ready)")
@@ -822,7 +822,9 @@ func setupVaultServer(oc *exutil.CLI, ns string, release string) (string, string
 	o.Expect(err).NotTo(o.HaveOccurred())
 	pkiIntermediateCSR := gjson.Get(output, "data.csr").String()
 	cmd = fmt.Sprintf(`echo "%s" > /tmp/pki_intermediate.csr`, pkiIntermediateCSR)
+	oc.NotShowInfo()
 	_, err = exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
+	oc.SetShowInfo()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	// sign the intermediate certificate with the root CA private key
 	cmd = fmt.Sprintf(`vault write -format=json pki/root/sign-intermediate issuer_ref="vault-root" csr=@/tmp/pki_intermediate.csr format=pem_bundle ttl=2160h`)
@@ -830,7 +832,9 @@ func setupVaultServer(oc *exutil.CLI, ns string, release string) (string, string
 	o.Expect(err).NotTo(o.HaveOccurred())
 	intCertPemData := gjson.Get(output, "data.certificate").String()
 	cmd = fmt.Sprintf(`echo "%s" > /tmp/intermediate.cert.pem`, intCertPemData)
+	oc.NotShowInfo()
 	_, err = exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
+	oc.SetShowInfo()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	cmd = fmt.Sprintf(`vault write pki_int/intermediate/set-signed certificate=@/tmp/intermediate.cert.pem`)
 	_, err = exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
