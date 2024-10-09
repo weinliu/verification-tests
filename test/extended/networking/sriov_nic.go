@@ -402,7 +402,7 @@ var _ = g.Describe("[sig-networking] SDN sriov externallyManaged", func() {
 
 		exutil.By("0.1 Get the node's name that has the device")
 		for _, thisNode := range sriovNodeList {
-			output, err := exutil.DebugNodeWithChroot(oc, thisNode, "nmcli", "con", "show")
+			output, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, thisNode, []string{"--quiet=true", "--to-namespace=default"}, "bash", "-c", "nmcli", "con", "show")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(output, data.InterfaceName) {
 				node = thisNode
@@ -452,7 +452,7 @@ var _ = g.Describe("[sig-networking] SDN sriov externallyManaged", func() {
 		// defer cleanup VFs by recreating VFPolicy with 0 VFs, then defer delete the VFPolicy
 		defer deleteNNCP(oc, VFPolicy.name)
 		defer func() {
-			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, VFPolicy.nodename, "nmcli", "con", "show")
+			ifaces, deferErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, VFPolicy.nodename, []string{"--quiet=true", "--to-namespace=default"}, "bash", "-c", "nmcli", "con", "show")
 			o.Expect(deferErr).NotTo(o.HaveOccurred())
 			VFPolicy.totalvfs = 0
 			if strings.Contains(ifaces, VFPolicy.intfname) {
@@ -662,7 +662,7 @@ var _ = g.Describe("[sig-networking] SDN sriov externallyManaged", func() {
 		// defer cleanup VFs by recreating VFPolicy with 0 VFs, then defer delete the VFPolicy
 		defer deleteNNCP(oc, VFPolicy.name)
 		defer func() {
-			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, VFPolicy.nodename, "nmcli", "con", "show")
+			ifaces, deferErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, VFPolicy.nodename, []string{"--quiet=true", "--to-namespace=default"}, "bash", "-c", "nmcli", "con", "show")
 			o.Expect(deferErr).NotTo(o.HaveOccurred())
 			VFPolicy.totalvfs = 0
 			if strings.Contains(ifaces, VFPolicy.intfname) {
@@ -834,7 +834,7 @@ var _ = g.Describe("[sig-networking] SDN sriov externallyManaged", func() {
 		// defer cleanup VFs by recreating VFPolicy with 0 VFs, then defer delete the VFPolicy
 		defer deleteNNCP(oc, VFPolicy.name)
 		defer func() {
-			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, VFPolicy.nodename, "nmcli", "con", "show")
+			ifaces, deferErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, VFPolicy.nodename, []string{"--quiet=true", "--to-namespace=default"}, "bash", "-c", "nmcli", "con", "show")
 			o.Expect(deferErr).NotTo(o.HaveOccurred())
 			VFPolicy.totalvfs = 0
 			if strings.Contains(ifaces, VFPolicy.intfname) {
@@ -978,7 +978,7 @@ var _ = g.Describe("[sig-networking] SDN sriov externallyManaged", func() {
 		// defer cleanup VFs by recreating VFPolicy with 0 VFs, then defer delete the VFPolicy
 		defer deleteNNCP(oc, VFPolicy.name)
 		defer func() {
-			ifaces, deferErr := exutil.DebugNodeWithChroot(oc, VFPolicy.nodename, "nmcli", "con", "show")
+			ifaces, deferErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, VFPolicy.nodename, []string{"--quiet=true", "--to-namespace=default"}, "bash", "-c", "nmcli", "con", "show")
 			o.Expect(deferErr).NotTo(o.HaveOccurred())
 			VFPolicy.totalvfs = 0
 			if strings.Contains(ifaces, VFPolicy.intfname) {
