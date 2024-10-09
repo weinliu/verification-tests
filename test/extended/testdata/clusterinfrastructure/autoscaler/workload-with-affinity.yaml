@@ -20,10 +20,10 @@ objects:
                 memory: 500Mi
                 cpu: ${CPU}
           restartPolicy: Never
-        tolerations:
-        - key: mapi
-          value: mapi_test
-          effect: NoSchedule
+          tolerations:
+          - key: mapi
+            value: mapi_test
+            effect: NoSchedule
         affinity:
           nodeAffinity:
             requiredDuringSchedulingIgnoredDuringExecution:
