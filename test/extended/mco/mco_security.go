@@ -684,7 +684,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		logger.Infof("OK!\n")
 
 	})
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-76587-Port number 22623 should not expose weak ciphers to external client from master node IP [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-76587-MCS port should not expose weak ciphers to external client from master node IP [Disruptive]", func() {
 		var (
 			node            = mcp.GetSortedNodesOrFail()[0]
 			port            = 22623
