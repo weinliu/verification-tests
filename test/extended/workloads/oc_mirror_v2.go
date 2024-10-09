@@ -2133,4 +2133,61 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2mirror still failed")
 	})
 
+	// author: knarra@redhat.com
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-74662-Verify oc-mirror does not crash when invalid catalogs are found in imageSetConfig file [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case74662"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-74662.yaml")
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+
+		exutil.By("Start mirror2disk with invalid catalogs")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("~/.oc-mirror/")
+		exutil.By("Start dry run of mirror2disk")
+		waitErr := wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorToDiskOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--dry-run", "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2disk failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(mirrorToDiskOutput, "dry-run/missing.txt") && strings.Contains(mirrorToDiskOutput, "dry-run/mapping.txt") {
+				e2e.Logf("Mirror to Disk dry run for invalid catalog has been completed successfully")
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2disk still failed for invalid catalog")
+
+		exutil.By("Start dry run of mirror2mirror")
+		waitErr = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			mirrorToMirrorOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName+"/m2minvalid", "--workspace", "file://"+dirname, "--v2", "--dry-run", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(mirrorToMirrorOutput, "dry-run/mapping.txt") {
+				e2e.Logf("Mirror to mirror dry run for invalid catalog has been completed successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2mirror still failed for invalid catalog")
+
+	})
 })
