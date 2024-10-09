@@ -2928,7 +2928,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		namespace := oc.Namespace()
 		ogSAtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup-serviceaccount.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		secTemplate := filepath.Join(buildPruningBaseDir, "secret.yaml")
 		csv := "learn-operator.v0.0.3"
 		sa := "scoped-24771"
 
@@ -2943,14 +2942,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			startingCSV:            "learn-operator.v0.0.3",
 			singleNamespace:        false,
 			template:               subTemplate,
-		}
-
-		secret := secretDescription{
-			name:      sa,
-			namespace: namespace,
-			saname:    sa,
-			sectype:   "kubernetes.io/service-account-token",
-			template:  secTemplate,
 		}
 
 		// create the OperatorGroup resource
@@ -2979,7 +2970,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.By("4) Create the service account")
 		_, err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		secret.create(oc)
 
 		exutil.By("5) Create a Subscription")
 		sub.createWithoutCheck(oc, itName, dr)
@@ -10010,7 +10000,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		rolebindingtemplate := filepath.Join(buildPruningBaseDir, "role-binding.yaml")
 		ogSAtemplate := filepath.Join(buildPruningBaseDir, "operatorgroup-serviceaccount.yaml")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-		secTemplate := filepath.Join(buildPruningBaseDir, "secret.yaml")
 		oc.SetupProject()
 		namespace := oc.Namespace()
 		itName := g.CurrentSpecReport().FullText()
@@ -10047,19 +10036,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				saname:    sa,
 				template:  rolebindingtemplate,
 			}
-			secret = secretDescription{
-				name:      sa,
-				namespace: namespace,
-				saname:    sa,
-				sectype:   "kubernetes.io/service-account-token",
-				template:  secTemplate,
-			}
 		)
 
 		exutil.By("1) Create the service account, secret and OperatorGroup")
 		_, err := oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", sa, "-n", sub.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		secret.create(oc)
 
 		og.createwithCheck(oc, itName, dr)
 		err = newCheck("expect", asAdmin, withoutNamespace, compare, sa, ok, []string{"og", og.name, "-n", og.namespace, "-o=jsonpath={.status.serviceAccountRef.name}"}).checkWithoutAssert(oc)
