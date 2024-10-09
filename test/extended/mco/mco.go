@@ -2480,7 +2480,7 @@ nulla pariatur.`
 		mc.parameters = []string{fmt.Sprintf(`EXTENSIONS=["%s", "%s"]`, validExtension, invalidExtension)}
 		mc.skipWaitForMcp = true
 
-		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason)
+		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason, true)
 
 	})
 
@@ -2803,11 +2803,11 @@ nulla pariatur.`
 
 		exutil.By("Patch the master-fips MC and set fips=false")
 		mMc.Patch("merge", `{"spec":{"fips": false}}`)
-		checkDegraded(mMcp, expectedRDMessage, expectedRDReason, "RenderDegraded", 1)
+		checkDegraded(mMcp, expectedRDMessage, expectedRDReason, "RenderDegraded", false, 1)
 
 		exutil.By("Try to disasble FIPS in worker pool")
 		wMc.Patch("merge", `{"spec":{"fips": false}}`)
-		checkDegraded(wMcp, expectedRDMessage, expectedRDReason, "RenderDegraded", 1)
+		checkDegraded(wMcp, expectedRDMessage, expectedRDReason, "RenderDegraded", false, 1)
 
 	})
 
@@ -2827,7 +2827,7 @@ nulla pariatur.`
 		mc.parameters = []string{fmt.Sprintf("FILES=[%s]", wrongUserFileConfig)}
 		mc.skipWaitForMcp = true
 
-		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason)
+		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason, false)
 
 	})
 
@@ -3686,7 +3686,7 @@ nulla pariatur.`
 		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName()).SetMCOTemplate("set-64k-pages-kernel.yaml")
 		mc.skipWaitForMcp = true
 
-		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason)
+		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason, false)
 	})
 
 	g.It("Author:rioliu-NonPreRelease-Critical-68695-MCO should not be degraded when image-registry is not installed [Serial]", func() {
@@ -4861,7 +4861,7 @@ desiredState:
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason
-func validateMcpNodeDegraded(mc *MachineConfig, mcp *MachineConfigPool, expectedNDMessage, expectedNDReason string) {
+func validateMcpNodeDegraded(mc *MachineConfig, mcp *MachineConfigPool, expectedNDMessage, expectedNDReason string, checkCODegraded bool) {
 	defer func() {
 		o.Expect(mcp.RecoverFromDegraded()).To(o.Succeed(), "The MCP could not be recovered from Degraded status")
 	}()
@@ -4869,7 +4869,7 @@ func validateMcpNodeDegraded(mc *MachineConfig, mcp *MachineConfigPool, expected
 	mc.create()
 	logger.Infof("OK!\n")
 
-	checkDegraded(mcp, expectedNDMessage, expectedNDReason, "NodeDegraded", 2)
+	checkDegraded(mcp, expectedNDMessage, expectedNDReason, "NodeDegraded", checkCODegraded, 2)
 }
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to RenderDegraded error matching expectedNDMessage, expectedNDReason
@@ -4879,10 +4879,10 @@ func validateMcpRenderDegraded(mc *MachineConfig, mcp *MachineConfigPool, expect
 	mc.create()
 	logger.Infof("OK!\n")
 
-	checkDegraded(mcp, expectedRDMessage, expectedRDReason, "RenderDegraded", 2)
+	checkDegraded(mcp, expectedRDMessage, expectedRDReason, "RenderDegraded", false, 2)
 }
 
-func checkDegraded(mcp *MachineConfigPool, expectedMessage, expectedReason, degradedConditionType string, offset int) {
+func checkDegraded(mcp *MachineConfigPool, expectedMessage, expectedReason, degradedConditionType string, checkCODegraded bool, offset int) {
 	oc := mcp.oc
 	expectedNumDegradedMachines := 0
 	if degradedConditionType == "NodeDegraded" {
@@ -4929,6 +4929,17 @@ func checkDegraded(mcp *MachineConfigPool, expectedMessage, expectedReason, degr
 	o.ConsistentlyWithOffset(offset, mco, "1m", "10s").Should(HaveConditionField("Available", "status", o.Equal("True")),
 		"co/machine-config should never have condition Available=false")
 
+	// Because of https://github.com/openshift/machine-config-operator/pull/4617#issuecomment-2385929278 it takes 30 minutes for the CO to become degraded
+	// We cannot afford to spend 30 minutes in every negative test case just waiting for the machine-config CO to become degraded
+	// We cannot afford not to test it either. We should have caught the issue linked above
+	// What we will do is to check for the CO degraded status in only one of our negative test cases trying to reach a good compromise.
+	if checkCODegraded {
+		o.EventuallyWithOffset(offset, mco, "35m", "30s").Should(BeDegraded(),
+			"co/macihne-config should be degraded because the MCP is degraded, but it wasn't")
+		// Double check that when we degraded CO we didn't se a wrong Available value
+		o.EventuallyWithOffset(offset, mco, "1m", "10s").Should(HaveConditionField("Available", "status", o.Equal("True")),
+			"co/machine-config should never have condition Available=false")
+	}
 	logger.Infof("OK!\n")
 }
 

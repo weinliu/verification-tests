@@ -1293,6 +1293,6 @@ func checkInvalidOsImagesDegradedStatus(oc *exutil.CLI, image, layeringMcName, e
 	layeringMC.parameters = []string{"OS_IMAGE=" + image}
 	layeringMC.skipWaitForMcp = true
 
-	validateMcpNodeDegraded(layeringMC, mcp, expectedNDMessage, expectedNDReason)
+	validateMcpNodeDegraded(layeringMC, mcp, expectedNDMessage, expectedNDReason, false)
 
 }

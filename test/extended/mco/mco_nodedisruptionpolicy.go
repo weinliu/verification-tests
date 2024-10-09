@@ -264,7 +264,7 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 		mc.create()
 		logger.Infof("OK!\n")
 
-		checkDegraded(mcp, expectedNDMessage, expectedNDReason, "NodeDegraded", 1)
+		checkDegraded(mcp, expectedNDMessage, expectedNDReason, "NodeDegraded", false, 1)
 
 		exutil.By("Fix the disruption policy configuration")
 		o.Expect(ndp.AddFilePolicy(filePath, validActions...).Apply()).To(o.Succeed(), "Patch ManchineConfiguration failed")
