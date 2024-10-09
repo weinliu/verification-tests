@@ -3,6 +3,7 @@ package mco
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -327,6 +328,64 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 
 		exutil.By("Remove the MachineOSConfig resource")
 		o.Expect(DisableOCL(mosc)).To(o.Succeed(), "Error cleaning up %s", mosc)
+		logger.Infof("OK!\n")
+	})
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-73497-OCB build images in many MCPs at the same time [Disruptive]", func() {
+		SkipIfSNO(oc.AsAdmin()) // This test makes no sense in SNO
+
+		var (
+			customMCPNames = "infra"
+			numCustomPools = 5
+			moscList       = []*MachineOSConfig{}
+			mcpList        = []*MachineConfigPool{}
+			wg             sync.WaitGroup
+		)
+
+		exutil.By("Create custom MCPS")
+		for i := 0; i < numCustomPools; i++ {
+			infraMcpName := fmt.Sprintf("%s-%d", customMCPNames, i)
+			infraMcp, err := CreateCustomMCP(oc.AsAdmin(), infraMcpName, 0)
+			defer infraMcp.delete()
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error creating a new custom pool: %s", infraMcpName)
+			mcpList = append(mcpList, infraMcp)
+
+		}
+		logger.Infof("OK!\n")
+
+		exutil.By("Checking that all MOSCs were executed properly")
+		for _, infraMcp := range mcpList {
+			moscName := fmt.Sprintf("mosc-%s", infraMcp.GetName())
+
+			mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), MachineConfigNamespace, moscName, infraMcp.GetName(), nil)
+			defer mosc.CleanupAndDelete()
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
+			moscList = append(moscList, mosc)
+
+			wg.Add(1)
+			go func() {
+				defer g.GinkgoRecover()
+				defer wg.Done()
+
+				ValidateSuccessfulMOSC(mosc, nil)
+			}()
+		}
+
+		wg.Wait()
+		logger.Infof("OK!\n")
+
+		exutil.By("Removing all MOSC resources")
+		for _, mosc := range moscList {
+			o.Expect(mosc.CleanupAndDelete()).To(o.Succeed(), "Error cleaning up %s", mosc)
+		}
+		logger.Infof("OK!\n")
+
+		exutil.By("Validate that all resources were garbage collected")
+		for i := 0; i < numCustomPools; i++ {
+			ValidateMOSCIsGarbageCollected(moscList[i], mcpList[i])
+		}
+		logger.Infof("OK!\n")
+
+		exutil.AssertAllPodsToBeReady(oc.AsAdmin(), MachineConfigNamespace)
 		logger.Infof("OK!\n")
 	})
 
