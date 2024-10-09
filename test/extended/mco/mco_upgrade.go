@@ -83,6 +83,11 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 				continue
 			}
 
+			if node.GetConditionStatusByType("DiskPressure") != FalseString {
+				logger.Infof("Node %s is under disk pressure. The node cannot be debugged. We skip the validation for this node", node.GetName())
+				continue
+			}
+
 			exutil.By(fmt.Sprintf("check authorized key dir and file on %s", node.GetName()))
 			o.Eventually(func(gm o.Gomega) {
 				output, err := node.DebugNodeWithChroot("stat", oldAuthorizedKeyPath)
