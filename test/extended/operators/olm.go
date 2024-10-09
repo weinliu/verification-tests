@@ -456,7 +456,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		cs.createWithCheck(oc, itName, dr)
 	})
 	// author: jiazha@redhat.com
-	g.It("ConnectedOnly-Author:jiazha-Low-68680-Operator Channels in random order for FBC Catalogs", func() {
+	g.It("Author:jiazha-DEPRECATED-ConnectedOnly-Low-68680-Operator Channels in random order for FBC Catalogs", func() {
 		var quayChannels string
 		// loop ten times to check if they're the same
 		for i := 0; i < 10; i++ {
