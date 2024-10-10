@@ -309,7 +309,7 @@ func prepareDockerfileDirectory(baseDir, dockerFileContent string) (string, erro
 }
 
 func getImageFromReleaseInfo(oc *exutil.CLI, imageName, dockerConfigFile string) (string, error) {
-	stdout, stderr, err := oc.Run("adm").Args("release", "info", "--image-for", imageName,
+	stdout, stderr, err := oc.Run("adm").Args("release", "info", "--insecure", "--image-for", imageName,
 		"--registry-config", dockerConfigFile).Outputs()
 	if err != nil {
 		logger.Errorf("STDOUT: %s", stdout)
