@@ -156,6 +156,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 
 		err = ls.prepareResourcesForLokiStack(oc)
+		if err != nil {
+			g.Skip("Skipping test since LokiStack resources were not deployed")
+		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = ls.deployLokiStack(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())

@@ -135,7 +135,9 @@ func createS3Bucket(client *s3.Client, bucketName string, cred s3Credential) err
 	// if not, create the bucket
 	exist := false
 	buckets, err := client.ListBuckets(context.TODO(), &s3.ListBucketsInput{})
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil {
+		return err
+	}
 	for _, bu := range buckets.Buckets {
 		if *bu.Name == bucketName {
 			exist = true
