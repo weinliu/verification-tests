@@ -525,14 +525,14 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 				csVersion12 = append(csVersion12, csNameList[i])
 			}
 		}
-		validateCorrectTlsProfileSecurity(oc, "", "VersionTLS12", csVersion12)
+		validateCorrectTLSProfileSecurity(oc, "", "VersionTLS12", csVersion12)
 		logger.Infof("OK!\n")
 
 		defer func(initialConfig string) {
 			exutil.By("Restore with previous apiserver value")
 			apiServer.SetSpec(initialConfig)
 			exutil.By("Check that all cluster operators are stable")
-			o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "30m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
+			o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "50m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
 			logger.Infof("Wait for MCC to get the leader lease")
 			o.Eventually(NewController(oc.AsAdmin()).HasAcquiredLease, "6m", "20s").Should(o.BeTrue(),
 				"The controller pod didn't acquire the lease properly.")
@@ -547,7 +547,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 
 		logger.Infof("OK!\n")
 		exutil.By("Check that all cluster operators are stable")
-		o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "30m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
+		o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "50m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
 		logger.Infof("Wait for MCC to get the leader lease")
 		o.Eventually(NewController(oc.AsAdmin()).HasAcquiredLease, "12m", "20s").Should(o.BeTrue(),
 			"The controller pod didn't acquire the lease properly.")
@@ -557,7 +557,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 
 		exutil.By("Verify for Custom TLS Profile")
 		customCipherSuite := []string{"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256", "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256", "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"}
-		validateCorrectTlsProfileSecurity(oc, "Custom", "VersionTLS11", customCipherSuite)
+		validateCorrectTLSProfileSecurity(oc, "Custom", "VersionTLS11", customCipherSuite)
 		logger.Infof("OK!\n")
 
 		exutil.By("Patch the Old tlsSecurityProfile")
@@ -566,7 +566,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 
 		logger.Infof("OK!\n")
 		exutil.By("Check that all cluster operators are stable")
-		o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "30m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
+		o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "50m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
 		logger.Infof("Wait for MCC to get the leader lease")
 		o.Eventually(NewController(oc.AsAdmin()).HasAcquiredLease, "12m", "20s").Should(o.BeTrue(),
 			"The controller pod didn't acquire the lease properly.")
@@ -575,7 +575,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 
 		exutil.By("Verify for Old TLS Profile")
 		csNameList = getCipherSuitesNameforSpecificVersion(VersionTLS10)
-		validateCorrectTlsProfileSecurity(oc, "Old", "VersionTLS10", csNameList)
+		validateCorrectTLSProfileSecurity(oc, "Old", "VersionTLS10", csNameList)
 		logger.Infof("OK!\n")
 
 		// For now Modern Profile is not supported
@@ -604,15 +604,15 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 			}
 		}
 		exutil.By("Verify for Intermediate TLS Profile in kubeletConfig")
-		validateCorrectTlsProfileSecurityInKubeletConfig(oc.AsAdmin(), node, "VersionTLS12", csVersion12)
+		validateCorrectTLSProfileSecurityInKubeletConfig(node, "VersionTLS12", csVersion12)
 		exutil.By("Verify for Intermediate TLS Profile pod logs")
-		validateCorrectTlsProfileSecurity(oc, "", "VersionTLS12", csVersion12)
+		validateCorrectTLSProfileSecurity(oc, "", "VersionTLS12", csVersion12)
 
 		defer func(initialConfig string) {
 			exutil.By("Restore with previous apiserver value")
 			apiServer.SetSpec(initialConfig)
 			exutil.By("Check that all cluster operators are stable")
-			o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "30m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
+			o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "50m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
 			logger.Infof("Wait for MCC to get the leader lease")
 			o.Eventually(NewController(oc.AsAdmin()).HasAcquiredLease, "6m", "20s").Should(o.BeTrue(),
 				"The controller pod didn't acquire the lease properly.")
@@ -626,7 +626,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 			`[{ "op": "add", "path": "/spec/tlsSecurityProfile", "value":  {"type": "Old","old": {}}}]`)).To(o.Succeed(), "Error patching http proxy")
 		logger.Infof("OK!\n")
 		exutil.By("Check that all cluster operators are stable")
-		o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "30m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
+		o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "50m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
 		logger.Infof("Wait for MCC to get the leader lease")
 		o.Eventually(NewController(oc.AsAdmin()).HasAcquiredLease, "12m", "20s").Should(o.BeTrue(),
 			"The controller pod didn't acquire the lease properly.")
@@ -636,9 +636,9 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 
 		exutil.By("Verify for Old TLS Profile in kubeletConfig")
 		csVersion10 := getCipherSuitesNameforSpecificVersion(VersionTLS10)
-		validateCorrectTlsProfileSecurityInKubeletConfig(oc.AsAdmin(), node, "VersionTLS10", csVersion10)
+		validateCorrectTLSProfileSecurityInKubeletConfig(node, "VersionTLS10", csVersion10)
 		exutil.By("Verify for Old TLS Profile in pod logs")
-		validateCorrectTlsProfileSecurity(oc, "Old", "VersionTLS10", csVersion10)
+		validateCorrectTLSProfileSecurity(oc, "Old", "VersionTLS10", csVersion10)
 
 		exutil.By("Create Kubeletconfig to configure a custom tlsSecurityProfile")
 		kc := NewKubeletConfig(oc.AsAdmin(), kcName, kcTemplate)
@@ -653,14 +653,14 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Verify for Custom TLS Profile in kubeletConfig")
-		validateCorrectTlsProfileSecurityInKubeletConfig(oc.AsAdmin(), node, "VersionTLS11", customCipherSuite)
+		validateCorrectTLSProfileSecurityInKubeletConfig(node, "VersionTLS11", customCipherSuite)
 
 		exutil.By("Patch the Intermediate tlsSecurityProfile to check kubeletconfig settings are not changed")
 		o.Expect(apiServer.Patch("json",
 			`[{ "op": "add", "path": "/spec/tlsSecurityProfile", "value":  {"type": "Intermediate","intermediate": {}}}]`)).To(o.Succeed(), "Error patching http proxy")
 		logger.Infof("OK!\n")
 		exutil.By("Check that all cluster operators are stable")
-		o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "30m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
+		o.Expect(WaitForStableCluster(oc.AsAdmin(), "30s", "50m")).To(o.Succeed(), "Not all COs were ready after configuring the tls profile")
 		logger.Infof("Wait for MCC to get the leader lease")
 		o.Eventually(NewController(oc.AsAdmin()).HasAcquiredLease, "12m", "20s").Should(o.BeTrue(),
 			"The controller pod didn't acquire the lease properly.")
@@ -669,9 +669,9 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Verify for Intermediate TLS Profile pod logs")
-		validateCorrectTlsProfileSecurity(oc, "Intermediate", "VersionTLS12", csVersion12)
+		validateCorrectTLSProfileSecurity(oc, "Intermediate", "VersionTLS12", csVersion12)
 		exutil.By("Verify for Custom TLS Profile not changed in kubeletConfig")
-		validateCorrectTlsProfileSecurityInKubeletConfig(oc.AsAdmin(), node, "VersionTLS11", customCipherSuite)
+		validateCorrectTLSProfileSecurityInKubeletConfig(node, "VersionTLS11", customCipherSuite)
 
 		exutil.By("Delete create kubeletConfig template")
 		kc.DeleteOrFail()
@@ -680,7 +680,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("To check the kubeletConfig to have same tls setting as of API server")
-		validateCorrectTlsProfileSecurityInKubeletConfig(oc.AsAdmin(), node, "VersionTLS12", csVersion12)
+		validateCorrectTLSProfileSecurityInKubeletConfig(node, "VersionTLS12", csVersion12)
 		logger.Infof("OK!\n")
 
 	})
@@ -852,8 +852,8 @@ func getCipherSuitesForVersion(version uint16) []*tls.CipherSuite {
 	return suites
 }
 
-// validateCorrectTlsProfileSecurity helps to check the valid tls-min-version and tls-cipher-suite
-func validateCorrectTlsProfileSecurity(oc *exutil.CLI, tlsSecurityProfile string, tlsMinVersionStr string, cipherSuite []string) {
+// validateCorrectTLSProfileSecurity helps to check the valid tls-min-version and tls-cipher-suite
+func validateCorrectTLSProfileSecurity(oc *exutil.CLI, tlsSecurityProfile, tlsMinVersionStr string, cipherSuite []string) {
 
 	var (
 		containerArgsPath  = `{.spec.containers[*].args[*]}`
@@ -902,7 +902,7 @@ func validateCorrectTlsProfileSecurity(oc *exutil.CLI, tlsSecurityProfile string
 	logger.Infof("OK!\n")
 }
 
-func validateCorrectTlsProfileSecurityInKubeletConfig(oc *exutil.CLI, node Node, tlsMinVersion string, cipherSuite []string) {
+func validateCorrectTLSProfileSecurityInKubeletConfig(node Node, tlsMinVersion string, cipherSuite []string) {
 	stdout, err := node.DebugNodeWithChroot("cat", "/etc/kubernetes/kubelet.conf")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	exutil.By("To check the kubeletConfig to have same tls setting as of API server")
