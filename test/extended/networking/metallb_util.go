@@ -473,7 +473,7 @@ func isPlatformSuitable(oc *exutil.CLI) bool {
 
 func createIPAddressPoolCR(oc *exutil.CLI, ipAddresspool ipAddressPoolResource, addressPoolTemplate string) (status bool) {
 	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ipAddresspool.template, "-p", "NAME="+ipAddresspool.name, "NAMESPACE="+ipAddresspool.namespace, "PRIORITY="+strconv.Itoa(int(ipAddresspool.priority)),
-		"AUTOASSIGN="+strconv.FormatBool(ipAddresspool.autoAssign), "AVOIDBUGGYIPS="+strconv.FormatBool(ipAddresspool.avoidBuggyIPs),
+		"LABELKEY1="+ipAddresspool.label1, "LABELVALUE1="+ipAddresspool.value1, "AUTOASSIGN="+strconv.FormatBool(ipAddresspool.autoAssign), "AVOIDBUGGYIPS="+strconv.FormatBool(ipAddresspool.avoidBuggyIPs),
 		"ADDRESS1="+ipAddresspool.addresses[0], "ADDRESS2="+ipAddresspool.addresses[1], "NAMESPACE1="+ipAddresspool.namespaces[0], "NAMESPACE2="+ipAddresspool.namespaces[1],
 		"MLSERVICEKEY1="+ipAddresspool.serviceLabelKey, "MLSERVICEVALUE1="+ipAddresspool.serviceLabelValue, "MESERVICEKEY1="+ipAddresspool.serviceSelectorKey, "MESERVICEOPERATOR1="+ipAddresspool.serviceSelectorOperator, "MESERVICEKEY1VALUE1="+ipAddresspool.serviceSelectorValue[0],
 		"MLNAMESPACEKEY1="+ipAddresspool.serviceLabelKey, "MLNAMESPACEVALUE1="+ipAddresspool.serviceLabelValue, "MENAMESPACEKEY1="+ipAddresspool.namespaceSelectorKey, "MENAMESPACEOPERATOR1="+ipAddresspool.namespaceSelectorOperator, "MENAMESPACEKEY1VALUE1="+ipAddresspool.namespaceSelectorValue[0])
@@ -808,5 +808,27 @@ func verifyHostPrefixAdvertised(oc *exutil.CLI, ns string, expectedHostPrefixes 
 			return false
 		}
 	}
+	return true
+}
+func checkBGPv4RouteTableEntry(oc *exutil.CLI, ns string, entry string, expectedPaths []string) bool {
+	cmd := []string{"-n", ns, bgpRouterPodName, "--", "vtysh", "-c", "show bgp ipv4 unicast " + entry}
+	errCheck := wait.Poll(60*time.Second, 120*time.Second, func() (bool, error) {
+		e2e.Logf("Checking BGP route table for entry " + entry)
+		routeOutput, routeErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
+		o.Expect(routeErr).NotTo(o.HaveOccurred())
+		if routeErr != nil {
+			return false, nil
+		}
+		for _, path := range expectedPaths {
+			if strings.Contains(routeOutput, path) {
+				e2e.Logf("Found expected: %s", path)
+			} else {
+				e2e.Logf("Failed to found expected: %s", path)
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(errCheck, "Checking BGP route table timed out")
 	return true
 }

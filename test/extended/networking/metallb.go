@@ -2310,4 +2310,173 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 
 	})
 
+	g.It("Author:qiowang-NonPreRelease-High-51187-Validate ipAddressPoolSelector, ipAddressPool and nodeSelector are honored when advertising service IP address via BGP advertisement [Serial]", func() {
+		var (
+			workers                              []string
+			nodeIPs                              []string
+			ipaddresspools                       []string
+			bgpPeers                             []string
+			namespaces                           []string
+			expectedPaths1                       []string
+			expectedPaths2                       []string
+			bgpPassword                          string
+			expectedAddress1                     = "10.10.10.1"
+			expectedAddress2                     = "10.10.12.1"
+			serviceSelectorKey                   = "environ"
+			serviceSelectorValue                 = [1]string{"Test"}
+			namespaceLabelKey                    = "region"
+			namespaceLabelValue                  = [1]string{"NA"}
+			ipAddressPoolSelectorsKey            = "zone"
+			ipAddressPoolSelectorsValues         = [2][2]string{{"east"}, {"west"}}
+			ipAddresspoolTemplate                = filepath.Join(testDataDir, "ipaddresspool-template.yaml")
+			BGPPeerTemplate                      = filepath.Join(testDataDir, "bgppeer-template.yaml")
+			bgpAdvertisementTemplate             = filepath.Join(testDataDir, "bgpadvertisement-template.yaml")
+			loadBalancerServiceAnnotatedTemplate = filepath.Join(testDataDir, "loadbalancer-svc-annotated-template.yaml")
+		)
+		ns := oc.Namespace()
+		namespaces = append(namespaces, ns)
+		namespaces = append(namespaces, "test51187")
+
+		//Two worker nodes needed to create BGP Advertisement object
+		workerList, getWorkersErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(getWorkersErr).NotTo(o.HaveOccurred())
+		if len(workerList.Items) < 2 {
+			g.Skip("These cases can only be run on cluster that has at least two worker nodes")
+		}
+		for i := 0; i < 2; i++ {
+			workers = append(workers, workerList.Items[i].Name)
+			nodeIP := getNodeIPv4(oc, ns, workerList.Items[i].Name)
+			nodeIPs = append(nodeIPs, nodeIP)
+		}
+
+		exutil.By("1. Set up upstream/external BGP router, enable BFD")
+		suffix := getRandomString()
+		bgpRouterNamespaceWithSuffix := bgpRouterNamespace + "-" + suffix
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(bgpRouterNamespaceWithSuffix)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", bgpRouterPodName, "-n", bgpRouterNamespaceWithSuffix, "--ignore-not-found").Execute()
+		bgpPassword = ""
+		o.Expect(setUpExternalFRRRouter(oc, bgpRouterNamespaceWithSuffix, bgpPassword)).To(o.BeTrue())
+
+		exutil.By("2. Create two IP addresspools with different labels")
+		for i := 0; i < 2; i++ {
+			ipAddresspool := ipAddressPoolResource{
+				name:                      "ipaddresspool-bgp-51187-" + strconv.Itoa(i),
+				namespace:                 opNamespace,
+				addresses:                 bgpAddresses[i][:],
+				namespaces:                namespaces,
+				label1:                    ipAddressPoolSelectorsKey,
+				value1:                    ipAddressPoolSelectorsValues[i][0],
+				priority:                  10,
+				avoidBuggyIPs:             true,
+				autoAssign:                true,
+				serviceLabelKey:           serviceSelectorKey,
+				serviceLabelValue:         serviceSelectorValue[0],
+				serviceSelectorKey:        serviceSelectorKey,
+				serviceSelectorOperator:   "In",
+				serviceSelectorValue:      serviceSelectorValue[:],
+				namespaceLabelKey:         namespaceLabelKey,
+				namespaceLabelValue:       namespaceLabelValue[0],
+				namespaceSelectorKey:      namespaceLabelKey,
+				namespaceSelectorOperator: "In",
+				namespaceSelectorValue:    namespaceLabelValue[:],
+				template:                  ipAddresspoolTemplate,
+			}
+			defer removeResource(oc, true, true, "ipaddresspools", ipAddresspool.name, "-n", ipAddresspool.namespace)
+			o.Expect(createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolTemplate)).To(o.BeTrue())
+			ipaddresspools = append(ipaddresspools, ipAddresspool.name)
+		}
+
+		exutil.By("3. Create BGP Peer")
+		BGPPeerCR := bgpPeerResource{
+			name:          "peer-64500",
+			namespace:     opNamespace,
+			holdTime:      "30s",
+			keepAliveTime: "10s",
+			password:      "",
+			myASN:         myASN,
+			peerASN:       peerASN,
+			peerAddress:   peerIPAddress,
+			template:      BGPPeerTemplate,
+		}
+		defer removeResource(oc, true, true, "bgppeers", BGPPeerCR.name, "-n", BGPPeerCR.namespace)
+		o.Expect(createBGPPeerCR(oc, BGPPeerCR)).To(o.BeTrue())
+		bgpPeers = append(bgpPeers, BGPPeerCR.name)
+
+		exutil.By("4. Create BGP Advertisement with ipAddressPool and nodeSelectors")
+		bgpAdvertisement := bgpAdvertisementResource{
+			name:                  "bgp-adv-51187",
+			namespace:             opNamespace,
+			aggregationLength:     32,
+			aggregationLengthV6:   128,
+			communities:           bgpCommunties[:],
+			ipAddressPools:        ipaddresspools[:],
+			nodeSelectorsKey:      "kubernetes.io/hostname",
+			nodeSelectorsOperator: "In",
+			nodeSelectorValues:    workers[:],
+			peer:                  bgpPeers[:],
+			template:              bgpAdvertisementTemplate,
+		}
+		defer removeResource(oc, true, true, "bgpadvertisements", bgpAdvertisement.name, "-n", bgpAdvertisement.namespace)
+		o.Expect(createBGPAdvertisementCR(oc, bgpAdvertisement)).To(o.BeTrue())
+
+		exutil.By("5. Check BGP Session between speakers and Router")
+		o.Expect(checkBGPSessions(oc, bgpRouterNamespaceWithSuffix)).To(o.BeTrue())
+
+		exutil.By("6. Create a service requesting address from the first ipaddresspools")
+		svc := loadBalancerServiceResource{
+			name:                          "hello-world-51187",
+			namespace:                     ns,
+			externaltrafficpolicy:         "Cluster",
+			labelKey:                      serviceLabelKey,
+			labelValue:                    serviceLabelValue,
+			annotationKey:                 "metallb.universe.tf/address-pool",
+			annotationValue:               ipaddresspools[0],
+			allocateLoadBalancerNodePorts: true,
+			template:                      loadBalancerServiceAnnotatedTemplate,
+		}
+		o.Expect(createLoadBalancerService(oc, svc, loadBalancerServiceAnnotatedTemplate)).To(o.BeTrue())
+		statusErr := checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		o.Expect(statusErr).NotTo(o.HaveOccurred())
+		svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+		e2e.Logf("The service %s 's External IP for OCP-51187 test case is %q", svc.name, svcIP)
+		o.Expect(strings.Contains(svcIP, expectedAddress1)).To(o.BeTrue())
+		masterNodeList, getMastersErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getMastersErr).NotTo(o.HaveOccurred())
+		result := validateService(oc, masterNodeList[0], svcIP)
+		o.Expect(result).To(o.BeTrue())
+
+		exutil.By("7. Verify route is advertised")
+		expectedPaths1 = append(expectedPaths1, "2 available", nodeIPs[0], nodeIPs[1])
+		o.Expect(checkBGPv4RouteTableEntry(oc, bgpRouterNamespaceWithSuffix, expectedAddress1, expectedPaths1)).To(o.BeTrue())
+
+		exutil.By("8. Remove the previously created services")
+		removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+		removeResource(oc, true, true, "replicationcontroller", svc.name, "-n", svc.namespace)
+
+		exutil.By("9. Update BGP Advertisement, update ipAddressPool and nodeSelectors, add ipAddressPoolSelectors")
+		patchBgpAdvertisement := `[{"op": "replace", "path": "/spec/ipAddressPools", "value": [""]}, {"op": "replace", "path": "/spec/nodeSelectors/0/matchExpressions/0/values", "value":["` + workers[0] + `"]}]`
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", opNamespace, "bgpadvertisement", bgpAdvertisement.name, "--type=json", "-p", patchBgpAdvertisement).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+		patchIPAddrPoolSelectors := `{"spec":{"ipAddressPoolSelectors":[{"matchExpressions": [{"key": "` + ipAddressPoolSelectorsKey + `","operator": "In","values": ["` + ipAddressPoolSelectorsValues[1][0] + `"]}]}]}}`
+		patchResourceAsAdmin(oc, "bgpadvertisement/"+bgpAdvertisement.name, patchIPAddrPoolSelectors, "metallb-system")
+
+		exutil.By("10. Check BGP Session between speakers and Router")
+		o.Expect(checkBGPSessions(oc, bgpRouterNamespaceWithSuffix)).To(o.BeTrue())
+
+		exutil.By("11. Create a service requesting address from the second ipaddresspools")
+		svc.annotationValue = ipaddresspools[1]
+		o.Expect(createLoadBalancerService(oc, svc, loadBalancerServiceAnnotatedTemplate)).To(o.BeTrue())
+		statusErr = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		o.Expect(statusErr).NotTo(o.HaveOccurred())
+		svcIP = getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+		e2e.Logf("The recreated service %s 's External IP for OCP-51187 test case is %q", svc.name, svcIP)
+		o.Expect(strings.Contains(svcIP, expectedAddress2)).To(o.BeTrue())
+		result = validateService(oc, masterNodeList[0], svcIP)
+		o.Expect(result).To(o.BeTrue())
+
+		exutil.By("12. Verify route is advertised")
+		expectedPaths2 = append(expectedPaths2, "1 available", nodeIPs[0])
+		o.Expect(checkBGPv4RouteTableEntry(oc, bgpRouterNamespaceWithSuffix, expectedAddress2, expectedPaths2)).To(o.BeTrue())
+	})
+
 })
