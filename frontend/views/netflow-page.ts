@@ -3,10 +3,10 @@ import { project } from "../views/netobserv"
 export const netflowPage = {
     visit: () => {
         cy.clearLocalStorage()
-        cy.intercept('**/backend/api/loki/flow/metrics*').as('call1')
+        cy.intercept('**/backend/api/flow/metrics*').as('call1')
         cy.visit('/netflow-traffic')
-        // wait for all calls to complete before checking due to bug
-        cy.wait('@call1', { timeout: 60000 }).wait('@call1')
+        // wait for all calls to complete
+        cy.wait('@call1', { timeout: 60000 })
 
         netflowPage.clearAllFilters()
 

@@ -31,10 +31,11 @@ describe("(OCP-67725, memodi) Network_Observability Client Performances", { brow
     })
 
     beforeEach("test", function () {
-        cy.intercept('**/backend/api/loki/flow/metrics*').as('call1')
+        cy.clearLocalStorage()
+        cy.intercept('**/backend/api/flow/metrics*').as('call1')
         cy.visit('/netflow-traffic')
-        // wait for all calls to complete before checking due to bug
-        cy.wait('@call1', { timeout: 60000 }).wait('@call1')
+        // wait for all calls to complete
+        cy.wait('@call1', { timeout: 60000 })
 
     })
 
@@ -66,7 +67,7 @@ describe("(OCP-67725, memodi) Network_Observability Client Performances", { brow
         cy.get('#tabs-container li:nth-child(2)').click()
         netflowPage.clearAllFilters()
         const start = performance.now()
-        const url = '**/backend/api/loki/flow/metrics*'
+        const url = '**/backend/api/flow/metrics*'
         cy.intercept('GET', url, {
             fixture: 'netobserv/netflow_table_perf.json'
         })
@@ -110,6 +111,5 @@ describe("(OCP-67725, memodi) Network_Observability Client Performances", { brow
 
     after("suite", function () {
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.uiLogout()
     })
 })

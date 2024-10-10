@@ -415,7 +415,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(metrics).Should(o.BeNumerically("~", 330, 270))
 	})
 
-	g.It("NonPreRelease-Longduration-Author:aramesha-High-60701-Verify connection tracking [Serial]", func() {
+	g.It("Author:aramesha-NonPreRelease-Longduration-High-60701-Verify connection tracking [Serial]", func() {
 		namespace := oc.Namespace()
 		startTime := time.Now()
 
@@ -510,7 +510,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		verifyConversationRecordTime(endConnectionRecords)
 	})
 
-	g.It("NonPreRelease-Longduration-Author:memodi-High-63839-Verify-multi-tenancy [Disruptive][Slow]", func() {
+	g.It("Author:memodi-NonPreRelease-Longduration-High-63839-Verify-multi-tenancy [Disruptive][Slow]", func() {
 		namespace := oc.Namespace()
 		users, usersHTpassFile, htPassSecret := getNewUser(oc, 2)
 		defer userCleanup(oc, users, usersHTpassFile, htPassSecret)
@@ -618,7 +618,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(len(flowRecords)).NotTo(o.BeNumerically(">", 0), "expected number of flowRecords to be equal to 0")
 	})
 
-	g.It("NonPreRelease-Author:aramesha-High-59746-NetObserv upgrade testing [Serial]", func() {
+	g.It("Author:aramesha-NonPreRelease-High-59746-NetObserv upgrade testing [Serial]", func() {
 		version, _, err := exutil.GetClusterVersion(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if version == "4.17" {
@@ -725,7 +725,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
-	g.It("NonPreRelease-Author:aramesha-High-62989-Verify SCTP, ICMP, ICMPv6 traffic is observed [Disruptive]", func() {
+	g.It("Author:aramesha-NonPreRelease-High-62989-Verify SCTP, ICMP, ICMPv6 traffic is observed [Disruptive]", func() {
 		namespace := oc.Namespace()
 
 		var (
@@ -850,7 +850,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 	})
 
-	g.It("NonPreRelease-Author:aramesha-LEVEL0-High-68125-Verify DSCP with NetObserv [Serial]", func() {
+	g.It("Author:aramesha-NonPreRelease-LEVEL0-High-68125-Verify DSCP with NetObserv [Serial]", func() {
 		namespace := oc.Namespace()
 
 		g.By("Deploying test server and client pods")
@@ -981,7 +981,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 	})
 
-	g.It("NonPreRelease-Author:aramesha-High-69218-High-71291-Verify cluster ID and zone in multiCluster deployment [Serial]", func() {
+	g.It("Author:aramesha-NonPreRelease-High-69218-High-71291-Verify cluster ID and zone in multiCluster deployment [Serial]", func() {
 		namespace := oc.Namespace()
 
 		g.By("Get clusterID of the cluster")
@@ -1045,7 +1045,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 	})
 
-	g.It("NonPreRelease-Longduration-Author:memodi-Medium-60664-Medium-61482-Alerts-with-NetObserv [Serial][Slow]", func() {
+	g.It("Author:memodi-NonPreRelease-Longduration-Medium-60664-Medium-61482-Alerts-with-NetObserv [Serial][Slow]", func() {
 		namespace := oc.Namespace()
 		flow := Flowcollector{
 			Namespace:     namespace,
@@ -1119,7 +1119,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		waitForAlertToBeActive(oc, "NetObservLokiError")
 	})
 
-	g.It("NonPreRelease-Author:aramesha-Medium-72875-Verify nodeSelector and tolerations with netobserv components [Serial]", func() {
+	g.It("Author:aramesha-NonPreRelease-Medium-72875-Verify nodeSelector and tolerations with netobserv components [Serial]", func() {
 		namespace := oc.Namespace()
 
 		// verify tolerations
@@ -1237,7 +1237,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		// TODO: once supported add a check for flowcollector dumped file.
 	})
 
-	g.It("NonPreRelease-Author:aramesha-High-73715-Verify eBPF agent filtering [Serial]", func() {
+	g.It("Author:aramesha-NonPreRelease-High-73175-Verify eBPF agent filtering [Serial]", func() {
 		namespace := oc.Namespace()
 
 		g.By("Deploy FlowCollector with eBPF agent flowFilter to Reject flows with SrcPort 53 and UDP protocol")
@@ -1617,7 +1617,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			}
 		})
 
-		g.It("NonPreRelease-Longduration-Author:aramesha-High-56362-High-53597-High-56326-Verify network flows are captured with Kafka with TLS [Serial][Slow]", func() {
+		g.It("Author:aramesha-NonPreRelease-Longduration-High-56362-High-53597-High-56326-Verify network flows are captured with Kafka with TLS [Serial][Slow]", func() {
 			namespace := oc.Namespace()
 
 			g.By("Deploy FlowCollector with Kafka TLS")

@@ -34,7 +34,7 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         // create DNS over TCP and UDP pods
         cy.adminCLI('oc apply -f ./fixtures/netobserv/DNS-pods.yaml')
 
-        // sepcify --env noo_release=upstream to run tests
+        // specify --env noo_release=upstream to run tests
         // from most recent "main" image
         let catalogImg
         let catalogDisplayName = "Production Operators"
