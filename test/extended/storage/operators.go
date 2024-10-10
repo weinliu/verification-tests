@@ -468,7 +468,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		exutil.By("# Updating clustercsidrivers.spec.managementState to Managed")
 		setClustercsidriversManagementState(oc, csidriver, "Managed")
 
-		csiDriverNode.waitReady(oc.AsAdmin())
+		// After some code update, it seems need to wait longer for CSI Driver resource
+		// Just waiting longer for the first checked daemonset, others should be up at the same time
+		csiDriverNode.longerTime().waitReady(oc.AsAdmin())
 		csiDriverController.waitReady(oc.AsAdmin())
 		csiDriverWebhook.waitReady(oc.AsAdmin())
 		expectSpecifiedResourceExist(oc, "csidriver/"+csidriver, "", true)
