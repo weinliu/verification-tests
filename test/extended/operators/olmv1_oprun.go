@@ -15,7 +15,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
+var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc = exutil.NewCLIWithoutNamespace("default")
