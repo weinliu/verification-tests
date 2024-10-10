@@ -16,6 +16,7 @@ const popover = '.ols-plugin__popover-container';
 const attachments = `${popover} .ols-plugin__chat-prompt-attachments`;
 const attachMenuButton = `${popover} .ols-plugin__attach-menu`;
 const attachMenu = `${popover} .ols-plugin__context-menu`;
+const feedbackForm = `${popover} .ols-plugin__feedback`;
 const promptInput = `${popover} textarea`;
 const modal = '.ols-plugin__modal'
 
@@ -88,12 +89,13 @@ spec:
       .should('include.text', 'Red Hat OpenShift Lightspeed');
 
     // Test that we can submit a prompt
+    // Expect an error response because no API secret exists
     cy.get(promptInput)
       .should('exist')
       .type('What is OpenShift?{enter}');
     cy.get(popover)
       .find('.ols-plugin__chat-entry--ai')
-      .should('exist');
+      .should('include.text', 'Error querying OpenShift Lightspeed service');
 
     // Test that the context menu has no context for the pods list page
     cy.get(attachMenuButton)
@@ -225,5 +227,50 @@ spec:
       .contains('Dismiss')
       .click();
     cy.get(promptInput).type('Test{enter}');
+  });
+
+  it('(OLS-1095,anpicker,Lightspeed) Test user feedback', {tags: ['e2e','admin', '@smoke']}, () => {
+    const baseURL = '/api/proxy/plugin/lightspeed-console-plugin/ols/v1';
+
+    // Test submitting a response with an non-error response
+    cy.intercept('POST', `${baseURL}/query`, {
+      statusCode: 200,
+      body: {
+        "conversation_id": "test-conversation-id",
+        "response": "Test response",
+        "referenced_documents": [],
+        "truncated": false
+      },
+    });
+
+    cy.intercept('POST', `${baseURL}/feedback`, {
+      statusCode: 200,
+      body: {},
+    });
+
+    cy.get(promptInput)
+      .should('exist')
+      .type('What is OpenShift?{enter}');
+    cy.get(popover)
+      .find('.ols-plugin__chat-entry--ai')
+      .should('include.text', 'Test response');
+
+    cy.get(feedbackForm).should('exist');
+    cy.get(feedbackForm).within(() => {
+      cy.get('.ols-plugin__feedback-icon').should('have.length', 2);
+      cy.get('div:first-of-type .ols-plugin__feedback-icon').click();
+      cy.get('.ols-plugin__feedback-icon.ols-plugin__feedback-icon--selected')
+        .should('have.length', 1);
+      cy.get('.ols-plugin__feedback-input')
+        .should('exist')
+        .type('Test feedback');
+      cy.get('button')
+        .should('exist')
+        .click();
+    });
+
+    cy.get('.ols-plugin__feedback-submitted')
+      .should('exist')
+      .should('include.text', 'Thank you');
   });
 });
