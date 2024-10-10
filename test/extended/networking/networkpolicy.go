@@ -1886,12 +1886,12 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("allow-same-namespace"))
 
-		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
-		o.Expect(ovnMasterPodName).NotTo(o.BeEmpty())
+		ovnNodePod := ovnkubeNodePod(oc, nodeList.Items[0].Name)
+		o.Expect(ovnNodePod).NotTo(o.BeEmpty())
 
 		exutil.By("3. Check the acl from the port-group from the OVNK leader ovnkube-node")
 		listPGCmd := fmt.Sprintf("ovn-nbctl find port-group | grep -C 2 '%s\\:allow-same-namespace'", ns)
-		listPGCOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listPGCmd)
+		listPGCOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnNodePod, listPGCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 		o.Expect(listPGCOutput).NotTo(o.BeEmpty())
 		e2e.Logf("Output %s", listPGCOutput)
@@ -1903,7 +1903,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		o.Expect(len(acls)).To(o.Equal(2))
 
 		listAclCmd := fmt.Sprintf("ovn-nbctl list acl %s", strings.Join(acls, " "))
-		listAclOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listAclCmd)
+		listAclOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnNodePod, listAclCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 		o.Expect(listAclOutput).NotTo(o.BeEmpty())
 
@@ -1917,7 +1917,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		o.Expect(addrSetName).NotTo(o.BeEmpty())
 
 		listAddressSetCmd := fmt.Sprintf("ovn-nbctl list address_set %s", addrSetName)
-		listAddrOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listAddressSetCmd)
+		listAddrOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnNodePod, listAddressSetCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 		o.Expect(listAddrOutput).NotTo(o.BeEmpty())
 		var AddrMap map[string]string
@@ -1936,7 +1936,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		pod1.createPingPodNode(oc)
 
 		exutil.By("6. Verify address is not added to address-set")
-		listAddrOutput, listErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listAddressSetCmd)
+		listAddrOutput, listErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnNodePod, listAddressSetCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 		o.Expect(listAddrOutput).NotTo(o.BeEmpty())
 		AddrMap = nbContructToMap(listAddrOutput)
@@ -1951,7 +1951,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
 		exutil.By("8. Verify address is added to address-set")
-		listAddrOutput, listErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, listAddressSetCmd)
+		listAddrOutput, listErr = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnNodePod, listAddressSetCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 		o.Expect(listAddrOutput).NotTo(o.BeEmpty())
 		AddrMap = nbContructToMap(listAddrOutput)
