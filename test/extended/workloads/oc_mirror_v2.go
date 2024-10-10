@@ -2188,6 +2188,100 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2mirror still failed for invalid catalog")
+	})
+
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Critical-73419-Verify filtering and mirroring specific bundle versions for operators works fine with oc-mirror v2 [Serial]", func() {
+		dirname := "/tmp/case73419"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-73419.yaml")
+
+		err = getRouteCAToFile(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "20G", "/var/lib/registry")
+		exutil.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-73419")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-73419")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify filtering and mirroring specific bundle versions for operators via mirror2disk")
+		waitErr := wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Execute()
+			if err != nil {
+				e2e.Logf("The mirror2disk failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2disk still failed")
+
+		exutil.By("Verify filtering and mirroring specific bundle versions for operators via disk2mirror")
+		waitErr = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--from", "file://"+dirname, "docker://"+serInfo.serviceName+"/d2m", "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
+			if err != nil {
+				e2e.Logf("The disk2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but disk2mirror still failed")
+
+		exutil.By("Create the catalogsource, idms and itms")
+		defer operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "delete")
+		operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "create")
+		assertPodOutput(oc, "olm.catalogSource=cs-redhat-operator-index-v4-14", "openshift-marketplace", "Running")
+		assertPodOutput(oc, "olm.catalogSource=cs-redhat-operator-index-v4-16", "openshift-marketplace", "Running")
+
+		exutil.By("Installing operators from 4.16 catalog")
+		rhrodoSub, rhrodoOG := getOperatorInfo(oc, "run-once-duration-override-operator", "openshift-run-once-duration-override-operator", "registry.redhat.io/redhat/redhat-operator-index:v4.16", "cs-redhat-operator-index-v4-16")
+		defer removeOperatorFromCustomCS(oc, rhrodoSub, rhrodoOG, "openshift-run-once-duration-override-operator")
+		installOperatorFromCustomCS(oc, rhrodoSub, rhrodoOG, "openshift-run-once-duration-override-operator", "run-once-duration-override-operator")
+
+		exutil.By("Installing operators from redhat-operator-index 4.14 catalog")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
+		awsRedhatcatalogSubscription := filepath.Join(buildPruningBaseDir, "awsredhatcustomsub73419.yaml")
+		awsRedhatcatalogOperator := filepath.Join(buildPruningBaseDir, "awsredhatcustomog73419.yaml")
+
+		exutil.By("Create the aws-load-balancer-operator namespace")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "aws-load-balancer-operator").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", "aws-load-balancer-operator").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create operatorgroup for aws load balancer operator")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", awsRedhatcatalogOperator).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", awsRedhatcatalogOperator).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create subscription for aws load balancer operator")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", awsRedhatcatalogSubscription).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", awsRedhatcatalogSubscription).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Wait for the operator pod running")
+		if ok := waitForAvailableRsRunning(oc, "deploy", "aws-load-balancer-operator-controller-manager", "aws-load-balancer-operator", "1"); ok {
+			e2e.Logf("AWS Load Balancer from redhat catalog index 4.14 has been depolyed successfully\n")
+		} else {
+			e2e.Failf("All pods related to aws load balancer operator from redhat catalog index 4.14 is not running")
+		}
 
 	})
 })
