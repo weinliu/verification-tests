@@ -972,8 +972,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			exutil.By("step: OCP-52625 operatorsdk generate operator base image match the release version.")
 			dockerFile := filepath.Join(tmpPath, "Dockerfile")
 			content := getContent(dockerFile)
-			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-operator:v" + ocpversion))
-			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-rhel9-operator:v" + ocpversion))
+			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
 
 			managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 			content = getContent(managerAuthProxyPatch)
@@ -1129,8 +1129,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			exutil.By("step: modify Dockerfile.")
 			dockerFile := filepath.Join(tmpPath, "Dockerfile")
 			content := getContent(dockerFile)
-			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-operator:v" + ocpversion))
-			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-rhel9-operator:v" + ocpversion))
+			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
 
 			managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 			content = getContent(managerAuthProxyPatch)
@@ -2324,8 +2324,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			exutil.By("step: modify Dockerfile.")
 			dockerFile := filepath.Join(tmpPath, "Dockerfile")
 			content := getContent(dockerFile)
-			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-operator:v" + ocpversion))
-			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-rhel9-operator:v" + ocpversion))
+			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
 			managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 			content = getContent(managerAuthProxyPatch)
 			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v" + ocpversion))
@@ -2767,7 +2767,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(makefileFilePath, "build config/default | kubectl apply -f -", "build config/default | CLUSTER_PROXY=$(shell kubectl get proxies.config.openshift.io cluster  -o json | jq '.spec.httpProxy') envsubst | kubectl apply -f -")
 		// update the Dockerfile
 		dockerFile := filepath.Join(tmpPath, "Dockerfile")
-		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
+		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
 		replaceContent(dockerFile, "install -r ${HOME}/requirements.yml", "install -r ${HOME}/requirements.yml --force")
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
@@ -3498,7 +3498,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// update the Dockerfile
 		dockerFile := filepath.Join(tmpPath, "Dockerfile")
-		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
+		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
 		replaceContent(dockerFile, "install -r ${HOME}/requirements.yml", "install -r ${HOME}/requirements.yml --force")
 
 		exutil.By("step: Build and push the operator image")
