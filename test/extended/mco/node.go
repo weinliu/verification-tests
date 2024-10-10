@@ -1125,9 +1125,21 @@ func (n *Node) ExecIP6Tables(rules []string) error {
 	return n.execIPTables(true, rules)
 }
 
+// GetArchitecture get the architecture used in the node
+func (n Node) GetArchitecture() (architecture.Architecture, error) {
+	arch, err := n.Get(`{.status.nodeInfo.architecture}`)
+	if err != nil {
+		return architecture.UNKNOWN, err
+	}
+	return architecture.FromString(arch), nil
+}
+
 // GetArchitectureOrFail get the architecture used in the node and fail the test if any error happens while doing it
-func (n *Node) GetArchitectureOrFail() architecture.Architecture {
-	return architecture.FromString(n.GetOrFail(`{.status.nodeInfo.architecture}`))
+func (n Node) GetArchitectureOrFail() architecture.Architecture {
+	arch, err := n.GetArchitecture()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the architecture of node %s", n.GetName())
+
+	return arch
 }
 
 // GetJournalLogs returns the journal logs

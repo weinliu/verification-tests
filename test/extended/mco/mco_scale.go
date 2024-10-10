@@ -4,9 +4,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/exec"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	"gopkg.in/ini.v1"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -44,7 +49,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 			numNewNodes  = 1     // the number of nodes scaled up in the new Machineset
 		)
 
-		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform) // Scale up using 4.1 is only supported in AWS. GCP is only supported in versions 4.6+
+		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform) // Scale up using 4.1 is only supported in AWS. GCP is only supported in versions 4.6+, and Vsphere in 4.2+
 		skipTestIfFIPSIsEnabled(oc.AsAdmin())                  // fips was supported for the first time in 4.3, hence it is not supported to scale 4.1 and 4.2 base images in clusters with fips=true
 		architecture.SkipNonAmd64SingleArch(oc)                // arm64 is not supported until 4.12
 
@@ -92,6 +97,18 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		SimpleScaleUPTest(oc, wMcp, imageVersion, getUserDataIgnitionVersionFromOCPVersion(imageVersion), numNewNodes)
 	})
 
+	// 4.12 is the last version using rhel8, in 4.13 ocp starts using rhel9
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Critical-76471-Scaleup using 4.12 cloud image[Disruptive]", func() {
+		var (
+			imageVersion = "4.12"
+			numNewNodes  = 1 // the number of nodes scaled up in the new Machineset
+		)
+
+		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, GCPPlatform, VspherePlatform) // Scale up using 4.12 is only supported in AWS, GCP and Vsphere
+
+		SimpleScaleUPTest(oc, wMcp, imageVersion, getUserDataIgnitionVersionFromOCPVersion(imageVersion), numNewNodes)
+	})
+
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-52822-Create new config resources with 2.2.0 ignition boot image nodes [Disruptive]", func() {
 		var (
 			newMsName  = "copied-machineset-modified-tc-52822"
@@ -107,8 +124,9 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 			numNewNodes  = 1 // the number of nodes scaled up in the new Machineset
 		)
 
-		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform) // Scale up using 4.5 is only supported for AWS. GCP is only supported in versions 4.6+
-		architecture.SkipNonAmd64SingleArch(oc)                // arm64 is not supported until 4.12
+		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, VspherePlatform) // Scale up using 4.5 is only supported for AWS and Vsphere. GCP is only supported in versions 4.6+
+		architecture.SkipNonAmd64SingleArch(oc)                                 // arm64 is not supported until 4.11
+
 		initialNumWorkers := len(wMcp.GetNodesOrFail())
 
 		defer func() {
@@ -154,7 +172,10 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		}()
 
 		// Duplicate an existing MachineSet
-		newMs := cloneMachineSet(oc.AsAdmin(), newMsName, imageVersion, getUserDataIgnitionVersionFromOCPVersion(imageVersion))
+		allMs, err := NewMachineSetList(oc, MachineAPINamespace).GetAll()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting a list of MachineSet resources")
+		ms := allMs[0]
+		newMs := cloneMachineSet(oc.AsAdmin(), ms, newMsName, imageVersion, getUserDataIgnitionVersionFromOCPVersion(imageVersion))
 
 		// KubeletConfig
 		exutil.By("Create KubeletConfig")
@@ -454,7 +475,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 	})
 })
 
-func cloneMachineSet(oc *exutil.CLI, newMsName, imageVersion, ignitionVersion string) *MachineSet {
+func cloneMachineSet(oc *exutil.CLI, ms MachineSet, newMsName, imageVersion, ignitionVersion string) *MachineSet {
 	var (
 		newSecretName = getClonedSecretName(newMsName)
 		platform      = exutil.CheckPlatform(oc.AsAdmin())
@@ -463,9 +484,6 @@ func cloneMachineSet(oc *exutil.CLI, newMsName, imageVersion, ignitionVersion st
 	// Duplicate an existing MachineSet
 	exutil.By("Duplicate a MachineSet resource")
 	logger.Infof("Create a new machineset that will use base image %s and ignition version %s", imageVersion, ignitionVersion)
-	allMs, err := NewMachineSetList(oc, MachineAPINamespace).GetAll()
-	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting a list of MachineSet resources")
-	ms := allMs[0]
 	newMs, dErr := ms.Duplicate(newMsName)
 	o.Expect(dErr).NotTo(o.HaveOccurred(), "Error duplicating MachineSet %s -n %s", ms.GetName(), ms.GetNamespace())
 	logger.Infof("OK!\n")
@@ -484,14 +502,24 @@ func cloneMachineSet(oc *exutil.CLI, newMsName, imageVersion, ignitionVersion st
 	rhcosHandler, err := GetRHCOSHandler(platform)
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the rhcos handler")
 
-	baseImage, err := rhcosHandler.GetBaseImageFromRHCOSImageInfo(imageVersion, *newMs.GetArchitectureOrFail(), getCurrentRegionOrFail(oc.AsAdmin()))
+	architecture, err := GetArchitectureFromMachineset(&ms, platform)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the arechitecture from machineset %s", ms.GetName())
+
+	baseImage, err := rhcosHandler.GetBaseImageFromRHCOSImageInfo(imageVersion, architecture, getCurrentRegionOrFail(oc.AsAdmin()))
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the base image")
 	logger.Infof("Using base image %s", baseImage)
+
+	baseImageURL, err := rhcosHandler.GetBaseImageURLFromRHCOSImageInfo(imageVersion, architecture)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the base image URL")
+
+	o.Expect(
+		uploadBaseImageToCloud(oc, platform, baseImageURL, baseImage),
+	).To(o.Succeed(), "Error uploading the base image %s to the cloud", baseImageURL)
 	logger.Infof("OK!\n")
 
 	// Set the new boot base image
 	exutil.By(fmt.Sprintf("Configure the duplicated MachineSet to use the %s boot image", baseImage))
-	o.Expect(rhcosHandler.SetNewBootImageInMachineSet(newMs, baseImage)).To(o.Succeed(),
+	o.Expect(newMs.SetCoreOsBootImage(baseImage)).To(o.Succeed(),
 		"There was an error while patching the new base image in %s", newMs)
 	logger.Infof("OK!\n")
 
@@ -622,7 +650,10 @@ func SimpleScaleUPTest(oc *exutil.CLI, mcp *MachineConfigPool, imageVersion, ign
 	}()
 
 	logger.Infof("Create a new MachineSet using the right base image")
-	newMs := cloneMachineSet(oc.AsAdmin(), newMsName, imageVersion, ignitionVergsion)
+	allMs, err := NewMachineSetList(oc, MachineAPINamespace).GetAll()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting a list of MachineSet resources")
+	ms := allMs[0]
+	newMs := cloneMachineSet(oc.AsAdmin(), ms, newMsName, imageVersion, ignitionVergsion)
 
 	exutil.By("Scale MachineSet up")
 	logger.Infof("Scaling up machineset %s", newMs.GetName())
@@ -655,6 +686,8 @@ func GetRHCOSHandler(platform string) (RHCOSHandler, error) {
 		return AWSRHCOSHandler{}, nil
 	case GCPPlatform:
 		return GCPRHCOSHandler{}, nil
+	case VspherePlatform:
+		return VsphereRHCOSHandler{}, nil
 	default:
 		return nil, fmt.Errorf("Platform %s is not supported and cannot get RHCOSHandler", platform)
 	}
@@ -662,14 +695,10 @@ func GetRHCOSHandler(platform string) (RHCOSHandler, error) {
 
 type RHCOSHandler interface {
 	GetBaseImageFromRHCOSImageInfo(version string, arch architecture.Architecture, region string) (string, error)
-	SetNewBootImageInMachineSet(newMs *MachineSet, baseImage string) error
+	GetBaseImageURLFromRHCOSImageInfo(version string, arch architecture.Architecture) (string, error)
 }
 
 type AWSRHCOSHandler struct{}
-
-func (aws AWSRHCOSHandler) SetNewBootImageInMachineSet(newMs *MachineSet, baseImage string) error {
-	return newMs.SetCoreOsBootImage(baseImage)
-}
 
 func (aws AWSRHCOSHandler) GetBaseImageFromRHCOSImageInfo(version string, arch architecture.Architecture, region string) (string, error) {
 	var (
@@ -701,6 +730,10 @@ func (aws AWSRHCOSHandler) GetBaseImageFromRHCOSImageInfo(version string, arch a
 			version, platform, arch, region, path)
 	}
 	return baseImage.String(), nil
+}
+
+func (aws AWSRHCOSHandler) GetBaseImageURLFromRHCOSImageInfo(version string, arch architecture.Architecture) (string, error) {
+	return getBaseImageURLFromRHCOSImageInfo(version, "aws", "vmdk.gz", convertArch(arch))
 }
 
 type GCPRHCOSHandler struct{}
@@ -749,12 +782,187 @@ func (gcp GCPRHCOSHandler) GetBaseImageFromRHCOSImageInfo(version string, arch a
 	return fmt.Sprintf("projects/%s/global/images/%s", project.String(), baseImage.String()), nil
 }
 
-func (gcp GCPRHCOSHandler) SetNewBootImageInMachineSet(newMs *MachineSet, baseImage string) error {
-	logger.Infof("Patch the cluster-autoscaler annotation so that our base image is not overridden by the coreos-images configmap values in clusters with techpreview")
-	err := newMs.Patch("json", `[{ "op": "replace", "path": "/metadata/annotations/capacity.cluster-autoscaler.kubernetes.io~1labels", "value": "kubernetes.io/arch=fake" }]`)
+func (gcp GCPRHCOSHandler) GetBaseImageURLFromRHCOSImageInfo(version string, arch architecture.Architecture) (string, error) {
+	return getBaseImageURLFromRHCOSImageInfo(version, "gcp", "tar.gz", convertArch(arch))
+}
+
+type VsphereRHCOSHandler struct{}
+
+func (vsp VsphereRHCOSHandler) GetBaseImageFromRHCOSImageInfo(version string, arch architecture.Architecture, _ string) (string, error) {
+	baseImageURL, err := vsp.GetBaseImageURLFromRHCOSImageInfo(version, arch)
+	if err != nil {
+		return "", err
+	}
+
+	return path.Base(baseImageURL), nil
+}
+
+func (vsp VsphereRHCOSHandler) GetBaseImageURLFromRHCOSImageInfo(version string, arch architecture.Architecture) (string, error) {
+	return getBaseImageURLFromRHCOSImageInfo(version, "vmware", "ova", convertArch(arch))
+}
+
+func getBaseImageURLFromRHCOSImageInfo(version, platform, format, stringArch string) (string, error) {
+	var (
+		imagePath    string
+		baseURIPath  string
+		olderThan410 = CompareVersions(version, "<", "4.10")
+	)
+
+	rhcosImageInfo, err := getRHCOSImagesInfo(version)
+	if err != nil {
+		return "", err
+	}
+
+	if olderThan410 {
+		imagePath = fmt.Sprintf("images.%s.path", platform)
+		baseURIPath = "baseURI"
+	} else {
+		imagePath = fmt.Sprintf("architectures.%s.artifacts.%s.formats.%s.disk.location", stringArch, platform, strings.ReplaceAll(format, ".", `\.`))
+	}
+
+	logger.Infof("Looking for rhcos base image path name in path %s", imagePath)
+	baseImageURL := gjson.Get(rhcosImageInfo, imagePath)
+	if !baseImageURL.Exists() {
+		logger.Infof("rhcos info:\n%s", rhcosImageInfo)
+		return "", fmt.Errorf("Could not find the base image for version <%s> in platform <%s> architecture <%s> and format <%s> with path %s",
+			version, platform, stringArch, format, imagePath)
+	}
+
+	if !olderThan410 {
+		return baseImageURL.String(), nil
+	}
+
+	logger.Infof("Looking for baseURL in path %s", baseURIPath)
+	baseURI := gjson.Get(rhcosImageInfo, baseURIPath)
+	if !baseURI.Exists() {
+		logger.Infof("rhcos info:\n%s", rhcosImageInfo)
+		return "", fmt.Errorf("Could not find the base URI with version <%s> in platform <%s> architecture <%s> and format <%s> with path %s",
+			version, platform, stringArch, format, baseURIPath)
+	}
+
+	return fmt.Sprintf("%s/%s", strings.Replace(strings.Trim(baseURI.String(), "/"), "releases-art-rhcos.svc.ci.openshift.org", "rhcos.mirror.openshift.com", 1), strings.Trim(baseImageURL.String(), "/")), nil
+}
+
+func uploadBaseImageToCloud(oc *exutil.CLI, platform, baseImageURL, baseImage string) error {
+
+	switch platform {
+	case AWSPlatform:
+		logger.Infof("No need to updload images in AWS")
+		return nil
+	case GCPPlatform:
+		logger.Infof("No need to updload images in GCP")
+		return nil
+	case VspherePlatform:
+		server, dataCenter, dataStore, folder, resourcePool, user, password, err := getvSphereCredentials(oc.AsAdmin())
+		if err != nil {
+			return err
+		}
+
+		err = uploadBaseImageToVsphere(baseImageURL, baseImage, server, dataCenter, dataStore, folder, resourcePool, user, password)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	default:
+		return fmt.Errorf("Platform %s is not supported, base image cannot be updloaded", platform)
+	}
+}
+
+func uploadBaseImageToVsphere(baseImageSrc, baseImageDest, server, dataCenter, dataStore, _, resourcePool, user, password string) error {
+	var (
+		execBin          = "govc"
+		uploadCommand    = []string{"import.ova", "--debug", "--name", baseImageDest, baseImageSrc}
+		upgradeHWCommand = []string{"vm.upgrade", "-vm", baseImageDest}
+		templateCommand  = []string{"vm.markastemplate", baseImageDest}
+		govcEnv          = []string{
+			"GOVC_URL=" + server,
+			"GOVC_USERNAME=" + user,
+			"GOVC_PASSWORD=" + password,
+			"GOVC_DATASTORE=" + dataStore,
+			"GOVC_RESOURCE_POOL=" + resourcePool,
+			"GOVC_DATACENTER=" + dataCenter,
+			"GOVC_INSECURE=1",
+		}
+	)
+	logger.Infof("Uploading base image %s to vsphere with name %s", baseImageSrc, baseImageDest)
+	logger.Infof("%s %s", execBin, uploadCommand)
+
+	uploadCmd := exec.Command(execBin, uploadCommand...)
+	uploadCmd.Env = os.Environ()
+
+	uploadCmd.Env = append(uploadCmd.Env, govcEnv...)
+
+	out, err := uploadCmd.CombinedOutput()
+	logger.Infof(string(out))
+	if err != nil {
+		if strings.Contains(string(out), "already exists") {
+			logger.Infof("Image %s already exists in the cloud, we don't upload it again", baseImageDest)
+			return nil
+		}
+		return err
+	}
+
+	logger.Infof("Upgrading VM's hardware")
+	logger.Infof("%s %s", execBin, upgradeHWCommand)
+
+	upgradeCmd := exec.Command(execBin, upgradeHWCommand...)
+	upgradeCmd.Env = os.Environ()
+
+	upgradeCmd.Env = append(upgradeCmd.Env, govcEnv...)
+
+	out, err = upgradeCmd.CombinedOutput()
+	logger.Infof(string(out))
 	if err != nil {
 		return err
 	}
-	logger.Infof("Actually patching the base image now")
-	return newMs.SetCoreOsBootImage(baseImage)
+
+	logger.Infof("Transforming VM into template")
+	logger.Infof("%s %s", execBin, templateCommand)
+
+	templateCmd := exec.Command(execBin, templateCommand...)
+	templateCmd.Env = os.Environ()
+
+	templateCmd.Env = append(templateCmd.Env, govcEnv...)
+
+	out, err = templateCmd.CombinedOutput()
+	logger.Infof(string(out))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func getvSphereCredentials(oc *exutil.CLI) (server, dataCenter, dataStore, folder, resourcePool, user, password string, err error) {
+	var (
+		configCM    = NewConfigMap(oc.AsAdmin(), "openshift-config", "cloud-provider-config")
+		credsSecret = NewSecret(oc.AsAdmin(), "kube-system", "vsphere-creds")
+	)
+	config, err := configCM.GetDataValue("config")
+	if err != nil {
+		return "", "", "", "", "", "", "", err
+	}
+
+	cfg, err := ini.Load(strings.NewReader(config))
+	if err != nil {
+		return
+	}
+
+	server = cfg.Section("Workspace").Key("server").String()
+	dataCenter = cfg.Section("Workspace").Key("datacenter").String()
+	dataStore = cfg.Section("Workspace").Key("default-datastore").String()
+	folder = cfg.Section("Workspace").Key("folder").String()
+	resourcePool = cfg.Section("Workspace").Key("resourcepool-path").String()
+
+	user, err = credsSecret.GetDataValue("vcenter.devqe.ibmc.devcluster.openshift.com.username")
+	if err != nil {
+		return
+	}
+	password, err = credsSecret.GetDataValue("vcenter.devqe.ibmc.devcluster.openshift.com.password")
+	if err != nil {
+		return
+	}
+
+	return
 }

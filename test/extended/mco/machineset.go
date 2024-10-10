@@ -416,9 +416,9 @@ func getUserDataIgnitionVersionFromOCPVersion(baseImageVersion string) string {
 	   4.16: 3.2.0
 	   4.15: 3.2.0
 	   4.14: 3.2.0
-	   4.13: 3.2.0
+	   4.13: 3.2.0   // change to rhel9
 	   4.12: 3.2.0
-	   4.11: 3.2.0
+	   4.11: 3.2.0   // support for arm64 added
 	   4.10: 3.1.0
 	   4.9: 3.1.0
 	   4.8: 3.1.0
@@ -447,9 +447,42 @@ func GetCoreOSBootImagePath(platform string) string {
 		patchCoreOsBootImagePath = "/spec/template/spec/providerSpec/value/ami/id"
 	case GCPPlatform:
 		patchCoreOsBootImagePath = "/spec/template/spec/providerSpec/value/disks/0/image"
+	case VspherePlatform:
+		patchCoreOsBootImagePath = "/spec/template/spec/providerSpec/value/template"
 	default:
 		e2e.Failf("Machineset.GetCoreOsBootImage method is only supported for GCP and AWS platforms")
 	}
 
 	return patchCoreOsBootImagePath
+}
+
+func GetArchitectureFromMachineset(ms *MachineSet, platform string) (architecture.Architecture, error) {
+	logger.Infof("Getting architecture for machineset %s", ms.GetName())
+
+	arch, err := ms.GetArchitecture()
+	if err == nil {
+		return *arch, nil
+	}
+
+	// In vsphere the machinesets are not annotated, so wee need to get the architecture from the Nodes if they exist
+	if platform != VspherePlatform {
+		return architecture.UNKNOWN, err
+	}
+
+	logger.Infof("In vsphere we need to get the architecture from the existing nodes created by the machineset %s", ms.GetName())
+	nodes, err := ms.GetNodes()
+	if err != nil {
+		return architecture.UNKNOWN, err
+	}
+
+	if len(nodes) == 0 {
+		return architecture.UNKNOWN, fmt.Errorf("Machineset %s has no replicas, so we cannot get the architecture from any existing node", ms.GetName())
+	}
+
+	narch, err := nodes[0].GetArchitecture()
+	if err != nil {
+		return architecture.UNKNOWN, err
+	}
+
+	return narch, nil
 }
