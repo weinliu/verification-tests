@@ -3,6 +3,7 @@ package workloads
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -343,11 +344,40 @@ var _ = g.Describe("[sig-cli] Workloads oc adm command works well", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "timeout wait for prune deploymentconfig dry run")
 	})
+
 	g.It("Author:yinzhou-ROSA-OSD_CCS-ARO-Medium-76271-make sure when must-gather failed and use oc adm inspect should have log lines with a timestamp", func() {
 		output, outErr, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--image=quay.io/test/must-gather:latest").Outputs()
 		o.Expect(err).Should(o.HaveOccurred())
 		o.Expect(strings.Contains(output, "OUT 202")).To(o.BeTrue())
 		o.Expect(strings.Contains(outErr, "Error running must-gather collection")).To(o.BeTrue())
 		o.Expect(strings.Contains(outErr, "Falling back to `oc adm inspect clusteroperators.v1.config.openshift.io` to collect basic cluster information")).To(o.BeTrue())
+	})
+
+	g.It("Author:yinzhou-ROSA-OSD_CCS-ARO-ConnectedOnly-High-76524-Make sure could extract oc based on s390x", func() {
+		if !assertPullSecret(oc) {
+			g.Skip("The cluster does not have pull secret for public registry hence skipping...")
+		}
+
+		exutil.By("Create temp dir and get pull secret")
+		extractTmpDirName := "/tmp/case76524"
+		err := os.MkdirAll(extractTmpDirName, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(extractTmpDirName)
+
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", extractTmpDirName), "--confirm").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Get desired image from ocp cluster")
+		pullSpec, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "-o", "jsonpath={..desired.image}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(pullSpec).NotTo(o.BeEmpty())
+
+		exutil.By("Use `oc adm release extract` command with certificate-authority")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("release", "extract", "--registry-config", extractTmpDirName+"/.dockerconfigjson", pullSpec, "--certificate-authority", "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem", "--command-os", "linux/s390x", "--command", "oc.rhel9", "--to="+extractTmpDirName+"/").NotShowInfo().Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocheckcmd := "file /tmp/case76524/oc"
+		ocfileOutput, err := exec.Command("bash", "-c", ocheckcmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(ocfileOutput), "IBM S/390")).To(o.BeTrue())
 	})
 })
