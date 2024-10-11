@@ -754,16 +754,26 @@ func (mcp *MachineConfigPool) waitForComplete() {
 
 	immediate := false
 	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(_ context.Context) (bool, error) {
+		defer g.GinkgoRecover()
 		// If there are degraded machines, stop polling, directly fail
 		degradedstdout, degradederr := mcp.getDegradedMachineCount()
 		if degradederr != nil {
-			logger.Errorf("the err:%v, and try next round", degradederr)
+			logger.Errorf("Error getting the number of degraded machines. Try next round: %s", degradederr)
 			return false, nil
 		}
 
 		if degradedstdout != 0 {
-			logger.Errorf("Degraded MC:\n%s", mcp.PrettyString())
-			exutil.AssertWaitPollNoErr(fmt.Errorf("Degraded machines"), fmt.Sprintf("mcp %s has degraded %d machines", mcp.name, degradedstdout))
+			return true, fmt.Errorf("mcp %s has degraded %d machines", mcp.name, degradedstdout)
+		}
+
+		degradedStatus, err := mcp.GetDegradedStatus()
+		if err != nil {
+			logger.Errorf("Error getting degraded status.Try next round: %s", err)
+			return false, nil
+		}
+
+		if degradedStatus != FalseString {
+			return true, fmt.Errorf("mcp %s has degraded status: %s", mcp.name, degradedStatus)
 		}
 
 		stdout, err := mcp.Get(`{.status.conditions[?(@.type=="Updated")].status}`)
@@ -779,7 +789,10 @@ func (mcp *MachineConfigPool) waitForComplete() {
 		return false, nil
 	})
 
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("mc operation is not completed on mcp %s", mcp.name))
+	if err != nil {
+		DebugDegradedStatus(mcp)
+	}
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), fmt.Sprintf("mc operation is not completed on mcp %s: %s", mcp.name, err))
 }
 
 // GetPoolSynchronizersStatusByType return the PoolsynchronizesStatus matching the give type
@@ -1527,4 +1540,60 @@ func GetPoolWithArchDifferentFromOrFail(oc *exutil.CLI, arch architecture.Archit
 
 	e2e.Failf("Something went wrong. There is no suitable pool to execute the test case. There is no pool with nodes using  an architecture different from %s", arch)
 	return nil
+}
+
+// DebugDegradedStatus prints the necessary information to debug why a MCP became degraded
+func DebugDegradedStatus(mcp *MachineConfigPool) {
+	var (
+		nodeList    = NewNodeList(mcp.GetOC())
+		mcc         = NewController(mcp.GetOC())
+		maxMCCLines = 30
+		maxMCDLines = 30
+	)
+	_ = mcp.GetOC().Run("get").Args("co", "machine-config").Execute()
+	_ = mcp.GetOC().Run("get").Args("mcp").Execute()
+	_ = mcp.GetOC().Run("get").Args("nodes", "-o", "wide").Execute()
+
+	logger.Infof("Not updated MCP %s", mcp.GetName())
+	logger.Infof("%s", mcp.PrettyString())
+	logger.Infof("#######################\n\n")
+	allNodes, err := nodeList.GetAll()
+	if err == nil {
+		for _, node := range allNodes {
+			state := node.GetMachineConfigState()
+			if state != "Done" {
+				logger.Infof("NODE %s IS %s", node.GetName(), state)
+				logger.Infof("%s", node.PrettyString())
+				logger.Infof("#######################\n\n")
+				mcdLogs, err := node.GetMCDaemonLogs("")
+				if err != nil {
+					logger.Infof("Error getting MCD logs for node %s", node.GetName())
+				}
+				mcdLines := strings.Split(mcdLogs, "\n")
+				lenMCDLogs := len(mcdLines)
+
+				if lenMCDLogs > maxMCDLines {
+					mcdLogs = strings.Join(mcdLines[lenMCDLogs-maxMCCLines:], "\n")
+				}
+				logger.Infof("Node %s MCD logs:\n%s", node.GetName(), mcdLogs)
+				logger.Infof("#######################\n\n")
+				logger.Infof("MachineConfigNode:\n%s", node.GetMachineConfigNode().PrettyString())
+				logger.Infof("#######################\n\n")
+			}
+		}
+	} else {
+		logger.Infof("Error getting the list of degraded nodes: %s", err)
+	}
+
+	mccLogLines, err := mcc.GetLogsAsList()
+	if err != nil {
+		logger.Infof("Error getting the logs from MCC: %s", err)
+	} else {
+		mccLogs := strings.Join(mccLogLines, "\n")
+		lenLogs := len(mccLogLines)
+		if lenLogs > maxMCCLines {
+			mccLogs = strings.Join(mccLogLines[lenLogs-maxMCCLines:], "\n")
+		}
+		logger.Infof("Last %d lines of MCC:\n%s", maxMCCLines, mccLogs)
+	}
 }
