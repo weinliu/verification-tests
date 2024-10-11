@@ -551,14 +551,12 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		var linuxWebserverImage string
 		if isDisconnectedCluster(oc) {
 			linuxWebserverImage = getConfigMapData(oc, wincTestCM, "linux_container_disconnected_image", defaultNamespace)
+			createWorkload(oc, namespace, linuxWebserverFileDisconnected, map[string]string{
+				"<linux_webserver_image>": linuxWebserverImage,
+			}, true, linuxWorkloads)
 		} else {
-			linuxWebserverImage = linuxNoTagsImage
+			createWorkload(oc, namespace, linuxWebserverFile, map[string]string{}, true, linuxWorkloads)
 		}
-
-		// Create Linux workload
-		createWorkload(oc, namespace, linuxWebserverFile, map[string]string{
-			"<linux_webserver_image>": linuxWebserverImage,
-		}, true, linuxWorkloads)
 		// we scale the deployment to 5 windows pods
 		scaleDeployment(oc, windowsWorkloads, 5, namespace)
 		hostIPArray, err := getWorkloadsHostIP(oc, windowsWorkloads, namespace)

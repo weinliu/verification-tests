@@ -55,6 +55,7 @@ var (
 	linuxNoTagsImage               = "quay.io/openshifttest/hello-openshift@sha256:2a3edeadd7aa12a6156e9a27de1daae73d0569cbb0a761a7885944738245f11e"
 	primary_disconnected_image_key = "primary_windows_container_disconnected_image"
 	linuxWebserverFile             = "linux_web_server.yaml"
+	linuxWebserverFileDisconnected = "linux_web_server_disconnected.yaml"
 	windowsWebserverFile           = "windows_web_server.yaml"
 	//	defaultSource      = "wmco"
 	// Bastion user used for Nutanix and vSphere IBMC
