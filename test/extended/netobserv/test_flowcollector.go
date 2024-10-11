@@ -967,17 +967,17 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 
 		g.By("Ping loopback address with custom QoS from client pod")
-		e2eoutput.RunHostCmd(testTemplate.ClientNS, "client", "ping -c 10 -Q 0x80 "+destinationIP)
-
-		g.By("Wait for a min before logs gets collected and written to loki")
 		startTime = time.Now()
-		time.Sleep(60 * time.Second)
+		e2eoutput.RunHostCmd(testTemplate.ClientNS, "client", "ping -c 10 -Q 0x80 "+destinationIP)
 
 		lokilabels = Lokilabels{
 			App:              "netobserv-flowcollector",
 			SrcK8S_Namespace: testTemplate.ClientNS,
 		}
 		parameters = []string{"DstAddr=\"" + destinationIP + "\""}
+
+		g.By("Wait for a min before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
 
 		g.By("Verify DSCP value=32")
 		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
@@ -1375,9 +1375,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
-			Namespace:     namespace,
-			Template:      flowFixturePath,
-			LokiNamespace: namespace,
+			Namespace:              namespace,
+			Template:               flowFixturePath,
+			LokiNamespace:          namespace,
+			EBPFCacheActiveTimeout: "30s",
 		}
 
 		defer flow.DeleteFlowcollector(oc)
@@ -1393,7 +1394,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
 
-		g.By("Deploying test server and client pods")
+		g.By("Deploy test server and client pods")
 		template := filePath.Join(baseDir, "test-client-server_template.yaml")
 		testTemplate := TestClientServerTemplate{
 			ServerNS:   "test-server-67782",
@@ -1407,9 +1408,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		err = testTemplate.createTestClientServer(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Wait for 1 min before logs gets collected and written to loki")
+		g.By("Wait for 2 mins before logs gets collected and written to loki")
 		startTime := time.Now()
-		time.Sleep(60 * time.Second)
+		time.Sleep(120 * time.Second)
 
 		lokilabels := Lokilabels{
 			App:              "netobserv-flowcollector",
@@ -1424,7 +1425,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows written to loki > 0")
 
-		// verify flow correctness
+		g.By("Verify flow correctness")
 		verifyFlowCorrectness(testTemplate.ObjectSize, flowRecords)
 	})
 

@@ -37,7 +37,7 @@ objects:
             capabilities:
               drop: ["ALL"]
               privileged: false
-          image: quay.io/openshifttest/nginx-alpine:latest
+          image: quay.io/openshifttest/nginx-alpine:1.2.3
           imagePullPolicy: IfNotPresent
           ports:
           - containerPort: 8080

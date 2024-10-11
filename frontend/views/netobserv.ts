@@ -142,6 +142,7 @@ export const Operator = {
                 cy.byTestID('status-text').should('exist').should('contain.text', 'FLPParentReady')
                 cy.byTestID('status-text').should('exist').should('contain.text', 'FlowCollectorLegacyReady')
                 cy.byTestID('status-text').should('exist').should('contain.text', 'MonitoringReady')
+                cy.byTestID('status-text').should('exist').should('contain.text', 'NetworkPolicyReady')
 
                 cy.byTestID('refresh-web-console', { timeout: 60000 }).should('exist')
                 cy.reload(true)

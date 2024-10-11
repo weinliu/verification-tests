@@ -1,5 +1,3 @@
-import { project } from "../views/netobserv"
-
 export const netflowPage = {
     visit: () => {
         cy.clearLocalStorage()
@@ -16,7 +14,7 @@ export const netflowPage = {
         cy.byTestID('no-results-found').should('not.exist')
         cy.get('#overview-container').should('exist')
     },
-    visitDeveloper: () => {
+    visitDeveloper: (project) => {
         cy.clearLocalStorage()
         cy.switchPerspective('Developer');
         cy.visit(`/dev-monitoring/ns/${project}/netflow-traffic`)
@@ -308,7 +306,7 @@ Cypress.Commands.add('checkNetflowTraffic', (loki = "Enabled") => {
         // verify netflow traffic page is disabled
         cy.get('li.tableTabButton > button').should('exist').should('have.class', 'pf-m-aria-disabled')
     }
-    else if (loki == "Enabled") {
+    else {
         cy.get('li.tableTabButton').should('exist').click()
         cy.wait(1000)
         cy.byTestID("table-composable", { timeout: 60000 }).should('exist')
