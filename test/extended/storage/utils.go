@@ -676,7 +676,7 @@ func waitCSOspecifiedStatusValueAsExpected(oc *exutil.CLI, specifiedStatus strin
 	pollErr := wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
 		realValue, err := getCSOspecifiedStatusValue(oc, specifiedStatus)
 		if err != nil {
-			e2e.Logf("Get CSO \"%s\" status value failed of: \"%v\"", err)
+			e2e.Logf("Get CSO \"%s\" status value failed of: \"%v\"", specifiedStatus, err)
 			return false, nil
 		}
 		if realValue == expectedValue {

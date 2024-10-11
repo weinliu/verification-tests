@@ -721,7 +721,7 @@ func (lvd *localVolumeDiscovery) waitSpecifiedDeviceStatusAsExpected(oc *exutil.
 		return strings.EqualFold(deviceStatus, expectedStatus), nil
 	})
 	if err != nil {
-		e2e.Logf(`Node/%s's LocalVolumeDiscoveryResult is`, nodeName, nodeDevicesDiscoverResults)
+		e2e.Logf(`Node/%s's LocalVolumeDiscoveryResult is %s`, nodeName, nodeDevicesDiscoverResults)
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf(`Waitting for device: "%s" on node/%s become "%s" timeout, last actual status is "%s".`, devicePath, nodeName, expectedStatus, deviceStatus))
 }

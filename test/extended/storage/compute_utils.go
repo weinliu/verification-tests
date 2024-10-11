@@ -36,7 +36,7 @@ func execCommandInSpecificNode(oc *exutil.CLI, nodeHostName string, command stri
 		stdOut, stdErr, err = exutil.DebugNodeWithOptionsAndChrootWithoutRecoverNsLabel(oc, nodeHostName, executeOption, executeCmd...)
 		debugLogf("Executed %q on node %q:\n*stdErr* :%q\nstdOut :%q\n*err*: %v", command, nodeHostName, stdErr, stdOut, err)
 		if err != nil {
-			e2e.Logf("Executed %q on node %q failed of %v", command, nodeHostName)
+			e2e.Logf("Executed %q on node %q failed of %v", command, nodeHostName, err)
 			return false, nil
 		}
 		return true, nil
