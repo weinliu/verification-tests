@@ -1161,7 +1161,7 @@ func addKustomizationToMicroshift(nodeName string, kustomizationFiles map[string
 		replacePatternInfile(tmpFileName, file[2], file[3])
 		fileOutput, err := exec.Command("bash", "-c", fmt.Sprintf(`cat %s`, tmpFileName)).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		destFile := file[1] + strings.Split(key, ".")[0] + ".yaml"
+		destFile := filepath.Join(file[1], strings.Split(key, ".")[0]+".yaml")
 		fileCmd := fmt.Sprintf(`'cat > %s << EOF
 %s
 EOF'`, destFile, string(fileOutput))
@@ -1858,4 +1858,17 @@ func checkDisconnect(oc *exutil.CLI) bool {
 
 	e2e.Logf("Successfully connected to the public Internet from the cluster.")
 	return false
+}
+
+// Validate MicroShift Config
+func validateMicroshiftConfig(fqdnName string, user string, patternToMatch string) {
+	e2e.Logf("Check manifest config")
+	chkConfigCmd := `sudo /usr/bin/microshift show-config --mode effective 2>/dev/null`
+	re := regexp.MustCompile(patternToMatch)
+	mchkConfig, mchkConfigErr := runSSHCommand(fqdnName, user, chkConfigCmd)
+	o.Expect(mchkConfigErr).NotTo(o.HaveOccurred())
+	match := re.MatchString(mchkConfig)
+	if !match {
+		e2e.Failf("Config not matched :: \n" + mchkConfig)
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -1692,5 +1693,236 @@ apiServer:
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(mstatusErr, fmt.Sprintf("Both storage paths are not identical :: %v. %s::%s", mSosErr, sosOutput1, sosOutput2))
+	})
+
+	// author: rgangwar@redhat.com
+	g.It("Author:rgangwar-MicroShiftOnly-Longduration-NonPreRelease-Medium-76468-[Apiserver] Drop-in configuration directory [Disruptive]", func() {
+		var (
+			e2eTestNamespace = "microshift-ocp76468"
+			nsString         = "NAMESPACEVAR"
+			nsBaseApp        = "base-app-ocp76468"
+			nsDevApp         = "dev-app-ocp76468"
+			nsPatchesApp     = "patches-app-ocp76468"
+			user             = "redhat"
+			basePath         = "/etc/microshift"
+			configDir        = filepath.Join(basePath, "config.d")
+			configFiles      = []string{
+				"config.yaml",
+				"10-kustomize.yaml",
+				"20-kustomize.yaml",
+				"10-san.yaml",
+				"20-san.yaml",
+				"10-kubelet.yaml",
+				"20-kubelet.yaml",
+			}
+
+			// Manifest paths
+			tmpManifestPath = []string{
+				filepath.Join(basePath, "manifests.d/my-app/base/"),
+				filepath.Join(basePath, "manifests.d/my-app/dev/"),
+				filepath.Join(basePath, "manifests.d/my-app/dev/patches/"),
+			}
+		)
+
+		var etcConfigYaml []string
+		for _, file := range configFiles {
+			if file == "config.yaml" {
+				etcConfigYaml = append(etcConfigYaml, filepath.Join(basePath, file))
+			} else {
+				etcConfigYaml = append(etcConfigYaml, filepath.Join(configDir, file))
+			}
+		}
+
+		var etcConfigYamlbak []string
+		for _, file := range configFiles {
+			if file == "config.yaml" {
+				etcConfigYamlbak = append(etcConfigYamlbak, filepath.Join(basePath, file+".bak"))
+			} else {
+				etcConfigYamlbak = append(etcConfigYamlbak, filepath.Join(configDir, file+".bak"))
+			}
+		}
+
+		exutil.By("1. Create new namespace for the scenario")
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		exutil.By("2. Get microshift VM hostname")
+		fqdnName := getMicroshiftHostname(oc)
+
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "hello-openshift-dev-app-ocp76468", "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "busybox-base-app-ocp76468", "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "busybox-patches-app-ocp76468", "--ignore-not-found").Execute()
+		}()
+
+		// Loop for restoring configs and cleaning up manifests after test completion
+		defer func() {
+			for i := range etcConfigYaml {
+				etcConfigCMD := fmt.Sprintf(
+					`'configfile=%v; configfilebak=%v; 
+				if [ -f $configfilebak ]; then 
+					cp $configfilebak $configfile; 
+					rm -f $configfilebak; 
+				else 
+					rm -f $configfile; 
+				fi'`,
+					etcConfigYaml[i], etcConfigYamlbak[i],
+				)
+				_, mchgConfigErr := runSSHCommand(fqdnName, user, "sudo bash -c", etcConfigCMD)
+				o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+			}
+
+			for i := range tmpManifestPath {
+				_, mchgConfigErr := runSSHCommand(fqdnName, user, "sudo rm -rf "+tmpManifestPath[i])
+				o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+			}
+
+			restartErr := restartMicroshift(fqdnName)
+			o.Expect(restartErr).NotTo(o.HaveOccurred())
+		}()
+
+		// Loop for backing up config files
+		exutil.By("3. Backup existing config files")
+		for i := range etcConfigYaml {
+			etcConfig := fmt.Sprintf(
+				`'configfile=%v; configfilebak=%v; 
+				if [ -f $configfile ]; then 
+					cp $configfile $configfilebak; 
+				fi'`,
+				etcConfigYaml[i],
+				etcConfigYamlbak[i],
+			)
+			_, mchgConfigErr := runSSHCommand(fqdnName, user, "sudo bash -c", etcConfig)
+			o.Expect(mchgConfigErr).NotTo(o.HaveOccurred())
+		}
+
+		// Create manifest paths for the new configurations
+		exutil.By("4. Create tmp manifest path on the node")
+		for i := range tmpManifestPath {
+			_, dirErr := runSSHCommand(fqdnName, user, "sudo mkdir -p "+tmpManifestPath[i])
+			o.Expect(dirErr).NotTo(o.HaveOccurred())
+		}
+
+		// Set glob path values to the manifest option in config
+		exutil.By("4.1 Scenario1 :: Set glob path values to the manifest option in config 10-kustomization.yaml")
+		etcConfig := `
+manifests:
+  kustomizePaths:
+  - /etc/microshift/manifests.d/my-app/*/`
+		changeMicroshiftConfig(etcConfig, fqdnName, etcConfigYaml[1])
+
+		// Create kustomization and deployment files
+		newSrcFiles := map[string][]string{
+			"busybox.yaml": {
+				"microshift-busybox-deployment.yaml",
+				tmpManifestPath[0],
+				nsString,
+				nsBaseApp,
+			},
+			"kustomization.yaml": {
+				"microshift-busybox-kustomization.yaml",
+				tmpManifestPath[0],
+				nsString,
+				nsBaseApp,
+			},
+			"hello-openshift.yaml": {
+				"microshift-hello-openshift.yaml",
+				tmpManifestPath[1],
+				nsString,
+				nsDevApp,
+			},
+			"kustomization": {
+				"microshift-hello-openshift-kustomization.yaml",
+				tmpManifestPath[1],
+				nsString,
+				nsDevApp,
+			},
+		}
+		exutil.By("4.2 Create kustomization and deployment files")
+		addKustomizationToMicroshift(fqdnName, newSrcFiles)
+		restartErr := restartMicroshift(fqdnName)
+		o.Expect(restartErr).NotTo(o.HaveOccurred())
+
+		// Validate pods after microshift restart
+		exutil.By("4.3 Check pods after microshift restart")
+		podsOutput := getPodsList(oc, "hello-openshift-"+nsDevApp)
+		o.Expect(podsOutput[0]).NotTo(o.BeEmpty(), "Test case Scenario1 :: Failed :: Pods are not created, manifests are not loaded from defined location")
+		podsOutput = getPodsList(oc, "busybox-"+nsBaseApp)
+		o.Expect(podsOutput[0]).NotTo(o.BeEmpty(), "Test case Scenario1 :: Failed :: Pods are not created, manifests are not loaded from defined location")
+		e2e.Logf("Test case Scenario1 :: Passed :: Pods are created, manifests are loaded from defined location :: %s", podsOutput[0])
+
+		exutil.By("4.4 Scenario2 :: Set glob path values to the manifest option in config 20-kustomization.yaml")
+		etcConfig = `
+manifests:
+  kustomizePaths:
+  - /etc/microshift/manifests.d/my-app/*/patches/`
+		changeMicroshiftConfig(etcConfig, fqdnName, etcConfigYaml[2])
+
+		// Create kustomization and deployment files
+		newSrcFilesPatches := map[string][]string{
+			"busybox.yaml": {
+				"microshift-busybox-deployment.yaml",
+				tmpManifestPath[2],
+				nsBaseApp,
+				nsPatchesApp,
+			},
+			"kustomization.yaml": {
+				"microshift-busybox-kustomization.yaml",
+				tmpManifestPath[2],
+				nsBaseApp,
+				nsPatchesApp,
+			},
+		}
+		exutil.By("4.5 Create kustomization and deployment files")
+		addKustomizationToMicroshift(fqdnName, newSrcFilesPatches)
+		restartErr = restartMicroshift(fqdnName)
+		o.Expect(restartErr).NotTo(o.HaveOccurred())
+
+		// Validate pods after microshift restart
+		exutil.By("4.6 Check pods after microshift restart")
+		podsOutput = getPodsList(oc, "busybox-patches-app-ocp76468")
+		o.Expect(podsOutput[0]).NotTo(o.BeEmpty(), "Test case Scenario1 :: Failed :: Pods are not created, manifests are not loaded from defined location")
+		e2e.Logf("Test case Scenario2 :: Passed :: Pods are created, manifests are loaded from defined location :: %s", podsOutput[0])
+
+		exutil.By("4.7 Scenario3 :: Set path values to the apiserver option in config 10-san.yaml and 20-san.yaml")
+		san10Content := `
+apiServer:
+  subjectAltNames:
+  - test.api.com`
+		changeMicroshiftConfig(san10Content, fqdnName, etcConfigYaml[3])
+
+		san20Content := `
+apiServer:
+  subjectAltNames:
+  - hostZ.api.com`
+		changeMicroshiftConfig(san20Content, fqdnName, etcConfigYaml[4])
+
+		restartErr = restartMicroshift(fqdnName)
+		o.Expect(restartErr).NotTo(o.HaveOccurred())
+
+		validateMicroshiftConfig(fqdnName, user, `subjectAltNames:\n\s+-\s+hostZ\.api\.com`)
+		e2e.Logf("Test case Scenario3 :: Passed :: San configs are not merged together, san with higher numbers take priority")
+
+		exutil.By("4.7 Scenario4 :: Set path values to the kubelet option in config 10-kubelet.yaml and 20-kubelet.yaml")
+		kubeletConfig := `
+kubelet:
+  another_setting1: True`
+		changeMicroshiftConfig(kubeletConfig, fqdnName, etcConfigYaml[0])
+
+		kubelet10Content := `
+kubelet:
+  another_setting2: True`
+		changeMicroshiftConfig(kubelet10Content, fqdnName, etcConfigYaml[5])
+
+		kubelet20Content := `
+kubelet:
+  another_setting3: True`
+		changeMicroshiftConfig(kubelet20Content, fqdnName, etcConfigYaml[6])
+
+		restartErr = restartMicroshift(fqdnName)
+		o.Expect(restartErr).NotTo(o.HaveOccurred())
+
+		validateMicroshiftConfig(fqdnName, user, `kubelet:\n\s+another_setting1:\s+true\n\s+another_setting2:\s+true\n\s+another_setting3:\s+true`)
+		e2e.Logf("Test case Scenario4 :: Passed :: kubelete configs are merged together")
 	})
 })
