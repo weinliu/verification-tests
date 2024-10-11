@@ -343,4 +343,11 @@ var _ = g.Describe("[sig-cli] Workloads oc adm command works well", func() {
 		})
 		exutil.AssertWaitPollNoErr(err, "timeout wait for prune deploymentconfig dry run")
 	})
+	g.It("Author:yinzhou-ROSA-OSD_CCS-ARO-Medium-76271-make sure when must-gather failed and use oc adm inspect should have log lines with a timestamp", func() {
+		output, outErr, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--image=quay.io/test/must-gather:latest").Outputs()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "OUT 202")).To(o.BeTrue())
+		o.Expect(strings.Contains(outErr, "Error running must-gather collection")).To(o.BeTrue())
+		o.Expect(strings.Contains(outErr, "Falling back to `oc adm inspect clusteroperators.v1.config.openshift.io` to collect basic cluster information")).To(o.BeTrue())
+	})
 })
