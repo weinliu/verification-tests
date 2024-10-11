@@ -14346,12 +14346,20 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                                                  = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
+		oc                                                  = exutil.NewCLIForKubeOpenShift("default-" + getRandomString())
 		guestClusterName, guestClusterKube, hostedClusterNS string
+		isAKS                                               bool
+		errIsAKS                                            error
 	)
 
 	g.BeforeEach(func() {
-		exutil.SkipNoOLMCore(oc)
+		isAKS, errIsAKS = exutil.IsAKSCluster(context.TODO(), oc)
+		if errIsAKS != nil {
+			g.Skip("can not determine if it is openshift cluster or aks cluster")
+		}
+		if !isAKS {
+			exutil.SkipNoOLMCore(oc)
+		}
 		guestClusterName, guestClusterKube, hostedClusterNS = exutil.ValidHypershiftAndGetGuestKubeConf(oc)
 		e2e.Logf("%s, %s, %s", guestClusterName, guestClusterKube, hostedClusterNS)
 		oc.SetGuestKubeconf(guestClusterKube)
@@ -14359,19 +14367,22 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 
 	// author: jiazha@redhat.com
 	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:bandrade-High-45408-Eliminate use of imagestreams in catalog management", func() {
-		exutil.SkipBaselineCaps(oc, "None")
-		exutil.By("1) check if uses the ImageStream resource")
-		controlProject := exutil.GetHyperShiftHostedClusterNameSpace(oc)
-		isOutput, err := oc.AsAdmin().Run("get").Args("is", "catalogs", "-n", controlProject, "-o", "yaml").Output()
-		if err != nil {
-			e2e.Failf("Fail to get cronjob in project: %s, error:%v", controlProject, err)
-		}
-		is := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
-		for _, imageStream := range is {
-			if !strings.Contains(isOutput, imageStream) {
-				e2e.Failf("find ImageStream:%s in project:%v", imageStream, controlProject)
+		controlProject := hostedClusterNS + "-" + guestClusterName
+		if !isAKS {
+			exutil.SkipBaselineCaps(oc, "None")
+			exutil.By("1) check if uses the ImageStream resource")
+			isOutput, err := oc.AsAdmin().Run("get").Args("is", "catalogs", "-n", controlProject, "-o", "yaml").Output()
+			if err != nil {
+				e2e.Failf("Fail to get cronjob in project: %s, error:%v", controlProject, err)
+			}
+			is := []string{"certified-operators", "community-operators", "redhat-marketplace", "redhat-operators"}
+			for _, imageStream := range is {
+				if !strings.Contains(isOutput, imageStream) {
+					e2e.Failf("find ImageStream:%s in project:%v", imageStream, controlProject)
+				}
 			}
 		}
+
 		exutil.By("2) check if Deployment uses the ImageStream")
 		deploys := []string{"certified-operators-catalog", "community-operators-catalog", "redhat-marketplace-catalog", "redhat-operators-catalog"}
 		for _, deploy := range deploys {
@@ -14379,8 +14390,14 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 			if err != nil {
 				e2e.Failf("Fail to get deploy:%s in project: %s, error:%v", deploy, controlProject, err)
 			}
-			if !strings.Contains(strings.ToLower(annotations), "imagestream") {
-				e2e.Failf("The deploy does not use ImageStream: %v", annotations)
+			if !isAKS {
+				if !strings.Contains(strings.ToLower(annotations), "imagestream") {
+					e2e.Failf("The deploy does not use ImageStream: %v", annotations)
+				}
+			} else {
+				if strings.Contains(strings.ToLower(annotations), "imagestream") {
+					e2e.Failf("The deploy does not use ImageStream: %v", annotations)
+				}
 			}
 		}
 	})
@@ -14424,7 +14441,11 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 		og.createwithCheck(oc.AsGuestKubeconf(), itName, dr)
 
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-image-template.yaml")
-		ocpVersionByte, err := exec.Command("bash", "-c", "oc version -o json | jq -r '.openshiftVersion' | cut -d '.' -f1,2").Output()
+		cmdString := `oc version -o json | jq -r '.openshiftVersion' | cut -d '.' -f1,2`
+		if isAKS {
+			cmdString = fmt.Sprintf(`oc --kubeconfig=%s version -o json | jq -r '.openshiftVersion' | cut -d '.' -f1,2`, guestClusterKube)
+		}
+		ocpVersionByte, err := exec.Command("bash", "-c", cmdString).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ocpVersion := strings.Replace(string(ocpVersionByte), "\n", "", -1)
 		indexImage := fmt.Sprintf("quay.io/openshift-qe-optional-operators/aosqe-index:v%s", ocpVersion)
