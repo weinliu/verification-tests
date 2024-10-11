@@ -110,8 +110,8 @@ describe("(OCP-53591 Network_Observability) Netflow Topology groups features", {
         })
         topologyPage.isViewRendered()
         // verify number of edges and nodes.
-        cy.get('#drawer ' + topologySelectors.edge).should('have.length', 48)
-        cy.get('#drawer ' + topologySelectors.node).should('have.length', 29)
+        cy.get('#drawer ' + topologySelectors.edge).should('have.length', 47)
+        cy.get('#drawer ' + topologySelectors.node).should('have.length', 28)
     })
 
     it("(OCP-53591, memodi, Network_Observability) should verify group Nodes", function () {

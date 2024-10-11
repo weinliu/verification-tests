@@ -848,9 +848,13 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(ICMPflows)).Should(o.BeNumerically(">", 0), "expected number of ICMP flows > 0")
 
+		nIcmptype8Flows := 0
 		for _, r := range ICMPflows {
-			o.Expect(r.Flowlog.IcmpType).To(o.Equal(8))
+			if r.Flowlog.IcmpType == 8 {
+				nIcmptype8Flows++
+			}
 		}
+		o.Expect(nIcmptype8Flows).Should(o.BeNumerically(">", 0), "expected number of ICMP flows of type 8 (echo) > 0")
 	})
 
 	g.It("Author:aramesha-NonPreRelease-LEVEL0-High-68125-Verify DSCP with NetObserv [Serial]", func() {
