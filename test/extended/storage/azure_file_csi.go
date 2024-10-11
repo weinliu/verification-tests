@@ -22,6 +22,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		podTemplate          string
 		deploymentTemplate   string
 		supportedProtocols   []string
+		isFipsEnabled        bool
 	)
 
 	// azure-file-csi test suite cloud provider support check
@@ -45,7 +46,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 
 		supportedProtocols = append(supportedProtocols, "smb", "nfs")
-		if checkFips(oc) {
+		isFipsEnabled = checkFips(oc)
+		if isFipsEnabled {
 			supportedProtocols = deleteElement(supportedProtocols, "smb")
 		}
 
@@ -387,7 +389,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// OCP-50919 - [Azure-File-CSI-Driver] support smb file share protocol
 	g.It("ARO-Author:wduan-LEVEL0-High-50919-[Azure-File-CSI-Driver] support smb file share protocol", func() {
 		// Skip case in FIPS enabled cluster with smb protocol
-		if checkFips(oc) {
+		if isFipsEnabled {
 			g.Skip("Azure-file CSI Driver with smb protocol don't support FIPS enabled env, skip!!!")
 		}
 
@@ -492,7 +494,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		g.It("ARO-Author:chaoyang-High-"+caseIds_fsgroup[i]+"-[Azure-File-CSI-Driver]Support fsgroup for "+protocolType[0]+" file share protocol", func() {
 			// Skip case in FIPS enabled cluster with smb protocol
-			if checkFips(oc) && protocolType[0] == "smb" {
+			if isFipsEnabled && protocolType[0] == "smb" {
 				g.Skip("Azure-file CSI Driver with smb protocol don't support FIPS enabled env, skip!!!")
 			}
 
@@ -719,6 +721,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: ropatil@redhat.com
 	// OCP-72163 - [Azure-File-CSI-Driver] [CSI Clone] provisioning volume with pvc data source having large number of files
 	g.It("ARO-Longduration-NonPreRelease-Author:ropatil-Medium-72163-[Azure-File-CSI-Driver] [CSI Clone] provisioning volume with pvc data source having large number of files [Serial]", func() {
+
+		if isFipsEnabled {
+			g.Skip("Azure-file CSI Driver with smb protocol does not support FIPS enabled env, nfs protocol does not support clone, skip!!!")
+		}
+
 		// Set up a specified project share for all the phases
 		exutil.By("#. Create new project for the scenario")
 		oc.SetupProject() //create new project
