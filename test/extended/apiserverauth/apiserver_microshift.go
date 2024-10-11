@@ -48,7 +48,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on Microshift", func() {
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftOnly-Longduration-NonPreRelease-Author:rgangwar-Medium-63298-[Apiserver] manifest directory scanning [Disruptive][Slow]", func() {
+	g.It("Author:rgangwar-MicroShiftOnly-Longduration-NonPreRelease-Medium-63298-[Apiserver] manifest directory scanning [Disruptive][Slow]", func() {
 		var (
 			e2eTestNamespace = "microshift-ocp63298"
 			etcConfigYaml    = "/etc/microshift/config.yaml"
@@ -283,7 +283,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftOnly-Author:rgangwar-Low-53693-[Apiserver] Identity and disable APIs not required for MVP", func() {
+	g.It("Author:rgangwar-MicroShiftOnly-Low-53693-[Apiserver] Identity and disable APIs not required for MVP", func() {
 		exutil.By("1. Check the MVP/recommended apis and status from below.")
 		apiResource, apiErr := oc.AsAdmin().WithoutNamespace().Run("api-resources").Args("--loglevel=6").Output()
 		o.Expect(apiErr).NotTo(o.HaveOccurred())
@@ -341,7 +341,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftOnly-Author:rgangwar-Medium-54816-[Apiserver] Remove RoleBindingRestrictions API", func() {
+	g.It("Author:rgangwar-MicroShiftOnly-Medium-54816-[Apiserver] Remove RoleBindingRestrictions API", func() {
 		exutil.By("1. Roles bindings restrictions should not work in microshift.")
 		roleOutput, roleErr := oc.AsAdmin().WithoutNamespace().Run("describe").Args("rolebinding.rbac").Output()
 		o.Expect(roleErr).NotTo(o.HaveOccurred())
@@ -399,7 +399,7 @@ roleRef:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftOnly-Author:rgangwar-Medium-53972-[Apiserver] Cluster Policy Controller integration", func() {
+	g.It("Author:rgangwar-MicroShiftOnly-Medium-53972-[Apiserver] Cluster Policy Controller integration", func() {
 		namespace := "tmpocp53792"
 		caseID := "ocp-53972"
 
@@ -606,7 +606,7 @@ roleRef:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-MicroShiftBoth-Author:rgangwar-Medium-55480-[Apiserver] Audit logs must be stored and persisted", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-MicroShiftBoth-Medium-55480-[Apiserver] Audit logs must be stored and persisted", func() {
 		exutil.By("1. Debug node and check the KAS audit log.")
 		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
 		o.Expect(masterErr).NotTo(o.HaveOccurred())
@@ -628,7 +628,7 @@ roleRef:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftBoth-Author:rgangwar-Medium-55677-[Apiserver] MicroShift enable CRDs validation", func() {
+	g.It("Author:rgangwar-MicroShiftBoth-Medium-55677-[Apiserver] MicroShift enable CRDs validation", func() {
 		namespace := "test-scc-ocp55677"
 		crontab := "my-new-cron-object-ocp55677"
 		crontabNew := "my-new-cron-object-ocp55677-2"
@@ -695,7 +695,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftOnly-ConnectedOnly-Author:rgangwar-High-56229-[Apiserver] Complete Route API compatibility", func() {
+	g.It("Author:rgangwar-MicroShiftOnly-ConnectedOnly-High-56229-[Apiserver] Complete Route API compatibility", func() {
 		namespace := "test-ocp56229"
 		routeName := "hello-microshift-ocp56229"
 
@@ -809,7 +809,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftOnly-Author:rgangwar-High-55728-[Apiserver] Clients (including internal clients) must not use an unready Kubernetes apiserver [Disruptive]", func() {
+	g.It("Author:rgangwar-MicroShiftOnly-High-55728-[Apiserver] Clients (including internal clients) must not use an unready Kubernetes apiserver [Disruptive]", func() {
 		// set the varaibles
 		var (
 			caseID           = "55728"
@@ -877,7 +877,7 @@ type: kubernetes.io/service-account-token`
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftOnly-Author:rgangwar-Medium-54786-[logging] component name presents in klog headers", func() {
+	g.It("Author:rgangwar-MicroShiftOnly-Medium-54786-[logging] component name presents in klog headers", func() {
 
 		var (
 			e2eTestNamespace = "microshift-ocp54786"
@@ -908,7 +908,7 @@ type: kubernetes.io/service-account-token`
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftOnly-Author:rgangwar-Medium-62959-[Apiserver] Remove search logic for configuration file [Disruptive]", func() {
+	g.It("Author:rgangwar-MicroShiftOnly-Medium-62959-[Apiserver] Remove search logic for configuration file [Disruptive]", func() {
 		var (
 			e2eTestNamespace = "microshift-ocp62959"
 			chkConfigCmd     = `sudo /usr/bin/microshift show-config --mode effective 2>/dev/null | grep -i memoryLimitMB`
@@ -986,7 +986,7 @@ EOF'`, etcConfigYaml, etcConfigYamlbak, valCfg)
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftOnly-Author:rgangwar-Medium-62987-[Apiserver] Remove search logic for data directory [Disruptive]", func() {
+	g.It("Author:rgangwar-MicroShiftOnly-Medium-62987-[Apiserver] Remove search logic for data directory [Disruptive]", func() {
 		var (
 			e2eTestNamespace           = "microshift-ocp62987"
 			userDataDir                = `/root/.microshift/data/`
@@ -1063,7 +1063,7 @@ EOF'`, etcConfigYaml, etcConfigYamlbak, valCfg)
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftOnly-Longduration-NonPreRelease-Author:rgangwar-Medium-63099-make logging config more resilient [Disruptive][Slow]", func() {
+	g.It("Author:rgangwar-MicroShiftOnly-Longduration-NonPreRelease-Medium-63099-make logging config more resilient [Disruptive][Slow]", func() {
 		var (
 			e2eTestNamespace = "microshift-ocp63099"
 			etcConfigYaml    = "/etc/microshift/config.yaml"
@@ -1131,7 +1131,7 @@ EOF'`, etcConfigYaml, level)
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftOnly-Longduration-NonPreRelease-Author:rgangwar-Medium-63217-[Apiserver] configurable manifest sources [Disruptive][Slow]", func() {
+	g.It("Author:rgangwar-MicroShiftOnly-Longduration-NonPreRelease-Medium-63217-[Apiserver] configurable manifest sources [Disruptive][Slow]", func() {
 		var (
 			e2eTestNamespace = "microshift-ocp63217"
 			etcConfigYaml    = "/etc/microshift/config.yaml"
@@ -1365,7 +1365,7 @@ manifests:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftOnly-Longduration-NonPreRelease-Author:rgangwar-Medium-72334-[Apiserver] Make audit log policy configurable for MicroShift [Disruptive][Slow]", func() {
+	g.It("Author:rgangwar-MicroShiftOnly-Longduration-NonPreRelease-Medium-72334-[Apiserver] Make audit log policy configurable for MicroShift [Disruptive][Slow]", func() {
 		var (
 			e2eTestNamespace     = "microshift-ocp72334-" + exutil.GetRandomString()
 			etcConfigYaml        = "/etc/microshift/config.yaml"
@@ -1537,7 +1537,7 @@ apiServer:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("MicroShiftOnly-Longduration-NonPreRelease-Author:rgangwar-Medium-72340-[Apiserver] Microshift Audit Log File Rotation [Disruptive][Slow]", func() {
+	g.It("Author:rgangwar-MicroShiftOnly-Longduration-NonPreRelease-Medium-72340-[Apiserver] Microshift Audit Log File Rotation [Disruptive][Slow]", func() {
 		var (
 			e2eTestNamespace = "microshift-ocp72340-" + exutil.GetRandomString()
 			etcConfigYaml    = "/etc/microshift/config.yaml"

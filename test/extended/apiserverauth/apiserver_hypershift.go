@@ -63,7 +63,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 
 	// author: kewang@redhat.com
 	// Hypershift dons't support some weak ciphers for old TLS profile, detail see bug https://issues.redhat.com/browse/OCPBUGS-30986
-	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Author:kewang-Medium-62093-[Apiserver] Wire tlsSecurityProfile cipher config from apiservers/cluster into apiservers of hosted cluster [Slow][Disruptive]", func() {
+	g.It("Author:kewang-ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Medium-62093-[Apiserver] Wire tlsSecurityProfile cipher config from apiservers/cluster into apiservers of hosted cluster [Slow][Disruptive]", func() {
 
 		var (
 			defaultCipherPatch = `{"spec": {"configuration": {"apiServer": null}}}`
@@ -152,7 +152,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 	})
 
 	// author: kewang@redhat.com
-	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:kewang-High-64000-Check the http accessible /readyz for kube-apiserver [Serial]", func() {
+	g.It("Author:kewang-ROSA-OSD_CCS-HyperShiftMGMT-High-64000-Check the http accessible /readyz for kube-apiserver [Serial]", func() {
 		exutil.By("1) Check if port 6081 is available")
 		err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 30*time.Second, false, func(cxt context.Context) (bool, error) {
 			checkOutput, _ := exec.Command("bash", "-c", "lsof -i:6081").Output()
@@ -203,7 +203,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 
 	// author: kewang@redhat.com
 	// The case always runs into failure with OCP 4.15 and later due to https://issues.redhat.com/browse/OCPBUGS-28866, add Flaky tag to skip execution until the bug get fixed.
-	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:kewang-Medium-64076-Init container setup should have the proper securityContext [Flaky]", func() {
+	g.It("Author:kewang-ROSA-OSD_CCS-HyperShiftMGMT-Medium-64076-Init container setup should have the proper securityContext [Flaky]", func() {
 		var (
 			apiserverItems = []struct {
 				label     string

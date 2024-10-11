@@ -58,7 +58,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server", func() {
 	})
 
 	// author: kewang@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:kewang-Medium-32383-bug 1793694 init container setup should have the proper securityContext", func() {
+	g.It("Author:kewang-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Medium-32383-bug 1793694 init container setup should have the proper securityContext", func() {
 		checkItems := []struct {
 			namespace string
 			container string
@@ -397,7 +397,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-Low-25926-Wire cipher config from apiservers/cluster into apiserver and authentication operators [Disruptive] [Slow]", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Low-25926-Wire cipher config from apiservers/cluster into apiserver and authentication operators [Disruptive] [Slow]", func() {
 		// Check authentication operator cliconfig, openshiftapiservers.operator.openshift.io and kubeapiservers.operator.openshift.io
 		var (
 			cipherToRecover = `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":}]`
@@ -502,7 +502,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-High-41899-Replacing the admin kubeconfig generated at install time [Disruptive] [Slow]", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-High-41899-Replacing the admin kubeconfig generated at install time [Disruptive] [Slow]", func() {
 		var (
 			dirname        = "/tmp/-OCP-41899-ca/"
 			name           = dirname + "custom"
@@ -672,7 +672,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:rgangwar-Medium-43889-Examine non critical kube-apiserver errors", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Medium-43889-Examine non critical kube-apiserver errors", func() {
 		g.Skip("This test always fails due to non-real critical errors and is not suitable for automated testing and will be tested manually instead, skip.")
 		var (
 			keywords     = "(error|fail|tcp dial timeout|connect: connection refused|Unable to connect to the server: dial tcp|remote error: tls: bad certificate)"
@@ -736,7 +736,7 @@ spec:
 	// It is destructive case, probably cause the system OOM, so adding [Disruptive].Workload loading costs more than 15mins, so adding [Slow]
 	// For the Jira issue https://issues.redhat.com/browse/OCPQE-9541, we need provide a good solution for the provision of adequate stress for the load of the environment
 	// Sometimes case takes more than 15mins to avoid this failure adding -Longduration- tag
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PreChkUpgrade-Longduration-NonPreRelease-ConnectedOnly-Author:rgangwar-High-40667-Prepare Upgrade cluster under stress with API Priority and Fairness feature [Slow][Disruptive]", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PreChkUpgrade-Longduration-NonPreRelease-ConnectedOnly-High-40667-Prepare Upgrade cluster under stress with API Priority and Fairness feature [Slow][Disruptive]", func() {
 		var (
 			dirname    = "/tmp/-OCP-40667/"
 			exceptions = "panicked: false"
@@ -883,7 +883,7 @@ spec:
 
 	// Sometimes case takes more than 15mins to avoid this failure adding -Longduration- tag
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-Longduration-NonPreRelease-Author:rgangwar-High-40667-Post Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-Longduration-NonPreRelease-High-40667-Post Upgrade cluster under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
 			dirname    = "/tmp/-OCP-40667/"
 			exceptions = "panicked: false"
@@ -1010,7 +1010,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("LEVEL0-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-Critical-40861-[Apiserver] [bug 1912564] cluster works fine wihtout panic under stress with API Priority and Fairness feature [Slow]", func() {
+	g.It("Author:rgangwar-LEVEL0-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Critical-40861-[Apiserver] [bug 1912564] cluster works fine wihtout panic under stress with API Priority and Fairness feature [Slow]", func() {
 		var (
 			exceptions   = "panicked: false, err: context canceled, panic-reason:|panicked: false, err: <nil>, panic-reason: <nil>"
 			caseID       = "ocp-40861"
@@ -1158,7 +1158,7 @@ spec:
 	})
 
 	// author: kewang@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:kewang-Medium-12308-Customizing template for project creation [Serial][Slow]", func() {
+	g.It("Author:kewang-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Medium-12308-Customizing template for project creation [Serial][Slow]", func() {
 		var (
 			caseID           = "ocp-12308"
 			dirname          = "/tmp/-ocp-12308"
@@ -1324,7 +1324,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-High-24698-Check the http accessible /readyz for kube-apiserver [Serial]", func() {
+	g.It("Author:zxiao-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-High-24698-Check the http accessible /readyz for kube-apiserver [Serial]", func() {
 		exutil.By("1) Check if port 6080 is available")
 		err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 30*time.Second, false, func(cxt context.Context) (bool, error) {
 			checkOutput, _ := exec.Command("bash", "-c", "lsof -i:6080").Output()
@@ -1371,7 +1371,7 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:dpunia-High-41664-Check deprecated APIs to be removed in next release and next EUS release", func() {
+	g.It("Author:dpunia-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-High-41664-Check deprecated APIs to be removed in next release and next EUS release", func() {
 		var (
 			ignoreCase  = "system:kube-controller-manager|system:serviceaccount|system:admin|testuser-*|Mozilla"
 			eusReleases = map[float64][]float64{4.8: {1.21, 1.22, 1.23}, 4.10: {1.24, 1.25}}
@@ -1508,7 +1508,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Low-27665-Check if the kube-storage-version-migrator operator related manifests has been loaded", func() {
+	g.It("Author:zxiao-ROSA-ARO-OSD_CCS-Low-27665-Check if the kube-storage-version-migrator operator related manifests has been loaded", func() {
 		resource := "customresourcedefinition"
 		resourceNames := []string{"storagestates.migration.k8s.io", "storageversionmigrations.migration.k8s.io", "kubestorageversionmigrators.operator.openshift.io"}
 		exutil.By("1) Check if [" + strings.Join(resourceNames, ", ") + "] is available in [" + resource + "]")
@@ -1567,7 +1567,7 @@ spec:
 	})
 
 	// author: jmekkatt@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:jmekkatt-High-50188-An informational error on kube-apiserver in case an admission webhook is installed for a virtual resource [Serial]", func() {
+	g.It("Author:jmekkatt-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-High-50188-An informational error on kube-apiserver in case an admission webhook is installed for a virtual resource [Serial]", func() {
 		var (
 			validatingWebhookName = "test-validating-cfg"
 			mutatingWebhookName   = "test-mutating-cfg"
@@ -1657,7 +1657,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-Low-21246-Check the exposed prometheus metrics of operators", func() {
+	g.It("Author:zxiao-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Low-21246-Check the exposed prometheus metrics of operators", func() {
 		exutil.By("1) get serviceaccount token")
 		token, err := exutil.GetSAToken(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1697,7 +1697,7 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:dpunia-High-44596-SNO kube-apiserver can fall back to last good revision well when failing to roll out in SNO env [Disruptive]", func() {
+	g.It("Author:dpunia-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-High-44596-SNO kube-apiserver can fall back to last good revision well when failing to roll out in SNO env [Disruptive]", func() {
 		if !isSNOCluster(oc) {
 			g.Skip("This is not a SNO cluster, skip.")
 		}
@@ -1796,7 +1796,7 @@ spec:
 	})
 
 	// author: jmekkatt@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PreChkUpgrade-NonPreRelease-Author:jmekkatt-High-50362-Prepare Upgrade checks when cluster has bad admission webhooks [Serial]", func() {
+	g.It("Author:jmekkatt-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PreChkUpgrade-NonPreRelease-High-50362-Prepare Upgrade checks when cluster has bad admission webhooks [Serial]", func() {
 		var (
 			namespace                    = "ocp-50362"
 			serviceName                  = "example-service"
@@ -1900,7 +1900,7 @@ spec:
 	})
 
 	// author: jmekkatt@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-NonPreRelease-Author:jmekkatt-High-50362-Post Upgrade checks when cluster has bad admission webhooks [Serial]", func() {
+	g.It("Author:jmekkatt-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-NonPreRelease-High-50362-Post Upgrade checks when cluster has bad admission webhooks [Serial]", func() {
 
 		var (
 			namespace                  = "ocp-50362"
@@ -1978,7 +1978,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-High-47633-[API-1361] [Apiserver] Update existing alert ExtremelyHighIndividualControlPlaneCPU [Slow] [Disruptive]", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-High-47633-[Apiserver] Update existing alert ExtremelyHighIndividualControlPlaneCPU [Slow] [Disruptive]", func() {
 		var (
 			alert             = "ExtremelyHighIndividualControlPlaneCPU"
 			alertBudget       = "KubeAPIErrorBudgetBurn"
@@ -2059,7 +2059,7 @@ spec:
 	})
 
 	// author: jmekkatt@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:jmekkatt-high-50223-Checks on different bad admission webhook errors, status of kube-apiserver [Serial]", func() {
+	g.It("Author:jmekkatt-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-High-50223-Checks on different bad admission webhook errors, status of kube-apiserver [Serial]", func() {
 		var (
 			validatingWebhookNameNotFound = "test-validating-notfound-cfg"
 			mutatingWebhookNameNotFound   = "test-mutating-notfound-cfg"
@@ -2284,7 +2284,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-PstChkUpgrade-Author:zxiao-High-44597-Upgrade SNO clusters given kube-apiserver implements startup-monitor mechanism", func() {
+	g.It("Author:zxiao-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-PstChkUpgrade-High-44597-Upgrade SNO clusters given kube-apiserver implements startup-monitor mechanism", func() {
 		exutil.By("1) Check if cluster is SNO.")
 		if !isSNOCluster(oc) {
 			g.Skip("This is not a SNO cluster, skip.")
@@ -2327,7 +2327,7 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:dpunia-Medium-15870-APIServer Verify node authorization is enabled", func() {
+	g.It("Author:dpunia-ROSA-ARO-OSD_CCS-Medium-15870-APIServer Verify node authorization is enabled", func() {
 		var (
 			podname    = "ocp-15870-openshift"
 			image      = "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83"
@@ -2397,7 +2397,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-High-39601-Examine critical errors in openshift-kube-apiserver related log files", func() {
+	g.It("Author:zxiao-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-High-39601-Examine critical errors in openshift-kube-apiserver related log files", func() {
 		//g.Skip("This test always fails due to non-real critical errors and is not suitable for automated testing and will be tested manually instead, skip.")
 		exutil.By("1) Create log arrays.")
 		podAbnormalLogs := make([]string, 0)
@@ -2651,7 +2651,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:rgangwar-High-38865-Examine abnormal errors in openshift-apiserver pod logs and audit logs", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-High-38865-Examine abnormal errors in openshift-apiserver pod logs and audit logs", func() {
 		exutil.By("1) Create log arrays.")
 		podAbnormalLogs := make([]string, 0)
 		externalPanicLogs := make([]string, 0)
@@ -2792,7 +2792,7 @@ spec:
 	})
 
 	// author: kewang@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:kewang-High-42937-Examine critical errors in oauth-apiserver related log files", func() {
+	g.It("Author:kewang-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-High-42937-Examine critical errors in oauth-apiserver related log files", func() {
 		exutil.By("1) Create log arrays.")
 		masterNodeAbnormalLogs := make([]string, 0)
 		externalPanicLogs := make([]string, 0)
@@ -2906,7 +2906,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Medium-11476-[origin_infrastructure_392] oadm new-project should fail when invalid node selector is given", func() {
+	g.It("Author:zxiao-ROSA-ARO-OSD_CCS-Medium-11476-[origin_infrastructure_392] oadm new-project should fail when invalid node selector is given", func() {
 		exutil.By("# Create projects with an invalid node-selector(the node selector is neither equality-based nor set-based)")
 		projectName := exutil.RandStrCustomize("abcdefghijklmnopqrstuvwxyz", 5)
 		invalidNodeSelectors := []string{"env:qa", "env,qa", "env [qa]", "env,"}
@@ -2946,7 +2946,7 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:dpunia-High-53085-Test Holes in EndpointSlice Validation Enable Host Network Hijack", func() {
+	g.It("Author:dpunia-ROSA-ARO-OSD_CCS-High-53085-Test Holes in EndpointSlice Validation Enable Host Network Hijack", func() {
 		var (
 			ns = "tmp53085"
 		)
@@ -2963,7 +2963,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:zxiao-Medium-10933-[platformmanagement_public_768] Check if client use protobuf data transfer scheme to communicate with master", func() {
+	g.It("Author:zxiao-ROSA-ARO-OSD_CCS-Medium-10933-[platformmanagement_public_768] Check if client use protobuf data transfer scheme to communicate with master", func() {
 		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -2986,7 +2986,7 @@ spec:
 
 	// author: zxiao@redhat.com
 	// maintainer: rgangwar@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-ConnectedOnly-Author:zxiao-Medium-9853-patch operation should use patched object to check admission control", func() {
+	g.It("Author:zxiao-ROSA-ARO-OSD_CCS-NonPreRelease-ConnectedOnly-Medium-09853-patch operation should use patched object to check admission control", func() {
 		exutil.By("This case is for bug 1297910")
 		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
@@ -3021,7 +3021,7 @@ spec:
 		exutil.AssertPodToBeReady(oc, podName, namespace)
 	})
 
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:zxiao-High-11138-[origin_platformexp_407] [Apiserver] Deploy will fail with incorrently formed pull secrets", func() {
+	g.It("Author:zxiao-ROSA-ARO-OSD_CCS-ConnectedOnly-High-11138-[Apiserver] Deploy will fail with incorrently formed pull secrets", func() {
 		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig") && isEnabledCapability(oc, "ImageRegistry")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
@@ -3128,7 +3128,7 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:dpunia-High-44738-The installer pod fall-backoff should not happen if latestAvailableRevision > targetRevision [Disruptive]", func() {
+	g.It("Author:dpunia-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-High-44738-The installer pod fall-backoff should not happen if latestAvailableRevision > targetRevision [Disruptive]", func() {
 		if !isSNOCluster(oc) {
 			g.Skip("This is not a SNO cluster, skip.")
 		}
@@ -3212,7 +3212,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("LEVEL0-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Critical-55494-[Apiserver] When using webhooks fails to rollout latest deploymentconfig [Disruptive]", func() {
+	g.It("Author:rgangwar-LEVEL0-ROSA-ARO-OSD_CCS-ConnectedOnly-Critical-55494-[Apiserver] When using webhooks fails to rollout latest deploymentconfig [Disruptive]", func() {
 		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
@@ -3366,7 +3366,7 @@ EOF`, dcpolicyrepo)
 	})
 
 	// author: zxiao@redhat.com
-	g.It("HyperShiftMGMT-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:zxiao-Medium-11364-[platformmanagement_public_624] Create nodeport service", func() {
+	g.It("Author:zxiao-HyperShiftMGMT-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-11364-[platformmanagement_public_624] Create nodeport service", func() {
 		var (
 			generatedNodePort int
 			curlOutput        string
@@ -3465,7 +3465,7 @@ EOF`, dcpolicyrepo)
 	})
 
 	// author: zxiao@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-Medium-12360-[origin_platformexp_403] The number of created API objects can not exceed quota limitation", func() {
+	g.It("Author:zxiao-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Medium-12360-[origin_platformexp_403] The number of created API objects can not exceed quota limitation", func() {
 		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -3604,7 +3604,7 @@ EOF`, dcpolicyrepo)
 	})
 
 	// author: zxiao@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:zxiao-High-24219-[MSTR-737] Custom resource watchers should terminate instead of hang when its CRD is deleted or modified [Disruptive]", func() {
+	g.It("Author:zxiao-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-High-24219-Custom resource watchers should terminate instead of hang when its CRD is deleted or modified [Disruptive]", func() {
 		exutil.By("1) Create a new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -3680,7 +3680,7 @@ EOF`, dcpolicyrepo)
 
 	// author: zxiao@redhat.com
 	// maintainer: kewang@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:zxiao-Medium-22565-[origin_platformexp_214][REST] Check if the given user or group have the privilege via SubjectAccessReview", func() {
+	g.It("Author:zxiao-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Medium-22565-[origin_platformexp_214][REST] Check if the given user or group have the privilege via SubjectAccessReview", func() {
 		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -3799,7 +3799,7 @@ EOF`, dcpolicyrepo)
 		o.Expect(afterRevision).To(o.Equal(beforeRevision))
 	})
 
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PreChkUpgrade-NonPreRelease-Author:dpunia-High-54745-Bug clusterResourceQuota objects check", func() {
+	g.It("Author:dpunia-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PreChkUpgrade-NonPreRelease-High-54745-Bug clusterResourceQuota objects check", func() {
 		var (
 			caseID           = "ocp-54745"
 			namespace        = caseID + "-quota-test"
@@ -3905,7 +3905,7 @@ EOF`, dcpolicyrepo)
 		}
 	})
 
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-NonPreRelease-Author:dpunia-High-54745-Bug clusterResourceQuota objects check", func() {
+	g.It("Author:dpunia-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-NonPreRelease-High-54745-Bug clusterResourceQuota objects check", func() {
 		var (
 			caseID           = "ocp-54745"
 			namespace        = caseID + "-quota-test"
@@ -3977,7 +3977,7 @@ EOF`, dcpolicyrepo)
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-Medium-10350-[Apiserver] compensate for raft/cache delay in namespace admission", func() {
+	g.It("Author:rgangwar-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Medium-10350-[Apiserver] compensate for raft/cache delay in namespace admission", func() {
 		tmpnamespace := "ocp-10350" + exutil.GetRandomString()
 		defer oc.AsAdmin().Run("delete").Args("ns", tmpnamespace, "--ignore-not-found").Execute()
 		exutil.By("1.) Create new namespace")
@@ -4059,7 +4059,7 @@ EOF`, dcpolicyrepo)
 	})
 
 	// author: kewang@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Author:kewang-High-56693-[Apiserver] Make SAR traffic from oauth and openshift apiserver exempt with API Priority and Fairness feature [Slow][Disruptive]", func() {
+	g.It("Author:kewang-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-High-56693-[Apiserver] Make SAR traffic from oauth and openshift apiserver exempt with API Priority and Fairness feature [Slow][Disruptive]", func() {
 		// The case is from customer bug 1888309
 		var (
 			patchJSON             = `[{"op": "replace", "path": "/spec/logLevel", "value": "TraceAll"}]`
@@ -4191,7 +4191,7 @@ EOF`, dcpolicyrepo)
 	})
 
 	// author : dpunia@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-NonPreRelease-Author:dpunia-Medium-56934-[Apiserver] bug Ensure unique CA serial numbers, after enable automated service CA rotation", func() {
+	g.It("Author:dpunia-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-PstChkUpgrade-NonPreRelease-Medium-56934-[Apiserver] bug Ensure unique CA serial numbers, after enable automated service CA rotation", func() {
 		var (
 			dirname = "/tmp/-OCP-56934/"
 		)
@@ -4235,7 +4235,7 @@ EOF`, dcpolicyrepo)
 	})
 
 	// author : dpunia@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:dpunia-High-53229-[Apiserver] Test Arbitrary path injection via type field in CNI configuration", func() {
+	g.It("Author:dpunia-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-High-53229-[Apiserver] Test Arbitrary path injection via type field in CNI configuration", func() {
 		exutil.By("1) Create new project")
 		oc.SetupProject()
 		namespace := oc.Namespace()
@@ -4457,7 +4457,7 @@ EOF`, dcpolicyrepo)
 	})
 
 	// author: kewang@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:kewang-Medium-11289-[origin_platformexp_407] [Apiserver] Check the imagestreams of quota in the project after build image [Serial]", func() {
+	g.It("Author:kewang-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-11289-[Apiserver] Check the imagestreams of quota in the project after build image [Serial]", func() {
 		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
@@ -4596,7 +4596,7 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:dpunia-High-11887-Could delete all the resource when deleting the project [Serial]", func() {
+	g.It("Author:dpunia-ROSA-ARO-OSD_CCS-ConnectedOnly-High-11887-Could delete all the resource when deleting the project [Serial]", func() {
 		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
@@ -4736,7 +4736,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Low-12036-APIServer User can pull a private image from a registry when a pull secret is defined [Serial]", func() {
+	g.It("Author:rgangwar-ROSA-ARO-OSD_CCS-ConnectedOnly-Low-12036-APIServer User can pull a private image from a registry when a pull secret is defined [Serial]", func() {
 		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
@@ -4812,7 +4812,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-11905-APIServer Use well-formed pull secret with incorrect credentials will fail to build and deploy [Serial]", func() {
+	g.It("Author:rgangwar-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-11905-APIServer Use well-formed pull secret with incorrect credentials will fail to build and deploy [Serial]", func() {
 		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
@@ -4894,7 +4894,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-11531-APIServer Can access both http and https pods and services via the API proxy [Serial]", func() {
+	g.It("Author:rgangwar-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-11531-APIServer Can access both http and https pods and services via the API proxy [Serial]", func() {
 		exutil.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, _ := getGlobalProxy(oc)
 		if strings.Contains(httpProxy, "http") || strings.Contains(httpsProxy, "https") {
@@ -4967,7 +4967,7 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-Author:dpunia-High-12193-APIServer User can get node selector from a project", func() {
+	g.It("Author:dpunia-ROSA-ARO-OSD_CCS-High-12193-APIServer User can get node selector from a project", func() {
 		var (
 			caseID        = "ocp-12193"
 			firstProject  = "e2e-apiserver-first" + caseID + "-" + exutil.GetRandomString()
@@ -5006,7 +5006,7 @@ spec:
 	})
 
 	// author: kewang@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-HyperShiftMGMT-Author:kewang-High-65924-Specifying non-existen secret for API namedCertificates renders inconsistent config [Disruptive]", func() {
+	g.It("Author:kewang-ROSA-ARO-OSD_CCS-HyperShiftMGMT-High-65924-Specifying non-existen secret for API namedCertificates renders inconsistent config [Disruptive]", func() {
 		// Currently, there is one bug OCPBUGS-15853 on 4.13, after the related PRs are merged, consider back-porting the case to 4.13
 		var (
 			apiserver           = "apiserver/cluster"
@@ -5067,7 +5067,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:rgangwar-Medium-66921-1-APIServer LatencySensitive featureset must be removed [Slow][Disruptive]", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Medium-66921-1-APIServer LatencySensitive featureset must be removed [Slow][Disruptive]", func() {
 		const (
 			featurePatch       = `[{"op": "replace", "path": "/spec/featureSet", "value": "LatencySensitive"}]`
 			invalidFeatureGate = `[{"op": "replace", "path": "/spec/featureSet", "value": "unknown"}]`
@@ -5094,7 +5094,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:rgangwar-Medium-66921-2-APIServer TechPreviewNoUpgrade featureset blocks upgrade [Slow][Disruptive]", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Medium-66921-2-APIServer TechPreviewNoUpgrade featureset blocks upgrade [Slow][Disruptive]", func() {
 		const (
 			featureTechPreview     = `[{"op": "replace", "path": "/spec/featureSet", "value": "TechPreviewNoUpgrade"}]`
 			featureCustomNoUpgrade = `[{"op": "replace", "path": "/spec/featureSet", "value": "CustomNoUpgrade"}]`
@@ -5121,7 +5121,7 @@ spec:
 	})
 
 	// author: kewang@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:kewang-Medium-11797-[Apiserver] Image with single or multiple layer(s) sumed up size slightly exceed the openshift.io/image-size will push failed", func() {
+	g.It("Author:kewang-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-11797-[Apiserver] Image with single or multiple layer(s) sumed up size slightly exceed the openshift.io/image-size will push failed", func() {
 		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig") && isEnabledCapability(oc, "ImageRegistry")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
@@ -5207,7 +5207,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-10865-[Apiserver] After Image Size Limit increment can push the image which previously over the limit", func() {
+	g.It("Author:rgangwar-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-10865-[Apiserver] After Image Size Limit increment can push the image which previously over the limit", func() {
 		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig") && isEnabledCapability(oc, "ImageRegistry")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
@@ -5288,7 +5288,7 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:dpunia-Low-24389-Verify the CR admission of the APIServer CRD [Slow][Disruptive]", func() {
+	g.It("Author:dpunia-NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-ConnectedOnly-Low-24389-Verify the CR admission of the APIServer CRD [Slow][Disruptive]", func() {
 		var (
 			patchOut        string
 			patchJsonRevert = `{"spec": {"additionalCORSAllowedOrigins": null}}`
@@ -5376,7 +5376,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-12263-[Apiserver] When exceed openshift.io/images will ban to create image reference or push image to project", func() {
+	g.It("Author:rgangwar-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-12263-[Apiserver] When exceed openshift.io/images will ban to create image reference or push image to project", func() {
 		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig") && isEnabledCapability(oc, "ImageRegistry")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
@@ -5482,7 +5482,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-10970-[Apiserver] Create service with multiports", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-10970-[Apiserver] Create service with multiports", func() {
 		var (
 			filename  = "pod_with_multi_ports.json"
 			filename1 = "pod-for-ping.json"
@@ -5563,7 +5563,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-Author:rgangwar-Medium-12158-[Apiserver] Specify ResourceQuota on project", func() {
+	g.It("Author:rgangwar-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-12158-[Apiserver] Specify ResourceQuota on project", func() {
 		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig") && isEnabledCapability(oc, "ImageRegistry")) {
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
@@ -5649,7 +5649,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:rgangwar-Medium-68629-[Apiserver] Audit log files of apiservers should not have too permissive mode", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Medium-68629-[Apiserver] Audit log files of apiservers should not have too permissive mode", func() {
 		directories := []string{
 			"/var/log/kube-apiserver/",
 			"/var/log/openshift-apiserver/",
@@ -5696,7 +5696,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-ConnectedOnly-Author:rgangwar-Medium-68400-[Apiserver] Do not generate image pull secrets for internal registry when internal registry is disabled[Slow][Disruptive]", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-ConnectedOnly-Medium-68400-[Apiserver] Do not generate image pull secrets for internal registry when internal registry is disabled[Slow][Disruptive]", func() {
 		var (
 			namespace    = "ocp-68400"
 			secretOutput string
@@ -5805,7 +5805,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-High-70020-Add new custom certificate for the cluster API [Disruptive] [Slow]", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-High-70020-Add new custom certificate for the cluster API [Disruptive] [Slow]", func() {
 		var (
 			patchToRecover      = `{"spec":{"servingCerts": {"namedCertificates": null}}}`
 			originKubeconfigBkp = "kubeconfig.origin"
@@ -5945,7 +5945,7 @@ EOF`, serverconf, fqdnName)
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-PstChkUpgrade-Author:rgangwar-Medium-34223-[Apiserver] kube-apiserver and openshift-apiserver should have zero-disruption upgrade", func() {
+	g.It("Author:rgangwar-ROSA-ARO-OSD_CCS-NonPreRelease-PstChkUpgrade-Medium-34223-[Apiserver] kube-apiserver and openshift-apiserver should have zero-disruption upgrade", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("ns").Args("project", "ocp-34223-proj", "--ignore-not-found").Execute()
 		cmExistsCmd, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "log", "-n", "ocp-34223-proj").Output()
 		if strings.Contains(cmExistsCmd, "No resources found") || err != nil {
@@ -5966,7 +5966,7 @@ EOF`, serverconf, fqdnName)
 	})
 
 	// author: kewang@redhat.com
-	g.It("LEVEL0-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-ConnectedOnly-Author:kewang-Critical-10873-Access app througth secure service and regenerate service serving certs if it about to expire [Slow]", func() {
+	g.It("Author:kewang-LEVEL0-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-ConnectedOnly-Critical-10873-Access app througth secure service and regenerate service serving certs if it about to expire [Slow]", func() {
 
 		var (
 			filename     = "aosqe-pod-for-ping.json"
@@ -6121,7 +6121,7 @@ EOF`, serverconf, fqdnName)
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-ConnectedOnly-Author:rgangwar-Medium-70369-[Apiserver] Use bound service account tokens when generating pull secrets.", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-ConnectedOnly-Medium-70369-[Apiserver] Use bound service account tokens when generating pull secrets.", func() {
 		var (
 			secretOutput string
 			randomSaAcc  = "test-" + exutil.GetRandomString()
@@ -6229,7 +6229,7 @@ metadata:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-High-73853-[API-1361] [Apiserver] Update existing alert KubeAPIErrorBudgetBurn [Slow] [Disruptive]", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-High-73853-[Apiserver] Update existing alert KubeAPIErrorBudgetBurn [Slow] [Disruptive]", func() {
 		var (
 			alertBudget          = "KubeAPIErrorBudgetBurn"
 			runbookBudgetURL     = "https://github.com/openshift/runbooks/blob/master/alerts/cluster-kube-apiserver-operator/KubeAPIErrorBudgetBurn.md"
@@ -6315,7 +6315,7 @@ metadata:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Author:rgangwar-High-73949-[Apiserver] Update existing alert AuditLogError [Slow] [Disruptive]", func() {
+	g.It("Author:rgangwar-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-High-73949-[Apiserver] Update existing alert AuditLogError [Slow] [Disruptive]", func() {
 		var (
 			alertBudget      = "AuditLogError"
 			alertTimeWarning = "1m"
