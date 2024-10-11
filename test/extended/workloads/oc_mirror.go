@@ -1611,4 +1611,91 @@ mirror:
 		defer removeCSAndISCP(oc)
 		createCSAndISCPNoPackageCheck(oc, "cs-ibm-operator-catalog", "openshift-marketplace", "Running")
 	})
+
+	g.It("Author:yinzhou-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-70861-Should return error code when oc-mirror hit operator not found [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case70861"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-70861.yaml")
+		defer os.RemoveAll("output70861")
+		defer os.RemoveAll(".oc-mirror.log")
+		exutil.By("Mirror should failed when operator not found")
+		_, outerr, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://output70861", "--dry-run").Outputs()
+		o.Expect(err).Should(o.HaveOccurred())
+		o.Expect(outerr).To(o.ContainSubstring("Operator cluster-logging was not found"))
+		exutil.By("Mirror should not failed when operator not found as used continue-on-error")
+		out, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://output70861", "--dry-run", "--continue-on-error").Output()
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("Operator cluster-logging was not found"))
+	})
+
+	g.It("Author:yinzhou-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-70858-High-66986-Make sure archiveSize is 1 in fully disconnected Openshift cluster works well for oc-mirror[Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case70858"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-66986.yaml")
+		defer os.RemoveAll("output66986")
+		defer os.RemoveAll(".oc-mirror.log")
+		defer os.RemoveAll("oc-mirror-workspace")
+		err = getRouteCAToFile(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+
+		exutil.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-60601")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-60601")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Start mirror2disk")
+		waitErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://output66986").Execute()
+			if err != nil {
+				e2e.Logf("The mirror2disk  failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk still failed")
+		exutil.By("Start disk2mirror")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("--from", "output66986/", "docker://"+serInfo.serviceName, "--dest-skip-tls").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if err != nil {
+				e2e.Logf("The disk2mirror  failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the disk2mirror still failed")
+
+		defer removeCSAndISCP(oc)
+		createCSAndISCPNoPackageCheck(oc, "cs-certified-operator-index", "openshift-marketplace", "Running")
+
+		portworxSub, portworxOG := getOperatorInfo(oc, "portworx-certified", "portworx-certified-ns", "registry.redhat.io/redhat/certified-operator-index:v4.16", "cs-certified-operator-index")
+		defer removeOperatorFromCustomCS(oc, portworxSub, portworxOG, "portworx-certified-ns")
+		installOperatorFromCustomCS(oc, portworxSub, portworxOG, "portworx-certified-ns", "portworx-operator")
+
+	})
 })
