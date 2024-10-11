@@ -1281,7 +1281,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 			g.Skip("Not enough node available, need at least one node for the test, skip the case!!")
 		}
 
-		g.By("1. create a namespace, create nodeport service on one node")
+		exutil.By("1. create a namespace, create nodeport service on one node")
 		ns := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, ns)
 
@@ -1301,7 +1301,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(svcOutput, service.name)).Should(o.BeTrue())
 
-		g.By("2. From external, curl NodePort service with its port to make sure NodePort service works")
+		exutil.By("2. From external, curl NodePort service with its port to make sure NodePort service works")
 		CurlNodePortPass(oc, nodeList.Items[1].Name, nodeList.Items[0].Name, "30012")
 
 		exutil.By("3. Create another test pod on another node, from the test pod to curl local port of external url, verify the connection can succeed\n")
