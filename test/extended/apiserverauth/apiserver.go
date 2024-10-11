@@ -2170,11 +2170,9 @@ spec:
 		clusterIP, err := oc.AsAdmin().Run("get").Args("service", "kubernetes", "-o=jsonpath={.spec.clusterIP}", "-n", "default").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterIP).NotTo(o.Equal(""))
-		if isIPv6(clusterIP) {
-			webhookClusterip = "fd02::010a"
-		} else {
-			webhookClusterip = "172.30.1.1"
-		}
+		newServiceIP := getServiceIP(oc, clusterIP)
+		e2e.Logf("Using unique service IP :: %s", newServiceIP)
+
 		webhookService = service{
 			name:      serviceName,
 			clusterip: webhookClusterip,
