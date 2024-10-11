@@ -830,6 +830,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 
 		defer os.RemoveAll("oc-mirror-workspace")
 		defer os.RemoveAll("olm_artifacts")
+		os.RemoveAll("oc-mirror-workspace")
 		g.By("Starting mirror2disk ....")
 		waitErr = wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
 			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFilterConfig, "file://"+dirname, "--ignore-history").Execute()
@@ -1222,6 +1223,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 
 		defer os.RemoveAll("oc-mirror-workspace")
 		defer os.RemoveAll("olm_artifacts")
+		os.RemoveAll("oc-mirror-workspace")
 		g.By("Starting mirror2mirror ....")
 		waitErr = wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
 			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", ociFilterConfig, "docker://"+serInfo.serviceName, "--dest-skip-tls").Execute()

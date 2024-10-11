@@ -794,6 +794,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		imageSetV1MinorFile := filepath.Join(ocmirrorBaseDir, "config-74650-minor-v1.yaml")
 		imageSetV1PatchFile := filepath.Join(ocmirrorBaseDir, "config-74650-patch-v1.yaml")
 
+		defer os.RemoveAll("oc-mirror-workspace")
 		exutil.By("Step 1 : no warning when minor diff < 2 for v1")
 		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
 			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetV1MinorFile, "file://"+dirname+"/m2d", "--dry-run").OutputToFile(getRandomString() + "workload-mirror.txt")
@@ -872,6 +873,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		e2e.Logf("Registry is %s", registry)
 		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "50G", "/var/lib/registry")
 
+		defer os.RemoveAll("oc-mirror-workspace")
 		exutil.By("Checkpoint for v1 m2d")
 		err = wait.Poll(300*time.Second, 900*time.Second, func() (bool, error) {
 			mirrorOutFile, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname+"/m2d").OutputToFile(getRandomString() + "workload-mirror.txt")
