@@ -574,7 +574,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 	})
 
 	g.It("Author:mjoseph-ROSA-OSD_CCS-ARO-Critical-56884-Confirm the coreDNS version and Kubernetes version of the oc client", func() {
-		var kubernetesVersion = "v1.30"
+		var kubernetesVersion = "v1.31"
 		var coreDNS = "CoreDNS-1.11.3"
 
 		exutil.By("1.Check the Kubernetes version")
