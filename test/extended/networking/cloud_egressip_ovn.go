@@ -4377,7 +4377,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                                                          = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
+		oc                                                          = exutil.NewCLIForKubeOpenShift("networking-" + getRandomString())
 		egressNodeLabel                                             = "k8s.ovn.org/egress-assignable"
 		hostedClusterName, hostedClusterKubeconfig, hostedclusterNS string
 	)
@@ -4472,8 +4472,10 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP on hypershift", func() {
 		o.Expect(LogErr).NotTo(o.HaveOccurred())
 		o.Expect(podLogs).To(o.ContainSubstring(expectedCouldNotConnectString))
 
-		exutil.By("8. Verify egressIP is not in cloudprivateipconfig after blocking iptable rule on port 9170 is added.\n")
-		waitCloudPrivateIPconfigUpdate(oc, freeIPs[0], false)
+		if exutil.IsKubernetesClusterFlag != "yes" {
+			exutil.By("8. Verify egressIP is not in cloudprivateipconfig after blocking iptable rule on port 9170 is added.\n")
+			waitCloudPrivateIPconfigUpdate(oc, freeIPs[0], false)
+		}
 
 		exutil.By("9. Delete the iptables rule, verify from log of lead ovnkube-control-plane pod that the health check connection is re-established.\n")
 		debugNodeErr = execCmdOnDebugNodeOfHostedCluster(oc, egressNode, delCmdOptions)

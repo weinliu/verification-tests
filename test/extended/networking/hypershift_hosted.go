@@ -19,16 +19,11 @@ var _ = g.Describe("[sig-networking] SDN OVN hypershift", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                                                          = exutil.NewCLI("networking-ovnkubernetes-"+getRandomString(), exutil.KubeConfigPath())
+		oc                                                          = exutil.NewCLIForKubeOpenShift("networking-ovnkubernetes-" + getRandomString())
 		hostedClusterName, hostedClusterKubeconfig, hostedclusterNS string
 	)
 
 	g.BeforeEach(func() {
-
-		networkType := exutil.CheckNetworkType(oc)
-		if !strings.Contains(networkType, "ovn") {
-			g.Skip("Incompatible networkType, skipping test!!!")
-		}
 
 		hostedClusterName, hostedClusterKubeconfig, hostedclusterNS = exutil.ValidHypershiftAndGetGuestKubeConf(oc)
 		oc.SetGuestKubeconf(hostedClusterKubeconfig)
