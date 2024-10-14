@@ -1145,7 +1145,7 @@ func parseCapacityToBytes(capacityWithUnit string) int64 {
 
 // isAzureInternalRegistryConfigured checks if internal imageregistry is configured
 func isAzureInternalRegistryConfigured(oc *exutil.CLI) bool {
-	registryType, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.storage.azure.networkAccess.type}").Output()
+	registryType, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.storage.azure.networkAccess.type}", "--ignore-not-found").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return registryType == "Internal"
 }
