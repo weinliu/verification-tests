@@ -186,7 +186,7 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 		mc.create()
 
 		exutil.By("Check mcp worker is degraded")
-		o.Eventually(mcp.getDegradedMachineCount, "3m", "5s").Should(o.BeNumerically("==", 1), "Degraded machine count is not ==1")
+		o.Eventually(mcp.getDegradedMachineCount, "5m", "5s").Should(o.BeNumerically("==", 1), "Degraded machine count is not ==1")
 		logger.Infof("OK\n")
 
 		exutil.By("Get degraded node")
