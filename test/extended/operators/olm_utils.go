@@ -1546,7 +1546,9 @@ func isSNOCluster(oc *exutil.CLI) bool {
 	//Only 1 master, 1 worker node and with the same hostname.
 	masterNodes, _ := exutil.GetClusterNodesBy(oc, "master")
 	workerNodes, _ := exutil.GetClusterNodesBy(oc, "worker")
+	e2e.Logf("masterNodes:%s, workerNodes:%s", masterNodes, workerNodes)
 	if len(masterNodes) == 1 && len(workerNodes) == 1 && masterNodes[0] == workerNodes[0] {
+		e2e.Logf("This is a SNO cluster")
 		return true
 	}
 	return false
