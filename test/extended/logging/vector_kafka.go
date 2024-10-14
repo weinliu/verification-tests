@@ -92,7 +92,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", kafka.namespace, consumerPodPodName))
 		})
 
-		g.It("Author:ikanse-CPaasrunOnly-Medium-52420-VA-IAC.03-Vector Forward logs to kafka using SASL plaintext", func() {
+		g.It("Author:ikanse-CPaasrunOnly-Medium-52420-Vector Forward logs to kafka using SASL plaintext", func() {
 			g.By("Create log producer")
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -332,7 +332,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author qitang@redhat.com
-		g.It("Author:qitang-CPaasrunOnly-Medium-48141-Vector Forward logs to different Kafka brokers.[Slow]", func() {
+		g.It("Author:qitang-CPaasrunOnly-WRS-Medium-48141-V-ICA.03-Vector Forward logs to different Kafka brokers.[Slow]", func() {
 			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if nodes.Items[0].Status.NodeInfo.Architecture == "arm64" {

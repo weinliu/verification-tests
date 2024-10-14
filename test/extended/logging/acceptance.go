@@ -51,7 +51,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	// author qitang@redhat.com
-	g.It("Author:qitang-WRS-CPaasrunBoth-Critical-74397-Forward logs to lokistack.[Slow][Serial]", func() {
+	g.It("Author:qitang-CPaasrunBoth-Critical-74397-Forward logs to lokistack.[Slow][Serial]", func() {
 		g.By("deploy LO")
 		LO.SubscribeOperator(oc)
 		s := getStorageType(oc)
