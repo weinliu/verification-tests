@@ -484,6 +484,7 @@ func getAllRunningPodsWithLabel(oc *exutil.CLI, namespace string, label string) 
 	return strings.Split(pods, " "), err
 }
 
+// monitoringPluginPodCheck poll check on monitoring-plugin pod until ready
 func monitoringPluginPodCheck(oc *exutil.CLI) {
 	podCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, true, func(context.Context) (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/component=monitoring-plugin").Output()
@@ -495,8 +496,43 @@ func monitoringPluginPodCheck(oc *exutil.CLI) {
 			e2e.Logf("pods not ready: \n%v", output)
 			return false, nil
 		}
+		if err != nil || strings.Contains(output, "Pending") {
+			e2e.Logf("pods not ready: \n%v", output)
+			return false, nil
+		}
+		if err != nil || strings.Contains(output, "ErrImagePull") {
+			e2e.Logf("pods not ready: \n%v", output)
+			return false, nil
+		}
+		if err != nil || strings.Contains(output, "CrashLoopBackOff") {
+			e2e.Logf("pods not ready: \n%v", output)
+			return false, nil
+		}
+		if err != nil || strings.Contains(output, "ImagePullBackOff") {
+			e2e.Logf("pods not ready: \n%v", output)
+			return false, nil
+		}
 		e2e.Logf("pods are ready: \n%v", output)
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(podCheck, "some monitoring-plugin pods are not ready!")
+}
+
+// alertmanagerTestPodCheck poll check on alertmanager-test-alertmanager-0 pod until ready
+func alertmanagerTestPodCheck(oc *exutil.CLI) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
+		podStats, err := oc.AsAdmin().Run("get").Args("pod", "alertmanager-test-alertmanager-0", "-n", "openshift-user-workload-monitoring").Output()
+		if err != nil || strings.Contains(podStats, "not found") {
+			return false, nil
+		}
+		if err != nil || strings.Contains(podStats, "Init:0/1") {
+			return false, nil
+		}
+		if err != nil || strings.Contains(podStats, "ContainerCreating") {
+			return false, nil
+		}
+		e2e.Logf("pod is ready: \n%v", podStats)
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "pod not created")
 }

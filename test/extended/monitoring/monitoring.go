@@ -621,7 +621,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("failed to curl without namespace parameter"))
+		exutil.AssertWaitPollNoErr(err, "failed to curl without namespace parameter")
 
 		exutil.By("curl with namespace parameter should return alerts")
 		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(context.Context) (bool, error) {
@@ -637,7 +637,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot get result with namespace parameter"))
+		exutil.AssertWaitPollNoErr(err, "Cannot get result with namespace parameter")
 	})
 
 	// author: tagao@redhat.com
@@ -1529,17 +1529,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("alertmanager", "test-alertmanager", "-n", "openshift-user-workload-monitoring").Execute()
 
 			exutil.By("check alertmanager pod is created")
-			err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
-				podStats, err := oc.AsAdmin().Run("get").Args("pod", "alertmanager-test-alertmanager-0", "-n", "openshift-user-workload-monitoring").Output()
-				if err != nil || strings.Contains(podStats, "not found") {
-					return false, nil
-				}
-				if err != nil || strings.Contains(podStats, "Init:0/1") {
-					return false, nil
-				}
-				return true, nil
-			})
-			exutil.AssertWaitPollNoErr(err, "pod not created")
+			alertmanagerTestPodCheck(oc)
 
 			exutil.By("skip case on disconnected cluster")
 			output, err := oc.AsAdmin().Run("get").Args("pod", "alertmanager-test-alertmanager-0", "-n", "openshift-user-workload-monitoring").Output()
@@ -1594,17 +1584,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			createResourceFromYaml(oc, "openshift-user-workload-monitoring", testAlertmanager)
 
 			exutil.By("check alertmanager pod is created")
-			err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
-				podStats, err := oc.AsAdmin().Run("get").Args("pod", "alertmanager-test-alertmanager-0", "-n", "openshift-user-workload-monitoring").Output()
-				if err != nil || strings.Contains(podStats, "not found") {
-					return false, nil
-				}
-				if err != nil || strings.Contains(podStats, "Init:0/1") {
-					return false, nil
-				}
-				return true, nil
-			})
-			exutil.AssertWaitPollNoErr(err, "pod not created or ready")
+			alertmanagerTestPodCheck(oc)
 
 			exutil.By("skip case on disconnected cluster")
 			cmCheck, _ := oc.AsAdmin().Run("get").Args("cm", "cluster-monitoring-config", "-n", "openshift-monitoring", "-ojson").Output()
