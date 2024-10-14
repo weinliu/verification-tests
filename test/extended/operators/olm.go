@@ -6727,6 +6727,22 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover test case: OCP-35895, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-35895-can't install a CSV with duplicate roles", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if infra == "SingleReplica" {
+			g.Skip("it is not supported")
+		}
+		exutil.SkipForSNOCluster(oc)
+		platform := exutil.CheckPlatform(oc)
+		e2e.Logf("platform: %v", platform)
+		proxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") ||
+			strings.Contains(platform, "vsphere") || strings.Contains(platform, "osp") || strings.Contains(platform, "ibmcloud") || strings.Contains(platform, "nutanix") ||
+			os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" ||
+			exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
