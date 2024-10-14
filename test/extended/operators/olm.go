@@ -848,7 +848,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-Medium-53759-Opeatorhub status shows errors after disabling default catalogSources [Disruptive]", func() {
+	g.It("Author:jiazha-NonHyperShiftHOST-Medium-53759-Opeatorhub status shows errors after disabling default catalogSources [Disruptive]", func() {
 		exutil.By("1, check if the marketplace enabled")
 		cap, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.enabledCapabilities}").Output()
 		if err != nil {
