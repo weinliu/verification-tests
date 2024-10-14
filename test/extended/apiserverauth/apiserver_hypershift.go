@@ -63,7 +63,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 
 	// author: kewang@redhat.com
 	// Hypershift dons't support some weak ciphers for old TLS profile, detail see bug https://issues.redhat.com/browse/OCPBUGS-30986
-	g.It("Author:kewang-ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Medium-62093-[Apiserver] Wire tlsSecurityProfile cipher config from apiservers/cluster into apiservers of hosted cluster [Slow][Disruptive]", func() {
+	g.It("Author:kewang-ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Medium-62093-1-[Apiserver] Wire tlsSecurityProfile cipher config from apiservers/cluster into apiservers of hosted cluster [Slow][Disruptive]", func() {
 
 		var (
 			defaultCipherPatch = `{"spec": {"configuration": {"apiServer": null}}}`
@@ -78,6 +78,89 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 					cipherSuite: `["TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"] VersionTLS11`,
 					patch:       `{"spec": {"configuration": {"apiServer": {"tlsSecurityProfile":{"custom":{"ciphers":["ECDHE-ECDSA-CHACHA20-POLY1305","ECDHE-RSA-CHACHA20-POLY1305","ECDHE-RSA-AES128-GCM-SHA256","ECDHE-ECDSA-AES128-GCM-SHA256"],"minTLSVersion":"VersionTLS11"},"type":"Custom"}}}}}`,
 				},
+				{
+					cipherType:  "Intermediate",
+					cipherSuite: defaultCipherSuite,
+					patch:       `{"spec": {"configuration": {"apiServer": {"tlsSecurityProfile":{"intermediate":{},"type":"Intermediate"}}}}}`,
+				},
+			}
+		)
+
+		defer func() {
+			exutil.By("-->> Restoring cluster's ciphers")
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "--type=merge", "-p", defaultCipherPatch).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// Checking if apiservers are restarted
+			errKas := waitApiserverRestartOfHypershift(oc, "kube-apiserver", guestClusterNS, 480)
+			o.Expect(errKas).NotTo(o.HaveOccurred())
+			errOas := waitApiserverRestartOfHypershift(oc, "openshift-apiserver", guestClusterNS, 240)
+			o.Expect(errOas).NotTo(o.HaveOccurred())
+			errOauth := waitApiserverRestartOfHypershift(oc, "oauth-openshift", guestClusterNS, 120)
+			o.Expect(errOauth).NotTo(o.HaveOccurred())
+			e2e.Logf("#### Check cipherSuites and minTLSVersion of oauth, openshift-apiserver and kubeapiservers config.")
+			errChipher := verifyHypershiftCiphers(oc, defaultCipherSuite, guestClusterNS)
+			if errChipher != nil {
+				exutil.AssertWaitPollNoErr(errChipher, "Ciphers are not matched the expected Intermediate type!")
+			}
+
+		}()
+
+		exutil.By("-->> 1.) Check the default cipherSuites and minTLSVersion of oauth, openshift-apiserver and kubeapiservers config.")
+		errChipher := verifyHypershiftCiphers(oc, defaultCipherSuite, guestClusterNS)
+		if errChipher != nil {
+			exutil.AssertWaitPollNoErr(errChipher, fmt.Sprintf("The ciphers are not matched : %s", defaultCipherSuite))
+		}
+		e2e.Logf(`The ciphers type are matched default "Intermediate".`)
+
+		// Apply supported chipher types
+		for i, cipherItem := range cipherItems {
+			if cipherItem.cipherType == "Intermediate" {
+				continue
+			}
+			i += 2
+			oldVer, errOldrVer := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "-o", `jsonpath={.status.conditions[?(@.type=="KubeAPIServerAvailable")].observedGeneration}`).Output()
+			o.Expect(errOldrVer).NotTo(o.HaveOccurred())
+			intOldVer, _ := strconv.Atoi(oldVer)
+			o.Expect(intOldVer).To(o.BeNumerically(">", 0))
+			e2e.Logf("observedGeneration: %v", intOldVer)
+
+			exutil.By(fmt.Sprintf("-->> %d.1) Patching the apiserver cluster with ciphers:  %s", i, cipherItem.cipherType))
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "--type=merge", "-p", cipherItem.patch).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			// Checking if apiservers are restarted
+			errKas := waitApiserverRestartOfHypershift(oc, "kube-apiserver", guestClusterNS, 480)
+			o.Expect(errKas).NotTo(o.HaveOccurred())
+			errOas := waitApiserverRestartOfHypershift(oc, "openshift-apiserver", guestClusterNS, 240)
+			o.Expect(errOas).NotTo(o.HaveOccurred())
+			errOauth := waitApiserverRestartOfHypershift(oc, "oauth-openshift", guestClusterNS, 120)
+			o.Expect(errOauth).NotTo(o.HaveOccurred())
+
+			newVer, errNewVer := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "-o", `jsonpath={.status.conditions[?(@.type=="KubeAPIServerAvailable")].observedGeneration}`).Output()
+			o.Expect(errNewVer).NotTo(o.HaveOccurred())
+			e2e.Logf("observedGeneration: %v", newVer)
+			o.Expect(strconv.Atoi(newVer)).To(o.BeNumerically(">", intOldVer))
+
+			exutil.By(fmt.Sprintf("-->> %d.2) Check cipherSuites and minTLSVersion of oauth, openshift-apiserver and kubeapiservers config.", i))
+			errChipher := verifyHypershiftCiphers(oc, cipherItem.cipherSuite, guestClusterNS)
+			if errChipher != nil {
+				exutil.AssertWaitPollNoErr(errChipher, fmt.Sprintf("Ciphers are not matched : %s", cipherItem.cipherType))
+			}
+			e2e.Logf("#### Ciphers are matched: %s", cipherItem.cipherType)
+		}
+	})
+
+	// author: kewang@redhat.com
+	// Hypershift dons't support some weak ciphers for old TLS profile, detail see bug https://issues.redhat.com/browse/OCPBUGS-30986
+	g.It("Author:kewang-ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Medium-62093-2-[Apiserver] Wire tlsSecurityProfile cipher config from apiservers/cluster into apiservers of hosted cluster [Slow][Disruptive]", func() {
+
+		var (
+			defaultCipherPatch = `{"spec": {"configuration": {"apiServer": null}}}`
+			defaultCipherSuite = `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"] VersionTLS12`
+			cipherItems        = []struct {
+				cipherType  string
+				cipherSuite string
+				patch       string
+			}{
 				{
 					cipherType:  "Old",
 					cipherSuite: `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA","TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA","TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA","TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA"] VersionTLS10`,
@@ -119,6 +202,9 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 
 		// Apply supported chipher types
 		for i, cipherItem := range cipherItems {
+			if cipherItem.cipherType == "Intermediate" {
+				continue
+			}
 			i += 2
 			oldVer, errOldrVer := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "-o", `jsonpath={.status.conditions[?(@.type=="KubeAPIServerAvailable")].observedGeneration}`).Output()
 			o.Expect(errOldrVer).NotTo(o.HaveOccurred())
