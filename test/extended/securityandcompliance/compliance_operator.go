@@ -600,6 +600,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 				template:        scansettingbindingTemplate,
 			}
 			ccrsShouldPass = []string{
+				"ocp4-cis-api-server-kubelet-client-cert",
+				"ocp4-cis-api-server-kubelet-client-key",
 				"ocp4-cis-node-master-file-groupowner-etcd-pki-cert-files",
 				"ocp4-cis-node-master-file-groupowner-openshift-pki-cert-files",
 				"ocp4-cis-node-master-file-groupowner-openshift-pki-key-files",
@@ -5842,6 +5844,17 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	g.It("Author:xiyuan-NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-High-61324-Low-61325-Check scans and instructions work for ocp4-stig, ocp4-stig-node and rhcos4-stig profiles for v1r1 and v2r1 versions[Slow]", func() {
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
+		ccrsShouldExist := []string{
+			"rhcos4-stig-master-audit-delete-failed",
+			"rhcos4-stig-master-audit-immutable-login-uids",
+			"rhcos4-stig-master-audit-rules-privileged-commands-pt-chown",
+			"rhcos4-stig-master-audit-rules-privileged-commands-write",
+			"rhcos4-stig-master-coreos-audit-backlog-limit-kernel-argument",
+			"rhcos4-stig-master-kernel-module-usb-storage-disabled",
+			"rhcos4-stig-master-package-usbguard-installed",
+			"rhcos4-stig-master-service-sshd-disabled",
+			"rhcos4-stig-master-service-usbguard-enabled",
+			"rhcos4-stig-master-usbguard-allow-hid-and-hub"}
 		ssbNameStig := "ocp4-stig-" + getRandomString()
 		ssbNameStigv2r1 := "ocp4-stig-v2r1-" + getRandomString()
 		ssbNameStigv1r1 := "ocp4-stig-v1r1-" + getRandomString()
@@ -5885,11 +5898,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		g.By("Diff the failed rules between profiles without suffix and profiles of latest version.. !!!\n")
 		checkFailedRulesForTwoProfiles(oc, subD.namespace, ssbNameStig, ssbNameStigv2r1, "-v2r1")
 
+		g.By("Check ccr should exist and pass by default.. !!!\n")
+		for _, ccrShouldExist := range ccrsShouldExist {
+			newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"ccr", ccrShouldExist, "-n", subD.namespace}).check(oc)
+		}
+
 		g.By("Check the instructions available for all rules.. !!")
 		//Add two rules in exemptRulesList due to bug https://issues.redhat.com/browse/OCPBUGS-18789
 		exemptRulesList := []string{"rhcos4-stig-master-audit-rules-session-events", "rhcos4-stig-worker-audit-rules-session-events"}
 		checkInstructionNotEmpty(oc, subD.namespace, ssbNameStig, exemptRulesList)
-
 		g.By("ocp-61324-61325-Check scans and instructions work for ocp4-stig, ocp4-stig-node and rhco4-stig profiles successfully... !!!\n")
 	})
 
