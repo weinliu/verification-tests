@@ -102,7 +102,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server", func() {
 	// author: xxia@redhat.com
 	// It is destructive case, will make kube-apiserver roll out, so adding [Disruptive]. One rollout costs about 25mins, so adding [Slow]
 	// If the case duration is greater than 10 minutes and is executed in serial (labelled Serial or Disruptive), add Longduration
-	g.It("Author:xxia-WRS-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Medium-25806-V-CM.04-Force encryption key rotation for etcd datastore [Slow][Disruptive]", func() {
+	g.It("Author:xxia-WRS-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Medium-25806-V-CM.03-V-CM.04-Force encryption key rotation for etcd datastore [Slow][Disruptive]", func() {
 		// only run this case in Etcd Encryption On cluster
 
 		exutil.By("1.) Check if cluster is Etcd Encryption On")
@@ -195,7 +195,7 @@ spec:
 	// author: xxia@redhat.com
 	// It is destructive case, will make kube-apiserver roll out, so adding [Disruptive]. One rollout costs about 25mins, so adding [Slow]
 	// If the case duration is greater than 10 minutes and is executed in serial (labelled Serial or Disruptive), add Longduration
-	g.It("Author:xxia-WRS-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Medium-25811-V-CM.04-Etcd encrypted cluster could self-recover when related encryption configuration is deleted [Slow][Disruptive]", func() {
+	g.It("Author:xxia-WRS-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Medium-25811-V-CM.03-V-CM.04-Etcd encrypted cluster could self-recover when related encryption configuration is deleted [Slow][Disruptive]", func() {
 		// only run this case in Etcd Encryption On cluster
 		exutil.By("1.) Check if cluster is Etcd Encryption On")
 		encryptionType, err := oc.WithoutNamespace().Run("get").Args("apiserver/cluster", "-o=jsonpath={.spec.encryption.type}").Output()
@@ -280,7 +280,7 @@ spec:
 	// It is destructive case, will make openshift-kube-apiserver and openshift-apiserver namespaces deleted, so adding [Disruptive].
 	// In test the recovery costs about 22mins in max, so adding [Slow]
 	// If the case duration is greater than 10 minutes and is executed in serial (labelled Serial or Disruptive), add Longduration
-	g.It("Author:xxia-WRS-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Medium-36801-V-CM.04-Etcd encrypted cluster could self-recover when related encryption namespaces are deleted [Slow][Disruptive]", func() {
+	g.It("Author:xxia-WRS-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Medium-36801-V-CM.03-V-CM.04-Etcd encrypted cluster could self-recover when related encryption namespaces are deleted [Slow][Disruptive]", func() {
 		// only run this case in Etcd Encryption On cluster
 		exutil.By("1.) Check if cluster is Etcd Encryption On")
 		encryptionType, err := oc.WithoutNamespace().Run("get").Args("apiserver/cluster", "-o=jsonpath={.spec.encryption.type}").Output()
@@ -397,7 +397,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Low-25926-Wire cipher config from apiservers/cluster into apiserver and authentication operators [Disruptive] [Slow]", func() {
+	g.It("Author:rgangwar-WRS-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-Low-25926-V-ACS.05-V-BR.12-V-CM.01-Wire cipher config from apiservers/cluster into apiserver and authentication operators [Disruptive] [Slow]", func() {
 		// Check authentication operator cliconfig, openshiftapiservers.operator.openshift.io and kubeapiservers.operator.openshift.io
 		var (
 			cipherToRecover = `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":}]`
@@ -3752,7 +3752,7 @@ EOF`, dcpolicyrepo)
 	})
 
 	// author: zxiao@redhat.com
-	g.It("Author:zxiao-WRS-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Medium-33830-V-BR.33-[Apiserver]customize audit config of apiservers negative test [Serial]", func() {
+	g.It("Author:zxiao-WRS-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-Medium-33830-V-BR.33-V-BR.39-[Apiserver]customize audit config of apiservers negative test [Serial]", func() {
 		var (
 			namespace = "openshift-kube-apiserver"
 			label     = fmt.Sprintf("app=%s", namespace)
@@ -4142,7 +4142,7 @@ EOF`, dcpolicyrepo)
 
 	// author: kewang@redhat.com
 	// This case cannot be executed on ROSA and OSD cluster, detail see Jira issue: https://issues.redhat.com/browse/OCPQE-14061
-	g.It("Author:kewang-WRS-NonHyperShiftHOST-ARO-Medium-57243-V-BR.33-[Apiserver] Viewing audit logs", func() {
+	g.It("Author:kewang-WRS-NonHyperShiftHOST-ARO-Medium-57243-V-BR.33-V-BR.39-[Apiserver] Viewing audit logs", func() {
 		var (
 			apiservers    = []string{"openshift-apiserver", "kube-apiserver", "oauth-apiserver"}
 			caseID        = "OCP-57243"
@@ -4276,7 +4276,7 @@ EOF`, dcpolicyrepo)
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("Author:rgangwar-WRS-NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Longduration-High-43261-V-BR.33-[Apiserver] APIServer Support None audit policy [Disruptive][Slow]", func() {
+	g.It("Author:rgangwar-WRS-NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Longduration-High-43261-V-BR.33-V-BR.39-[Apiserver] APIServer Support None audit policy [Disruptive][Slow]", func() {
 		var (
 			patch                = `[{"op": "replace", "path": "/spec/audit", "value":{"profile":"None"}}]`
 			patchToRecover       = `[{"op": "replace", "path": "/spec/audit", "value":{"profile":"Default"}}]`
@@ -4375,7 +4375,7 @@ EOF`, dcpolicyrepo)
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("Author:rgangwar-WRS-NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Longduration-High-33427-V-BR.33-[Apiserver] customize audit config of apiservers [Disruptive][Slow]", func() {
+	g.It("Author:rgangwar-WRS-NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Longduration-High-33427-V-BR.33-V-BR.39-[Apiserver] customize audit config of apiservers [Disruptive][Slow]", func() {
 		var (
 			patchAllRequestBodies   = `[{"op": "replace", "path": "/spec/audit", "value":{"profile":"AllRequestBodies"}}]`
 			patchWriteRequestBodies = `[{"op": "replace", "path": "/spec/audit", "value":{"profile":"WriteRequestBodies"}}]`
@@ -4534,7 +4534,7 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("Author:dpunia-WRS-NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Longduration-High-43336-V-BR.33-Support customRules list for by-group profiles to the audit configuration [Disruptive][Slow]", func() {
+	g.It("Author:dpunia-WRS-NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Longduration-High-43336-V-BR.33-V-BR.39-Support customRules list for by-group profiles to the audit configuration [Disruptive][Slow]", func() {
 		var (
 			patchCustomRules string
 			auditEventCount  int
@@ -4661,7 +4661,7 @@ spec:
 		o.Expect(out).Should(o.ContainSubstring("no services, deployment"))
 	})
 
-	g.It("Author:dpunia-WRS-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-High-63273-V-CM.04-Test etcd encryption migration [Slow][Disruptive]", func() {
+	g.It("Author:dpunia-WRS-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-High-63273-V-CM.03-V-CM.04-Test etcd encryption migration [Slow][Disruptive]", func() {
 		// only run this case in Etcd Encryption On cluster
 		exutil.By("1) Check if cluster is Etcd Encryption On")
 		encryptionType, err := oc.WithoutNamespace().Run("get").Args("apiserver/cluster", "-o=jsonpath={.spec.encryption.type}").Output()
@@ -5803,7 +5803,7 @@ spec:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-High-70020-Add new custom certificate for the cluster API [Disruptive] [Slow]", func() {
+	g.It("Author:rgangwar-WRS-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-High-70020-V-CM.02-Add new custom certificate for the cluster API [Disruptive] [Slow]", func() {
 		var (
 			patchToRecover      = `{"spec":{"servingCerts": {"namedCertificates": null}}}`
 			originKubeconfigBkp = "kubeconfig.origin"
@@ -6065,7 +6065,7 @@ EOF`, serverconf, fqdnName)
 	})
 
 	// author: kewang@redhat.com
-	g.It("Author:kewang-WRS-NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Longduration-High-73410-V-BR.33-Support customRules list for by-group with none profile to the audit configuration [Disruptive][Slow]", func() {
+	g.It("Author:kewang-WRS-NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Longduration-High-73410-V-BR.33-V-BR.39-Support customRules list for by-group with none profile to the audit configuration [Disruptive][Slow]", func() {
 		var (
 			patchCustomRules string
 			auditEventCount  int
