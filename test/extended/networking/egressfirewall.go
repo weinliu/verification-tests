@@ -30,6 +30,11 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	var oc = exutil.NewCLI("networking-egressfirewall", exutil.KubeConfigPath())
 	var aclLogPath = "--path=ovn/acl-audit-log.log"
 	g.BeforeEach(func() {
+		networkType := exutil.CheckNetworkType(oc)
+		if networkType != "ovn" {
+			g.Skip("This case requires OVNKubernetes as network plugin, skip the test as the cluster does not have OVN network plugin")
+		}
+
 		if checkProxy(oc) {
 			g.Skip("This is proxy cluster, egressfirewall cannot be tested on proxy cluster, skip the test.")
 		}

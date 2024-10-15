@@ -31,6 +31,11 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 	g.BeforeEach(func() {
 
+		networkType := exutil.CheckNetworkType(oc)
+		if networkType != "ovn" {
+			g.Skip("This case requires OVNKubernetes as network plugin, skip the test as the cluster does not have OVN network plugin")
+		}
+
 		namespaceTemplate := filepath.Join(testDataDir, "namespace-template.yaml")
 		operatorGroupTemplate := filepath.Join(testDataDir, "operatorgroup-template.yaml")
 		subscriptionTemplate := filepath.Join(testDataDir, "subscription-template.yaml")
@@ -103,8 +108,9 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 		// Install metallb on vSphere and baremetal but skip on all platforms
 		exutil.By("Check the platform if it is suitable for running the test")
 		platform := exutil.CheckPlatform(oc)
-		if !(strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none")) {
-			g.Skip("These cases can only be run on networking team's private RDU BM cluster, vSphere and IPI/UPI BM, skip for other envrionment!!!")
+		networkType := exutil.CheckNetworkType(oc)
+		if !(strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none")) || !strings.Contains(networkType, "ovn") {
+			g.Skip("These cases can only be run on networking team's private RDU BM cluster, vSphere and IPI/UPI BM, skip for other platforms or other non-OVN network plugin!!!")
 		}
 
 		namespaceTemplate := filepath.Join(testDataDir, "namespace-template.yaml")
@@ -269,8 +275,9 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 	g.BeforeEach(func() {
 
 		exutil.By("Check the platform if it is suitable for running the test")
-		if !(isPlatformSuitable(oc)) {
-			g.Skip("These cases can only be run on networking team's private RDU cluster , skip for other envrionment!!!")
+		networkType := exutil.CheckNetworkType(oc)
+		if !(isPlatformSuitable(oc)) || !strings.Contains(networkType, "ovn") {
+			g.Skip("These cases can only be run on networking team's private RDU cluster , skip for other platforms or non-OVN network plugin!!!")
 		}
 		namespaceTemplate := filepath.Join(testDataDir, "namespace-template.yaml")
 		operatorGroupTemplate := filepath.Join(testDataDir, "operatorgroup-template.yaml")
@@ -1513,8 +1520,9 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 
 	g.BeforeEach(func() {
 		exutil.By("Check the platform if it is suitable for running the test")
-		if !(isPlatformSuitable(oc)) {
-			g.Skip("These cases can only be run on networking team's private BM RDU clusters , skip for other envrionment!!!")
+		networkType := exutil.CheckNetworkType(oc)
+		if !(isPlatformSuitable(oc)) || !strings.Contains(networkType, "ovn") {
+			g.Skip("These cases can only be run on networking team's private BM RDU clusters , skip for other platform or other non-OVN network plugin!!!")
 		}
 
 		namespaceTemplate := filepath.Join(testDataDir, "namespace-template.yaml")

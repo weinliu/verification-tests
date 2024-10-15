@@ -1,6 +1,8 @@
 package networking
 
 import (
+	"strings"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -11,6 +13,12 @@ var _ = g.Describe("[sig-networking] SDN alerts", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("networking-alerts", exutil.KubeConfigPath())
+	g.BeforeEach(func() {
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+	})
 
 	g.It("NonHyperShiftHOST-Author:weliang-Medium-51438-Upgrade NoRunningOvnControlPlane to critical severity and inclue runbook.", func() {
 		alertName, NameErr := oc.AsAdmin().Run("get").Args("prometheusrule", "-n", "openshift-ovn-kubernetes", "master-rules", "-o=jsonpath={.spec.groups[*].rules[*].alert}").Output()

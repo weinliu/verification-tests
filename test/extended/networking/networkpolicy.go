@@ -27,6 +27,13 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 
 	var oc = exutil.NewCLI("networking-networkpolicy", exutil.KubeConfigPath())
 
+	g.BeforeEach(func() {
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+	})
+
 	// author: zzhao@redhat.com
 	g.It("Author:zzhao-Critical-49076-[FdpOvnOvs]-service domain can be resolved when egress type is enabled", func() {
 		var (
@@ -1974,6 +1981,13 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy StressTest", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("networking-networkpolicy-stress", exutil.KubeConfigPath())
+
+	g.BeforeEach(func() {
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+	})
 
 	//author: meinli@redhat.com
 	g.It("Author:meinli-High-69234-high memory usage on ovnkube-master leader pods on some clusters when a network policy is deleted. [Serial]", func() {

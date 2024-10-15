@@ -25,6 +25,14 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("networking-services", exutil.KubeConfigPath())
+
+	g.BeforeEach(func() {
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+	})
+
 	// author: huirwang@redhat.com
 	g.It("Author:huirwang-High-50347-[FdpOvnOvs] internalTrafficPolicy set Local for pod/node to service access", func() {
 		var (

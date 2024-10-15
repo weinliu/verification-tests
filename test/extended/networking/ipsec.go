@@ -20,6 +20,13 @@ var _ = g.Describe("[sig-networking] SDN IPSEC", func() {
 
 	var oc = exutil.NewCLI("networking-ipsec", exutil.KubeConfigPath())
 
+	g.BeforeEach(func() {
+		networkType := exutil.CheckNetworkType(oc)
+		if networkType != "ovn" {
+			g.Skip("Skip case on cluster that has non-OVN network plugin!!")
+		}
+	})
+
 	// author: rbrattai@redhat.com
 	g.It("Author:rbrattai-High-66652-Verify IPsec encapsulation is enabled for NAT-T", func() {
 		// Epic https://issues.redhat.com/browse/SDN-2629

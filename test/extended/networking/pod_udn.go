@@ -28,6 +28,11 @@ var _ = g.Describe("[sig-networking] SDN udn", func() {
 	g.BeforeEach(func() {
 
 		SkipIfNoFeatureGate(oc, "NetworkSegmentation")
+
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
 	})
 
 	g.It("Author:anusaxen-Critical-74921-Check udn pods isolation on user defined networks", func() {

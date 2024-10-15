@@ -24,6 +24,11 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator installation", func() 
 	)
 
 	g.BeforeEach(func() {
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+
 		installNMstateOperator(oc)
 	})
 
@@ -43,9 +48,10 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 	)
 
 	g.BeforeEach(func() {
-		g.By("Check the platform if it is suitable for running the test")
-		if !(isPlatformSuitableForNMState(oc)) {
-			g.Skip("Skipping for unsupported platform!")
+		g.By("Check the platform and network plugin type if it is suitable for running the test")
+		networkType := checkNetworkType(oc)
+		if !(isPlatformSuitableForNMState(oc)) || !strings.Contains(networkType, "ovn") {
+			g.Skip("Skipping for unsupported platform or non-OVN network plugin type!")
 		}
 		installNMstateOperator(oc)
 	})

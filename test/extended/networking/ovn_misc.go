@@ -24,6 +24,12 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("networking-ovnkubernetes", exutil.KubeConfigPath())
+	g.BeforeEach(func() {
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+	})
 
 	// author: anusaxen@redhat.com
 	g.It("Author:anusaxen-Medium-49216-ovnkube-node logs should not print api token in logs. ", func() {

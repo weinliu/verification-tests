@@ -24,9 +24,10 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes egressrouter", func() {
 	g.BeforeEach(func() {
 		platform := exutil.CheckPlatform(oc)
 		e2e.Logf("\n\nThe platform is %v\n", platform)
+		networkType := checkNetworkType(oc)
 		acceptedPlatform := strings.Contains(platform, "baremetal")
-		if !acceptedPlatform {
-			g.Skip("Test cases should be run on BareMetal cluster, skip for other platforms!")
+		if !acceptedPlatform || !strings.Contains(networkType, "ovn") {
+			g.Skip("Test cases should be run on BareMetal cluster, skip for other platforms or other non-OVN network plugin!!")
 		}
 		if checkProxy(oc) {
 			g.Skip("This is proxy cluster, skip the test.")

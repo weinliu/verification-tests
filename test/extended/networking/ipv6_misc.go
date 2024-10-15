@@ -11,6 +11,13 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 
 	var oc = exutil.NewCLI("networking-ipv6", exutil.KubeConfigPath())
 
+	g.BeforeEach(func() {
+		networkType := exutil.CheckNetworkType(oc)
+		if networkType != "ovn" {
+			g.Skip("This case requires OVNKubernetes as network plugin, skip the test as the cluster does not have OVN network plugin")
+		}
+	})
+
 	// author: weliang@redhat.com
 	g.It("NonHyperShiftHOST-Author:weliang-High-55193-Dual stack cluster fails on installation when multi-path routing entries exist. [Disruptive]", func() {
 		// Customer bug https://issues.redhat.com/browse/OCPBUGS-1318

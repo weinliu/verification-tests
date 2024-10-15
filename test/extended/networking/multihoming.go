@@ -20,6 +20,13 @@ var _ = g.Describe("[sig-networking] SDN multihoming", func() {
 
 	var oc = exutil.NewCLI("networking-multihoming", exutil.KubeConfigPath())
 
+	g.BeforeEach(func() {
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+	})
+
 	// author: weliang@redhat.com
 	g.It("NonHyperShiftHOST-Author:weliang-Medium-60505-Multihoming Verify the ip4 connectivity between multihoming pods", func() {
 		var (

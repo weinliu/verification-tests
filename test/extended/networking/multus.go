@@ -19,6 +19,13 @@ var _ = g.Describe("[sig-networking] SDN multus", func() {
 
 	var oc = exutil.NewCLI("networking-multus", exutil.KubeConfigPath())
 
+	g.BeforeEach(func() {
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+	})
+
 	// OCP-46387 failed in 4.14 due to https://issues.redhat.com/browse/OCPBUGS-11082 and https://issues.redhat.com/browse/NP-752
 	// Enable this case until Dev fix the issue
 	/*

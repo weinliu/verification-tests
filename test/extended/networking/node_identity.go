@@ -28,8 +28,9 @@ var _ = g.Describe("[sig-networking] SDN node-identity", func() {
 	g.BeforeEach(func() {
 		// Check network node identity webhook is enabled on cluster
 		webhook, err := checkNodeIdentityWebhook(oc)
-		if err != nil || strings.Contains(webhook, notFountMsg) {
-			g.Skip("The cluster does not have node identity webhook enabled, skipping tests")
+		networkType := checkNetworkType(oc)
+		if err != nil || strings.Contains(webhook, notFountMsg) || !strings.Contains(networkType, "ovn") {
+			g.Skip("The cluster does not have node identity webhook enabled or OVN network plugin, skipping tests")
 		}
 		e2e.Logf("The Node Identity webhook enabled on the cluster : %s", webhook)
 		o.Expect(strings.Split(webhook, " ")).Should(o.HaveLen(2))

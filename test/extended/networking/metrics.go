@@ -24,6 +24,12 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("networking-metrics", exutil.KubeConfigPath())
+	g.BeforeEach(func() {
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+	})
 
 	g.It("NonHyperShiftHOST-Author:weliang-Medium-47524-Metrics for ovn-appctl stopwatch/show command.", func() {
 		var (
