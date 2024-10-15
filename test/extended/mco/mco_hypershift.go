@@ -646,8 +646,10 @@ func (ht *HypershiftTest) skipTestIfLatestAcceptedBuildIsSameAsHostedClusterVers
 
 func (ht *HypershiftTest) getHypershiftImage() string {
 	// get minor release version as image tag
-	imageTag, _, cvErr := exutil.GetClusterVersion(ht.oc)
-	o.Expect(cvErr).NotTo(o.HaveOccurred(), "Get minor release version error")
+	// imageTag, _, cvErr := exutil.GetClusterVersion(ht.oc)
+	// o.Expect(cvErr).NotTo(o.HaveOccurred(), "Get minor release version error")
+	// Becaseu of https://issues.redhat.com/browse/OCPQE-26256 we will always use the "latest" image
+	imageTag := "latest"
 	arch := architecture.GetControlPlaneArch(ht.oc)
 	if arch == architecture.ARM64 {
 		imageTag = fmt.Sprintf("%s-%s", imageTag, architecture.ARM64.String())
