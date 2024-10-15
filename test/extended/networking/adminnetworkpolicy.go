@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
@@ -1192,5 +1194,357 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 		o.Expect(statusChkMsg).To(o.BeEmpty())
 
 	})
+	g.It("Author:asood-High-73802-[FdpOvnOvs] BANP and ANP work with named ports. [Serial]", func() {
+		var (
+			testID               = "73802"
+			testDataDir          = exutil.FixturePath("testdata", "networking")
+			banpCRTemplate       = filepath.Join(testDataDir, "adminnetworkpolicy", "banp-multi-pod-mixed-rule-template.yaml")
+			anpCRTemplate        = filepath.Join(testDataDir, "adminnetworkpolicy", "anp-single-rule-me-template.yaml")
+			namedPortPodTemplate = filepath.Join(testDataDir, "named-port-pod-template.yaml")
+			direction            = "from"
+			policyType           = "ingress"
+			namespaceLabelKey    = "team"
+			namespaceLabelVal    = "qe"
+			podKey               = "name"
+			podVal               = "hello-pod"
+			nsList               = []string{}
+			dummyLabel           = "qe1"
+		)
 
+		exutil.By("1. Get the first namespace (subject) and create another (peer)")
+		subjectNs := oc.Namespace()
+		nsList = append(nsList, subjectNs)
+		oc.SetupProject()
+		peerNs := oc.Namespace()
+		nsList = append(nsList, peerNs)
+
+		exutil.By("2. Create two pods in each namespace and label namespaces")
+		namedPortPod := namedPortPodResource{
+			name:          "",
+			namespace:     "",
+			podLabelKey:   "name",
+			podLabelVal:   "hello-pod",
+			portname:      "",
+			containerport: 8080,
+			template:      namedPortPodTemplate,
+		}
+		podNames := []string{"hello-pod-" + testID + "-1", "hello-pod-" + testID + "-2"}
+		portNames := []string{"web", "web123"}
+		for i := 0; i < 2; i++ {
+			namedPortPod.namespace = nsList[i]
+			err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", nsList[i], namespaceLabelKey+"="+namespaceLabelVal).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for j := 0; j < len(podNames); j++ {
+				namedPortPod.name = podNames[j]
+				namedPortPod.portname = portNames[j]
+				namedPortPod.createNamedPortPod(oc)
+			}
+
+			err = waitForPodWithLabelReady(oc, namedPortPod.namespace, namedPortPod.podLabelKey+"="+namedPortPod.podLabelVal)
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Pods with label %s=%s in %s not ready", namedPortPod.podLabelKey, namedPortPod.podLabelVal, namedPortPod.namespace))
+			podListInNs, podListErr := exutil.GetAllPodsWithLabel(oc, nsList[i], namedPortPod.podLabelKey+"="+namedPortPod.podLabelVal)
+			o.Expect(podListErr).NotTo(o.HaveOccurred())
+			o.Expect(len(podListInNs)).Should(o.Equal(2))
+			e2e.Logf("Pods %s in %s namespace", podListInNs, nsList[i])
+		}
+
+		exutil.By("3. Create a ANP with deny and pass action for ingress to projects with label team=qe")
+		anpCR := singleRuleANPMEPolicyResource{
+			name:            "anp-" + testID + "-1",
+			subjectKey:      namespaceLabelKey,
+			subjectOperator: "In",
+			subjectVal:      namespaceLabelVal,
+			priority:        25,
+			policyType:      policyType,
+			direction:       direction,
+			ruleName:        "deny ingress",
+			ruleAction:      "Deny",
+			ruleKey:         namespaceLabelKey,
+			ruleOperator:    "NotIn",
+			ruleVal:         dummyLabel,
+			template:        anpCRTemplate,
+		}
+		defer removeResource(oc, true, true, "anp", anpCR.name)
+		anpCR.createSingleRuleANPMatchExp(oc)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anpCR.name)).To(o.BeTrue())
+
+		exutil.By("3.1 Update ANP's first rule with named port")
+		patchANP := fmt.Sprintf("[{\"op\": \"add\", \"path\":\"/spec/%s/0/ports\", \"value\": [\"namedPort\": %s]}]", policyType, portNames[0])
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy", anpCR.name, "--type=json", "-p", patchANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By("3.2 Update ANP to add second ingress rule with named port")
+		patchANP = fmt.Sprintf("[{\"op\": \"add\", \"path\":\"/spec/%s/1\", \"value\": {\"name\":\"pass ingress\", \"action\": \"Pass\", \"from\": [{\"namespaces\":  {\"matchLabels\": {%s: %s}}}], \"ports\":[{\"namedPort\": %s}]}}]", policyType, namespaceLabelKey, namespaceLabelVal, portNames[1])
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy", anpCR.name, "--type=json", "-p", patchANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By(fmt.Sprintf("3.3 Validate traffic is blocked between pods with named port %s but passes through the pods with named ports %s", portNames[0], portNames[1]))
+		CurlPod2PodPass(oc, nsList[0], podNames[1], nsList[1], podNames[1])
+		CurlPod2PodPass(oc, nsList[1], podNames[1], nsList[0], podNames[1])
+
+		CurlPod2PodFail(oc, nsList[0], podNames[0], nsList[1], podNames[0])
+		CurlPod2PodFail(oc, nsList[1], podNames[0], nsList[0], podNames[0])
+
+		exutil.By("4. Create a BANP with deny and pass action for ingress to projects with label team=qe")
+
+		exutil.By("4.0 Update ANP change Deny action to Pass for first rule")
+		patchANP = fmt.Sprintf("[{\"op\": \"add\", \"path\":\"/spec/%s/0/name\", \"value\": \"pass ingress\"}, {\"op\": \"add\", \"path\":\"/spec/%s/0/action\", \"value\": \"Pass\"}]", policyType, policyType)
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy", anpCR.name, "--type=json", "-p", patchANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		banpCR := multiPodMixedRuleBANPPolicyResource{
+			name:          "default",
+			subjectKey:    namespaceLabelKey,
+			subjectVal:    namespaceLabelVal,
+			subjectPodKey: podKey,
+			subjectPodVal: podVal,
+			policyType1:   policyType,
+			direction1:    direction,
+			ruleName1:     "default-allow-ingress",
+			ruleAction1:   "Allow",
+			ruleKey1:      "team",
+			ruleVal1:      "qe",
+			rulePodKey1:   podKey,
+			rulePodVal1:   podVal,
+			policyType2:   "egress",
+			direction2:    "to",
+			ruleName2:     "default-deny-from-colored-pods",
+			ruleAction2:   "Deny",
+			ruleKey2:      "team",
+			ruleVal2:      "qe",
+			rulePodKey2:   podKey,
+			rulePodVal2:   podVal,
+			template:      banpCRTemplate,
+		}
+		defer removeResource(oc, true, true, "banp", banpCR.name)
+		banpCR.createMultiPodMixedRuleBANP(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("banp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, banpCR.name)).To(o.BeTrue())
+
+		exutil.By("4.1 Remove egress rule in BANP")
+		patchBANP := fmt.Sprintf("[{\"op\": \"remove\", \"path\":\"/spec/egress\"}]")
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("baselineadminnetworkpolicy", banpCR.name, "--type=json", "-p", patchBANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By("4.2 Update first rule with named port")
+		patchBANP = fmt.Sprintf("[{\"op\": \"add\", \"path\":\"/spec/%s/0/ports\", \"value\": [\"namedPort\": %s]}]", policyType, portNames[1])
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("baselineadminnetworkpolicy", banpCR.name, "--type=json", "-p", patchBANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By("4.3 Add another rule with first named port")
+		patchBANP = fmt.Sprintf("[{\"op\": \"add\", \"path\":\"/spec/%s/1\", \"value\": {\"name\":\"deny ingress\", \"action\": \"Deny\", \"from\": [{\"pods\":  {\"namespaceSelector\": {\"matchLabels\": {%s: %s}}, \"podSelector\": {}}}], \"ports\":[{\"namedPort\": %s}]}}]", policyType, namespaceLabelKey, namespaceLabelVal, portNames[0])
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("baselineadminnetworkpolicy", banpCR.name, "--type=json", "-p", patchBANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By(fmt.Sprintf("4.4 Validate traffic passes between pods with named port %s but is blocked between the pods with named ports %s", portNames[1], portNames[0]))
+		CurlPod2PodPass(oc, nsList[0], podNames[0], nsList[1], podNames[1])
+		CurlPod2PodPass(oc, nsList[1], podNames[0], nsList[0], podNames[1])
+
+		CurlPod2PodFail(oc, nsList[0], podNames[1], nsList[1], podNames[0])
+		CurlPod2PodFail(oc, nsList[1], podNames[1], nsList[0], podNames[0])
+
+	})
+
+	g.It("Author:asood-High-73454-[FdpOvnOvs] Egress traffic works with ANP, BANP and NP with node egress peer. [Serial]", func() {
+		var (
+			testID                          = "73454"
+			testDataDir                     = exutil.FixturePath("testdata", "networking")
+			banpCRTemplate                  = filepath.Join(testDataDir, "adminnetworkpolicy", "banp-single-rule-template-node.yaml")
+			anpCRTemplate                   = filepath.Join(testDataDir, "adminnetworkpolicy", "anp-single-rule-template-node.yaml")
+			egressTypeFile                  = filepath.Join(testDataDir, "networkpolicy", "default-allow-egress.yaml")
+			httpServerPodNodeTemplate       = filepath.Join(testDataDir, "httpserverPod-specific-node-template.yaml")
+			pingPodNodeTemplate             = filepath.Join(testDataDir, "ping-for-pod-specific-node-template.yaml")
+			containerport             int32 = 30001
+			hostport                  int32 = 30003
+			direction                       = "to"
+			policyType                      = "egress"
+			nsMatchLabelKey                 = "kubernetes.io/metadata.name"
+			nodeLabels                      = []string{"qe", "ocp"}
+			labelledNodeMap                 = make(map[string]string)
+			nodePodMap                      = make(map[string]string)
+			newNodePodMap                   = make(map[string]string)
+			numWorkerNodes                  = 2
+		)
+
+		exutil.By("1.0 Get the worker nodes in the cluster")
+		workersList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(workersList.Items) < numWorkerNodes {
+			g.Skip("Skipping the test as it requires two worker nodes, found insufficient worker nodes")
+		}
+		exutil.By("1.1 Label the worker nodes")
+		for i := 0; i < numWorkerNodes; i++ {
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workersList.Items[i].Name, "team", nodeLabels[i])
+			labelledNodeMap[nodeLabels[i]] = workersList.Items[i].Name
+		}
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, labelledNodeMap["ocp"], "team")
+		exutil.By("1.2 Create the pods on cluster network and pods that open port on worker nodes")
+		ns := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns)
+		httpServerPod := httpserverPodResourceNode{
+			name:          "",
+			namespace:     ns,
+			containerport: containerport,
+			hostport:      hostport,
+			nodename:      "",
+			template:      httpServerPodNodeTemplate,
+		}
+
+		for i := 0; i < numWorkerNodes; i++ {
+			httpServerPod.name = "httpserverpod-" + testID + "-" + strconv.Itoa(i)
+			httpServerPod.nodename = workersList.Items[i].Name
+			httpServerPod.createHttpservePodNodeByAdmin(oc)
+			waitPodReady(oc, ns, httpServerPod.name)
+
+		}
+		pod := pingPodResourceNode{
+			name:      "",
+			namespace: ns,
+			nodename:  "",
+			template:  pingPodNodeTemplate,
+		}
+
+		for i := 0; i < 2; i++ {
+			pod.name = "test-pod-" + testID + "-" + strconv.Itoa(i)
+			pod.nodename = workersList.Items[i].Name
+			pod.createPingPodNode(oc)
+			waitPodReady(oc, ns, pod.name)
+			nodePodMap[pod.nodename] = pod.name
+		}
+
+		exutil.By("1.3 Validate from the pods running on all the nodes, egress traffic from each node is allowed.\n")
+		nodeList := []string{labelledNodeMap["ocp"], labelledNodeMap["qe"]}
+		for _, egressNode := range nodeList {
+			for i := 0; i < numWorkerNodes; i++ {
+				o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[workersList.Items[i].Name])).To(o.BeTrue())
+				CurlPod2NodePass(oc, ns, nodePodMap[workersList.Items[i].Name], ns, egressNode, strconv.Itoa(int(hostport)))
+			}
+		}
+
+		exutil.By("2.0 Create BANP to block egress traffic from all the worker nodes.\n")
+		banp := singleRuleBANPPolicyResourceNode{
+			name:       "default",
+			subjectKey: nsMatchLabelKey,
+			subjectVal: ns,
+			policyType: policyType,
+			direction:  direction,
+			ruleName:   "default-egress",
+			ruleAction: "Deny",
+			ruleKey:    "kubernetes.io/hostname",
+			template:   banpCRTemplate,
+		}
+
+		defer removeResource(oc, true, true, "banp", banp.name)
+		banp.createSingleRuleBANPNode(oc)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("banp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, banp.name)).To(o.BeTrue())
+
+		exutil.By("2.1 Validate from the pods running on all the nodes, egress traffic from each node is blocked.\n")
+		nodeList = []string{labelledNodeMap["ocp"], labelledNodeMap["qe"]}
+		for _, egressNode := range nodeList {
+			for i := 0; i < numWorkerNodes; i++ {
+				o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[workersList.Items[i].Name])).To(o.BeFalse())
+				CurlPod2NodeFail(oc, ns, nodePodMap[workersList.Items[i].Name], ns, egressNode, strconv.Itoa(int(hostport)))
+			}
+		}
+		exutil.By("3.0 Create ANP with egress traffic allowed from node labeled team=qe but blocked from other nodes.\n")
+		anp := singleRuleANPPolicyResourceNode{
+			name:       "anp-node-egress-peer-" + testID,
+			subjectKey: nsMatchLabelKey,
+			subjectVal: ns,
+			priority:   40,
+			policyType: policyType,
+			direction:  direction,
+			ruleName:   "allow egress",
+			ruleAction: "Allow",
+			ruleKey:    "team",
+			nodeKey:    "node-role.kubernetes.io/worker",
+			ruleVal:    nodeLabels[0],
+			actionname: "pass egress",
+			actiontype: "Pass",
+			template:   anpCRTemplate,
+		}
+		defer removeResource(oc, true, true, "anp", anp.name)
+		anp.createSingleRuleANPNode(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anp.name)).To(o.BeTrue())
+		patchANP := fmt.Sprintf("[{\"op\": \"add\", \"path\":\"/spec/%s/1\", \"value\": {\"name\":\"deny egress\", \"action\": \"Deny\", \"to\": [{\"nodes\": {\"matchExpressions\": [{\"key\":\"team\", \"operator\": \"In\", \"values\":[%s]}]}}]}}]", policyType, nodeLabels[1])
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy", anp.name, "--type=json", "-p", patchANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		anpRules, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("adminnetworkpolicy", anp.name, "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n ANP Rules %s after update : ", anpRules)
+
+		exutil.By("3.1 Validate from the pods running on all the nodes, egress traffic from node labeled team=qe is allowed.\n")
+		egressNode := labelledNodeMap["qe"]
+		for i := 0; i < numWorkerNodes; i++ {
+			o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[workersList.Items[i].Name])).To(o.BeTrue())
+			CurlPod2NodePass(oc, ns, nodePodMap[workersList.Items[i].Name], ns, egressNode, strconv.Itoa(int(hostport)))
+		}
+
+		exutil.By("3.2 Validate from the pods running on all the nodes, egress traffic from the node labelled team=ocp is blocked.\n")
+
+		egressNode = labelledNodeMap["ocp"]
+		for i := 0; i < numWorkerNodes; i++ {
+			o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[workersList.Items[i].Name])).To(o.BeFalse())
+			CurlPod2NodeFail(oc, ns, nodePodMap[workersList.Items[i].Name], ns, egressNode, strconv.Itoa(int(hostport)))
+		}
+		exutil.By("4.0 Update ANP with only HTTP egress traffic is allowed from node labeled team=qe and all other traffic blocked from other nodes")
+		patchANP = fmt.Sprintf("[{\"op\": \"add\", \"path\":\"/spec/%s/0/ports\", \"value\": [\"portRange\": {\"protocol\": \"TCP\", \"start\": %s, \"end\": %s}]}]", policyType, strconv.Itoa(int(containerport)), strconv.Itoa(int(hostport)))
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy", anp.name, "--type=json", "-p", patchANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		anpRules, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("adminnetworkpolicy", anp.name, "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n ANP Rules %s after update : ", anpRules)
+
+		exutil.By("4.1 Validate from the pods running on all the nodes, only HTTP egress traffic is allowed from node labeled team=qe.\n")
+		egressNode = labelledNodeMap["qe"]
+		for i := 0; i < numWorkerNodes; i++ {
+			o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[workersList.Items[i].Name])).To(o.BeFalse())
+			CurlPod2NodePass(oc, ns, nodePodMap[workersList.Items[i].Name], ns, egressNode, strconv.Itoa(int(hostport)))
+		}
+
+		exutil.By("5.0 Create new set of pods to validate ACLs are created as per (B)ANP already created.\n")
+		for i := 0; i < 2; i++ {
+			pod.name = "new-test-pod-" + testID + "-" + strconv.Itoa(i)
+			pod.nodename = workersList.Items[i].Name
+			pod.createPingPodNode(oc)
+			waitPodReady(oc, ns, pod.name)
+			newNodePodMap[pod.nodename] = pod.name
+		}
+		exutil.By("5.1 Validate from newly created pods on all the nodes, egress traffic from node with label team=ocp is blocked.\n")
+		egressNode = labelledNodeMap["ocp"]
+		for i := 0; i < numWorkerNodes; i++ {
+			CurlPod2NodeFail(oc, ns, newNodePodMap[workersList.Items[i].Name], ns, egressNode, strconv.Itoa(int(hostport)))
+		}
+		exutil.By("5.2 Validate from newly created pods on all the nodes, only HTTP egress traffic is allowed from node labeled team=qe.\n")
+		egressNode = labelledNodeMap["qe"]
+		for i := 0; i < numWorkerNodes; i++ {
+			o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, newNodePodMap[workersList.Items[i].Name])).To(o.BeFalse())
+			CurlPod2NodePass(oc, ns, newNodePodMap[workersList.Items[i].Name], ns, egressNode, strconv.Itoa(int(hostport)))
+		}
+
+		exutil.By("6.0 Create a NP to override BANP to allow egress traffic from node with no label\n")
+		createResourceFromFile(oc, ns, egressTypeFile)
+		output, err = oc.Run("get").Args("networkpolicy").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "default-allow-egress")).To(o.BeTrue())
+
+		exutil.By("6.1 Remove the label team=qe from the node.\n")
+		e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, labelledNodeMap["qe"], "team")
+
+		exutil.By("6.2 Validate from pods on all the nodes, all egress traffic from node that had label team=qe is now allowed.\n")
+		egressNode = labelledNodeMap["qe"]
+		for i := 0; i < numWorkerNodes; i++ {
+			o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[workersList.Items[i].Name])).To(o.BeTrue())
+			CurlPod2NodePass(oc, ns, nodePodMap[workersList.Items[i].Name], ns, egressNode, strconv.Itoa(int(hostport)))
+		}
+	})
 })

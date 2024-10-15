@@ -18,6 +18,8 @@ objects:
       - python
       - -m
       - http.server
+      - -b
+      - "::"
       - "${CONTAINERPORT}"
       image: image-registry.openshift-image-registry.svc:5000/openshift/tools:latest
       imagePullPolicy: IfNotPresent

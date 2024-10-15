@@ -270,6 +270,17 @@ type VRFResource struct {
 	template string
 }
 
+// struct to create a pod with named port
+type namedPortPodResource struct {
+	name          string
+	namespace     string
+	podLabelKey   string
+	podLabelVal   string
+	portname      string
+	containerport int32
+	template      string
+}
+
 func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace)
@@ -4094,4 +4105,19 @@ func (vrf *VRFResource) createVRF(oc *exutil.CLI) error {
 		return fmt.Errorf("fail to create VRF on the node %v", vrf.name)
 	}
 	return nil
+}
+
+func (namedPortPod *namedPortPodResource) createNamedPortPod(oc *exutil.CLI) {
+	exutil.By("Creating named port pod from template")
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", namedPortPod.template, "-p", "NAME="+namedPortPod.name,
+			"NAMESPACE="+namedPortPod.namespace, "PODLABELKEY="+namedPortPod.podLabelKey, "PODLABELVAL="+namedPortPod.podLabelVal,
+			"PORTNAME="+namedPortPod.portname, "CONTAINERPORT="+strconv.Itoa(int(namedPortPod.containerport)))
+		if err1 != nil {
+			e2e.Logf("Error creating resource:%v, and trying again", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create named port pod %v", namedPortPod.name))
 }
