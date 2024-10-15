@@ -28,23 +28,23 @@ export const preferNotifications = {
 }
 export const consoleTheme = {
   setDarkTheme: () => {
-    cy.get('button[id="console.theme"]').click();
-    cy.contains('button', 'Dark').click()
+    cy.get('div[data-test*="onsole.theme"] > div > button').click();
+    cy.contains('span', 'Dark').click()
   },
   setLightTheme: () => {
-    cy.get('button[id="console.theme"]').click();
-    cy.contains('button', 'Light').click()
+    cy.get('div[data-test*="console.theme"] > div > button').click();
+    cy.contains('span', 'Light').click()
   },
   setSystemDefaultTheme: () => {
-    cy.get('button[id="console.theme"]').click();
-    cy.contains('button', 'System default').click()
+    cy.get('div[data-test*="console.theme"] > div > button').click();
+    cy.contains('span', 'System default').click()
   }
 }
 
 export const userPreferences = {
   navToGeneralUserPreferences: () => {
     cy.get('button[aria-label="User menu"]').click({force: true});
-    cy.get('a').contains('User Preferences').click();
+    cy.get('span').contains('User Preferences').click();
     cy.get('.co-user-preference-page-content__tab-content', {timeout: 20000}).should('be.visible');
     cy.get('ul[role="tablist"] a[data-test="tab general"]').click();
   },

@@ -1,14 +1,13 @@
 export const searchPage = {
   navToSearchPage: () => cy.visit('/search/all-namespaces'),
   chooseResourceType: (resource_type) => {
-    cy.get('button[aria-label="Options menu"]').click();
-    cy.get('input[type="search"]').clear().type(`${resource_type}`);
-    cy.get(`input[id$="~${resource_type}"]`).click();
+    cy.get('input[placeholder="Resources"]').clear().type(`${resource_type}`);
+    cy.get(`label[id$="~${resource_type}"]`).click();
   },
   checkNoMachineResources: () => {
     searchPage.navToSearchPage();
     cy.get('button[class*=c-select__toggle]').click();
-    cy.get('[placeholder="Select Resource"]').type("machine");
+    cy.get('[placeholder="Resources"]').type("machine");
     const machineResources = ['MMachine','MAMachineAutoscaler','MCMachineConfig','MCPMachineConfigPool','MHCMachineHealthCheck','MSMachineSet'];
     machineResources.forEach((machineResource) => {
       cy.get(`[data-filter-text=${machineResource}]`).should('not.exist');

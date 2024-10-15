@@ -15,10 +15,11 @@ describe('user preferences related features', () => {
   after(() => {
     userPreferences.navToGeneralUserPreferences();
     userPreferences.toggleExactMatch('disable');
+    cy.adminCLI(`oc delete project ${projectName}`, {failOnNonZeroExit: false});
   });
 
   it('(OCP-75494,yanpzhan,UserInterface) Show Lightspeed hover button on pages',{tags:['@userinterface','@e2e','@osd-ccs','@rosa']}, () => {
-    cy.exec(`oc get packagemanifests.packages.operators.coreos.com --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | grep lightspeed-operator`).then((result) => {
+    cy.exec(`oc get packagemanifests.packages.operators.coreos.com --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | grep lightspeed-operator`, {failOnNonZeroExit: false}).then((result) => {
       if(result.stdout.includes('lightspeed')){
 	// check lightspeed button with normal user
         cy.visit('/user-preferences');
@@ -37,7 +38,8 @@ describe('user preferences related features', () => {
         userPreferences.checkLightspeedModal('cluster-admin');
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
       }else{
-        cy.get('@lightspeedbutton').should('not.exist');
+	cy.log('There is not Lightspeed operator on the cluster, Lightspeed hover button should not exist.');
+        cy.get('button.lightspeed__popover-button').should('not.exist');
       }
     });
   });
@@ -67,7 +69,7 @@ describe('user preferences related features', () => {
       cy.get('tr', {timeout: 30000}).should('have.length.at.least', 1);
     };
     const emptyResourcesFound = () => {
-      cy.get('[data-test="empty-message"]').should('exist');
+      cy.get('[data-test="empty-box"]').should('exist');
     };
     // verify exact match option is also available for normal users
     userPreferences.navToGeneralUserPreferences();
@@ -169,7 +171,6 @@ describe('user preferences related features', () => {
     searchPage.searchBy('APIServer');
     cy.wait(3000);
     checkAllItemsExactMatch('APIServer');
-    cy.adminCLI(`oc delete project ${projectName}`);
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
