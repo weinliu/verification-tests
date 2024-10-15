@@ -6804,7 +6804,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("Author:xiyuan-NonHyperShiftHOST-NonPreRelease-Medium-53667-Check the ocp4-pci-dss-modified-api-checks-pod will not in CrashLoopBackoff state with large scale of mc [Disruptive][Slow]", func() {
+	g.It("Author:xiyuan-StressTest-NonHyperShiftHOST-NonPreRelease-Medium-53667-Check the ocp4-pci-dss-modified-api-checks-pod will not in CrashLoopBackoff state with large scale of mc [Disruptive][Slow]", func() {
 		g.By("Set initial value !!!\n")
 		var (
 			cnt           int
