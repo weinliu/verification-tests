@@ -1130,8 +1130,8 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			sriovOpNs           = "openshift-sriov-network-operator"
 			podName1            = "sriov-67619-testpod1"
 			podName2            = "sriov-67619-testpod2"
-			pfName              = "ens2f0" // for RDU1, ens2f1 for RDU2
-			deviceID            = "159b"   // for RDU1, 1583 for RDU2
+			pfName              = ""
+			deviceID            = ""
 			vendorID            = "8086"
 			vfNum               = 4
 			ipv4Addr1           = "192.168.122.71"
@@ -1209,6 +1209,21 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 				EBPFPrivileged:    "true",
 			}
 
+			g.By("Get SRIOV interfaces")
+			route, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(route, "sriov.openshift-qe.sdn.com") {
+				g.By("Running test on RDU1 cluster")
+				pfName = "ens2f0"
+				deviceID = "159b"
+			} else if strings.Contains(route, "offload.openshift-qe.sdn.com") {
+				g.By("Running test on RDU2 cluster")
+				pfName = "ens2f1"
+				deviceID = "1583"
+			} else {
+				g.Skip("This case will only run on RDU1/RDU2 cluster. Skip for other envrionment!!!")
+			}
+
 			g.By("####### Check openshift-sriov-network-operator is running well ##########")
 			// assuming SRIOV Operator will be present in the cluster.
 			// also assuming SRIOVOperatorConfig is applied in OCP versions >= 4.16
@@ -1232,7 +1247,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 				o.Expect((NOStatus)).To(o.BeTrue())
 			}
 			g.By("Deploy 0-click loki")
-			_, _, err := exutil.SetupK8SNFSServerAndVolume(oc, 1)
+			_, _, err = exutil.SetupK8SNFSServerAndVolume(oc, 1)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), "--ignore-unknown-parameters=true", "-f", lokipvcFixturePath, "-p", "NAMESPACE="+oc.Namespace())
 			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), "--ignore-unknown-parameters=true", "-f", zeroClickLokiFixturePath)
