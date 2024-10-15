@@ -61,7 +61,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	}
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-21205-Low-36584-Install descheduler operator via a deployment & verify it should not violate PDB [Slow] [Disruptive]", func() {
+	g.It("Author:knarra-ROSA-OSD_CCS-ARO-WRS-High-21205-Low-36584-V-ACS.02-Install descheduler operator via a deployment & verify it should not violate PDB [Slow] [Disruptive]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 
@@ -333,7 +333,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-37463-High-40055-Descheduler-Validate AffinityAndTaints and TopologyAndDuplicates profile [Disruptive][Slow]", func() {
+	g.It("Author:knarra-ROSA-OSD_CCS-ARO-WRS-High-37463-High-40055-V-ACS.02-Descheduler-Validate AffinityAndTaints and TopologyAndDuplicates profile [Disruptive][Slow]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 
@@ -826,7 +826,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 	// author: knarra@redhat.com
 	// Removing Hypershiftmgmt due to bug https://issues.redhat.com/browse/OCPBUGS-29064
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Longduration-NonPreRelease-Author:knarra-High-43287-High-43283-Descheduler-Descheduler operator should verify config does not conflict with scheduler and SoftTopologyAndDuplicates profile [Disruptive][Slow]", func() {
+	g.It("Author:knarra-NonHyperShiftHOST-ROSA-OSD_CCS-ARO-WRS-Longduration-NonPreRelease-High-43287-High-43283-V-ACS.02-Descheduler-Descheduler operator should verify config does not conflict with scheduler and SoftTopologyAndDuplicates profile [Disruptive][Slow]", func() {
 		// Check if cluster is hypershift cluster
 		guestClusterName, guestClusterKubeconfig, hostedClusterName := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
 		if guestClusterKubeconfig != "" {
@@ -1130,7 +1130,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("Author:knarra-ROSA-OSD_CCS-ARO-Medium-43277-High-50941-High-76158-Descheduler-Validate Predictive, Automatic mode and eviction limits for descheduler [Slow][Disruptive]", func() {
+	g.It("Author:knarra-ROSA-OSD_CCS-ARO-WRS-Medium-43277-High-50941-High-76158-V-ACS.02-Descheduler-Validate Predictive, Automatic mode and eviction limits for descheduler [Slow][Disruptive]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 
@@ -1301,7 +1301,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-50193-High-50191-Descheduler-Validate priorityFiltering with thresholdPriorityClassName & thresholdPriority param [Disruptive][Slow]", func() {
+	g.It("Author:knarra-ROSA-OSD_CCS-ARO-WRS-High-50193-High-50191-V-ACS.02-Descheduler-Validate priorityFiltering with thresholdPriorityClassName & thresholdPriority param [Disruptive][Slow]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 
@@ -1504,7 +1504,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-52303-Descheduler-Validate namespace filtering [Slow][Disruptive]", func() {
+	g.It("Author:knarra-ROSA-OSD_CCS-ARO-WRS-High-52303-Descheduler-V-ACS.02-Validate namespace filtering [Slow][Disruptive]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 
@@ -1682,7 +1682,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-NonPreRelease-Longduration-Author:knarra-High-53058-Descheduler-Validate exclude namespace filtering [Slow][Disruptive]", func() {
+	g.It("Author:knarra-ROSA-OSD_CCS-ARO-WRS-NonPreRelease-Longduration-High-53058-V-ACS.02-Descheduler-Validate exclude namespace filtering [Slow][Disruptive]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 
@@ -1894,7 +1894,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:knarra-High-50195-High-50942-Descheduler-Validate priorityfiltering with thresholdPriority param [Slow][Disruptive]", func() {
+	g.It("Author:knarra-ROSA-OSD_CCS-ARO-WRS-High-50195-High-50942-V-ACS.02-Descheduler-Validate priorityfiltering with thresholdPriority param [Slow][Disruptive]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 
@@ -2101,7 +2101,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-NonPreRelease-Longduration-Author:yinzhou-Medium-45694-Support to collect olm data in must-gather [Slow][Disruptive]", func() {
+	g.It("Author:knarra-ROSA-OSD_CCS-ARO-WRS-NonPreRelease-Longduration-Medium-45694-V-ACS.02-Support to collect olm data in must-gather [Slow][Disruptive]", func() {
 		// Skip the test if no qe-app-registry catalog is present
 		skipMissingCatalogsource(oc)
 
@@ -2166,7 +2166,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("Author:knarra-ROSA-OSD_CCS-ARO-Medium-76194-Descheduler-Validate profiles below cannot be declared together [Slow][Disruptive]", func() {
+	g.It("Author:knarra-ROSA-OSD_CCS-ARO-WRS-Medium-76194-V-ACS.02-Descheduler-Validate profiles below cannot be declared together [Slow][Disruptive]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 
@@ -2317,7 +2317,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("Author:knarra-ROSA-OSD_CCS-ARO-High-76422-Descheduler-Verify LongLifeCycle descheduler [Slow][Disruptive]", func() {
+	g.It("Author:knarra-ROSA-OSD_CCS-ARO-WRS-High-76422-V-ACS.02-Descheduler-Verify LongLifeCycle descheduler [Slow][Disruptive]", func() {
 		// Skip the test if cluster is SNO
 		exutil.SkipForSNOCluster(oc)
 
