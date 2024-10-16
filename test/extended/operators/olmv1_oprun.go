@@ -523,6 +523,178 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	})
 
+	// author: kuiwang@redhat.com
+	g.It("Author:kuiwang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-76843-support disc with icsp [Disruptive]", func() {
+		exutil.SkipOnProxyCluster(oc)
+		exutil.SkipForSNOCluster(oc)
+		var (
+			caseID                       = "76843"
+			ns                           = "ns-" + caseID
+			sa                           = "sa" + caseID
+			labelValue                   = caseID
+			catalogName                  = "clustercatalog-" + caseID
+			ceName                       = "ce-" + caseID
+			iscpName                     = "icsp-" + caseID
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
+			icspTemplate                 = filepath.Join(baseDir, "icsp-single-mirror.yaml")
+			icsp                         = olmv1util.IcspDescription{
+				Name:     iscpName,
+				Mirror:   "quay.io/olmqe",
+				Source:   "qe76843.myregistry.io/olmqe",
+				Template: icspTemplate,
+			}
+			clustercatalog = olmv1util.ClusterCatalogDescription{
+				Name:     catalogName,
+				Imageref: "qe76843.myregistry.io/olmqe/nginx-ok-index@sha256:c613ddd68b74575d823c6f370c0941b051ea500aa4449224489f7f2cc716e712",
+				Template: clustercatalogTemplate,
+			}
+			saCrb = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			ce76843 = olmv1util.ClusterExtensionDescription{
+				Name:             ceName,
+				PackageName:      "nginx-ok-v76843",
+				Channel:          "alpha",
+				Version:          ">=0.0.1",
+				InstallNamespace: ns,
+				SaName:           sa,
+				LabelValue:       labelValue,
+				Template:         clusterextensionTemplate,
+			}
+		)
+		exutil.By("check if there is idms or itms")
+		// if exutil.CheckAppearance(oc, 1*time.Second, 1*time.Second, exutil.Immediately,
+		// 	exutil.AsAdmin, exutil.WithoutNamespace, exutil.Appear, "ImageContentSourcePolicy") {
+		// 	g.Skip("skip it because there is icsp")
+		// }
+		if exutil.CheckAppearance(oc, 1*time.Second, 1*time.Second, exutil.Immediately,
+			exutil.AsAdmin, exutil.WithoutNamespace, exutil.Appear, "ImageDigestMirrorSet") ||
+			exutil.CheckAppearance(oc, 1*time.Second, 1*time.Second, exutil.Immediately,
+				exutil.AsAdmin, exutil.WithoutNamespace, exutil.Appear, "ImageTagMirrorSet") {
+			g.Skip("skip it because there is itms or idms")
+		}
+
+		exutil.By("check if current mcp is healthy")
+		if !olmv1util.HealthyMCP4OLM(oc) {
+			g.Skip("current mcp is not healthy")
+		}
+
+		exutil.By("create icsp")
+		defer icsp.Delete(oc)
+		icsp.Create(oc)
+
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
+
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
+
+		exutil.By("check ce to be installed")
+		defer ce76843.Delete(oc)
+		ce76843.Create(oc)
+
+	})
+
+	// author: kuiwang@redhat.com
+	g.It("Author:kuiwang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-76844-support disc with itms and idms [Disruptive]", func() {
+		exutil.SkipOnProxyCluster(oc)
+		exutil.SkipForSNOCluster(oc)
+		var (
+			caseID                       = "76844"
+			ns                           = "ns-" + caseID
+			sa                           = "sa" + caseID
+			labelValue                   = caseID
+			catalogName                  = "clustercatalog-" + caseID
+			ceName                       = "ce-" + caseID
+			itdmsName                    = "itdms-" + caseID
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
+			itdmsTemplate                = filepath.Join(baseDir, "itdms-full-mirror.yaml")
+			itdms                        = olmv1util.ItdmsDescription{
+				Name:            itdmsName,
+				MirrorSite:      "quay.io",
+				SourceSite:      "qe76844.myregistry.io",
+				MirrorNamespace: "quay.io/olmqe",
+				SourceNamespace: "qe76844.myregistry.io/olmqe",
+				Template:        itdmsTemplate,
+			}
+			clustercatalog = olmv1util.ClusterCatalogDescription{
+				Name:     catalogName,
+				Imageref: "qe76844.myregistry.io/olmqe/nginx-ok-index:vokv76844",
+				Template: clustercatalogTemplate,
+			}
+			saCrb = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			ce76844 = olmv1util.ClusterExtensionDescription{
+				Name:             ceName,
+				PackageName:      "nginx-ok-v76844",
+				Channel:          "alpha",
+				Version:          ">=0.0.1",
+				InstallNamespace: ns,
+				SaName:           sa,
+				LabelValue:       labelValue,
+				Template:         clusterextensionTemplate,
+			}
+		)
+		exutil.By("check if there is icsp")
+		if exutil.CheckAppearance(oc, 1*time.Second, 1*time.Second, exutil.Immediately,
+			exutil.AsAdmin, exutil.WithoutNamespace, exutil.Appear, "ImageContentSourcePolicy") {
+			g.Skip("skip it because there is icsp")
+		}
+		// if exutil.CheckAppearance(oc, 1*time.Second, 1*time.Second, exutil.Immediately,
+		// 	exutil.AsAdmin, exutil.WithoutNamespace, exutil.Appear, "ImageDigestMirrorSet") ||
+		// 	exutil.CheckAppearance(oc, 1*time.Second, 1*time.Second, exutil.Immediately,
+		// 		exutil.AsAdmin, exutil.WithoutNamespace, exutil.Appear, "ImageTagMirrorSet") {
+		// 	g.Skip("skip it because there is itms or idms")
+		// }
+
+		exutil.By("check if current mcp is healthy")
+		if !olmv1util.HealthyMCP4OLM(oc) {
+			g.Skip("current mcp is not healthy")
+		}
+
+		exutil.By("create itdms")
+		defer itdms.Delete(oc)
+		itdms.Create(oc)
+
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
+
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
+
+		exutil.By("check ce to be installed")
+		defer ce76844.Delete(oc)
+		ce76844.Create(oc)
+
+	})
+
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-Author:xzha-High-68821-OLMv1 Supports Version Ranges during Installation", func() {
 		exutil.SkipOnProxyCluster(oc)

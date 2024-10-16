@@ -202,7 +202,7 @@ func GetFieldWithJsonpath(oc *CLI, interval, timeout time.Duration, immediately,
 // if you expect pod in ns disappear, could be
 // CheckAppearance(oc, 4*time.Second, 200*time.Second, exutil.NotImmediately, exutil.AsAdmin, exutil.WithoutNamespace, exutil.Disappear, "-n", ns, "pod" name)
 func CheckAppearance(oc *CLI, interval, timeout time.Duration, immediately, asAdmin, withoutNamespace, appear bool, parameters ...string) bool {
-	if appear == Disappear {
+	if !appear {
 		parameters = append(parameters, "--ignore-not-found")
 	}
 	err := wait.PollUntilContextTimeout(context.TODO(), interval, timeout, immediately, func(ctx context.Context) (bool, error) {
@@ -211,10 +211,11 @@ func CheckAppearance(oc *CLI, interval, timeout time.Duration, immediately, asAd
 			e2e.Logf("the get error is %v, and try next", err)
 			return false, nil
 		}
+		e2e.Logf("output: %v", output)
 		if !appear && strings.Compare(output, "") == 0 {
 			return true, nil
 		}
-		if appear && strings.Compare(output, "") != 0 {
+		if appear && strings.Compare(output, "") != 0 && !strings.Contains(strings.ToLower(output), "no resources found") {
 			return true, nil
 		}
 		return false, nil
