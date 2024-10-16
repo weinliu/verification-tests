@@ -4858,6 +4858,75 @@ desiredState:
 			"The manually cordoned node should not be updated. The desiredConfig value should be the old one.")
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-Longduration-NonPreRelease-Critical-76108-MachineConfig inheritance. Canary rollout update [Disruptive]", func() {
+		SkipIfCompactOrSNO(oc) // We can't create custom pools if only the master pool exists
+
+		var (
+			customMCPName = "worker-perf"
+			canaryMCPName = "worker-perf-canary"
+			mcName        = "06-kdump-enable-worker-perf-tc-76108"
+			mcUnit        = `{"enabled": true, "name": "kdump.service"}`
+			mcKernelArgs  = "crashkernel=512M"
+		)
+
+		exutil.By("Create custom MCP")
+		defer DeleteCustomMCP(oc.AsAdmin(), customMCPName)
+		customMcp, err := CreateCustomMCP(oc.AsAdmin(), customMCPName, 2)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Could not create a new custom MCP")
+		logger.Infof("OK!\n")
+
+		exutil.By("Create canary custom MCP")
+		defer DeleteCustomMCP(oc.AsAdmin(), canaryMCPName)
+		canaryMcp, err := CreateCustomMCP(oc.AsAdmin(), canaryMCPName, 0)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Could not create a new custom MCP")
+		logger.Infof("OK!\n")
+
+		exutil.By("Patch the canary MCP so that it uses the MCs of the custom MCP too")
+		o.Expect(
+			canaryMcp.Patch("json", `[{ "op": "add", "path": "/spec/machineConfigSelector/matchExpressions/0/values/-", "value":"`+customMCPName+`"}]`),
+		).To(o.Succeed(), "Error patching MCP %s so that it uses the same MCs as MCP %s", canaryMcp.GetName(), customMcp.GetName())
+		logger.Infof("OK!\n")
+
+		exutil.By("Apply a new MC to the custom pool")
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, customMCPName)
+		defer mc.delete()
+
+		err = mc.Create("-p", "NAME="+mcName, "-p", "POOL="+customMCPName, "-p", fmt.Sprintf("UNITS=[%s]", mcUnit), fmt.Sprintf(`KERNEL_ARGS=["%s"]`, mcKernelArgs))
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating MachineConfig %s", mc.GetName())
+
+		customMcp.waitForComplete()
+
+		exutil.By("Check that the configuration was applied the nodes")
+		canaryNode := customMcp.GetNodesOrFail()[0]
+		o.Expect(canaryNode.IsKernelArgEnabled(mcKernelArgs)).Should(o.BeTrue(), "Kernel argument %s is not set in node %s", mcKernelArgs, canaryNode)
+		logger.Infof("OK!\n")
+
+		exutil.By("Move one node from the custom pool to the canary custom pool")
+		startTime := canaryNode.GetDateOrFail()
+		defer canaryNode.RemoveLabel("node-role.kubernetes.io/" + canaryMCPName)
+		o.Expect(
+			canaryNode.AddLabel("node-role.kubernetes.io/"+canaryMCPName, ""),
+		).To(o.Succeed(), "Error labeling node %s", canaryNode)
+		o.Expect(
+			canaryNode.RemoveLabel("node-role.kubernetes.io/"+customMCPName),
+		).To(o.Succeed(), "Error removing label from node %s", canaryNode)
+
+		o.Eventually(canaryMcp.getMachineCount, "5m", "20s").Should(o.Equal(1),
+			"A machine should be added to the canary MCP, but no machine was added: %s", canaryMcp.PrettyString())
+		o.Eventually(customMcp.getMachineCount, "5m", "20s").Should(o.Equal(1),
+			"A machine should be removed from the custom MCP: %s", customMcp.PrettyString())
+		canaryMcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the configuration is still applied to the canary node")
+		o.Expect(canaryNode.IsKernelArgEnabled(mcKernelArgs)).Should(o.BeTrue(), "Kernel argument %s is not set in node %s", mcKernelArgs, canaryNode)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the node was not restarted when it was added to the canary pool")
+		checkRebootAction(false, canaryNode, startTime)
+		logger.Infof("OK!\n")
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason

@@ -390,8 +390,8 @@ func checkDrainActionWithGomega(drainExecuted bool, node Node, controller *Contr
 }
 
 // checkRebootActionWithGomega checks that the reboot action in the node is the expected one (rebootSkipped)
-func checkRebootAction(rebootSkipped bool, node Node, startTime time.Time) {
-	checkRebootActionWithGomega(rebootSkipped, node, startTime, o.Default)
+func checkRebootAction(rebootExecuted bool, node Node, startTime time.Time) {
+	checkRebootActionWithGomega(rebootExecuted, node, startTime, o.Default)
 }
 
 // checkRebootActionWithGomega checks that the reboot action in the node is the expected one (rebootSkipped). It accepts and extra Gomega parameter that allows the function to be used in the Eventually gomega matchers

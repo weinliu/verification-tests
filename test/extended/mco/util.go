@@ -1354,6 +1354,13 @@ func SkipIfSNO(oc *exutil.CLI) {
 	}
 }
 
+// SkipIfCompactOrSNO skips the test case if the cluster is a compact or SNO cluster
+func SkipIfCompactOrSNO(oc *exutil.CLI) {
+	if IsCompactOrSNOCluster(oc) {
+		g.Skip("The test is not supported in Compact or SNO clusters")
+	}
+}
+
 // getAllKubeProxyPod returns the kube-rbac-proxy- pod for given namespace
 func getAllKubeProxyPod(oc *exutil.CLI, namespace string) ([]string, error) {
 	var kubeRabcProxyPodList []string

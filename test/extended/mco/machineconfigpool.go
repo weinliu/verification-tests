@@ -1406,7 +1406,7 @@ func DeleteCustomMCP(oc *exutil.CLI, name string) error {
 
 	nodes, err := mcp.GetNodes()
 	if err != nil {
-		logger.Errorf("Could not get the nodes that belong to MCP %s", mcp.GetName())
+		logger.Errorf("Could not get the nodes that belong to MCP %s: %s", mcp.GetName(), err)
 		return err
 	}
 
@@ -1415,7 +1415,7 @@ func DeleteCustomMCP(oc *exutil.CLI, name string) error {
 		logger.Infof("Removing pool label from node %s", node.GetName())
 		err := node.RemoveLabel(label)
 		if err != nil {
-			logger.Errorf("Could not remove the role label from node %s", node.GetName())
+			logger.Errorf("Could not remove the role label from node %s: %s", node.GetName(), err)
 			return err
 		}
 	}
@@ -1429,7 +1429,7 @@ func DeleteCustomMCP(oc *exutil.CLI, name string) error {
 
 	err = mcp.WaitForMachineCount(0, 5*time.Minute)
 	if err != nil {
-		logger.Errorf("The %s MCP already contains nodes, it cannot be deleted", mcp.GetName())
+		logger.Errorf("The %s MCP already contains nodes, it cannot be deleted: %s", mcp.GetName(), err)
 		return err
 	}
 
@@ -1438,14 +1438,14 @@ func DeleteCustomMCP(oc *exutil.CLI, name string) error {
 	wMcp := NewMachineConfigPool(oc, MachineConfigPoolWorker)
 	err = wMcp.WaitForUpdatedStatus()
 	if err != nil {
-		logger.Errorf("The worker MCP was not ready after removing the custom pool")
+		logger.Errorf("The worker MCP was not ready after removing the custom pool: %s", err)
 		wMcp.PrintDebugCommand()
 		return err
 	}
 
 	err = mcp.Delete()
 	if err != nil {
-		logger.Errorf("The %s MCP could not be deleted", mcp.GetName())
+		logger.Errorf("The %s MCP could not be deleted: %s", mcp.GetName(), err)
 		return err
 	}
 
