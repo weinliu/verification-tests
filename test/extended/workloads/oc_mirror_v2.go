@@ -2286,4 +2286,225 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		}
 
 	})
+
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-76469-Verify Creating release signature configmap with oc-mirror v2 [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case76469"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "30G", "/var/lib/registry")
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-76469.yaml")
+
+		exutil.By("Start mirror2disk")
+		defer os.RemoveAll("~/.oc-mirror/")
+		defer os.RemoveAll("~/.oc-mirror.log")
+		waitErr := wait.PollImmediate(30*time.Second, 900*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2disk for creating release signature configmap with oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk for creating release signature configmap with oc-mirror v2 failed, retrying...")
+
+		exutil.By("Start disk2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--from", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
+			if err != nil {
+				e2e.Logf("The disk2mirror for creating release signature configmap with oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the disk2mirror for creating release signature configmap with oc-mirror v2 failed")
+
+		// Validate if the content from the signature configmap in cluster-resources directory and signature directory matches
+		validateConfigmapAndSignatureContent(oc, dirname, "4.16.0")
+
+		exutil.By("Start mirror2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		dirnameM2M := "/tmp/case76469m2m"
+		defer os.RemoveAll(dirnameM2M)
+		err = os.MkdirAll(dirnameM2M, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirnameM2M, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
+			if err != nil {
+				e2e.Logf("The mirror2mirror for creating release signature configmap with oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the disk2mirror for creating release signature configmap with oc-mirror v2 still failed")
+
+		// Validate if the content from the signature configmap in cluster-resources directory and signature directory matches
+		validateConfigmapAndSignatureContent(oc, dirnameM2M, "4.16.0")
+
+	})
+
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-76596-oc-mirror should not GenerateSignatureConfigMap when not mirror the release images [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case76596"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "30G", "/var/lib/registry")
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-76596.yaml")
+
+		exutil.By("Start mirror2disk")
+		defer os.RemoveAll("~/.oc-mirror/")
+		defer os.RemoveAll("~/.oc-mirror.log")
+		waitErr := wait.PollImmediate(30*time.Second, 900*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2disk for should not generate signature configmap when not mirror the release images  with oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk for should not generate signature configmap when not mirror the release images  with oc-mirror v2 failed, retrying...")
+
+		exutil.By("Start disk2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			d2mOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--from", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The disk2mirror for should not generate signature configmap when not mirror the release images with oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(d2mOutput, "signature files not found, could not generate signature configmap") {
+				e2e.Failf("Signature Configmaps are being generated when nothing related to platform is set in the isc which is not expected")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the disk2mirror for should not generate signature configmap when not mirror the release images with oc-mirror v2 failed")
+
+		exutil.By("Start mirror2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		dirnameM2M := "/tmp/case76469m2m"
+		defer os.RemoveAll(dirnameM2M)
+		err = os.MkdirAll(dirnameM2M, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			m2mOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirnameM2M, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror for should not generate signature configmap when not mirror the release images with oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(m2mOutput, "signature files not found, could not generate signature configmap") {
+				e2e.Failf("ignature Configmaps are being generated when nothing related to platform is set in the isc which is not expected")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but mirror2mirror for should not generate signature configmap when not mirror the release images with oc-mirror v2 failed")
+	})
+
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-76489-oc-mirror should fail when the cincinnati API has errors [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case76489"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "30G", "/var/lib/registry")
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-76489.yaml")
+		imageSetYamlFileS := filepath.Join(ocmirrorBaseDir, "config-76596.yaml")
+
+		// Set UPDATE_URL_OVERRIDE to a site that does not work
+		exutil.By("Set UPDATE_URL_OVERRIDE to a site that does not work")
+		defer os.Unsetenv("UPDATE_URL_OVERRIDE")
+		err = os.Setenv("UPDATE_URL_OVERRIDE", "https://a-site-that-does-not-work")
+		if err != nil {
+			e2e.Failf("Error setting environment variable:", err)
+		}
+
+		// Verify that the environment variable is set
+		e2e.Logf("UPDATE_URL_OVERRIDE:", os.Getenv("UPDATE_URL_OVERRIDE"))
+
+		exutil.By("Start mirror2disk")
+		defer os.RemoveAll("~/.oc-mirror/")
+		defer os.RemoveAll("~/.oc-mirror.log")
+		m2dOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		if matched, _ := regexp.Match("ERROR"+".*"+"RemoteFailed"+".*"+"lookup a-site-that-does-not-work"+".*"+"no such host", []byte(m2dOutput)); !matched {
+			e2e.Failf("Do not see the expected output while doing mirror2disk\n")
+		}
+
+		exutil.By("Start mirror2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		m2mOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+		o.Expect(err).To(o.HaveOccurred())
+		if matched, _ := regexp.Match("ERROR"+".*"+"RemoteFailed"+".*"+"lookup a-site-that-does-not-work"+".*"+"no such host", []byte(m2mOutput)); !matched {
+			e2e.Failf("Do not see the expected output while doing mirror2disk\n")
+		}
+
+		// Unset the update_url_override
+		err = os.Unsetenv("UPDATE_URL_OVERRIDE")
+		if err != nil {
+			e2e.Failf("Error unsetting environment variable:", err)
+		}
+
+		// Verify that the environment variable is unset
+		e2e.Logf("UPDATE_URL_OVERRIDE:", os.Getenv("UPDATE_URL_OVERRIDE"))
+
+		exutil.By("Start mirror2mirror")
+		waitErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileS, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror after unsetting the UPDATE_URL_OVERRIDE for oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but mirror2mirror after unsetting the UPDATE_URL_OVERRIDE for oc-mirror v2 failed")
+	})
 })

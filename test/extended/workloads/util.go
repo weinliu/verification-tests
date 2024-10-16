@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -2347,4 +2348,73 @@ func checkOcPlatform(oc *exutil.CLI) string {
 		return "Unknown platform"
 	}
 
+}
+
+func validateConfigmapAndSignatureContent(oc *exutil.CLI, dirname string, filePrefix string) {
+	var signatureContent = "None"
+
+	// Check if signature configmap yaml and json files exists in the clusterresources folder directory
+	exutil.By("Verify that there is a yaml and json signature configmap files present under the clusterresources folder")
+	signatureConfigmapOutput, err := exec.Command("bash", "-c", fmt.Sprintf("ls -l %s", dirname+"/working-dir/cluster-resources")).Output()
+	if err != nil {
+		e2e.Failf("Error is %v", err)
+	}
+	if !strings.Contains(string(signatureConfigmapOutput), "signature-configmap.yaml") && strings.Contains(string(signatureConfigmapOutput), "signature-configmap.json") {
+		e2e.Failf("Could not find signature configmap files in the output, actual output is %s", signatureConfigmapOutput)
+	}
+
+	// Check if file with ocp_version-arch-imagedigestid exists in the signatures folder
+	exutil.By("Verify that there is a file inside working-dir/signatures folder")
+	signaturesFileOutput, err := exec.Command("bash", "-c", fmt.Sprintf("ls -l %s", dirname+"/working-dir/signatures/")).Output()
+	if err != nil {
+		e2e.Failf("Error %s occured while trying to retreive signatures folder", signaturesFileOutput)
+	}
+	e2e.Logf("Displaying content from signatures directory %s", signaturesFileOutput)
+	if !strings.Contains(string(signaturesFileOutput), "4.16.0") {
+		e2e.Failf("Could not find any files starting with string 4.16.0 in the signatures folder")
+	}
+
+	exutil.By("Get content from signatures folder")
+	err = filepath.Walk(dirname+"/working-dir/signatures/", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			e2e.Failf("Err is %s", err)
+		}
+		// Check if the file starts with the given prefix
+		if !info.IsDir() && strings.HasPrefix(info.Name(), filePrefix) {
+			e2e.Logf("Found file: %s\n", path)
+
+			// Read the file content
+			fileContent, err := ioutil.ReadFile(path)
+			if err != nil {
+				e2e.Logf("Error reading file %s: %v", path, err)
+			}
+
+			signatureContent = base64.StdEncoding.EncodeToString(fileContent)
+
+			e2e.Logf("Content of %s:\n%s\n", path, signatureContent)
+		}
+		return nil
+	})
+	if err != nil {
+		e2e.Logf("Error walking the directory: %v", err)
+	}
+
+	exutil.By("Retreive content from signature configmap yaml and json files")
+	signatureConfigmapContent, err := exec.Command("bash", "-c", fmt.Sprintf("cat %s | grep 'binaryData:' -A 1 | tail -n 1 | sed 's/^[[:space:]]*//'", dirname+"/working-dir/cluster-resources/signature-configmap.yaml")).Output()
+	configmapYamlContent := strings.Split(string(signatureConfigmapContent), ":")[1]
+	if err != nil {
+		e2e.Failf("could retreive content from signature-configmap.yaml")
+	}
+	if !(strings.TrimSpace(configmapYamlContent) == strings.TrimSpace(signatureContent)) {
+		e2e.Failf("Content from signatures directory %s and the configmap are not the same %s", signatureContent, configmapYamlContent)
+	}
+
+	signatureConfigmapContentone, err := exec.Command("bash", "-c", fmt.Sprintf("cat %s | jq -r '.binaryData' | sed 's/[{}]//g; s/\"//g'", dirname+"/working-dir/cluster-resources/signature-configmap.json")).Output()
+	configmapJsonContent := strings.Split(string(signatureConfigmapContentone), ":")[1]
+	if err != nil {
+		e2e.Failf("could retreive content from signature-configmap.json")
+	}
+	if !(strings.TrimSpace(configmapJsonContent) == strings.TrimSpace(signatureContent)) {
+		e2e.Failf("Content from signatures directory %s and the configmap json are not the same %s", signatureContent, configmapJsonContent)
+	}
 }
