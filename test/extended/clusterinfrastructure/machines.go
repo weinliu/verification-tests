@@ -975,6 +975,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
+		availabilityZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-o=jsonpath={.spec.template.spec.providerSpec.value.placement.availabilityZone}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if availabilityZone != "us-east-2b" && availabilityZone != "us-east-1b" {
+			g.Skip("Restricted to b availabilityZone testing because cluster placement group cannot span zones. But it's " + availabilityZone)
+		}
 		g.By("Update machineset with Placement group")
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"placementGroupName":"pgcluster"}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
