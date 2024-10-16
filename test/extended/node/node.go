@@ -2036,6 +2036,90 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		o.Expect(strings.Contains(log, "INFO\tReconciling ScaledObject")).Should(o.BeTrue())
 
 	})
+	// author: asahay@redhat.com
+	g.It("Author:asahay-High-60966-CMA Scale applications based on memory metrics [Serial]", func() {
+		exutil.By("1) Create a kedacontroller with default template")
+
+		kedaControllerDefault := filepath.Join(buildPruningBaseDir, "keda-controller-default.yaml")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kedaControllerDefault).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		cmaNs := "cma-60966"
+		defer deleteProject(oc, cmaNs)
+		createProject(oc, cmaNs)
+
+		var output string
+
+		exutil.By("2) Creating a Keda HPA deployment")
+		kedaHPADemoDeploymentTemp := filepath.Join(buildPruningBaseDir, "keda-hpa-demo-deployment.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f="+kedaHPADemoDeploymentTemp, "-n", cmaNs).Execute()
+		err = oc.AsAdmin().Run("create").Args("-f="+kedaHPADemoDeploymentTemp, "-n", cmaNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3) Verify the deployment is available")
+		errCheck := wait.Poll(20*time.Second, 280*time.Second, func() (bool, error) {
+			output, err1 := oc.AsAdmin().Run("get").Args("deployment", "-n", cmaNs).Output()
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "keda-hpa-demo-deployment") && strings.Contains(output, "1/1") {
+				e2e.Logf("Deployment has been created Sucessfully!")
+				return true, nil
+			}
+			return false, nil
+		})
+		e2e.Logf("Output: %v", output)
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Depolyment has not been created"))
+
+		exutil.By("4) Creating a ScaledObject")
+		memScaledObjectTemp := filepath.Join(buildPruningBaseDir, "mem-scaledobject.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f="+memScaledObjectTemp, "-n", cmaNs).Execute()
+		err = oc.AsAdmin().Run("create").Args("-f="+memScaledObjectTemp, "-n", cmaNs).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5) Verifying the scaledobject readiness")
+		errCheck = wait.Poll(20*time.Second, 380*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().Run("get").Args("scaledobject", "mem-scaledobject", "-n", cmaNs, "-o", "jsonpath={.status.conditions[?(@.status=='True')].status} {.status.conditions[?(@.type=='Ready')].status}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if output == "True True True" {
+				e2e.Logf("ScaledObject is Active and Running.")
+				return true, nil
+			}
+			return false, nil
+		})
+		e2e.Logf("Output: %v", output)
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("ScaledObject is not ready"))
+
+		exutil.By("6) Checking HPA status using jsonpath")
+		errCheck = wait.Poll(20*time.Second, 380*time.Second, func() (bool, error) {
+			output, err = oc.AsAdmin().Run("get").Args("hpa", "keda-hpa-mem-scaledobject", "-n", cmaNs, "-o", "jsonpath={.spec.minReplicas} {.spec.maxReplicas}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			// The lower limit for the number of replicas to which the autoscaler can scale down is 1 and the upper limit for the number of replicas to which the autoscaler can scale up is 10
+			if strings.Contains(output, "1 10") {
+				e2e.Logf("HPA is configured correctly as expected!")
+				return true, nil
+			}
+
+			return false, nil
+		})
+		e2e.Logf("Output: %v", output)
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("HPA status check failed"))
+
+		exutil.By("7) Describing HPA to verify conditions")
+
+		errCheck = wait.Poll(20*time.Second, 380*time.Second, func() (bool, error) {
+			output, err = oc.AsAdmin().Run("get").Args("hpa", "keda-hpa-mem-scaledobject", "-n", cmaNs, "-o", "jsonpath={.status.conditions[?(@.type=='AbleToScale')].status} {.status.conditions[?(@.type=='ScalingActive')].status}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if output == "True True" {
+				e2e.Logf("HPA conditions are as expected: AbleToScale is True, ScalingActive is True.")
+				return true, nil
+			}
+			return false, nil
+		})
+		e2e.Logf("Output: %v", output)
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("HPA conditions are not met"))
+
+	})
 })
 
 var _ = g.Describe("[sig-node] NODE VPA Vertical Pod Autoscaler", func() {
