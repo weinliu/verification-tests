@@ -611,7 +611,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(sshKeyOut).Should(o.ContainSubstring("mco_test@redhat.com"))
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-High-46897-add new ssh authorized keys RHEL. OCP>=4.10 [Serial]", func() {
+	g.It("Author:sregidor-WRS-NonPreRelease-Longduration-High-46897-V-BR.26-add new ssh authorized keys RHEL. OCP>=4.10 [Serial]", func() {
 		skipTestIfClusterVersion(oc, "<", "4.10")
 		workerNode := skipTestIfOsIsNotRhelOs(oc)
 
