@@ -48,7 +48,7 @@ objects:
           restartPolicy: Never
 parameters:
 - name: KAFKA_IMAGE
-  value: "registry.redhat.io/amq-streams/kafka-34-rhel8:2.4.0"
+  value: "registry.redhat.io/amq-streams/kafka-34-rhel8:2.5.2"
 - name: KAFKA_TOPIC
   value: "network-flows-export"
 - name: KAFKA_USER

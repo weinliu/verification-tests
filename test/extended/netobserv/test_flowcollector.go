@@ -1791,6 +1791,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Deploy Kafka consumer pod")
+			// using amq-streams/kafka-34-rhel8:2.5.2 version. Update if imagePull issues are observed
 			consumerTemplate := filePath.Join(kafkaDir, "topic-consumer-tls.yaml")
 			consumer := Resource{"job", kafkaTopic2.TopicName + "-consumer", namespace}
 			defer consumer.clear(oc)
