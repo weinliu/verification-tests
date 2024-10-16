@@ -945,7 +945,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-High-75123-CRD upgrade checks for changes in required field and field type", func() {
+	// Cover test case: OCP-75123 and OCP-75217
+	g.It("Author:jitli-ConnectedOnly-High-75123-High-75217-CRD upgrade checks for changes in required field and field type", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -998,6 +999,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		// Cover test case: OCP-75217 - [olmv1] Override the unsafe upgrades with the warning message
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
 			`failed: version "v1alpha1", field "^.spec": new required fields added: [requiredfield2] for resolved bundle "nginx75123.v1.0.2" with version "1.0.2"`, 10, 60, 0)
 
