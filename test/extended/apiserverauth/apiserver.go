@@ -6736,9 +6736,19 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("4. Creating the kubeconfig files for ocpdev, ocptw and ocpqe")
-		opensslOcpdevCmd := fmt.Sprintf(`openssl s_client -showcerts -connect %s:%s </dev/null 2>/dev/null|openssl x509 -outform PEM > %s`, fqdnName, port, apiserverCrt)
-		_, err = exec.Command("bash", "-c", opensslOcpdevCmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		endpointUrl := fmt.Sprintf("https://%s:%s", fqdnName, port)
+
+		pemCert, err := fetchOpenShiftAPIServerCert(endpointUrl)
+		if err != nil {
+			e2e.Failf("Failed to fetch certificate: %v", err)
+		} else {
+			// Write the PEM-encoded certificate to the output file
+			if err := ioutil.WriteFile(apiserverCrt, pemCert, 0644); err != nil {
+				e2e.Failf("Error writing certificate to file: %v", err)
+			} else {
+				e2e.Logf("Certificate written to %s\n", apiserverCrt)
+			}
+		}
 
 		i := 1
 		for _, userDetails := range users {

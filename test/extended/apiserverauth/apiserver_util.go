@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -1871,4 +1872,66 @@ func validateMicroshiftConfig(fqdnName string, user string, patternToMatch strin
 	if !match {
 		e2e.Failf("Config not matched :: \n" + mchkConfig)
 	}
+}
+
+// fetchOpenShiftAPIServerCert fetches the server's certificate and returns it as a PEM-encoded string.
+func fetchOpenShiftAPIServerCert(apiServerEndpoint string) ([]byte, error) {
+	timeout := 120 * time.Second
+	retryInterval := 20 * time.Second
+
+	// Create a cancellable context for polling
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+	}
+
+	proxyURL := getProxyURL()
+	transport.Proxy = http.ProxyURL(proxyURL)
+
+	// Set up TLS configuration and DialContext
+	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, network, addr)
+	}
+
+	client := &http.Client{
+		Transport: transport,
+	}
+
+	var pemCert []byte
+	pollFunc := func(ctx context.Context) (done bool, err error) {
+		// Attempt to send a GET request to the OpenShift API server
+		resp, err := client.Get(apiServerEndpoint)
+		if err != nil {
+			e2e.Logf("Error connecting to the OpenShift API server: %v. Retrying...\n", err)
+			return false, nil
+		}
+		defer resp.Body.Close()
+
+		// Check TLS connection state
+		tlsConnectionState := resp.TLS
+		if tlsConnectionState == nil {
+			return false, fmt.Errorf("No TLS connection established")
+		}
+
+		// Encode the server's certificate to PEM format
+		cert := tlsConnectionState.PeerCertificates[0]
+		pemCert = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw})
+		if pemCert == nil {
+			return false, fmt.Errorf("Error encoding certificate to PEM")
+		}
+
+		fmt.Println("Certificate fetched successfully")
+		return true, nil
+	}
+
+	err := wait.PollUntilContextTimeout(ctx, retryInterval, timeout, true, pollFunc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch certificate within timeout: %w", err)
+	}
+
+	return pemCert, nil
 }
