@@ -567,7 +567,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		dockerfileFilePath := filepath.Join(dataPath, "Dockerfile")
 		err = copy(dockerfileFilePath, filepath.Join(tmpPath, "Dockerfile"))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocppreversion)
+		replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocppreversion)
 		// copy manager_auth_proxy_patch.yaml
 		authFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 		err = copy(filepath.Join(dataPath, "manager_auth_proxy_patch.yaml"), authFilePath)
@@ -828,11 +828,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 		err = copy(filepath.Join(dataPath, "Dockerfile"), filepath.Join(tmpPath, "Dockerfile"))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
+		replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
 
 		err = copy(filepath.Join(dataPath, "config", "default", "manager_auth_proxy_patch.yaml"), filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		replaceContent(filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml"), "registry.redhat.io/openshift4/ose-kube-rbac-proxy:vocppreversion", "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocppreversion)
+		replaceContent(filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml"), "registry.redhat.io/openshift4/ose-kube-rbac-proxy:vocppreversion", "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocppreversion)
 
 		exutil.By("step: Build and push the operator image")
 		tokenDir := "/tmp/ocp-34462" + getRandomString()
@@ -977,8 +977,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 			managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 			content = getContent(managerAuthProxyPatch)
-			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v" + ocpversion))
-			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocppreversion)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v" + ocpversion))
+			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocppreversion)
 		}
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
@@ -1134,8 +1134,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 			managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 			content = getContent(managerAuthProxyPatch)
-			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v" + ocpversion))
-			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocppreversion)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v" + ocpversion))
+			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocppreversion)
 		}
 
 		exutil.By("step: Create API.")
@@ -1549,8 +1549,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 			managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 			content = getContent(managerAuthProxyPatch)
-			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v" + ocpversion))
-			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocppreversion)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v" + ocpversion))
+			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocppreversion)
 		}
 
 		exutil.By("step: modify namespace")
@@ -1766,7 +1766,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
-		imageTag := "registry-proxy.engineering.redhat.com/rh-osbs/openshift-ose-ansible-operator:v" + ocpversion
+		imageTag := "registry-proxy.engineering.redhat.com/rh-osbs/openshift-ose-ansible-rhel9-operator:v" + ocpversion
 		containerCLI := container.NewPodmanCLI()
 		e2e.Logf("create container with image %s", imageTag)
 		id, err := containerCLI.ContainerCreate(imageTag, "test-42028", "/bin/sh", true)
@@ -1865,8 +1865,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			exutil.By("step: update manager_auth_proxy_patch")
 			managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 			content := getContent(managerAuthProxyPatch)
-			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v" + ocpversion))
-			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocppreversion)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v" + ocpversion))
+			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocppreversion)
 		}
 
 		exutil.By("step: Build the operator image")
@@ -2328,8 +2328,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
 			managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 			content = getContent(managerAuthProxyPatch)
-			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v" + ocpversion))
-			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocppreversion)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v" + ocpversion))
+			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocppreversion)
 		}
 
 		deployfilepath := filepath.Join(tmpPath, "config", "samples", "cache_v1alpha1_memcached40341.yaml")
@@ -2487,7 +2487,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(makefileFilePath, "operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)", "operator-sdk generate bundle $(BUNDLE_GEN_FLAGS)")
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 
 		exutil.By("step: make bundle.")
 		// copy manifests
@@ -2582,7 +2582,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(makefileFilePath, "operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)", "operator-sdk generate bundle $(BUNDLE_GEN_FLAGS)")
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 
 		exutil.By("step: make bundle.")
 		// copy manifests
@@ -2677,7 +2677,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(makefileFilePath, "controller:latest", imageTag)
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 
 		exutil.By("step: Install kustomize")
 		kustomizePath := "/root/kustomize"
@@ -2771,7 +2771,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(dockerFile, "install -r ${HOME}/requirements.yml", "install -r ${HOME}/requirements.yml --force")
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 
 		exutil.By("step: Build and push the operator image")
 		tokenDir := "/tmp/ocp-44550" + getRandomString()
@@ -2893,7 +2893,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-rhel9-operator:v"+ocpversion)
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 		// update the Makefile
 		makefileFilePath := filepath.Join(tmpPath, "Makefile")
 		replaceContent(makefileFilePath, "controller:latest", imageTag)
@@ -3155,7 +3155,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("step: modify files to generate the quay.io/olmqe images.")
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 		// update the Dockerfile
 		dockerFilePath := filepath.Join(tmpPath, "Dockerfile")
 		replaceContent(dockerFilePath, "golang:", "quay.io/olmqe/golang:")
@@ -3519,7 +3519,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(makefileFilePath, "operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)", "operator-sdk generate bundle $(BUNDLE_GEN_FLAGS)")
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 		if upstream {
 			replaceContent(rbacFilePath, "gcr.io/kubebuilder/kube-rbac-proxy:", "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion+" #")
 		}
@@ -3723,7 +3723,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(makefileFilePath, "operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)", "operator-sdk generate bundle $(BUNDLE_GEN_FLAGS)")
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 		if upstream {
 			replaceContent(rbacFilePath, "gcr.io/kubebuilder/kube-rbac-proxy:", "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion+" #")
 		}
@@ -3928,7 +3928,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(makefileFilePath, "controller:latest", imageTag)
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 		if upstream {
 			replaceContent(rbacFilePath, "gcr.io/kubebuilder/kube-rbac-proxy:", "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion+" #")
 		}
@@ -4121,12 +4121,12 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		dockerfileFilePath := filepath.Join(dataPath, "Dockerfile")
 		err = copy(dockerfileFilePath, filepath.Join(tmpPath, "Dockerfile"))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
+		replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
 		// copy manager_auth_proxy_patch.yaml
 		authFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 		err = copy(filepath.Join(dataPath, "manager_auth_proxy_patch.yaml"), authFilePath)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		replaceContent(authFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:vocpversion", "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		replaceContent(authFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:vocpversion", "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 		// copy manager.yaml
 		err = copy(filepath.Join(dataPath, "manager.yaml"), filepath.Join(tmpPath, "config", "manager", "manager.yaml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -4329,13 +4329,13 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		dockerfileFilePath := filepath.Join(dataPath, "Dockerfile")
 		err = copy(dockerfileFilePath, filepath.Join(tmpPath, "Dockerfile"))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
+		replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
 		// copy the watches.yaml
 		err = copy(filepath.Join(dataPath, "watches.yaml"), filepath.Join(tmpPath, "watches.yaml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 
 		exutil.By("step: Build and push the operator image")
 		tokenDir := "/tmp/ocp-28586" + getRandomString()
@@ -4449,13 +4449,13 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		dockerfileFilePath := filepath.Join(tmpPath, "Dockerfile")
 		err = copy(filepath.Join(dataPath, "Dockerfile"), dockerfileFilePath)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		replaceContent(dockerfileFilePath, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:v"+ocpversion)
+		replaceContent(dockerfileFilePath, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
 		// copy the roles/testmetrics/tasks/main.yml
 		err = copy(filepath.Join(dataPath, "main.yml"), filepath.Join(tmpPath, "roles", "testmetrics", "tasks", "main.yml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 
 		exutil.By("step: Build and push the operator image")
 		tokenDir := "/tmp/ocp-48366" + getRandomString()
@@ -4594,7 +4594,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("step: modify files to generate the operator image.")
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
-		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 		// update the Dockerfile
 		dockerFilePath := filepath.Join(tmpPath, "Dockerfile")
 		replaceContent(dockerFilePath, "golang:", "quay.io/olmqe/golang:")
@@ -4867,8 +4867,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 			managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 			content = getContent(managerAuthProxyPatch)
-			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy:v" + ocpversion))
-			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:v"+ocppreversion)
+			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v" + ocpversion))
+			replaceContent(managerAuthProxyPatch, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocppreversion)
 		}
 
 		exutil.By("modify namespace")
