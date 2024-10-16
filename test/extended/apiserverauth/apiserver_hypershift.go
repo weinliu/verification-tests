@@ -23,36 +23,45 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc               = exutil.NewCLI("hp-apiserver-test", exutil.KubeConfigPath())
-		guestClusterName string
-		guestClusterNS   string
-		guestClusterKube string
-		hostedClusterNS  string
-		iaasPlatform     string
-		tmpdir           string
+		oc                      = exutil.NewCLIForKubeOpenShift("hp-apiserver-" + getRandomString(8))
+		hostedClusterName       string
+		hostedControlPlaneNS    string
+		hostedclusterKubeconfig string
+		hostedClusterNS         string
+		iaasPlatform            string
+		tmpdir                  string
+		hostedclusterPlatform   string
+		err                     error
 	)
 
-	g.BeforeEach(func() {
-		guestClusterName, guestClusterKube, hostedClusterNS = exutil.ValidHypershiftAndGetGuestKubeConf(oc)
-		e2e.Logf("#### %s, %s, %s", guestClusterName, guestClusterKube, hostedClusterNS)
-		oc.SetGuestKubeconf(guestClusterKube)
+	g.BeforeEach(func(ctx context.Context) {
+		hostedClusterName, hostedclusterKubeconfig, hostedClusterNS = exutil.ValidHypershiftAndGetGuestKubeConf(oc)
+		e2e.Logf("HostedCluster info: %s, %s, %s", hostedClusterName, hostedclusterKubeconfig, hostedClusterNS)
+		oc.SetGuestKubeconf(hostedclusterKubeconfig)
+		hostedControlPlaneNS = hostedClusterNS + "-" + hostedClusterName
+		e2e.Logf("hostedControlPlaneNS: %v", hostedControlPlaneNS)
 
-		iaasPlatform = exutil.CheckPlatform(oc)
-		// Currently, the test is only supported on AWS
-		if iaasPlatform != "aws" {
-			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
-		}
-		guestClusterNS = hostedClusterNS + "-" + guestClusterName
-		e2e.Logf("HostedClusterControlPlaneNS: %v", guestClusterNS)
+		// Get IaaS platform, hypershift is supported on AWS and Azure cloud, which on Azure is based on k8s,
+		// All cases involving the OCP features cannot be executed, such as cluster operator, project and so on.
+		iaasPlatform = exutil.ExtendedCheckPlatform(ctx, oc)
+		e2e.Logf("The managemant cluster platform is: %s", iaasPlatform)
+		hostedclusterPlatform, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", "-n", hostedClusterNS, hostedClusterName, "-ojsonpath={.spec.platform.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The HostedCluster platform is: %s", hostedclusterPlatform)
+
 		tmpdir = "/tmp/-OCP-apisever-cases-" + exutil.GetRandomString() + "/"
-		err := os.MkdirAll(tmpdir, 0755)
+		err = os.MkdirAll(tmpdir, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("The cluster should be healthy before running case.")
-		errSanity := clusterSanityCheck(oc)
-		if errSanity != nil {
-			e2e.Failf("Cluster health check failed before running case :: %s ", errSanity)
+		// If the managemant cluster is not OCP cluster, skip sanity check.
+		if exutil.IsKubernetesClusterFlag != "yes" {
+			errSanity := clusterSanityCheck(oc)
+			if errSanity != nil {
+				e2e.Failf("Cluster health check failed before running case :: %s ", errSanity)
+			}
 		}
+
 	})
 
 	g.JustAfterEach(func() {
@@ -64,7 +73,6 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 	// author: kewang@redhat.com
 	// Hypershift dons't support some weak ciphers for old TLS profile, detail see bug https://issues.redhat.com/browse/OCPBUGS-30986
 	g.It("Author:kewang-ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Medium-62093-1-[Apiserver] Wire tlsSecurityProfile cipher config from apiservers/cluster into apiservers of hosted cluster [Slow][Disruptive]", func() {
-
 		var (
 			defaultCipherPatch = `{"spec": {"configuration": {"apiServer": null}}}`
 			defaultCipherSuite = `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"] VersionTLS12`
@@ -88,17 +96,17 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 
 		defer func() {
 			exutil.By("-->> Restoring cluster's ciphers")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "--type=merge", "-p", defaultCipherPatch).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", hostedClusterName, "-n", hostedClusterNS, "--type=merge", "-p", defaultCipherPatch).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			// Checking if apiservers are restarted
-			errKas := waitApiserverRestartOfHypershift(oc, "kube-apiserver", guestClusterNS, 480)
+			errKas := waitApiserverRestartOfHypershift(oc, "kube-apiserver", hostedControlPlaneNS, 480)
 			o.Expect(errKas).NotTo(o.HaveOccurred())
-			errOas := waitApiserverRestartOfHypershift(oc, "openshift-apiserver", guestClusterNS, 240)
+			errOas := waitApiserverRestartOfHypershift(oc, "openshift-apiserver", hostedControlPlaneNS, 240)
 			o.Expect(errOas).NotTo(o.HaveOccurred())
-			errOauth := waitApiserverRestartOfHypershift(oc, "oauth-openshift", guestClusterNS, 120)
+			errOauth := waitApiserverRestartOfHypershift(oc, "oauth-openshift", hostedControlPlaneNS, 120)
 			o.Expect(errOauth).NotTo(o.HaveOccurred())
 			e2e.Logf("#### Check cipherSuites and minTLSVersion of oauth, openshift-apiserver and kubeapiservers config.")
-			errChipher := verifyHypershiftCiphers(oc, defaultCipherSuite, guestClusterNS)
+			errChipher := verifyHypershiftCiphers(oc, defaultCipherSuite, hostedControlPlaneNS)
 			if errChipher != nil {
 				exutil.AssertWaitPollNoErr(errChipher, "Ciphers are not matched the expected Intermediate type!")
 			}
@@ -106,7 +114,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 		}()
 
 		exutil.By("-->> 1.) Check the default cipherSuites and minTLSVersion of oauth, openshift-apiserver and kubeapiservers config.")
-		errChipher := verifyHypershiftCiphers(oc, defaultCipherSuite, guestClusterNS)
+		errChipher := verifyHypershiftCiphers(oc, defaultCipherSuite, hostedControlPlaneNS)
 		if errChipher != nil {
 			exutil.AssertWaitPollNoErr(errChipher, fmt.Sprintf("The ciphers are not matched : %s", defaultCipherSuite))
 		}
@@ -118,30 +126,30 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 				continue
 			}
 			i += 2
-			oldVer, errOldrVer := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "-o", `jsonpath={.status.conditions[?(@.type=="KubeAPIServerAvailable")].observedGeneration}`).Output()
+			oldVer, errOldrVer := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", hostedClusterName, "-n", hostedClusterNS, "-o", `jsonpath={.status.conditions[?(@.type=="KubeAPIServerAvailable")].observedGeneration}`).Output()
 			o.Expect(errOldrVer).NotTo(o.HaveOccurred())
 			intOldVer, _ := strconv.Atoi(oldVer)
 			o.Expect(intOldVer).To(o.BeNumerically(">", 0))
 			e2e.Logf("observedGeneration: %v", intOldVer)
 
 			exutil.By(fmt.Sprintf("-->> %d.1) Patching the apiserver cluster with ciphers:  %s", i, cipherItem.cipherType))
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "--type=merge", "-p", cipherItem.patch).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", hostedClusterName, "-n", hostedClusterNS, "--type=merge", "-p", cipherItem.patch).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			// Checking if apiservers are restarted
-			errKas := waitApiserverRestartOfHypershift(oc, "kube-apiserver", guestClusterNS, 480)
+			errKas := waitApiserverRestartOfHypershift(oc, "kube-apiserver", hostedControlPlaneNS, 480)
 			o.Expect(errKas).NotTo(o.HaveOccurred())
-			errOas := waitApiserverRestartOfHypershift(oc, "openshift-apiserver", guestClusterNS, 240)
+			errOas := waitApiserverRestartOfHypershift(oc, "openshift-apiserver", hostedControlPlaneNS, 240)
 			o.Expect(errOas).NotTo(o.HaveOccurred())
-			errOauth := waitApiserverRestartOfHypershift(oc, "oauth-openshift", guestClusterNS, 120)
+			errOauth := waitApiserverRestartOfHypershift(oc, "oauth-openshift", hostedControlPlaneNS, 120)
 			o.Expect(errOauth).NotTo(o.HaveOccurred())
 
-			newVer, errNewVer := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "-o", `jsonpath={.status.conditions[?(@.type=="KubeAPIServerAvailable")].observedGeneration}`).Output()
+			newVer, errNewVer := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", hostedClusterName, "-n", hostedClusterNS, "-o", `jsonpath={.status.conditions[?(@.type=="KubeAPIServerAvailable")].observedGeneration}`).Output()
 			o.Expect(errNewVer).NotTo(o.HaveOccurred())
 			e2e.Logf("observedGeneration: %v", newVer)
 			o.Expect(strconv.Atoi(newVer)).To(o.BeNumerically(">", intOldVer))
 
 			exutil.By(fmt.Sprintf("-->> %d.2) Check cipherSuites and minTLSVersion of oauth, openshift-apiserver and kubeapiservers config.", i))
-			errChipher := verifyHypershiftCiphers(oc, cipherItem.cipherSuite, guestClusterNS)
+			errChipher := verifyHypershiftCiphers(oc, cipherItem.cipherSuite, hostedControlPlaneNS)
 			if errChipher != nil {
 				exutil.AssertWaitPollNoErr(errChipher, fmt.Sprintf("Ciphers are not matched : %s", cipherItem.cipherType))
 			}
@@ -152,7 +160,6 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 	// author: kewang@redhat.com
 	// Hypershift dons't support some weak ciphers for old TLS profile, detail see bug https://issues.redhat.com/browse/OCPBUGS-30986
 	g.It("Author:kewang-ROSA-OSD_CCS-HyperShiftMGMT-Longduration-NonPreRelease-Medium-62093-2-[Apiserver] Wire tlsSecurityProfile cipher config from apiservers/cluster into apiservers of hosted cluster [Slow][Disruptive]", func() {
-
 		var (
 			defaultCipherPatch = `{"spec": {"configuration": {"apiServer": null}}}`
 			defaultCipherSuite = `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"] VersionTLS12`
@@ -176,17 +183,17 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 
 		defer func() {
 			exutil.By("-->> Restoring cluster's ciphers")
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "--type=merge", "-p", defaultCipherPatch).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", hostedClusterName, "-n", hostedClusterNS, "--type=merge", "-p", defaultCipherPatch).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			// Checking if apiservers are restarted
-			errKas := waitApiserverRestartOfHypershift(oc, "kube-apiserver", guestClusterNS, 480)
+			errKas := waitApiserverRestartOfHypershift(oc, "kube-apiserver", hostedControlPlaneNS, 480)
 			o.Expect(errKas).NotTo(o.HaveOccurred())
-			errOas := waitApiserverRestartOfHypershift(oc, "openshift-apiserver", guestClusterNS, 240)
+			errOas := waitApiserverRestartOfHypershift(oc, "openshift-apiserver", hostedControlPlaneNS, 240)
 			o.Expect(errOas).NotTo(o.HaveOccurred())
-			errOauth := waitApiserverRestartOfHypershift(oc, "oauth-openshift", guestClusterNS, 120)
+			errOauth := waitApiserverRestartOfHypershift(oc, "oauth-openshift", hostedControlPlaneNS, 120)
 			o.Expect(errOauth).NotTo(o.HaveOccurred())
 			e2e.Logf("#### Check cipherSuites and minTLSVersion of oauth, openshift-apiserver and kubeapiservers config.")
-			errChipher := verifyHypershiftCiphers(oc, defaultCipherSuite, guestClusterNS)
+			errChipher := verifyHypershiftCiphers(oc, defaultCipherSuite, hostedControlPlaneNS)
 			if errChipher != nil {
 				exutil.AssertWaitPollNoErr(errChipher, "Ciphers are not matched the expected Intermediate type!")
 			}
@@ -194,7 +201,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 		}()
 
 		exutil.By("-->> 1.) Check the default cipherSuites and minTLSVersion of oauth, openshift-apiserver and kubeapiservers config.")
-		errChipher := verifyHypershiftCiphers(oc, defaultCipherSuite, guestClusterNS)
+		errChipher := verifyHypershiftCiphers(oc, defaultCipherSuite, hostedControlPlaneNS)
 		if errChipher != nil {
 			exutil.AssertWaitPollNoErr(errChipher, fmt.Sprintf("The ciphers are not matched : %s", defaultCipherSuite))
 		}
@@ -206,37 +213,36 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 				continue
 			}
 			i += 2
-			oldVer, errOldrVer := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "-o", `jsonpath={.status.conditions[?(@.type=="KubeAPIServerAvailable")].observedGeneration}`).Output()
+			oldVer, errOldrVer := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", hostedClusterName, "-n", hostedClusterNS, "-o", `jsonpath={.status.conditions[?(@.type=="KubeAPIServerAvailable")].observedGeneration}`).Output()
 			o.Expect(errOldrVer).NotTo(o.HaveOccurred())
 			intOldVer, _ := strconv.Atoi(oldVer)
 			o.Expect(intOldVer).To(o.BeNumerically(">", 0))
 			e2e.Logf("observedGeneration: %v", intOldVer)
 
 			exutil.By(fmt.Sprintf("-->> %d.1) Patching the apiserver cluster with ciphers:  %s", i, cipherItem.cipherType))
-			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "--type=merge", "-p", cipherItem.patch).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", hostedClusterName, "-n", hostedClusterNS, "--type=merge", "-p", cipherItem.patch).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			// Checking if apiservers are restarted
-			errKas := waitApiserverRestartOfHypershift(oc, "kube-apiserver", guestClusterNS, 480)
+			errKas := waitApiserverRestartOfHypershift(oc, "kube-apiserver", hostedControlPlaneNS, 480)
 			o.Expect(errKas).NotTo(o.HaveOccurred())
-			errOas := waitApiserverRestartOfHypershift(oc, "openshift-apiserver", guestClusterNS, 240)
+			errOas := waitApiserverRestartOfHypershift(oc, "openshift-apiserver", hostedControlPlaneNS, 240)
 			o.Expect(errOas).NotTo(o.HaveOccurred())
-			errOauth := waitApiserverRestartOfHypershift(oc, "oauth-openshift", guestClusterNS, 120)
+			errOauth := waitApiserverRestartOfHypershift(oc, "oauth-openshift", hostedControlPlaneNS, 120)
 			o.Expect(errOauth).NotTo(o.HaveOccurred())
 
-			newVer, errNewVer := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "-o", `jsonpath={.status.conditions[?(@.type=="KubeAPIServerAvailable")].observedGeneration}`).Output()
+			newVer, errNewVer := oc.AsAdmin().WithoutNamespace().Run("get").Args("hostedcluster", hostedClusterName, "-n", hostedClusterNS, "-o", `jsonpath={.status.conditions[?(@.type=="KubeAPIServerAvailable")].observedGeneration}`).Output()
 			o.Expect(errNewVer).NotTo(o.HaveOccurred())
 			e2e.Logf("observedGeneration: %v", newVer)
 			o.Expect(strconv.Atoi(newVer)).To(o.BeNumerically(">", intOldVer))
 
 			exutil.By(fmt.Sprintf("-->> %d.2) Check cipherSuites and minTLSVersion of oauth, openshift-apiserver and kubeapiservers config.", i))
-			errChipher := verifyHypershiftCiphers(oc, cipherItem.cipherSuite, guestClusterNS)
+			errChipher := verifyHypershiftCiphers(oc, cipherItem.cipherSuite, hostedControlPlaneNS)
 			if errChipher != nil {
 				exutil.AssertWaitPollNoErr(errChipher, fmt.Sprintf("Ciphers are not matched : %s", cipherItem.cipherType))
 			}
 			e2e.Logf("#### Ciphers are matched: %s", cipherItem.cipherType)
 		}
 	})
-
 	// author: kewang@redhat.com
 	g.It("Author:kewang-ROSA-OSD_CCS-HyperShiftMGMT-High-64000-Check the http accessible /readyz for kube-apiserver [Serial]", func() {
 		exutil.By("1) Check if port 6081 is available")
@@ -252,17 +258,17 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 		exutil.AssertWaitPollNoErr(err, "Port 6081 is available")
 
 		exutil.By("2) Get kube-apiserver pods")
-		err = oc.AsAdmin().Run("project").Args(guestClusterNS).Execute()
+		err = oc.AsAdmin().Run("project").Args(hostedControlPlaneNS).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		podList, err := exutil.GetAllPodsWithLabel(oc, guestClusterNS, "app=kube-apiserver")
+		podList, err := exutil.GetAllPodsWithLabel(oc, hostedControlPlaneNS, "app=kube-apiserver")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(podList).ShouldNot(o.BeEmpty())
 		defer oc.AsAdmin().Run("project").Args("default").Execute() // switch to default project
 
 		exutil.By("3) Perform port-forward on the first pod available")
-		exutil.AssertPodToBeReady(oc, podList[0], guestClusterNS)
-		_, _, _, err = oc.AsAdmin().Run("port-forward").Args("-n", guestClusterNS, podList[0], "6081:6443").Background()
+		exutil.AssertPodToBeReady(oc, podList[0], hostedControlPlaneNS)
+		_, _, _, err = oc.AsAdmin().Run("port-forward").Args("-n", hostedControlPlaneNS, podList[0], "6081:6443").Background()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer exec.Command("bash", "-c", "kill -HUP $(lsof -t -i:6081)").Output()
 
@@ -288,8 +294,13 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 	})
 
 	// author: kewang@redhat.com
-	// The case always runs into failure with OCP 4.15 and later due to https://issues.redhat.com/browse/OCPBUGS-28866, add Flaky tag to skip execution until the bug get fixed.
-	g.It("Author:kewang-ROSA-OSD_CCS-HyperShiftMGMT-Medium-64076-Init container setup should have the proper securityContext [Flaky]", func() {
+	// The case always runs into failure with OCP 4.15 and 4.16 due to https://issues.redhat.com/browse/OCPBUGS-28866,
+	// add Flaky tag to skip execution until the bug get fixed.
+	g.It("Author:kewang-ROSA-OSD_CCS-HyperShiftMGMT-Medium-64076-Init container setup should have the proper securityContext", func() {
+		if exutil.IsKubernetesClusterFlag == "yes" {
+			g.Skip("Skip execution for Hypershift of Kubernetes Cluster on Azure")
+		}
+
 		var (
 			apiserverItems = []struct {
 				label     string
@@ -313,13 +324,13 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 
 		for i, apiserverItem := range apiserverItems {
 			exutil.By(fmt.Sprintf("%v.1 Get one pod name of %s", i+1, apiserverItem.label))
-			e2e.Logf("namespace is: %s", guestClusterNS)
-			podList, err := exutil.GetAllPodsWithLabel(oc, guestClusterNS, "app="+apiserverItem.label)
+			e2e.Logf("namespace is: %s", hostedControlPlaneNS)
+			podList, err := exutil.GetAllPodsWithLabel(oc, hostedControlPlaneNS, "app="+apiserverItem.label)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(podList).ShouldNot(o.BeEmpty())
 			e2e.Logf("Get the %s pod name: %s", apiserverItem.label, podList[0])
 
-			containerList, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", guestClusterNS, podList[0], "-o", `jsonpath={.spec.containers[*].name}`).Output()
+			containerList, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", hostedControlPlaneNS, podList[0], "-o", `jsonpath={.spec.containers[*].name}`).Output()
 			o.Expect(err1).NotTo(o.HaveOccurred())
 			o.Expect(containerList).ShouldNot(o.BeEmpty())
 			containers := strings.Split(containerList, " ")
@@ -328,7 +339,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 			for _, container := range containers {
 				e2e.Logf("#### Checking the container %s of pod: %s", container, podList[0])
 				jsonpath := fmt.Sprintf(`jsonpath={range .spec.containers[?(@.name=="%s")]}{.securityContext}`, container)
-				out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", guestClusterNS, podList[0], "-o", jsonpath).Output()
+				out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", hostedControlPlaneNS, podList[0], "-o", jsonpath).Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
 				o.Expect(out).To(o.ContainSubstring(sc))
 				e2e.Logf("#### The securityContext of container %s matched the expected result.", container)
@@ -336,13 +347,13 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 
 			exutil.By(fmt.Sprintf("%v.3 Checking the securityContext of init-container %s of pod %s", i+1, apiserverItem.apiserver, podList[0]))
 			jsonpath := `jsonpath={.spec.initContainers[].securityContext}`
-			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", guestClusterNS, podList[0], "-o", jsonpath).Output()
+			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", hostedControlPlaneNS, podList[0], "-o", jsonpath).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(out).To(o.ContainSubstring(sc))
 			e2e.Logf("#### The securityContext of init-container matched the expected result.")
 
 			exutil.By(fmt.Sprintf("%v.4 Checking one container %s of %s pod %s is not allowed to access any devices on the host", i+1, containers[0], apiserverItem.apiserver, podList[0]))
-			cmd := []string{"-n", guestClusterNS, podList[0], "-c", containers[0], "--", "sysctl", "-w", "kernel.msgmax=65536"}
+			cmd := []string{"-n", hostedControlPlaneNS, podList[0], "-c", containers[0], "--", "sysctl", "-w", "kernel.msgmax=65536"}
 			cmdOut, errCmd := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
 			o.Expect(errCmd).To(o.HaveOccurred())
 			o.Expect(cmdOut).Should(o.ContainSubstring("Read-only file system"))
@@ -354,7 +365,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 		var (
 			patchToRecover           = `{"spec": {"configuration": {"apiServer": {"servingCerts": {"namedCertificates": []}}}}}`
 			originHostdKubeconfigBkp = "kubeconfig.origin"
-			originHostedKube         = guestClusterKube
+			originHostedKube         = hostedclusterKubeconfig
 			originCA                 = tmpdir + "certificate-authority-data-origin.crt"
 			newCA                    = tmpdir + "certificate-authority-data-origin-new.crt"
 			CN_BASE                  = "kas-test-cert"
@@ -405,8 +416,8 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 
 		defer func() {
 			exutil.By("Restoring hosted hypershift cluster")
-			_, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "--type=merge", "-p", patchToRecover).Output()
-			errKas := waitApiserverRestartOfHypershift(oc, "kube-apiserver", guestClusterNS, 480)
+			_, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", hostedClusterName, "-n", hostedClusterNS, "--type=merge", "-p", patchToRecover).Output()
+			errKas := waitApiserverRestartOfHypershift(oc, "kube-apiserver", hostedControlPlaneNS, 480)
 			o.Expect(errKas).NotTo(o.HaveOccurred())
 			e2e.Logf("Restore original hosted hypershift kubeconfig")
 			bkpCmdKubeConf := fmt.Sprintf("cp -f %s %s", originHostedKubeconfPath, originHostedKube)
@@ -461,7 +472,7 @@ EOF`, serverconf, fqdnName)
 
 		exutil.By("5. Add new certificate to apiserver")
 		patchCmd := fmt.Sprintf(`{"spec": {"configuration": {"apiServer": {"servingCerts": {"namedCertificates": [{"names": ["%s"], "servingCertificate": {"name": "custom-api-cert"}}]}}}}}`, fqdnName)
-		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", guestClusterName, "-n", hostedClusterNS, "--type=merge", "-p", patchCmd).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("hostedcluster", hostedClusterName, "-n", hostedClusterNS, "--type=merge", "-p", patchCmd).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("6. Add new certificates to hosted kubeconfig")
@@ -469,7 +480,7 @@ EOF`, serverconf, fqdnName)
 		updateKubeconfigWithConcatenatedCert(caCertpem, originCA, originHostedKube, newCA)
 
 		exutil.By("7. Checking if kube-apiserver is restarted")
-		waitApiserverRestartOfHypershift(oc, "kube-apiserver", guestClusterNS, 480)
+		waitApiserverRestartOfHypershift(oc, "kube-apiserver", hostedControlPlaneNS, 480)
 
 		exutil.By("8. Validate new certificates")
 		returnValues := []string{"Subject", "Issuer"}
@@ -479,7 +490,7 @@ EOF`, serverconf, fqdnName)
 		o.Expect(string(certDetails.Issuer)).To(o.ContainSubstring("CN=kas-test-cert_ca"))
 
 		exutil.By("9. Validate old certificates should not work")
-		certDetails, err = urlHealthCheck(fqdnName, port, originCA, returnValues)
+		_, err = urlHealthCheck(fqdnName, port, originCA, returnValues)
 		o.Expect(err).To(o.HaveOccurred())
 	})
 })
