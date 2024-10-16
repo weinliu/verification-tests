@@ -1,9 +1,9 @@
 import { Deployment } from "views/deployment";
 describe('console configuration tests', () => {
-  const capabilities_enabled_data = `[{"name":"LightspeedButton","visibility":{"state":"Enabled"}}]`
-  const capabilities_disabled_data = `[{"name":"LightspeedButton","visibility":{"state":"Disabled"}}]`
-  const patch_consoleoperator_lightspeed_enabled = `oc patch console.operator cluster -p '{"spec":{"customization":{"capabilities":[{"name": "LightspeedButton","visibility":{"state":"Enabled"}}]}}}' --type merge`;
-  const patch_consoleoperator_lightspeed_disabled = `oc patch console.operator cluster -p '{"spec":{"customization":{"capabilities":[{"name": "LightspeedButton","visibility":{"state":"Disabled"}}]}}}' --type merge`;
+  const capabilities_enabled_data = `{"name":"LightspeedButton","visibility":{"state":"Enabled"}}`
+  const capabilities_disabled_data = `{"name":"LightspeedButton","visibility":{"state":"Disabled"}}`
+  const patch_consoleoperator_lightspeed_enabled = `oc patch console.operator cluster -p '{"spec":{"customization":{"capabilities":[{"name": "LightspeedButton","visibility":{"state":"Enabled"}},{"name": "GettingStartedBanner","visibility":{"state":"Enabled"}}]}}}' --type merge`;
+  const patch_consoleoperator_lightspeed_disabled = `oc patch console.operator cluster -p '{"spec":{"customization":{"capabilities":[{"name": "LightspeedButton","visibility":{"state":"Disabled"}},{"name": "GettingStartedBanner","visibility":{"state":"Enabled"}}]}}}' --type merge`;
   const query_consoleoperator_cmd = `oc get console.operator cluster -o jsonpath='{.spec.customization.capabilities}'`;
   const query_configmap_data = `oc get cm console-config -n openshift-console -o jsonpath='{.data}'`;
   after(() => {
@@ -66,9 +66,7 @@ describe('console configuration tests', () => {
       .should('include', capabilities_enabled_data)
     cy.adminCLI(`${query_configmap_data}`)
       .its('stdout')
-      .should('include', 'capabilities')
-      .and('include', 'name: LightspeedButton')
-      .and('include', 'state: Enabled')
+      .should('match', /name: LightspeedButton.*state: Enabled/)
     cy.adminCLI(`${patch_consoleoperator_lightspeed_disabled}`)
       .its('stdout')
       .should('include', 'patched')
@@ -77,19 +75,17 @@ describe('console configuration tests', () => {
       .should('include', capabilities_disabled_data)
     cy.adminCLI(`${query_configmap_data}`)
       .its('stdout')
-      .should('include', 'capabilities')
-      .and('include', 'name: LightspeedButton')
-      .and('include', 'state: Disabled')
+      .should('match',/name: LightspeedButton.*state: Disabled/)
     // some negative tests
     cy.adminCLI(`${patch_invalid_state}`,{failOnNonZeroExit: false})
       .its('stderr')
       .should('match', /Unsupported value.*Tested.*supported values.*Enabled.*Disabled/)
     cy.adminCLI(`${patch_another_entry}`,{failOnNonZeroExit: false})
       .its('stderr')
-      .should('match', /Too many.*2.*must have at most 1 item/)
+      .should('match', /Too many.*must have at most 2 item/)
     cy.adminCLI(`${patch_unsupported_name}`,{failOnNonZeroExit: false})
       .its('stderr')
-      .should('match', /Unsupported value.*TestCap.*supported values.*LightspeedButton/)
+      .should('match', /Unsupported value.*TestCap.*supported values.*LightspeedButton.*GettingStartedBanner/)
   });
 
 })

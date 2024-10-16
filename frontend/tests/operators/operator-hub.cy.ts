@@ -189,6 +189,7 @@ describe('Operator Hub tests', () => {
     cy.createProject(testParams.testNamespace);
     operatorHubPage.installOperator('sonarqube-operator', `${testParams.catalogName}`, `${testParams.testNamespace}`);
     Pages.gotoInstalledOperatorPage(testParams.testNamespace)
+    cy.checkCommandResult(`oc get csv  -n ${testParams.testNamespace}`, 'sonarqube-operator.v');
     operatorHubPage.checkOperatorStatus('Sonarqube Operator', 'Installing');
     cy.visit(`/k8s/ns/${testParams.testNamespace}/operators.coreos.com~v1alpha1~ClusterServiceVersion/sonarqube-operator.v0.0.6/sonarsource.parflesh.github.io~v1alpha1~SonarQube`)
     cy.byTestID('item-create').click();

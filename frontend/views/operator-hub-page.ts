@@ -170,14 +170,14 @@ export const operatorHubModal = {
   selectChannel: (channel) => {
     cy.get('h5').contains('Channel').parent('div').within(() => {
       // click on button instead of div
-      cy.get('button[id*="select-toggle"]').click({force: true});
-      cy.get(`li[id="${channel}"] button`).click({force: true});
+      cy.get('button[data-test="operator-channel-select-toggle"]').click({force: true});
+      cy.get(`button[id="${channel}"]`).click({force: true});
     })
   },
   selectVersion: (version) => {
     cy.get('h5').contains('Version').parent('div').within(() => {
-      cy.get('button[id*="select-toggle"]').click({force: true});
-      cy.get(`li[id="${version}"] button`).click({force: true});
+      cy.get('button[data-test="operator-version-select-toggle"]').click({force: true});
+      cy.get(`button[id="${version}"]`).click({force: true});
     })
   },
 };
