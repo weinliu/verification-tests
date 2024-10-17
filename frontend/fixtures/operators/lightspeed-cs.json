@@ -1,0 +1,14 @@
+{
+  "apiVersion": "operators.coreos.com/v1alpha1",
+  "kind": "CatalogSource",
+  "metadata": {
+    "name": "lightspeedsc",
+    "namespace": "openshift-marketplace"
+  },
+  "spec": {
+    "sourceType": "grpc",
+    "image": "quay.io/openshift/lightspeed-catalog:latest",
+    "displayName": "Test-lightspeed",
+    "publisher": "OpenShift UI QE"
+  }
+}

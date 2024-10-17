@@ -160,6 +160,11 @@ export const operatorHubPage = {
   },
   cancel: () => {
     cy.get('button').contains('Cancel').click({force: true});
+  },
+  checkRecommenedMonitoring: (packageName, catalogSource, operatorName, enableStatus) => {
+    cy.visit(`/operatorhub/subscribe?pkg=${packageName}&catalog=${catalogSource}&catalogNamespace=openshift-marketplace&targetNamespace=undefined`);
+    cy.contains(`${operatorName}`, {timeout: 30000}).should('exist');
+    cy.get('input#enable-monitoring-checkbox').should('have.attr', 'data-checked-state', `${enableStatus}`);
   }
 };
 

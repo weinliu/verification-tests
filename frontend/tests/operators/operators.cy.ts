@@ -139,4 +139,4 @@ describe('Operators related features', () => {
       .should('contain', 'rhpam-trial1')
       .should('contain', 'rhpam-trial2');
   });
-})
+}) 
