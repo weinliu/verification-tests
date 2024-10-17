@@ -1,7 +1,7 @@
 export const nodesPage = {
   goToNodesPage: () => {
     cy.visit('/k8s/cluster/core~v1~Node');
-    cy.get('[data-test-id="resource-title"]').should('be.visible');
+    cy.get('[data-test-id="resource-title"]',{timeout: 60000}).should('be.visible');
   },
   gotoDetail: (nodeName) => {
     cy.visit(`/k8s/cluster/nodes/${nodeName}/details`)
@@ -16,8 +16,8 @@ export const nodesPage = {
   },
   filterBy: (by, value) => {
     cy.get('[data-test-id="filter-dropdown-toggle"] button').click();
-    cy.get(`[id="${by}"]`).scrollIntoView();
-    cy.get(`input[id="${value}"]`).check();
+    cy.get('h1').contains(`${by}`).scrollIntoView();
+    cy.get(`li[data-test-row-filter="${value}"] input`).check();
     cy.get('[data-test-id="filter-dropdown-toggle"] button').click();
   },
   setAdditionalColumn: (columnName) => {

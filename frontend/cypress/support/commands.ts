@@ -80,9 +80,9 @@ Cypress.Commands.add('uiLogout', () => {
       return;
     }
     cy.log('Log out UI');
-    cy.byTestID('user-dropdown').click();
+    cy.get('button[data-test="user-dropdown"]').click();
     cy.byTestID('log-out').should('be.visible');
-    cy.byTestID('log-out').click({ force: true });
+    cy.get('[data-test="log-out"] button').click({ force: true });
   })
 });
 
