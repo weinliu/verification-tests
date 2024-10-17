@@ -31,7 +31,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	var aclLogPath = "--path=ovn/acl-audit-log.log"
 	g.BeforeEach(func() {
 		networkType := exutil.CheckNetworkType(oc)
-		if networkType != "ovn" {
+		if !strings.Contains(networkType, "ovn") {
 			g.Skip("This case requires OVNKubernetes as network plugin, skip the test as the cluster does not have OVN network plugin")
 		}
 

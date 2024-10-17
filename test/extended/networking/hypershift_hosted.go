@@ -26,7 +26,7 @@ var _ = g.Describe("[sig-networking] SDN OVN hypershift", func() {
 	g.BeforeEach(func() {
 		// Check the network plugin type
 		networkType := exutil.CheckNetworkType(oc)
-		if networkType != "ovn" {
+		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip case on cluster that has non-OVN network plugin!!")
 		}
 		hostedClusterName, hostedClusterKubeconfig, hostedclusterNS = exutil.ValidHypershiftAndGetGuestKubeConf(oc)

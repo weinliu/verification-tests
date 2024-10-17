@@ -1,6 +1,8 @@
 package networking
 
 import (
+	"strings"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -13,7 +15,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 
 	g.BeforeEach(func() {
 		networkType := exutil.CheckNetworkType(oc)
-		if networkType != "ovn" {
+		if !strings.Contains(networkType, "ovn") {
 			g.Skip("This case requires OVNKubernetes as network plugin, skip the test as the cluster does not have OVN network plugin")
 		}
 	})

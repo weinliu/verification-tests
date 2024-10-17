@@ -25,7 +25,7 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 		// Check the cluster type
 		networkType := exutil.CheckNetworkType(oc)
 		o.Expect(networkType).NotTo(o.BeEmpty())
-		if networkType != "ovnkubernetes" {
+		if !strings.Contains(networkType, "ovn") {
 			g.Skip(fmt.Sprintf("Baseline Admin and Admin network policies not supported on  cluster type : %s", networkType))
 		}
 

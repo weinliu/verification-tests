@@ -32,7 +32,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 	g.BeforeEach(func() {
 
 		networkType := exutil.CheckNetworkType(oc)
-		if networkType != "ovn" {
+		if !strings.Contains(networkType, "ovn") {
 			g.Skip("This case requires OVNKubernetes as network plugin, skip the test as the cluster does not have OVN network plugin")
 		}
 

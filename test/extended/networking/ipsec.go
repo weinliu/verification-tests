@@ -22,7 +22,7 @@ var _ = g.Describe("[sig-networking] SDN IPSEC", func() {
 
 	g.BeforeEach(func() {
 		networkType := exutil.CheckNetworkType(oc)
-		if networkType != "ovn" {
+		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip case on cluster that has non-OVN network plugin!!")
 		}
 	})
