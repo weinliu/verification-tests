@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -61,6 +62,42 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlCmdWithCookie = fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-kSL -b "+fileDir+"/cookie-10207", "http://"+routehost)
 		result = repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 60, 6)
 		o.Expect(result[1]).To(o.Equal(6))
+	})
+
+	// author: iamin@redhat.com
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Low-10943-NetworkEdge Set invalid timeout server for route", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			unSecSvcName        = "service-unsecure"
+		)
+
+		exutil.By("1.0: Deploy a project with single pod and the service")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		output, err := oc.Run("get").Args("service").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(unSecSvcName))
+
+		exutil.By("2.0: Create an unsecure route")
+
+		createRoute(oc, project1, "http", unSecSvcName, unSecSvcName, []string{})
+		output, err = oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(unSecSvcName))
+
+		exutil.By("3.0: Annotate unsecure route")
+		setAnnotation(oc, project1, "route/"+unSecSvcName, "haproxy.router.openshift.io/timeout=-2s")
+		findAnnotation := getAnnotation(oc, project1, "route", unSecSvcName)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout":"-2s`))
+
+		exutil.By("4.0: Check HAProxy file for timeout tunnel")
+		routerpod := getNewRouterPod(oc, "default")
+		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", unSecSvcName)
+		o.Expect(searchOutput).NotTo(o.ContainSubstring(`timeout server  -2s`))
+
 	})
 
 	// merge OCP-11042(NetworkEdge NetworkEdge Disable haproxy hash based sticky session for edge termination routes) to OCP-11130
@@ -241,6 +278,51 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 	})
 
+	// author: iamin@redhat.com
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-High-11982-NetworkEdge Set timeout server for unsecure route", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "httpbin")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-pod.json")
+			unSecSvcName        = "service-unsecure"
+			svcFileDir          = filepath.Join(buildPruningBaseDir, "service_unsecure.json")
+		)
+
+		exutil.By("1.0: Deploy a project with single pod and the service")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		createResourceFromFile(oc, project1, svcFileDir)
+		err := waitForPodWithLabelReady(oc, project1, "name=httpbin-pod")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=httpbin-pod Ready status not met")
+		output, err := oc.Run("get").Args("service").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(unSecSvcName))
+
+		exutil.By("2.0: Create an unsecure route")
+		routeName := unSecSvcName
+		routehost := routeName + "-" + project1 + ".apps." + getBaseDomain(oc)
+
+		createRoute(oc, project1, "http", unSecSvcName, unSecSvcName, []string{})
+		output, err = oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(unSecSvcName))
+
+		exutil.By("3.0: Annotate unsecure route")
+		setAnnotation(oc, project1, "route/"+routeName, "haproxy.router.openshift.io/timeout=2s")
+		findAnnotation := getAnnotation(oc, project1, "route", routeName)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout":"2s`))
+
+		exutil.By("4.0: Curl the unsecure route for two times, one with normal delay and other above timeout delay")
+		waitForOutsideCurlContains("http://"+routehost+"/delay/1", "-l", `"Host": "service-unsecure`)
+		waitForOutsideCurlContains("http://"+routehost+"/delay/1", "-l", `delay/1`)
+		waitForOutsideCurlContains("http://"+routehost+"/delay/5", "-l", `The server didn't respond in time`)
+
+		exutil.By("5.0: Check HAProxy file for timeout tunnel")
+		routerpod := getNewRouterPod(oc, "default")
+		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", routeName)
+		o.Expect(searchOutput).To(o.ContainSubstring(`timeout server  2s`))
+
+	})
+
 	// merge OCP-15874(NetworkEdge can set cookie name for reencrypt routes by annotation) to OCP-15873
 	g.It("Author:shudili-ROSA-OSD_CCS-ARO-Critical-15873-NetworkEdge can set cookie name for edge/reen routes by annotation", func() {
 		var (
@@ -312,6 +394,129 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		expectOutput = []string{"Hello-OpenShift +" + srvPodList[0] + " +https-8443", "Hello-OpenShift +" + srvPodList[1] + " +https-8443"}
 		result = repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 60, 6)
 		o.Expect(result[1]).To(o.Equal(6))
+	})
+
+	// author: iamin@redhat.com
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Medium-16732-NetworkEdge Check haproxy.config when overwriting 'timeout server' which was already specified", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			srvrcInfo           = "web-server-rc"
+			unSecSvcName        = "service-unsecure"
+		)
+
+		exutil.By("1.0: Deploy a project with single pod and the service")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		output, err := oc.Run("get").Args("service").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(unSecSvcName))
+
+		exutil.By("2.0: Create an unsecure route")
+		routeName := unSecSvcName
+
+		createRoute(oc, project1, "http", unSecSvcName, unSecSvcName, []string{})
+		output, err = oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(unSecSvcName))
+
+		exutil.By("3.0: Annotate unsecure route")
+		setAnnotation(oc, project1, "route/"+routeName, "haproxy.router.openshift.io/timeout=5s")
+		findAnnotation := getAnnotation(oc, project1, "route", routeName)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout":"5s`))
+
+		exutil.By("4.0: Check HAProxy file for timeout server")
+		routerpod := getNewRouterPod(oc, "default")
+		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+routeName)
+		o.Expect(searchOutput).To(o.ContainSubstring(`timeout server  5s`))
+
+		// overwrite annotation with same parameter to check whether haProxy shows the same annotation twice
+		exutil.By("5.0: Overwrite route annotation")
+		setAnnotation(oc, project1, "route/"+routeName, "haproxy.router.openshift.io/timeout=5s")
+
+		exutil.By("6.0: Check HAProxy file again for timeout server")
+		searchOutput = readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+routeName)
+		o.Expect(strings.Count(searchOutput, `timeout server  5s`) == 1).To(o.BeTrue())
+
+	})
+
+	// author: iamin@redhat.com
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-38671-NetworkEdge 'haproxy.router.openshift.io/timeout-tunnel' annotation gets applied alongside 'haproxy.router.openshift.io/timeout' for clear/edge/reencrypt routes", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			srvrcInfo           = "web-server-rc"
+			unSecSvcName        = "service-unsecure"
+		)
+
+		exutil.By("1.0: Deploy a project with single pod and 3 services")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		output, err := oc.Run("get").Args("service").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.And(o.ContainSubstring(unSecSvcName), o.ContainSubstring("service-secure")))
+
+		exutil.By("2.0: Create a clear HTTP, edge and reen route")
+		routeName := unSecSvcName
+
+		createRoute(oc, project1, "http", unSecSvcName, unSecSvcName, []string{})
+		createRoute(oc, project1, "edge", "edge-route", unSecSvcName, []string{})
+		createRoute(oc, project1, "reencrypt", "reen-route", "service-secure", []string{})
+		output, err = oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.And(o.ContainSubstring(unSecSvcName), o.ContainSubstring("edge-route"), o.ContainSubstring("reen-route")))
+
+		exutil.By("3.0: Annotate all 3 routes")
+		setAnnotation(oc, project1, "route/"+routeName, "haproxy.router.openshift.io/timeout=15s")
+		findAnnotation := getAnnotation(oc, project1, "route", routeName)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout":"15s`))
+
+		setAnnotation(oc, project1, "route/edge-route", "haproxy.router.openshift.io/timeout=15s")
+		findAnnotation = getAnnotation(oc, project1, "route", "edge-route")
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout":"15s`))
+
+		setAnnotation(oc, project1, "route/reen-route", "haproxy.router.openshift.io/timeout=15s")
+		findAnnotation = getAnnotation(oc, project1, "route", "reen-route")
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout":"15s`))
+
+		exutil.By("4.0: Check HAProxy file for timeout server on the routes")
+		routerpod := getNewRouterPod(oc, "default")
+		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+routeName)
+		o.Expect(searchOutput).To(o.ContainSubstring(`timeout server  15s`))
+
+		searchOutput = readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":edge-route")
+		o.Expect(searchOutput).To(o.ContainSubstring(`timeout server  15s`))
+
+		searchOutput = readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":reen-route")
+		o.Expect(searchOutput).To(o.ContainSubstring(`timeout server  15s`))
+
+		exutil.By("5.0: Annotate all routes with timeout tunnel")
+		setAnnotation(oc, project1, "route/"+routeName, "haproxy.router.openshift.io/timeout-tunnel=5s")
+		findAnnotation = getAnnotation(oc, project1, "route", routeName)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout-tunnel":"5s`))
+
+		setAnnotation(oc, project1, "route/edge-route", "haproxy.router.openshift.io/timeout-tunnel=5s")
+		findAnnotation = getAnnotation(oc, project1, "route", "edge-route")
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout-tunnel":"5s`))
+
+		setAnnotation(oc, project1, "route/reen-route", "haproxy.router.openshift.io/timeout-tunnel=5s")
+		findAnnotation = getAnnotation(oc, project1, "route", "reen-route")
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout-tunnel":"5s`))
+
+		exutil.By("6.0: Check HAProxy file for timeout tunnel on the routes")
+		searchOutput = readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+routeName)
+		o.Expect(searchOutput).To(o.ContainSubstring(`timeout tunnel  5s`))
+
+		searchOutput = readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":edge-route")
+		o.Expect(searchOutput).To(o.ContainSubstring(`timeout tunnel  5s`))
+
+		searchOutput = readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":reen-route")
+		o.Expect(searchOutput).To(o.ContainSubstring(`timeout tunnel  5s`))
+
 	})
 
 	// author: aiyengar@redhat.com
