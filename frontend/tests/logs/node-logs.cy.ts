@@ -7,7 +7,7 @@ import { testName } from '../../upstream/support';
 describe('node logs related features', () => {
   before(() => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+    cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     guidedTour.close();
     cy.exec(`oc new-project ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
   });

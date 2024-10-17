@@ -5,21 +5,17 @@ export const logsPage = {
     cy.get('#log-unit').clear();
     cy.get('#log-unit').type(unitname).type('{enter}');
   },
-  selectContainer: (containername?, containernumber?) => {
-    cy.get('button[data-test-id="dropdown-button"]').click();
-    if(containername){
-      cy.contains('span.co-resource-item__resource-name', `${containername}`).click();
-    }else if(containernumber){
-      cy.get('ul.[class*=dropdown__menu] li button').eq(`${containernumber}-1`).click();
-    }
+  selectContainer: (containername) => {
+    cy.get('span[title="Container"]').parent().parent().parent('button[class*="menu-toggle"]').click();
+    cy.contains('span', `${containername}`).parent().parent().parent().parent('button[role="option"]').click();
   },
   selectLogComponent: (componentname: string) => {
-    cy.get('button[class*=select__toggle]').click();
-    cy.get('[class*=select__menu-item').contains(componentname).click();
+    cy.get('button[aria-label="Select a path"]').click();
+    cy.get('span').contains(componentname).parentsUntil('button[role="option"]').click();
   },
   selectLogFile: (logname: string) => {
-    cy.get('button[class*=select__toggle]').last().click();
-    cy.get('[class*=select__menu-item]').contains(logname).click();
+    cy.get('span').contains('Select a log file').parent('button[class*="menu-toggle"]').click();
+    cy.get('span').contains(logname).parentsUntil('button[role="option"]').click();
   },
   checkLogLineExist: () => cy.get('[class*=log-viewer__index]').should('exist'),
   searchLog: (keyword) => {
