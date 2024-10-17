@@ -1012,9 +1012,15 @@ func setAuditProfile(oc *exutil.CLI, patchNamespace string, patch string) string
 }
 
 func getNewUser(oc *exutil.CLI, count int) ([]User, string, string) {
+	command := "htpasswd"
+	_, err := exec.LookPath("command")
+	if err != nil {
+		e2e.Failf("Command '%s' not found in PATH, exit execution!", command)
+	}
+
 	usersDirPath := "/tmp/" + exutil.GetRandomString()
 	usersHTpassFile := usersDirPath + "/htpasswd"
-	err := os.MkdirAll(usersDirPath, 0o755)
+	err = os.MkdirAll(usersDirPath, 0o755)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	htPassSecret, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("oauth/cluster", "-o", "jsonpath={.spec.identityProviders[0].htpasswd.fileData.name}").Output()
