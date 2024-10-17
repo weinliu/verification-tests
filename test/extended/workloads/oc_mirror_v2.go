@@ -1825,7 +1825,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 				e2e.Logf("Mirror2disk when kubeVirtContainer set to true for a release that does not have this image failing, retrying...")
 				return false, nil
 			}
-			if strings.Contains(kubeVirtContainerImageOutputm2d, "could not find kubevirt image in release payload") {
+			if strings.Contains(kubeVirtContainerImageOutputm2d, "could not find kubevirt image") {
 				e2e.Logf("Mirror to disk completed successfully when kubeVirtContainer set to true for a release that does not have this image")
 				return true, nil
 			}
@@ -1842,7 +1842,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 				e2e.Logf("Disk2mirror when kubeVirtContainer set to true for a release that does not have this image is still failing, retrying...")
 				return false, nil
 			}
-			if strings.Contains(kubeVirtContainerImageOutputd2m, "could not find kubevirt image in release payload") {
+			if strings.Contains(kubeVirtContainerImageOutputd2m, "could not find kubevirt image") {
 				e2e.Logf("Disk to mirror when kubeVirtContainer set to true for a release that does not have this image completed successfully")
 				return true, nil
 			}
@@ -1859,7 +1859,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 				e2e.Logf("The mirror2mirror when kubeVirtContainer set to true that does not contain this image still failed, retrying...")
 				return false, nil
 			}
-			if strings.Contains(kubeVirtContainerImageOutputm2m, "could not find kubevirt image in release payload") {
+			if strings.Contains(kubeVirtContainerImageOutputm2m, "could not find kubevirt image") {
 				e2e.Logf("Mirror to mirror when kubeVirtContainer set to true for a release that does not have this image has been completed successfully")
 				return true, nil
 			}

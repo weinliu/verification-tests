@@ -830,6 +830,8 @@ var _ = g.Describe("[sig-scheduling] Workloads test predicates and priority work
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(checkOutpostsNode, "node-role.kubernetes.io/outposts") {
 			deployNodeAffinity = filepath.Join(buildPruningBaseDir, "node-affinity-required-case14479-outposts.yaml")
+		} else if strings.Contains(checkOutpostsNode, "node-role.kubernetes.io/edge") {
+			deployNodeAffinity = filepath.Join(buildPruningBaseDir, "node-affinity-required-case14479-edge.yaml")
 		}
 
 		exutil.By("Set namespace privileged")
@@ -892,6 +894,8 @@ var _ = g.Describe("[sig-scheduling] Workloads test predicates and priority work
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(checkOutpostsNode, "node-role.kubernetes.io/outposts") {
 			nodeAffinityRequiredCase = filepath.Join(buildPruningBaseDir, "node-affinity-required-case14488-outposts.yaml")
+		} else if strings.Contains(checkOutpostsNode, "node-role.kubernetes.io/edge") {
+			nodeAffinityRequiredCase = filepath.Join(buildPruningBaseDir, "node-affinity-required-case14488-edge.yaml")
 		}
 
 		exutil.By("Set namespace privileged")

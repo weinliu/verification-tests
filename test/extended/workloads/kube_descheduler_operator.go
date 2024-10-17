@@ -134,13 +134,13 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 				e2e.Logf("Fail to get csv, error: %s. Trying again", err)
 				return false, nil
 			}
-			if matched, _ := regexp.MatchString("1.28", minkuberversion); matched {
+			if matched, _ := regexp.MatchString("1.30", minkuberversion); matched {
 				e2e.Logf("descheduler operator rebased with latest kubernetes")
 				return true, nil
 			}
 			return false, nil
 		})
-		e2e.Logf("Descheduler has been rebased with kubernetes version %s", minkuberversion)
+		e2e.Logf("Descheduler has not been rebased with kubernetes version %s", minkuberversion)
 		exutil.AssertWaitPollNoErr(err, "descheduler operator not rebased with latest Kubernetes")
 
 		g.By("Check the kubedescheduler run well")
@@ -1430,7 +1430,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name")
-		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
 			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 			if strings.Contains(podName, " ") {
 				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
@@ -1464,7 +1464,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name after mode is set")
-		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
 			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 			if strings.Contains(podName, " ") {
 				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)

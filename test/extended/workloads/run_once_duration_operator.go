@@ -168,7 +168,7 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 		rebasedVersion := strings.Split(minkuberversion, ".")[0] + "." + strings.Split(minkuberversion, ".")[1]
 		e2e.Logf("rebasedVersion is %s", rebasedVersion)
 
-		if strings.Contains(rebasedVersion, kuberVersion) || strings.Contains(rebasedVersion, "1.28") {
+		if strings.Contains(rebasedVersion, kuberVersion) || strings.Contains(rebasedVersion, "1.30") {
 			e2e.Logf("RODO operator has been rebased with latest kubernetes")
 		} else {
 			e2e.Failf("RODO operator not rebased with latest kubernetes")
