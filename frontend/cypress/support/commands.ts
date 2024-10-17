@@ -129,9 +129,8 @@ const AzureLoginFlowOnPage = ()=>{
   });
   cy.wait(5000);
   cy.origin('https://auth.redhat.com',{ args: sentArgs }, ({ username, password, email }) => {
-    cy.get('body', {timeout: 10000}).should('include.text','Internal SSO');
+    cy.get('body', {timeout: 10000}).should('include.text','Internal');
     cy.get('body').then(($body) => {
-      cy.log('Now input user and password.');
       cy.get('#username').type(username);
       cy.get('#password').type(password);
       cy.get('input[type=submit]').click();
