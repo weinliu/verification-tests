@@ -3,6 +3,8 @@ package operators
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -692,6 +694,177 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.By("check ce to be installed")
 		defer ce76844.Delete(oc)
 		ce76844.Create(oc)
+
+	})
+
+	// author: kuiwang@redhat.com
+	g.It("Author:kuiwang-ConnectedOnly-Medium-76983-install index and bundle from private image", func() {
+		exutil.SkipOnProxyCluster(oc)
+		exutil.SkipForSNOCluster(oc)
+		// note: 1, it depends the default global secret to access private index and bundle in quay.io
+		var (
+			caseID                       = "76983"
+			ns                           = "ns-" + caseID
+			sa                           = "sa" + caseID
+			labelValue                   = caseID
+			catalogName                  = "clustercatalog-" + caseID
+			ceName                       = "ce-" + caseID
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
+			clustercatalog               = olmv1util.ClusterCatalogDescription{
+				Name:     catalogName,
+				Imageref: "quay.io/olmqe/nginx-ok-index-private:vokv76983",
+				Template: clustercatalogTemplate,
+			}
+			saCrb = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			ce = olmv1util.ClusterExtensionDescription{
+				Name:             ceName,
+				PackageName:      "nginx-ok-v76983", // private bundle quay.io/olmqe/nginx-ok-bundle-private:v76983-0.0.1
+				Channel:          "alpha",
+				Version:          ">=0.0.1",
+				InstallNamespace: ns,
+				SaName:           sa,
+				LabelValue:       labelValue,
+				Template:         clusterextensionTemplate,
+			}
+		)
+
+		exutil.By("check if there is global secret")
+		if !exutil.CheckAppearance(oc, 1*time.Second, 1*time.Second, exutil.Immediately,
+			exutil.AsAdmin, exutil.WithoutNamespace, exutil.Appear, "secret/pull-secret", "-n", "openshift-config") {
+			g.Skip("skip it because there is no global secret")
+		}
+
+		exutil.By("Create clustercatalog")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
+
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
+
+		exutil.By("check ce to be installed")
+		defer ce.Delete(oc)
+		ce.Create(oc)
+
+	})
+
+	// author: kuiwang@redhat.com
+	g.It("Author:kuiwang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-76985-authfile is updated automatically [Disruptive].", func() {
+		exutil.SkipOnProxyCluster(oc)
+		exutil.SkipForSNOCluster(oc)
+		var (
+			caseID = "76985"
+		)
+
+		exutil.By("check if there is global secret")
+		if !exutil.CheckAppearance(oc, 1*time.Second, 1*time.Second, exutil.Immediately,
+			exutil.AsAdmin, exutil.WithoutNamespace, exutil.Appear, "secret/pull-secret", "-n", "openshift-config") {
+			g.Skip("skip it because there is no global secret")
+		}
+
+		exutil.By("check if current mcp is healthy")
+		if !olmv1util.HealthyMCP4OLM(oc) {
+			g.Skip("current mcp is not healthy")
+		}
+
+		exutil.By("set gobal secret")
+		dirname := "/tmp/" + caseID + "-globalsecretdir"
+		err := os.MkdirAll(dirname, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		newAuthCmd := fmt.Sprintf(`cat %s/.dockerconfigjson | jq '.auths["fake.registry"] |= . + {"auth":"faketoken=="}' > %s/newdockerconfigjson`, dirname, dirname)
+		_, err = exec.Command("bash", "-c", newAuthCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("set").Args("data", "secret/pull-secret", "-n", "openshift-config",
+			"--from-file=.dockerconfigjson="+dirname+"/newdockerconfigjson").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer func() {
+			err = oc.AsAdmin().WithoutNamespace().Run("set").Args("data", "secret/pull-secret", "-n", "openshift-config",
+				"--from-file=.dockerconfigjson="+dirname+"/.dockerconfigjson").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			olmv1util.AssertMCPCondition(oc, "master", "Updating", "status", "True", 3, 120, 1)
+			olmv1util.AssertMCPCondition(oc, "worker", "Updating", "status", "True", 3, 120, 1)
+			olmv1util.AssertMCPCondition(oc, "master", "Updating", "status", "False", 30, 600, 20)
+			olmv1util.AssertMCPCondition(oc, "worker", "Updating", "status", "False", 30, 600, 20)
+			o.Expect(olmv1util.HealthyMCP4OLM(oc)).To(o.BeTrue())
+		}()
+
+		olmv1util.AssertMCPCondition(oc, "master", "Updating", "status", "True", 3, 120, 1)
+		olmv1util.AssertMCPCondition(oc, "worker", "Updating", "status", "True", 3, 120, 1)
+		olmv1util.AssertMCPCondition(oc, "master", "Updating", "status", "False", 30, 600, 20)
+		olmv1util.AssertMCPCondition(oc, "worker", "Updating", "status", "False", 30, 600, 20)
+		o.Expect(olmv1util.HealthyMCP4OLM(oc)).To(o.BeTrue())
+
+		exutil.By("check if auth is updated for catalogd")
+		catalogDPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "control-plane=catalogd-controller-manager",
+			"-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-catalogd").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(catalogDPod).NotTo(o.BeEmpty())
+
+		// avoid to use oc.xx.Output to avoid possible sensitive information leak.
+		checkAuthCmdCatalogd := `grep -q "fake.registry" /tmp/catalogd-global-pull-secret-*.json`
+		finalArgsCatalogd := []string{
+			"--kubeconfig=" + exutil.KubeConfigPath(),
+			"exec",
+			"-n",
+			"openshift-catalogd",
+			catalogDPod,
+			"--",
+			"bash",
+			"-c",
+			checkAuthCmdCatalogd,
+		}
+
+		e2e.Logf("cmdCatalogd: %v", "oc"+" "+strings.Join(finalArgsCatalogd, " "))
+		cmdCatalogd := exec.Command("oc", finalArgsCatalogd...)
+		_, err = cmdCatalogd.CombinedOutput()
+		// please do not print output because it is possible to leak sensitive information
+		o.Expect(err).NotTo(o.HaveOccurred(), "auth for catalogd is not updated")
+
+		exutil.By("check if auth is updated for operator-controller")
+		operatorControlerPod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "control-plane=operator-controller-controller-manager",
+			"-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-operator-controller").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(operatorControlerPod).NotTo(o.BeEmpty())
+
+		// avoid to use oc.xx.Output to avoid possible sensitive information leak.
+		checkAuthCmdOperatorController := `grep -q "registry" /tmp/operator-controller-global-pull-secrets-*.json`
+		finalArgsOperatorController := []string{
+			"--kubeconfig=" + exutil.KubeConfigPath(),
+			"exec",
+			"-n",
+			"openshift-operator-controller",
+			operatorControlerPod,
+			"--",
+			"bash",
+			"-c",
+			checkAuthCmdOperatorController,
+		}
+
+		e2e.Logf("cmdOperatorController: %v", "oc"+" "+strings.Join(finalArgsOperatorController, " "))
+		cmdOperatorController := exec.Command("oc", finalArgsOperatorController...)
+		_, err = cmdOperatorController.CombinedOutput()
+		// please do not print output because it is possible to leak sensitive information
+		o.Expect(err).NotTo(o.HaveOccurred(), "auth for operator-controller is not updated")
 
 	})
 
