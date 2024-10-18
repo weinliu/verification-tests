@@ -356,7 +356,7 @@ var _ = g.Describe("[sig-api-machinery] API_Server on hypershift", func() {
 			cmd := []string{"-n", hostedControlPlaneNS, podList[0], "-c", containers[0], "--", "sysctl", "-w", "kernel.msgmax=65536"}
 			cmdOut, errCmd := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
 			o.Expect(errCmd).To(o.HaveOccurred())
-			o.Expect(cmdOut).Should(o.ContainSubstring("Read-only file system"))
+			o.Expect(cmdOut).Should(o.ContainSubstring("sysctl: permission denied on key"))
 		}
 	})
 
