@@ -790,6 +790,7 @@ func (mcp *MachineConfigPool) waitForComplete() {
 	})
 
 	if err != nil {
+		exutil.ArchiveMustGatherFile(mcp.GetOC(), extractJournalLogs)
 		DebugDegradedStatus(mcp)
 	}
 	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), fmt.Sprintf("mc operation is not completed on mcp %s: %s", mcp.name, err))

@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -787,8 +788,16 @@ func IsCapabilityEnabled(oc *exutil.CLI, capability string) bool {
 func GetCurrentTestPolarionIDNumber() string {
 	name := g.CurrentSpecReport().FullText()
 
-	r := regexp.MustCompile(`\d+`)
-	return r.FindString(name)
+	r := regexp.MustCompile(`-(?P<id>\d+)-`)
+
+	matches := r.FindStringSubmatch(name)
+	number := r.SubexpIndex("id")
+	if len(matches) < number+1 {
+		logger.Errorf("Could not get the test case ID")
+		return ""
+	}
+
+	return matches[number]
 }
 
 // GetBase64EncodedFileSourceContent returns the ignition config "source" value for a content file encoded in base64
@@ -1384,4 +1393,46 @@ func WaitForStableCluster(oc *exutil.CLI, minimumStable, timeout string) error {
 		oc.Run("get").Args("co").Execute()
 	}
 	return err
+}
+
+func extractJournalLogs(oc *exutil.CLI, outDir string) (totalErr error) {
+	var (
+		nl = NewNodeList(oc)
+	)
+
+	logger.Infof("Collecting journal logs")
+	allNodes, err := nl.GetAll()
+	if err != nil {
+		return err
+	}
+	for _, node := range allNodes {
+		if node.HasTaintEffectOrFail("NoExecute") {
+			logger.Infof("Node %s is tainted with 'NoExecute'. Validation skipped.", node.GetName())
+			continue
+		}
+		if node.GetConditionStatusByType("DiskPressure") != FalseString {
+			logger.Infof("Node %s is under disk pressure. The node cannot be debugged. We skip the validation for this node", node.GetName())
+			continue
+		}
+
+		logger.Infof("Collecting journal logs from node: %s", node.GetName())
+
+		fileName := path.Join(outDir, node.GetName()+"-journal.log")
+		tmpFilePath := path.Join("/tmp/journal.log")
+
+		_, err := node.DebugNodeWithChroot("bash", "-c", "journalctl -o with-unit >  "+tmpFilePath)
+		if err != nil {
+			totalErr = err
+			logger.Infof("Error getting journal logs from node %s: %s", node.GetName(), err)
+			continue
+		}
+		err = node.CopyToLocal(tmpFilePath, fileName)
+		if err != nil {
+			totalErr = err
+			logger.Infof("Error copying the file with the journal logs from node %s: %s", node.GetName(), err)
+			continue
+		}
+	}
+
+	return totalErr
 }
