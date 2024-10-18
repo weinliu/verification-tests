@@ -165,6 +165,15 @@ type routerPodResource struct {
 	template       string
 }
 
+type communityResource struct {
+	name          string
+	namespace     string
+	communityName string
+	value1        string
+	value2        string
+	template      string
+}
+
 var (
 	snooze                 time.Duration = 720
 	bgpRouterIP                          = "192.168.111.60/24"
@@ -674,6 +683,16 @@ func createBGPAdvertisementCR(oc *exutil.CLI, bgpAdvertisement bgpAdvertisementR
 
 }
 
+func createCommunityCR(oc *exutil.CLI, community communityResource) (status bool) {
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", community.template, "-p", "NAME="+community.name, "NAMESPACE="+community.namespace,
+		"COMMUNITYNAME="+community.communityName, "VALUE="+community.value1+":"+community.value2)
+	if err != nil {
+		e2e.Logf("Error creating Community %v", err)
+		return false
+	}
+	return true
+
+}
 func checkServiceEvents(oc *exutil.CLI, svcName string, namespace string, reason string) (bool, string) {
 	fieldSelectorArgs := fmt.Sprintf("reason=%s,involvedObject.kind=Service,involvedObject.name=%s", reason, svcName)
 	result := false

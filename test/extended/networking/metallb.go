@@ -87,6 +87,27 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 	})
 
+	g.It("Author:asood-Medium-50950-Verify community creation and webhook validation.", func() {
+		communityTemplate := filepath.Join(testDataDir, "community-template.yaml")
+		communityCR := communityResource{
+			name:          "community-50950",
+			namespace:     opNamespace,
+			communityName: "NO_ADVERTISE",
+			value1:        "65535",
+			value2:        "65282",
+			template:      communityTemplate,
+		}
+		defer removeResource(oc, true, true, "community", communityCR.name, "-n", communityCR.namespace)
+		result := createCommunityCR(oc, communityCR)
+		o.Expect(result).To(o.BeTrue())
+
+		patchCommunity := `[{"op": "add", "path": "/spec/communities/1", "value": {"name": "NO_ADVERTISE", "value":"65535:65282"}}]`
+		patchOutput, patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("community", communityCR.name, "-n", communityCR.namespace, "--type=json", "-p", patchCommunity).Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(strings.Contains(patchOutput, "duplicate definition of community")).To(o.BeTrue())
+
+	})
+
 })
 
 // Tests related to metallb install and CR creation that can be executed more frequently
@@ -270,6 +291,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		metalLBNodeSelVal         = ""
 		metalLBControllerSelKey   = "node-role.kubernetes.io/worker"
 		metalLBControllerSelVal   = ""
+		ipAddressPoolLabelKey     = "zone"
+		ipAddressPoolLabelVal     = "east"
 	)
 
 	g.BeforeEach(func() {
@@ -374,6 +397,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		ipAddresspool := ipAddressPoolResource{
 			name:                      "ipaddresspool-l2",
 			namespace:                 opNamespace,
+			label1:                    ipAddressPoolLabelKey,
+			value1:                    ipAddressPoolLabelVal,
 			addresses:                 l2Addresses[0][:],
 			namespaces:                namespaces[:],
 			priority:                  10,
@@ -501,6 +526,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		ipAddresspool := ipAddressPoolResource{
 			name:                      "ipaddresspool-l2",
 			namespace:                 opNamespace,
+			label1:                    ipAddressPoolLabelKey,
+			value1:                    ipAddressPoolLabelVal,
 			addresses:                 l2Addresses[0][:],
 			namespaces:                namespaces[:],
 			priority:                  10,
@@ -633,6 +660,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		ipAddresspool := ipAddressPoolResource{
 			name:                      "ipaddresspool-l2",
 			namespace:                 opNamespace,
+			label1:                    ipAddressPoolLabelKey,
+			value1:                    ipAddressPoolLabelVal,
 			addresses:                 l2Addresses[0][:],
 			namespaces:                namespaces[:],
 			priority:                  10,
@@ -806,6 +835,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 			ipAddresspool := ipAddressPoolResource{
 				name:                      "ipaddresspool-l2-" + strconv.Itoa(i),
 				namespace:                 opNamespace,
+				label1:                    ipAddressPoolLabelKey,
+				value1:                    ipAddressPoolLabelVal,
 				addresses:                 l2Addresses[i][:],
 				namespaces:                namespaces[:],
 				priority:                  10,
@@ -1186,6 +1217,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 			ipAddresspool := ipAddressPoolResource{
 				name:                      "ipaddresspool-l2-" + strconv.Itoa(i),
 				namespace:                 opNamespace,
+				label1:                    ipAddressPoolLabelKey,
+				value1:                    ipAddressPoolLabelVal,
 				addresses:                 l2Addresses[i][:],
 				namespaces:                namespaces[:],
 				priority:                  10,
@@ -1422,6 +1455,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		ipAddresspool := ipAddressPoolResource{
 			name:                      "ipaddresspool-l2",
 			namespace:                 opNamespace,
+			label1:                    ipAddressPoolLabelKey,
+			value1:                    ipAddressPoolLabelVal,
 			addresses:                 l2Addresses[0][:],
 			namespaces:                namespaces[:],
 			priority:                  10,
@@ -1516,6 +1551,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 		metalLBNodeSelVal       = ""
 		metalLBControllerSelKey = "node-role.kubernetes.io/worker"
 		metalLBControllerSelVal = ""
+		ipAddressPoolLabelKey   = "zone"
+		ipAddressPoolLabelVal   = "east"
 	)
 
 	g.BeforeEach(func() {
@@ -1648,6 +1685,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 			ipAddresspool := ipAddressPoolResource{
 				name:                      "ipaddresspool-l3-" + strconv.Itoa(i),
 				namespace:                 opNamespace,
+				label1:                    ipAddressPoolLabelKey,
+				value1:                    ipAddressPoolLabelVal,
 				addresses:                 bgpAddresses[i][:],
 				namespaces:                namespaces,
 				priority:                  priority_val,
@@ -1860,6 +1899,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 		ipAddresspool := ipAddressPoolResource{
 			name:                      "ipaddresspool-l3-" + testID,
 			namespace:                 opNamespace,
+			label1:                    ipAddressPoolLabelKey,
+			value1:                    ipAddressPoolLabelVal,
 			addresses:                 ipAddressList[:],
 			namespaces:                namespaces[:],
 			priority:                  0,
@@ -2025,6 +2066,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 		ipAddresspool := ipAddressPoolResource{
 			name:                      "ipaddresspool-bgp-46652",
 			namespace:                 opNamespace,
+			label1:                    ipAddressPoolLabelKey,
+			value1:                    ipAddressPoolLabelVal,
 			addresses:                 bgpAddresses[0][:],
 			namespaces:                namespaces,
 			priority:                  10,
@@ -2189,6 +2232,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 		ipAddresspool := ipAddressPoolResource{
 			name:                      "ipaddresspool-bgp-" + testID,
 			namespace:                 opNamespace,
+			label1:                    ipAddressPoolLabelKey,
+			value1:                    ipAddressPoolLabelVal,
 			addresses:                 bgpAddresses[0][:],
 			namespaces:                namespaces,
 			priority:                  10,
@@ -2318,7 +2363,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 
 	})
 
-	g.It("Author:qiowang-NonPreRelease-High-51187-Validate ipAddressPoolSelector, ipAddressPool and nodeSelector are honored when advertising service IP address via BGP advertisement [Serial]", func() {
+	g.It("Author:qiowang-High-51187-Validate ipAddressPoolSelector, ipAddressPool and nodeSelector are honored when advertising service IP address via BGP advertisement [Serial]", func() {
 		var (
 			workers                              []string
 			nodeIPs                              []string
