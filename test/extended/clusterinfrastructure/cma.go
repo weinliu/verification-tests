@@ -15,7 +15,7 @@ import (
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CMA", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc = exutil.NewCLI("cluster-machine-approver", exutil.KubeConfigPath())
+		oc = exutil.NewCLIForKubeOpenShift("cluster-machine-approver" + getRandomString())
 	)
 	g.BeforeEach(func() {
 		exutil.SkipForSNOCluster(oc)
