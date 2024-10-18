@@ -2430,6 +2430,10 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-High-71178-Make sure no mismatch for sha256sum of openshift install for mac version", func() {
+		if !assertPullSecret(oc) {
+			g.Skip("The cluster does not have pull secret for public registry hence skipping...")
+		}
+
 		extractTmpDirName := "/tmp/d71178"
 		err := os.MkdirAll(extractTmpDirName, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2463,6 +2467,9 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:yinzhou-Medium-71273-Medium-71275-Validate user is able to extract rhel8 and rhel9 oc from the ocp payload", func() {
+		if !assertPullSecret(oc) {
+			g.Skip("The cluster does not have pull secret for public registry hence skipping...")
+		}
 		extractTmpDirName := "/tmp/case71273"
 		defer os.RemoveAll(extractTmpDirName)
 		err := os.MkdirAll(extractTmpDirName, 0755)
