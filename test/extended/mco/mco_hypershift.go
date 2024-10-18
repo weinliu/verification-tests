@@ -23,7 +23,7 @@ var _ = g.Describe("[sig-mco] MCO hypershift", func() {
 		// init cli object, temp namespace contains prefix mco.
 		// tip: don't put this in BeforeEach/JustBeforeEach, you will get error
 		// "You may only call AfterEach from within a Describe, Context or When"
-		oc = exutil.NewCLI("mco-hypershift", exutil.KubeConfigPath())
+		oc = exutil.NewCLIForKubeOpenShift("mco-hypershift")
 		// temp dir to store all test files, and it will be recycled when test is finished
 		tmpdir string
 		// whether hypershift is enabled
