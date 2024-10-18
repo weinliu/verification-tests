@@ -806,6 +806,50 @@ var _ = g.Describe("[sig-apps] Workloads test kcm works well", func() {
 			e2e.Failf("KCM restarted when processing StatefulSet with spec.podManagementPolicy is Parallel")
 		}
 	})
+
+	g.It("Author:yinzhou-ROSA-OSD_CCS-ARO-High-19922-Terminating pod should be removed from endpoints list for service", func() {
+		project19922 := oc.Namespace()
+
+		resourceBaseDir := exutil.FixturePath("testdata", "workloads")
+		deploymentFile := filepath.Join(resourceBaseDir, "deployment-with-shutdown-gracefully.yaml")
+
+		exutil.By("Create the deployment")
+		err := oc.Run("create").Args("-f", deploymentFile, "-n", project19922).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.Run("expose").Args("deployment", "hello-19922", "-n", project19922).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if ok := waitForAvailableRsRunning(oc, "deployment", "hello-19922", project19922, "1"); ok {
+			e2e.Logf("All pods are runnnig now\n")
+		} else {
+			oc.Run("get").Args("events", "-n", project19922).Execute()
+			e2e.Failf("Deployment hello-19922 is not running even afer waiting for about 3 minutes")
+
+		}
+
+		exutil.By("Get the current pod ip")
+		podIp, err := oc.Run("get").Args("pod", "-l", "deployment=hello-19922", "-n", project19922, "-o=jsonpath={.items[*].status.podIP}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Trigger new deployment")
+		err = oc.Run("set").Args("env", "deployment", "hello-19922", "-n", project19922, "foo=bar").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check the service should not see the previous pod in the endpoint list")
+		err = wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			describeSVC, err := oc.Run("describe").Args("svc", "hello-19922", "-n", project19922).Output()
+			if err != nil {
+				e2e.Logf("the err:%v, and try next round", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString(describeSVC, podIp); matched {
+				e2e.Logf("Still see the terminating endpoint, and try next round")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Endpoint for the terminating pods are still seen even after the timeout")
+	})
 })
 
 var _ = g.Describe("[sig-cli] Workloads kube-controller-manager on Microshift", func() {
