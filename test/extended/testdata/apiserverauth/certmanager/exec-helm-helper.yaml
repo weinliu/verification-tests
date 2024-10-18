@@ -37,6 +37,13 @@ objects:
             - "sh"
             - "-c"
             - ${HELM_CMD}
+          env:
+            - name: HTTPS_PROXY
+              value: "${HTTPS_PROXY}"
+            - name: HTTP_PROXY
+              value: "${HTTP_PROXY}"
+            - name: NO_PROXY
+              value: "${NO_PROXY}"
           volumeMounts:
             - name: values-volume
               mountPath: /helm
@@ -54,3 +61,6 @@ parameters:
   - name: NAMESPACE
   - name: HELM_CMD
   - name: CONFIGMAP_NAME
+  - name: HTTPS_PROXY
+  - name: HTTP_PROXY
+  - name: NO_PROXY

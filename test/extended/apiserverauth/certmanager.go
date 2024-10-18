@@ -1797,7 +1797,7 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 		oidcIssuer := gjson.Get(output, "issuer").String()
 		cmd := fmt.Sprintf(`vault auth enable jwt && vault write auth/jwt/config oidc_discovery_url=%s`, oidcIssuer)
 
-		if !exutil.IsSTSCluster(oc) {
+		if strings.Contains(oidcIssuer, "kubernetes.default.svc") {
 			// This is an workaround for non-STS envs, otherwise vault issuer will run into 'fetching keys oidc: get keys failed: 403 Forbidden' error.
 			// The public keys under '/openid/v1/jwks' are non-sensitive, so there is no concern about granting access.
 			exutil.By("create RBAC resources for anonymous user (vault) to get 'jwks_uri' in non-STS env")

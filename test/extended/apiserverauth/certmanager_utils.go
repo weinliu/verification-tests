@@ -699,7 +699,18 @@ func setupVaultServer(oc *exutil.CLI, ns string, release string) (string, string
 		installerRolebinding = "vault-installer-binding-" + ns
 		installerPodName     = "vault-installer"
 		vaultPodLabel        = "app.kubernetes.io/name=vault"
+		httpProxy            = ""
+		httpsProxy           = ""
+		noProxy              = ""
 	)
+
+	// The Vault server requires Unix commands like 'chmod' to initialize operator, but it's not supported natively by Azure Files SMB protocol.
+	// xref: https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/storage/could-not-change-permissions-azure-files
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass", `-o=jsonpath={.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(output, "azurefile-csi") || len(output) == 0 {
+		g.Skip("Skipping as the default storage class is not applicable for the vault server to consume.")
+	}
 
 	e2e.Logf("=> perpare TLS certs to secure HTTPS traffic of Vault server")
 	createIssuer(oc, ns)
@@ -708,7 +719,7 @@ func setupVaultServer(oc *exutil.CLI, ns string, release string) (string, string
 	e2e.Logf("create a CA issuer")
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 	issuerFile := filepath.Join(buildPruningBaseDir, "issuer-ca.yaml")
-	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "-f", issuerFile).Execute()
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "-f", issuerFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	err = waitForResourceReadiness(oc, ns, "issuer", issuerName, 10*time.Second, 120*time.Second)
 	if err != nil {
@@ -726,6 +737,16 @@ func setupVaultServer(oc *exutil.CLI, ns string, release string) (string, string
 	}
 	exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 
+	// set proxy envs for the Vault installer pod to access the Helm chart repository when running on a proxy-enabled cluster
+	output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(output, "httpProxy") {
+		e2e.Logf("=> retrieve the proxy configurations for Vault installer pod to inject")
+		httpProxy = gjson.Get(output, "httpProxy").String()
+		httpsProxy = gjson.Get(output, "httpsProxy").String()
+		noProxy = gjson.Get(output, "noProxy").String()
+	}
+
 	e2e.Logf("=> create a pod to install Vault through Helm charts")
 	// store the Helm values regarding Vault TLS config into a configmap
 	helmConfigFile := filepath.Join(buildPruningBaseDir, "helm-vault-tls-config.yaml")
@@ -734,7 +755,7 @@ func setupVaultServer(oc *exutil.CLI, ns string, release string) (string, string
 	// install a standalone TLS-enabled Vault with agent injector service disabled
 	cmd := fmt.Sprintf(`helm repo add hashicorp https://helm.releases.hashicorp.com && helm install %s hashicorp/vault -n %s --set injector.enabled=false --set global.openshift=true --values /helm/custom-values.yaml`, release, ns)
 	helmHelperFile := filepath.Join(buildPruningBaseDir, "exec-helm-helper.yaml")
-	params = []string{"-f", helmHelperFile, "-p", "SA_NAME=" + installerSA, "ROLEBINDING_NAME=" + installerRolebinding, "POD_NAME=" + installerPodName, "HELM_CMD=" + cmd, "CONFIGMAP_NAME=" + configMapName, "NAMESPACE=" + ns}
+	params = []string{"-f", helmHelperFile, "-p", "SA_NAME=" + installerSA, "ROLEBINDING_NAME=" + installerRolebinding, "POD_NAME=" + installerPodName, "HELM_CMD=" + cmd, "CONFIGMAP_NAME=" + configMapName, "NAMESPACE=" + ns, "HTTP_PROXY=" + httpProxy, "HTTPS_PROXY=" + httpsProxy, "NO_PROXY=" + noProxy}
 	exutil.ApplyClusterResourceFromTemplate(oc, params...)
 	defer func() {
 		e2e.Logf("cleanup created clusterrolebinding resource")
@@ -774,7 +795,7 @@ func setupVaultServer(oc *exutil.CLI, ns string, release string) (string, string
 	e2e.Logf("=> init and unseal Vault")
 	// init Vault with one key share and one key threshold
 	cmd = fmt.Sprintf(`vault operator init -key-shares=1 -key-threshold=1 -format=json`)
-	output, err := exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
+	output, err = exutil.RemoteShPod(oc, ns, vaultPodName, "sh", "-c", cmd)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	vaultUnsealKey := gjson.Get(output, "unseal_keys_b64.0").String()
 	vaultRootToken := gjson.Get(output, "root_token").String()
