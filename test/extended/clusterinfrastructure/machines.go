@@ -969,6 +969,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		if region != "us-east-2" && region != "us-east-1" {
 			g.Skip("Not support region " + region + " for the case for now.")
 		}
+		clusterinfra.GetAwsCredentialFromCluster(oc)
+		awsClient := exutil.InitAwsSession()
+		_, err = awsClient.GetPlacementGroupByName("pgcluster")
+		if err != nil {
+			g.Skip("There is no this placement group for testing, skip the cases!!")
+		}
+
 		g.By("Create a new machineset")
 		machinesetName := infrastructureName + "-64909"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
@@ -1403,6 +1410,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		if region != "us-east-2" && region != "us-east-1" {
 			g.Skip("Not support region " + region + " for the case for now.")
 		}
+		clusterinfra.GetAwsCredentialFromCluster(oc)
+		awsClient := exutil.InitAwsSession()
+		_, err = awsClient.GetPlacementGroupByName("pgpartition3")
+		if err != nil {
+			g.Skip("There is no this placement group for testing, skip the cases!!")
+		}
+
 		g.By("Create a new machineset")
 		machinesetName := infrastructureName + "-74603"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
@@ -1447,6 +1461,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		if region != "us-east-2" && region != "us-east-1" {
 			g.Skip("Not support region " + region + " for the case for now.")
 		}
+		clusterinfra.GetAwsCredentialFromCluster(oc)
+		awsClient := exutil.InitAwsSession()
+		_, err = awsClient.GetPlacementGroupByName("pgpartition3")
+		if err != nil {
+			g.Skip("There is no this placement group for testing, skip the cases!!")
+		}
+
 		g.By("Create a new machineset")
 		machinesetName := infrastructureName + "-75037"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}

@@ -357,6 +357,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		skipForCAPINotExist(oc)
+		clusterinfra.GetAwsCredentialFromCluster(oc)
+		awsClient := exutil.InitAwsSession()
+		_, err := awsClient.GetPlacementGroupByName("pgpartition3")
+		if err != nil {
+			g.Skip("There is no this placement group for testing, skip the cases!!")
+		}
 
 		g.By("Create capi machineset")
 		cluster.createCluster(oc)
