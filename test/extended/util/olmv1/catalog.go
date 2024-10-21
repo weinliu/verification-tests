@@ -18,6 +18,11 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
+const (
+	v1ApiPath = "api/v1"
+	v1ApiData = "all"
+)
+
 type ClusterCatalogDescription struct {
 	Name         string
 	PullSecret   string
@@ -121,8 +126,9 @@ func (clustercatalog *ClusterCatalogDescription) GetcontentURL(oc *exutil.CLI) {
 		exutil.AssertWaitPollNoErr(errWait, "get route catalogd-service failed")
 	}
 	o.Expect(route).To(o.ContainSubstring("catalogd-service-openshift-catalogd"))
-	contentURL, err := GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", "jsonpath={.status.contentURL}")
+	contentURL, err := GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", "jsonpath={.status.urls.base}")
 	o.Expect(err).NotTo(o.HaveOccurred())
+	contentURL = contentURL + "/" + v1ApiPath + "/" + v1ApiData
 	clustercatalog.ContentURL = strings.Replace(contentURL, "catalogd-service.openshift-catalogd.svc", route, 1)
 	e2e.Logf("clustercatalog contentURL is %s", clustercatalog.ContentURL)
 }
@@ -155,7 +161,7 @@ func (clustercatalog *ClusterCatalogDescription) GetContent(oc *exutil.CLI) []by
 	defer func() {
 		err := resp.Body.Close()
 		if err != nil {
-			e2e.Logf("Error closing body:", err)
+			e2e.Logf("Error closing body: %v", err)
 		}
 	}()
 	o.Expect(err).NotTo(o.HaveOccurred())

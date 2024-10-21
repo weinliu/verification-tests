@@ -436,7 +436,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 		exutil.By("get the index content through http service off cluster")
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 100*time.Second, false, func(ctx context.Context) (bool, error) {
-			checkOutput, err := exec.Command("bash", "-c", "curl -k https://127.0.0.1:6920/catalogs/clustercatalog-69202/all.json").Output()
+			checkOutput, err := exec.Command("bash", "-c", "curl -k https://127.0.0.1:6920/catalogs/clustercatalog-69202/api/v1/all").Output()
 			if err != nil {
 				e2e.Logf("failed to execute the curl: %s. Trying again", err)
 				return false, nil
@@ -1335,13 +1335,13 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Check the url response")
-		getCmd := fmt.Sprintf("curl -ki https://%s/catalogs/clustercatalog-75441/all.json -H \"Accept-Encoding: gzip\"", url)
+		getCmd := fmt.Sprintf("curl -ki https://%s/catalogs/clustercatalog-75441/api/v1/all -H \"Accept-Encoding: gzip\"", url)
 		stringMessage, err := exec.Command("bash", "-c", getCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stringMessage).To(o.ContainSubstring("Content-Encoding: gzip"))
 		o.Expect(stringMessage).To(o.ContainSubstring("Content-Type: application/jsonl"))
 
-		getCmd2 := fmt.Sprintf("curl -ki https://%s/catalogs/clustercatalog-75441v2/all.json -H \"Accept-Encoding: gzip\"", url)
+		getCmd2 := fmt.Sprintf("curl -ki https://%s/catalogs/clustercatalog-75441v2/api/v1/all -H \"Accept-Encoding: gzip\"", url)
 		stringMessage2, err := exec.Command("bash", "-c", getCmd2).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stringMessage2).NotTo(o.ContainSubstring("Content-Encoding: gzip"))
