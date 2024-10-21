@@ -735,10 +735,19 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			}
 		)
 
-		exutil.By("check if there is global secret")
+		exutil.By("check if there is global secret and it includes token to access quay.io")
 		if !exutil.CheckAppearance(oc, 1*time.Second, 1*time.Second, exutil.Immediately,
 			exutil.AsAdmin, exutil.WithoutNamespace, exutil.Appear, "secret/pull-secret", "-n", "openshift-config") {
 			g.Skip("skip it because there is no global secret")
+		}
+
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/pull-secret", "-n", "openshift-config",
+			`--template={{index .data ".dockerconfigjson" | base64decode}}`).Output()
+		if err != nil {
+			e2e.Failf("can not get data of global secret ")
+		}
+		if !strings.Contains(output, "quay.io/olmqe") {
+			g.Skip("skip it becuse of no token for test")
 		}
 
 		exutil.By("Create clustercatalog")
@@ -747,7 +756,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 		exutil.By("Create namespace")
 		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
-		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
 
