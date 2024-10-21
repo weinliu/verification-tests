@@ -323,6 +323,137 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 	})
 
+	// author: iamin@redhat.com
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-14678-NetworkEdge Only the host in whitelist could access unsecure/edge/reencrypt/passthrough routes", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			unSecSvcName        = "service-unsecure1"
+			signedPod           = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+		)
+
+		exutil.By("1.0: Deploy a project with Pod and Services")
+		project1 := oc.Namespace()
+		routerpod := getNewRouterPod(oc, "default")
+		createResourceFromFile(oc, project1, signedPod)
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+
+		exutil.By("2.0: Create an unsecure, edge, reencrypt and passthrough route")
+		unsecureRoute := "route-unsecure"
+		unsecureHost := unsecureRoute + "-" + project1 + ".apps." + getBaseDomain(oc)
+		edgeRoute := "route-edge"
+		edgeHost := edgeRoute + "-" + project1 + ".apps." + getBaseDomain(oc)
+		passthroughRoute := "route-passthrough"
+		passthroughHost := passthroughRoute + "-" + project1 + ".apps." + getBaseDomain(oc)
+		reenRoute := "route-reen"
+		reenHost := reenRoute + "-" + project1 + ".apps." + getBaseDomain(oc)
+
+		createRoute(oc, project1, "http", unsecureRoute, unSecSvcName, []string{})
+		waitForOutput(oc, project1, "route/route-unsecure", "{.status.ingress[0].conditions[0].status}", "True")
+		createRoute(oc, project1, "edge", edgeRoute, unSecSvcName, []string{})
+		waitForOutput(oc, project1, "route/route-edge", "{.status.ingress[0].conditions[0].status}", "True")
+		createRoute(oc, project1, "passthrough", passthroughRoute, "service-secure1", []string{})
+		waitForOutput(oc, project1, "route/route-passthrough", "{.status.ingress[0].conditions[0].status}", "True")
+		createRoute(oc, project1, "reencrypt", reenRoute, "service-secure1", []string{})
+		waitForOutput(oc, project1, "route/route-reen", "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("3.0: Annotate unsecure, edge, reencrypt and passthrough route")
+		result := getClientIP(oc)
+		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_whitelist=`+result)
+		findAnnotation := getAnnotation(oc, project1, "route", unsecureRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"` + result + `"`))
+		setAnnotation(oc, project1, "route/"+edgeRoute, `haproxy.router.openshift.io/ip_whitelist=`+result)
+		findAnnotation = getAnnotation(oc, project1, "route", edgeRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"` + result + `"`))
+		setAnnotation(oc, project1, "route/"+passthroughRoute, `haproxy.router.openshift.io/ip_whitelist=`+result)
+		findAnnotation = getAnnotation(oc, project1, "route", passthroughRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"` + result + `"`))
+		setAnnotation(oc, project1, "route/"+reenRoute, `haproxy.router.openshift.io/ip_whitelist=`+result)
+		findAnnotation = getAnnotation(oc, project1, "route", reenRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"` + result + `"`))
+
+		exutil.By("4.0: access the routes using the IP from the whitelist")
+		waitForOutsideCurlContains("http://"+unsecureHost, "", `Hello-OpenShift web-server-rc`)
+		waitForOutsideCurlContains("https://"+edgeHost, "-k", `Hello-OpenShift web-server-rc`)
+		waitForOutsideCurlContains("https://"+passthroughHost, "-k", `Hello-OpenShift web-server-rc`)
+		waitForOutsideCurlContains("https://"+reenHost, "-k", `Hello-OpenShift web-server-rc`)
+
+		exutil.By("5.0: re-annotate routes with a random IP")
+		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_whitelist=5.6.7.8`)
+		findAnnotation = getAnnotation(oc, project1, "route", unsecureRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"5.6.7.8`))
+		setAnnotation(oc, project1, "route/"+edgeRoute, `haproxy.router.openshift.io/ip_whitelist=5.6.7.8`)
+		findAnnotation = getAnnotation(oc, project1, "route", edgeRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"5.6.7.8`))
+		setAnnotation(oc, project1, "route/"+passthroughRoute, `haproxy.router.openshift.io/ip_whitelist=5.6.7.8`)
+		findAnnotation = getAnnotation(oc, project1, "route", passthroughRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"5.6.7.8`))
+		setAnnotation(oc, project1, "route/"+reenRoute, `haproxy.router.openshift.io/ip_whitelist=5.6.7.8`)
+		findAnnotation = getAnnotation(oc, project1, "route", reenRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"5.6.7.8`))
+
+		exutil.By("6.0: attempt to access the routes without an IP in the whitelist")
+		waitForOutsideCurlContains("http://"+unsecureHost, "", `exit status`)
+		waitForOutsideCurlContains("https://"+edgeHost, "-k", `exit status`)
+		waitForOutsideCurlContains("https://"+passthroughHost, "-k", `exit status`)
+		waitForOutsideCurlContains("https://"+reenHost, "-k", `exit status`)
+
+		exutil.By("7.0: Check HaProxy if the IP in the whitelist annotation exists")
+		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+unsecureRoute)
+		o.Expect(searchOutput).To(o.ContainSubstring(`acl whitelist src 5.6.7.8`))
+		searchOutput = readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+edgeRoute)
+		o.Expect(searchOutput).To(o.ContainSubstring(`acl whitelist src 5.6.7.8`))
+		searchOutput = readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+passthroughRoute)
+		o.Expect(searchOutput).To(o.ContainSubstring(`acl whitelist src 5.6.7.8`))
+		searchOutput = readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+reenRoute)
+		o.Expect(searchOutput).To(o.ContainSubstring(`acl whitelist src 5.6.7.8`))
+
+	})
+
+	// author: iamin@redhat.com
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Low-14680-NetworkEdge Add invalid value in annotation whitelist to route", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			unSecSvcName        = "service-unsecure"
+		)
+
+		exutil.By("1.0: Deploy a project with Pod and Services")
+		project1 := oc.Namespace()
+		routerpod := getNewRouterPod(oc, "default")
+		createResourceFromFile(oc, project1, testPodSvc)
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+
+		exutil.By("2.0: Create an unsecure, route")
+		unsecureRoute := "route-unsecure"
+		unsecureHost := unsecureRoute + "-" + project1 + ".apps." + getBaseDomain(oc)
+
+		createRoute(oc, project1, "http", unsecureRoute, unSecSvcName, []string{})
+		waitForOutput(oc, project1, "route/route-unsecure", "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("3.0: Annotate route with invalid whitelist value")
+		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_whitelist='192.abc.123.0'`)
+		findAnnotation := getAnnotation(oc, project1, "route", unsecureRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"'192.abc.123.0'"`))
+
+		exutil.By("4.0: access the route using any host since whitelist is not in effect")
+		waitForOutsideCurlContains("http://"+unsecureHost, "", `Hello-OpenShift web-server-rc`)
+
+		exutil.By("5.0: re-annotate route with IP that all Hosts can access")
+		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_whitelist=0.0.0.0/0`)
+		findAnnotation = getAnnotation(oc, project1, "route", unsecureRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"0.0.0.0/0`))
+
+		exutil.By("6.0: all hosts can access the route")
+		waitForOutsideCurlContains("http://"+unsecureHost, "", `Hello-OpenShift web-server-rc`)
+
+		exutil.By("7.0: Check HaProxy if the IP in the whitelist annotation exists")
+		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+unsecureRoute)
+		o.Expect(searchOutput).To(o.ContainSubstring(`acl whitelist src 0.0.0.0/0`))
+
+	})
+
 	// merge OCP-15874(NetworkEdge can set cookie name for reencrypt routes by annotation) to OCP-15873
 	g.It("Author:shudili-ROSA-OSD_CCS-ARO-Critical-15873-NetworkEdge can set cookie name for edge/reen routes by annotation", func() {
 		var (

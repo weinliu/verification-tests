@@ -3,7 +3,9 @@ package router
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1874,4 +1876,10 @@ func getPublicSubnetList(oc *exutil.CLI) []string {
 	}
 	e2e.Logf("The public subnet list generated from private is: %v", publicSubnetList)
 	return publicSubnetList
+}
+
+func getClientIP(oc *exutil.CLI) string {
+	res, _ := http.Get("https://api.ipify.org")
+	result, _ := ioutil.ReadAll(res.Body)
+	return string(result)
 }
