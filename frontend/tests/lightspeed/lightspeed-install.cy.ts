@@ -98,12 +98,7 @@ spec:
       .should('include.text', 'Error querying OpenShift Lightspeed service');
 
     // Test that the context menu has no context for the pods list page
-    cy.get(attachMenuButton)
-      .should('exist')
-      .click();
-    cy.get(attachMenu)
-      .should('exist')
-      .should('include.text', 'No context found');
+    cy.get(attachMenuButton).should('be.disabled');
 
     // Navigate to the pod details page
     searchPage.searchBy(podName);
