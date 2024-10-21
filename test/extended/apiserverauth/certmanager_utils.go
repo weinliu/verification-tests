@@ -215,9 +215,9 @@ func createCertManagerOperator(oc *exutil.CLI) {
 		subscriptionNamespace  = "cert-manager-operator"
 		catalogSourceNamespace = "openshift-marketplace"
 		channelName            = "stable-v1"
-
-		// MinMultiArchSupportedVersion is the minimum version to support multi-arch
-		MinMultiArchSupportedVersion = "1.13.0"
+		operandNamespace       = "cert-manager"
+		operandPodLabel        = "app.kubernetes.io/instance=cert-manager"
+		operandPodNum          = 3
 	)
 
 	// switch to an available catalogsource
@@ -225,89 +225,72 @@ func createCertManagerOperator(oc *exutil.CLI) {
 	if len(catalogSourceName) == 0 || err != nil {
 		g.Skip("skip since no available catalogsource was found")
 	}
-	e2e.Logf("will use catalogsource: %s", catalogSourceName)
+	e2e.Logf("=> using catalogsource: '%s'", catalogSourceName)
 
-	// skip non-amd64 arch for unsupported version
-	currentVersion, _ := semver.Parse(getCurrentCSVDescVersion(oc, catalogSourceNamespace, catalogSourceName, subscriptionName, channelName))
-	e2e.Logf("current csv desc version: %s", currentVersion)
-	minVersion, _ := semver.Parse(MinMultiArchSupportedVersion)
-	if currentVersion.Compare(minVersion) == -1 {
-		e2e.Logf("currentVersion(%s) < minVersion(%s), skip non-amd64 arch for unsupported version", currentVersion, minVersion)
-		architecture.SkipNonAmd64SingleArch(oc)
-	}
-
-	e2e.Logf("Prepare cert manager operator.\n")
+	e2e.Logf("=> create the operator namespace")
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
-
-	// create namspace
 	namespaceFile := filepath.Join(buildPruningBaseDir, "namespace.yaml")
-	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", namespaceFile).Output()
-
+	output, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", namespaceFile).Output()
 	// skip the install process to mitigate the namespace deletion terminating issue caused by case 62006
 	// the full message is 'Detected changes to resource cert-manager-operator which is currently being deleted'
-	if strings.Contains(msg, "being deleted") {
-		g.Skip("skipping the install process as the cert-manager-operator namespace is being terminated due to other env issue e.g. we ever hit such failures caused by OCPBUGS-31443")
+	if strings.Contains(output, "being deleted") {
+		g.Skip("skip the install process as the cert-manager-operator namespace is being terminated due to other env issue e.g. we ever hit such failures caused by OCPBUGS-31443")
 	}
-	e2e.Logf("err %v, msg %v", err, msg)
+	o.Expect(err).NotTo(o.HaveOccurred())
 
-	// create operatorgroup
+	e2e.Logf("=> create the operatorgroup")
 	operatorGroupFile := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-	msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", operatorGroupFile).Output()
-	e2e.Logf("err %v, msg %v", err, msg)
+	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", operatorGroupFile).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 
-	// create subscription
+	e2e.Logf("=> create the subscription")
 	subscriptionTemplate := filepath.Join(buildPruningBaseDir, "subscription.yaml")
 	params := []string{"-f", subscriptionTemplate, "-p", "NAME=" + subscriptionName, "SOURCE=" + catalogSourceName, "SOURCE_NAMESPACE=" + catalogSourceNamespace, "CHANNEL=" + channelName}
 	exutil.ApplyNsResourceFromTemplate(oc, subscriptionNamespace, params...)
-
-	// checking subscription status
-	errCheck := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
-		subState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", subscriptionNamespace, "-o=jsonpath={.status.state}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Compare(subState, "AtLatestKnown") == 0 {
+	// wait for subscription state to become AtLatestKnown
+	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, true, func(context.Context) (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", subscriptionNamespace, "-o=jsonpath={.status.state}").Output()
+		if strings.Contains(output, "AtLatestKnown") {
 			return true, nil
 		}
 		return false, nil
 	})
-	if errCheck != nil {
+	if err != nil {
 		dumpResource(oc, subscriptionNamespace, "sub", subscriptionName, "-o=jsonpath={.status}")
 	}
-	exutil.AssertWaitPollNoErr(errCheck, "timeout waiting for subscription to become AtLatestKnown")
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for subscription state to become AtLatestKnown")
 
-	// checking csv status
+	e2e.Logf("=> retrieve the installed CSV name")
 	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", subscriptionNamespace, "-o=jsonpath={.status.installedCSV}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(csvName).NotTo(o.BeEmpty())
-	errCheck = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
-		csvState, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", subscriptionNamespace, "-o=jsonpath={.status.phase}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Compare(csvState, "Succeeded") == 0 {
-			e2e.Logf("CSV check complete!!!")
+	// wait for csv phase to become Succeeded
+	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, true, func(context.Context) (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", subscriptionNamespace, "-o=jsonpath={.status.phase}").Output()
+		if strings.Contains(output, "Succeeded") {
+			e2e.Logf("csv '%s' installed successfully", csvName)
 			return true, nil
 		}
 		return false, nil
-
 	})
-	if errCheck != nil {
+	if err != nil {
 		dumpResource(oc, subscriptionNamespace, "csv", csvName, "-o=jsonpath={.status}")
 	}
-	exutil.AssertWaitPollNoErr(errCheck, "timeout waiting for csv to become Succeeded")
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for csv phase to become Succeeded")
 
-	e2e.Logf("Check cert manager pods.\n")
-	mStatusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "cert-manager", "pod", "-o=jsonpath={.items[*].status.phase}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		var certManagerPodList []string = strings.Fields(output)
-		e2e.Logf("certManagerPodList=%v", certManagerPodList)
-		if len(certManagerPodList) == 3 {
-			if strings.Contains(certManagerPodList[2], "Running") {
-				e2e.Logf("operator pods created successfully!!!")
-				return true, nil
-			}
+	e2e.Logf("=> checking the cert-manager operand pods readiness")
+	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, true, func(context.Context) (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", operandNamespace, "-l", operandPodLabel, "--field-selector=status.phase=Running", "-o=jsonpath={.items[*].metadata.name}").Output()
+		if len(strings.Fields(output)) == operandPodNum {
+			e2e.Logf("all operand pods are up and running!")
+			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(mStatusErr, "operator pods created failed.")
+	if err != nil {
+		oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", operandNamespace, "-l", operandPodLabel).Execute()
+	}
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for all operand pods phase to become Running")
 }
 
 // create selfsigned issuer
@@ -502,32 +485,6 @@ func getAvailableCatalogSourceName(oc *exutil.CLI, namespace string) (string, er
 	output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "catalogsource").Output()
 	e2e.Logf("get existing catalogsource: %s", output)
 	return "", nil
-}
-
-// Get current CSV described version from PackageManifest before creating Subscription
-func getCurrentCSVDescVersion(oc *exutil.CLI, sourceNamespace string, source string, subscriptionName string, channelName string) string {
-	e2e.Logf("Check PackageManifest before getting currentCSVDesc.\n")
-	waitErr := wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", sourceNamespace, "-l", "catalog="+source, "--field-selector", "metadata.name="+subscriptionName).Output()
-		if strings.Contains(output, "No resources found") || err != nil {
-			e2e.Logf("get packagemanifest output:\n%v", output)
-			return false, nil
-		}
-		return true, nil
-	})
-	if waitErr != nil {
-		catalogStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "-n", sourceNamespace, source, "-o=jsonpath={.status}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("catalogsource \"%v\"'s status:\n%v", source, catalogStatus)
-		pod, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", sourceNamespace, "-l", "olm.catalogSource="+source).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("catalogsource \"%v\"'s pod:\n%v", source, pod)
-		e2e.Failf("The packagemanifest \"%v\" or catalogsource \"%v\" is unhealthy", subscriptionName, source)
-	}
-
-	ver, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", sourceNamespace, "-l", "catalog="+source, "--field-selector", "metadata.name="+subscriptionName, "-o=jsonpath={.items[0].status.channels[?(@.name=='"+channelName+"')].currentCSVDesc.version}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return ver
 }
 
 // Get installed cert-manager Operator version. The return value format is semantic 'x.y.z'.
