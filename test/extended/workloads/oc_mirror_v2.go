@@ -2507,4 +2507,65 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but mirror2mirror after unsetting the UPDATE_URL_OVERRIDE for oc-mirror v2 failed")
 	})
+
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-76597-oc-mirror throws error when performing delete operation with --generate [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case76597"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "30G", "/var/lib/registry")
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-76597.yaml")
+		imageDeleteYamlFileF := filepath.Join(ocmirrorBaseDir, "config-76597-delete.yaml")
+
+		exutil.By("Start mirror2disk")
+		defer os.RemoveAll("~/.oc-mirror/")
+		defer os.RemoveAll("~/.oc-mirror.log")
+		waitErr := wait.PollImmediate(30*time.Second, 900*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2disk for performing delete operatiorn with --generate failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk but performing delete operation with --generate failed, retrying...")
+
+		exutil.By("Start disk2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--from", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
+			if err != nil {
+				e2e.Logf("The disk2mirror for performing delete operation with --generate failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the disk2mirror for performing delete operation with --generate failed")
+
+		exutil.By("Generate delete image file")
+		dirnameDelete := "/tmp/case76597delete"
+		defer os.RemoveAll(dirnameDelete)
+		err = os.MkdirAll(dirnameDelete, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--config", imageDeleteYamlFileF, "--generate", "--workspace", "file://"+dirnameDelete, "docker://"+serInfo.serviceName, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+	})
+
 })
