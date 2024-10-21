@@ -1174,6 +1174,13 @@ func (dep *deployment) checkDataBlockType(oc *exutil.CLI) {
 	o.Expect(execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat /tmp/testfile")).To(o.ContainSubstring("block-data"))
 }
 
+// Check raw block volume written data by writeDataBlockType was wiped
+func (dep *deployment) checkRawBlockVolumeDataWiped(oc *exutil.CLI) {
+	_, err := execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "/bin/dd if="+dep.mpath+" of=/tmp/testfile bs=512 count=1")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(execCommandInSpecificPod(oc, dep.namespace, dep.getPodList(oc)[0], "cat /tmp/testfile")).ShouldNot(o.ContainSubstring("block-data"))
+}
+
 // Get deployment all replicas logs by filter
 func (dep *deployment) getLogs(oc *exutil.CLI, filterArgs ...string) string {
 	finalArgs := append([]string{"-n", dep.namespace, "-l", dep.applabel}, filterArgs...)

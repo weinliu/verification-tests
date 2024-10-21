@@ -149,11 +149,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		depNew.create(oc)
 		defer depNew.deleteAsAdmin(oc)
 		depNew.waitReady(oc)
+
 		// Check the data is cleaned up in the volume
-		command := []string{"-n", depNew.namespace, "deployment/" + depNew.name, "--", "/bin/dd if=" + dep.mpath + " of=/tmp/testfile bs=512 count=1"}
-		output, err := oc.WithoutNamespace().Run("exec").Args(command...).Output()
-		o.Expect(err).Should(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("no such file or directory"))
+		depNew.checkRawBlockVolumeDataWiped(oc)
 	})
 
 	// author: pewang@redhat.com
@@ -592,11 +590,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		depNew.create(oc)
 		defer depNew.deleteAsAdmin(oc)
 		depNew.waitReady(oc)
+
 		// Check the data is cleaned up in the volume
-		command := []string{"-n", depNew.namespace, "deployment/" + depNew.name, "--", "/bin/dd if=" + dep.mpath + " of=/tmp/testfile bs=512 count=1"}
-		output, err := oc.WithoutNamespace().Run("exec").Args(command...).Output()
-		o.Expect(err).Should(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("no such file or directory"))
+		depNew.checkRawBlockVolumeDataWiped(oc)
 	})
 
 	// author: pewang@redhat.com
