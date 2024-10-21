@@ -6065,7 +6065,7 @@ EOF`, serverconf, fqdnName)
 	})
 
 	// author: kewang@redhat.com
-	g.It("Author:kewang-WRS-NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Longduration-High-73410-V-BR.33-V-BR.39-Support customRules list for by-group with none profile to the audit configuration [Disruptive][Slow]", func() {
+	g.It("Author:kewang-WRS-NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-Longduration-High-73410-V-BR.22-V-BR.33-V-BR.39-Support customRules list for by-group with none profile to the audit configuration [Disruptive][Slow]", func() {
 		var (
 			patchCustomRules string
 			auditEventCount  int

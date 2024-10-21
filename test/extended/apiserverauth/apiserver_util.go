@@ -1583,6 +1583,12 @@ func checkUserAuditLog(oc *exutil.CLI, logGroup string, user string, pass string
 
 	errUser := oc.AsAdmin().WithoutNamespace().Run("login").Args("-u", user, "-p", pass).NotShowInfo().Execute()
 	o.Expect(errUser).NotTo(o.HaveOccurred())
+	whoami, err := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("whoami: %s", whoami)
+	err = oc.AsAdmin().WithoutKubeconf().WithoutNamespace().Run("logout").Args().Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The user %s logged out successfully", user)
 
 	script := fmt.Sprintf(`rm -if /tmp/audit-test-*.json;
 	for logpath in kube-apiserver oauth-apiserver openshift-apiserver;do
@@ -1601,6 +1607,7 @@ func checkUserAuditLog(oc *exutil.CLI, logGroup string, user string, pass string
 		e2e.Logf("event logs count:%v", n)
 		eventCount += n
 	}
+
 	return eventLogs, eventCount
 }
 
