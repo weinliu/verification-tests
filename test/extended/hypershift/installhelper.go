@@ -545,9 +545,7 @@ func (receiver *installHelper) dumpHostedCluster(createCluster *createCluster) e
 	}
 
 	// Move dump archive to artifact dir
-	if err := os.Rename(path.Join(dumpDir, dumpArchiveName), path.Join(dumpArtifactDir, dumpArchiveName)); err != nil {
-		return fmt.Errorf("failed to move dump archive from %s to %s: %w", dumpDir, dumpArtifactDir, err)
-	}
+	exutil.MoveFileToPath(path.Join(dumpDir, dumpArchiveName), path.Join(dumpArtifactDir, dumpArchiveName))
 	e2e.Logf("Dump archive saved to %s", dumpArtifactDir)
 	return nil
 }
