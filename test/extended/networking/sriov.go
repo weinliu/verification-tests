@@ -903,8 +903,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 		arpIpv4MacOutput, err := e2eoutput.RunHostCmdWithRetries(ns1, pod1Name[1], commandv4, 3*time.Second, 12*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("arp for ipv4: %v", arpIpv4MacOutput)
-		//comment this for temp because this bug https://issues.redhat.com/browse/OCPBUGS-30549
-		//o.Expect(arpIpv4MacOutput).To(o.ContainSubstring(newPodMac))
+		o.Expect(arpIpv4MacOutput).To(o.ContainSubstring(newPodMac))
 
 		exutil.By("check the entry of arp table for ipv6 is updated")
 		commandv6 := fmt.Sprintf("ip neigh show %s | awk '{print $5}'", pod1IPv6)
