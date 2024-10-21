@@ -2978,9 +2978,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(strings.Count(routeBackendCfg, "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
 
 		exutil.By("send traffic and check the max http headers specified in a route")
-		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "--resolve", toDst, "--connect-timeout", "10"}
+		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-Is", "http://" + routehost + "/headers", "--resolve", toDst, "--connect-timeout", "10"}
 		adminRepeatCmd(oc, cmdOnPod, "200", 30, 1)
-		resHeaders, err := oc.Run("exec").Args("-n", project1, cltPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
+		resHeaders, err := oc.Run("exec").Args("-n", project1, cltPodName, "--", "curl", "-s", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Count(strings.ToLower(resHeaders), "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
 
@@ -3008,7 +3008,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(haproxyHeaderName).To(o.ContainSubstring(maxHeaderName))
 
 		exutil.By("send traffic and check the max header name specified in a route")
-		resHeaders, err = oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
+		resHeaders, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-s", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(strings.ToLower(resHeaders), maxHeaderName+"\": \"value123abc\"")).To(o.BeTrue())
 
@@ -3049,7 +3049,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		maxCfg.WriteString(patchHeadersPart1)
 		negMaxCfg.WriteString(patchHeadersPart1)
 		for i := 0; i < maxHTTPHeaders-1; i++ {
-			//patchHeadersPart2 = patchHeadersPart2 + "{\"name\": \"ocp66566testheader" + strconv.Itoa(i) + "\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}, "
 			maxCfg.WriteString("{\"name\": \"ocp66566testheader" + strconv.Itoa(i) + "\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}, ")
 			negMaxCfg.WriteString("{\"name\": \"ocp66566testheader" + strconv.Itoa(i) + "\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value123abc\"}}}, ")
 		}
@@ -3072,7 +3071,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(strings.Count(routeBackendCfg, "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
 
 		exutil.By("send traffic and check the max http headers specified in an ingress controller")
-		icResHeaders, err := oc.Run("exec").Args(cltPodName, "--", "curl", "-I", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
+		icResHeaders, err := oc.Run("exec").Args(cltPodName, "--", "curl", "-Is", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Count(strings.ToLower(icResHeaders), "ocp66566testheader") == maxHTTPHeaders).To(o.BeTrue())
 		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", negPatchHeaders, "--type=merge", "-n", ingctrl.namespace).Output()
@@ -3104,7 +3103,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(strings.Contains(routeBackendCfg, maxHeaderName)).To(o.BeTrue())
 
 		exutil.By("send traffic and check the header with max length name specified in an ingress controller")
-		icResHeaders, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-I", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
+		icResHeaders, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-Is", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(strings.ToLower(icResHeaders), maxHeaderName+": value123abc")).To(o.BeTrue())
 
