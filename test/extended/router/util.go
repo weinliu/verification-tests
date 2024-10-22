@@ -111,14 +111,32 @@ func getBaseDomain(oc *exutil.CLI) string {
 	return basedomain
 }
 
-// to exact available worker node count and details
+// to exact available linux worker node count and details
+// for debugging: also list non linux or workers with special labels
 func exactNodeDetails(oc *exutil.CLI) (int, string) {
-	workerNodeDetails, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=").Output()
+	linuxWorkerDetails, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=,kubernetes.io/os=linux").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	nodeCount := int(strings.Count(workerNodeDetails, "Ready")) - (int(strings.Count(workerNodeDetails, "SchedulingDisabled")) + int(strings.Count(workerNodeDetails, "NotReady")))
-	e2e.Logf("Worker node details are: %v", workerNodeDetails)
-	e2e.Logf("Available worker node count is: %v", nodeCount)
-	return nodeCount, workerNodeDetails
+	nodeCount := int(strings.Count(linuxWorkerDetails, "Ready")) - (int(strings.Count(linuxWorkerDetails, "SchedulingDisabled")) + int(strings.Count(linuxWorkerDetails, "NotReady")))
+	e2e.Logf("Linux worker node details are:\n%v", linuxWorkerDetails)
+	e2e.Logf("Available linux worker node count is: %v", nodeCount)
+	// checking other type workers for debugging
+	nonLinuxWorker, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/worker=,kubernetes.io/os!=linux").Output()
+	if !strings.Contains(nonLinuxWorker, "No resources found") {
+		e2e.Logf("Found non linux worker nodes and details are:\n%v", nonLinuxWorker)
+	}
+	remoteWorker, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node.openshift.io/remote-worker").Output()
+	if !strings.Contains(remoteWorker, "No resources found") {
+		e2e.Logf("Found remote worker nodes and details are:\n%v", remoteWorker)
+	}
+	outpostWorker, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=topology.ebs.csi.aws.com/outpost-id").Output()
+	if !strings.Contains(remoteWorker, "No resources found") {
+		e2e.Logf("Found outpost worker nodes and details are:\n%v", outpostWorker)
+	}
+	localZoneWorker, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/edge").Output()
+	if !strings.Contains(remoteWorker, "No resources found") {
+		e2e.Logf("Found local zone worker nodes and details are:\n%v", localZoneWorker)
+	}
+	return nodeCount, linuxWorkerDetails
 }
 
 func (ingctrl *ingressControllerDescription) create(oc *exutil.CLI) {
@@ -235,6 +253,10 @@ func getNewRouterPod(oc *exutil.CLI, icName string) string {
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but NewReplicaSet not found"))
 	e2e.Logf("the new ReplicaSet labels is %s", rsLabel)
 	err := waitForPodWithLabelReady(oc, ns, rsLabel)
+	if err != nil {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", ns).Output()
+		e2e.Logf("All current router pods are:\n%v", output)
+	}
 	exutil.AssertWaitPollNoErr(err, "the new router pod failed to be ready within allowed time!")
 	return getOnePodNameByLabel(oc, ns, rsLabel)
 }
