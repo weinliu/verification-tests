@@ -4894,4 +4894,35 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		validateResourceEnv(oc, "openshift-image-registry", "deployment.apps/image-registry", "REGISTRY_STORAGE_S3_CHUNKSIZE=2252341248")
 	})
+
+	g.It("Author:wewang-HyperShiftMGMT-Critical-76876-Support reconciliation of tags on day2 updates in HCP cluster [Serial]", func() {
+		g.By("Check platforms")
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+
+		g.By("Get the default infra.Status.PlatformStatus.AWS.ResourceTags")
+		getResourceTags, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure/cluster", "-ojsonpath={.status.platformStatus.aws.resourceTags}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Add/update the infra.Status.PlatformStatus.AWS.ResourceTags")
+		patchInfo := fmt.Sprintf("{\"status\":{\"platformStatus\":{\"aws\":{\"resourceTags\": %s}}}}", getResourceTags)
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("infrastructure/cluster", "-p", patchInfo, "--subresource=status", "--type", "merge").Output()
+		out, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("infrastructure/cluster", "-p", `{"status":{"platformStatus":{"aws":{"resourceTags":[{"key":"Environment","value":"Production"},{"key":"Owner","value":"DevOpsTeam"},{"key":"Project","value":"OpenShift-Cluster"}]}}}}`, "--subresource=status", "--type", "merge").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.Equal("infrastructure.config.openshift.io/cluster patched"))
+
+		g.By("Get the registry storage bucket name from managed cluster")
+		bucket, err := oc.AsAdmin().Run("get").Args("config.image", "-o=jsonpath={..spec.storage.s3.bucket}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(bucket).NotTo(o.BeEmpty())
+
+		g.By("Check the bucket tags")
+		aws := getAWSClient(oc)
+		tag, err := awsGetBucketTagging(aws, bucket)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(tag, "Production") && strings.Contains(tag, "DevOpsTeam") && strings.Contains(tag, "OpenShift") {
+			e2e.Logf("Can get registry storage bucket tags.")
+		} else {
+			e2e.Failf("Cannot get registry storage bucket tags!")
+		}
+	})
 })
