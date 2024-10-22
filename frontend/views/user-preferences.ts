@@ -43,8 +43,8 @@ export const consoleTheme = {
 
 export const userPreferences = {
   navToGeneralUserPreferences: () => {
-    cy.get('button[aria-label="User menu"]').click({force: true});
-    cy.get('span').contains('User Preferences').click();
+    cy.get('button[data-test="user-dropdown"]').click({force: true});
+    cy.get('span').contains('User Preferences').click({force: true});
     cy.get('.co-user-preference-page-content__tab-content', {timeout: 20000}).should('be.visible');
     cy.get('ul[role="tablist"] a[data-test="tab general"]').click();
   },
@@ -81,7 +81,7 @@ export const userPreferences = {
 	} else if(action === 'display')	{
           cy.log('Lightspeed button is hidden, click to display.');
           cy.get('@hideLightspeed').click();
-	}	
+	}
       } else if(checkedstate === 'false') {
         if(action === 'display') {
           cy.log('Lightspeed button is already displayed, nothing to do!');
@@ -114,13 +114,13 @@ export const userPreferences = {
   getLanguageOptions: () => {
     cy.get('ul > li > a[data-test="tab language"]').click({force: true});
     cy.get('input#default-language-checkbox').uncheck();
-    cy.get('button[id="console.preferredLanguage"]').click();
+    cy.get('[data-test="console.preferredLanguage field"] button[class*="toggle"]').click();
     return cy.get('button[role="option"]');
   },
   chooseDifferentLanguage: (lang: string) => {
     cy.visit('/user-preferences/language');
     cy.get('input#default-language-checkbox').uncheck();
-    cy.get('button[id="console.preferredLanguage"]').click();
+    cy.get('[data-test="console.preferredLanguage field"] button[class*="toggle"]').click();
     cy.byButtonText(lang).click({force: true});
   }
 }

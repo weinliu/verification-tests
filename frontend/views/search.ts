@@ -17,8 +17,9 @@ export const searchPage = {
     cy.byButtonText('Clear all filters').click({force: true});
   },
   searchMethodValues: (method, value) => {
-    cy.get('button[id="toggle-id"]').click();
-    cy.get(`button[name="${method}"]`).click();
+    method = method.toLocaleLowerCase();
+    cy.get('button[id="search-filter-toggle"]').click();
+    cy.get(`li[data-test="${method}-filter"] button[role="option"]`).click();
     cy.get('input[id="search-filter-input"]').clear().type(`${value}`);
   },
   searchBy: (text) => {
