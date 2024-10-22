@@ -1149,7 +1149,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			logLevel:         "Normal",
 			operatorLogLevel: "Normal",
 			profile1:         "EvictPodsWithPVC",
-			profile2:         "SoftTopologyAndDuplicates",
+			profile2:         "EvictPodsWithLocalStorage",
 			profile3:         "LifecycleAndUtilization",
 			template:         deschedulerpT,
 		}
@@ -1201,7 +1201,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		checkAvailable(oc, "deploy", "descheduler", kubeNamespace, "1")
 
 		g.By("Get descheduler cluster pod name")
-		err = wait.Poll(5*time.Second, 180*time.Second, func() (bool, error) {
+		err = wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
 			podName, _ := oc.AsAdmin().Run("get").Args("pods", "-l", "app=descheduler", "-n", kubeNamespace, "-o=jsonpath={.items..metadata.name}").Output()
 			if strings.Contains(podName, " ") {
 				e2e.Logf("podName contains space which is not expected: %s. Trying again", podName)
