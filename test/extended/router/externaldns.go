@@ -178,7 +178,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandLabel)
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operand pod is not ready"))
-		ensureLogsContainString(oc, operatorNamespace, operandLabel, "No zones found in the project")
+		ensureLogsContainString(oc, operatorNamespace, operandLabel, "No zones in the project")
 		operandPod := getPodListByLabel(oc, operatorNamespace, operandLabel)
 
 		exutil.By("Patch externaldns with valid privateZone ID and wait until new operand pod ready")
