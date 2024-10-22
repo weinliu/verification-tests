@@ -792,34 +792,18 @@ spec:
 		exutil.AssertWaitPollNoErr(errPod, "Abnormality found in clusterbuster pods.")
 
 		exutil.By("Check the abnormal nodes")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers").OutputToFile("OCP-40667/node.log")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cmd := fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, dirname+"node.log")
-		nodeLogs, err := exec.Command("bash", "-c", cmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("%s", nodeLogs)
-		if len(nodeLogs) > 0 {
-			e2e.Logf("Some nodes are NotReady or SchedulingDisabled...Please check")
-			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
+		err = clusterNodesHealthcheck(oc, 100, "OCP-40667/log")
+		if err != nil {
+			e2e.Failf("Cluster nodes health check failed. Abnormality found in nodes.")
 		} else {
 			e2e.Logf("Nodes are normal...")
-			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
 		exutil.By("Check the abnormal operators")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile("OCP-40667/co.log")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cmd = fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, dirname+"co.log")
-		coLogs, err := exec.Command("bash", "-c", cmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(coLogs) > 0 {
-			e2e.Logf("%s", coLogs)
-			e2e.Logf("Found abnormal cluster operators, if errors are  potential bug then file a bug.")
+		err = clusterOperatorHealthcheck(oc, 500, "OCP-40667/log")
+		if err != nil {
+			e2e.Failf("Cluster operators health check failed. Abnormality found in cluster operators.")
 		} else {
-			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("No abnormality found in cluster operators...")
 		}
 
@@ -835,7 +819,7 @@ spec:
 			}
 		}
 
-		cmd = fmt.Sprintf(`cat %v | grep -iE 'apf_controller.go|apf_filter.go' | grep 'no route' || true`, dirname+"kas.log.*")
+		cmd := fmt.Sprintf(`cat %v | grep -iE 'apf_controller.go|apf_filter.go' | grep 'no route' || true`, dirname+"kas.log.*")
 		noRouteLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -i 'panic' | grep -Ev "%s" || true`, dirname+"kas.log.*", exceptions)
@@ -874,7 +858,7 @@ spec:
 			e2e.Logf("Number of %s is %v\n", key, value)
 		}
 
-		if cpuAvgVal > 70 || memAvgVal > 75 || len(noRouteLogs) > 0 || len(panicLogs) > 0 || len(coLogs) > 0 || len(nodeLogs) > 0 {
+		if cpuAvgVal > 70 || memAvgVal > 75 || len(noRouteLogs) > 0 || len(panicLogs) > 0 {
 			e2e.Failf("Prechk Test case: Failed.....Check above errors in case run logs.")
 		} else {
 			e2e.Logf("Prechk Test case: Passed.....There is no error abnormaliy found..")
@@ -914,41 +898,25 @@ spec:
 		o.Expect(output).Should(o.Equal(`20`))
 
 		exutil.By("Check the abnormal nodes")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers").OutputToFile("OCP-40667/node.log")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cmd := fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, dirname+"node.log")
-		nodeLogs, err := exec.Command("bash", "-c", cmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("%s", nodeLogs)
-		if len(nodeLogs) > 0 {
-			e2e.Logf("Some nodes are NotReady or SchedulingDisabled...Please check")
-			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
+		err = clusterNodesHealthcheck(oc, 500, "OCP-40667/log")
+		if err != nil {
+			e2e.Failf("Cluster nodes health check failed. Abnormality found in nodes.")
 		} else {
 			e2e.Logf("Nodes are normal...")
-			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
 		exutil.By("Check the abnormal operators")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile("OCP-40667/co.log")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cmd = fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, dirname+"co.log")
-		coLogs, err := exec.Command("bash", "-c", cmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(coLogs) > 0 {
-			e2e.Logf("%s", coLogs)
-			e2e.Logf("Found abnormal cluster operators, if errors are  potential bug then file a bug.")
+		err = clusterOperatorHealthcheck(oc, 500, "OCP-40667/log")
+		if err != nil {
+			e2e.Failf("Cluster operators health check failed. Abnormality found in cluster operators.")
 		} else {
-			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("No abnormality found in cluster operators...")
 		}
 
 		exutil.By("Check the abnormal pods")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A").OutputToFile("OCP-40667/pod.log")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		cmd = fmt.Sprintf(`cat %v | grep -iE 'cpuload|memload' |grep -ivE 'Running|Completed|namespace|pending' || true`, dirname+"pod.log")
+		cmd := fmt.Sprintf(`cat %v | grep -iE 'cpuload|memload' |grep -ivE 'Running|Completed|namespace|pending' || true`, dirname+"pod.log")
 		podLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(podLogs) > 0 {
@@ -1002,7 +970,7 @@ spec:
 			e2e.Logf("Number of %s is %v\n", key, value)
 		}
 
-		if cpuAvgVal > 75 || memAvgVal > 85 || len(noRouteLogs) > 0 || len(panicLogs) > 0 || len(coLogs) > 0 || len(nodeLogs) > 0 {
+		if cpuAvgVal > 75 || memAvgVal > 85 || len(noRouteLogs) > 0 || len(panicLogs) > 0 {
 			e2e.Failf("Postchk Test case: Failed.....Check above errors in case run logs.")
 		} else {
 			e2e.Logf("Postchk Test case: Passed.....There is no error abnormaliy found..")
@@ -1017,7 +985,6 @@ spec:
 			dirName      = "/tmp/-" + caseID + "/"
 			nodesLogFile = caseID + "/nodes.log"
 			podLogFile   = caseID + "/pod.log"
-			coLogFile    = caseID + "/co.log"
 			kasLogFile   = caseID + "/kas.log"
 		)
 
@@ -1073,33 +1040,18 @@ spec:
 		exutil.AssertWaitPollNoErr(errPod, "Abnormality found in clusterbuster pods.")
 
 		exutil.By("Check the abnormal nodes")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers").OutputToFile(nodesLogFile)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cmd := fmt.Sprintf(`cat %v | grep -Ei 'NotReady|SchedulingDisabled' || true`, nodesLogFile)
-		nodeLogs, err := exec.Command("bash", "-c", cmd).Output()
-		e2e.Logf("%s", nodeLogs)
-		if len(nodeLogs) > 0 {
-			e2e.Logf("Some nodes are NotReady or SchedulingDisabled...Please check")
-			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
+		err = clusterNodesHealthcheck(oc, 100, caseID+"/log")
+		if err != nil {
+			e2e.Failf("Cluster nodes health check failed. Abnormality found in nodes.")
 		} else {
 			e2e.Logf("Nodes are normal...")
-			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
 		exutil.By("Check the abnormal operators")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co", "--no-headers").OutputToFile(coLogFile)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cmd = fmt.Sprintf(`cat %v | grep -v '.True.*False.*False' || true`, coLogFile)
-		coLogs, err := exec.Command("bash", "-c", cmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(coLogs) > 0 {
-			e2e.Logf("%s", coLogs)
-			e2e.Logf("Found abnormal cluster operators, if errors are  potential bug then file a bug.")
+		err = clusterOperatorHealthcheck(oc, 500, caseID+"/log")
+		if err != nil {
+			e2e.Failf("Cluster operators health check failed. Abnormality found in cluster operators.")
 		} else {
-			err = oc.AsAdmin().WithoutNamespace().Run("get").Args("co").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
 			e2e.Logf("No abnormality found in cluster operators...")
 		}
 
@@ -1111,7 +1063,7 @@ spec:
 			_, errlog := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-kube-apiserver", "kube-apiserver-"+masterName[i]).OutputToFile(kasLogFile + "." + masterName[i])
 			o.Expect(errlog).NotTo(o.HaveOccurred())
 		}
-		cmd = fmt.Sprintf(`cat %v | grep -iE 'apf_controller.go|apf_filter.go' | grep 'no route' || true`, kasLogFile+".*")
+		cmd := fmt.Sprintf(`cat %v | grep -iE 'apf_controller.go|apf_filter.go' | grep 'no route' || true`, kasLogFile+".*")
 		noRouteLogs, err := exec.Command("bash", "-c", cmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		cmd = fmt.Sprintf(`cat %v | grep -i 'panic' | grep -Ev "%s" || true`, kasLogFile+".*", exceptions)
@@ -1150,7 +1102,7 @@ spec:
 			e2e.Logf("Number of %s is %v\n", key, value)
 		}
 
-		if cpuAvgVal > 75 || memAvgVal > 85 || len(noRouteLogs) > 0 || len(panicLogs) > 0 || len(coLogs) > 0 || len(nodeLogs) > 0 {
+		if cpuAvgVal > 75 || memAvgVal > 85 || len(noRouteLogs) > 0 || len(panicLogs) > 0 {
 			e2e.Failf("Test case: Failed.....Check above errors in case run logs.")
 		} else {
 			e2e.Logf("Test case: Passed.....There is no error abnormaliy found..")
