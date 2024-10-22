@@ -1398,12 +1398,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	g.It("ConnectedOnly-Author:jiazha-High-43101-OLM blocks minor OpenShift upgrades when incompatible optional operators are installed", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		// consumes this index imaage: quay.io/olmqe/etcd-index:upgrade-auto, it contains the etcdoperator v0.9.2, v0.9.4, v0.9.5
-		exutil.By("1) Create a CatalogSource in the openshift-marketplace project")
+		exutil.By("1, create a random project")
+		oc.SetupProject()
+		exutil.By("1-1, create a CatalogSource in this random project")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-opm.yaml")
 		cs := catalogSourceDescription{
 			name:        "cs-43101",
-			namespace:   "openshift-marketplace",
+			namespace:   oc.Namespace(),
 			displayName: "OLM QE Operators",
 			publisher:   "Jian",
 			sourceType:  "grpc",
@@ -1416,10 +1418,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		defer cs.delete(itName, dr)
 		cs.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", "openshift-marketplace", "-o=jsonpath={.status..lastObservedState}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "READY", ok, []string{"catsrc", cs.name, "-n", oc.Namespace(), "-o=jsonpath={.status..lastObservedState}"}).check(oc)
 
-		exutil.By("2) Install the OperatorGroup in a random project")
-		oc.SetupProject()
+		exutil.By("2, install the OperatorGroup in that random project")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		og := operatorGroupDescription{
 			name:      "og-43101",
@@ -1429,13 +1430,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer og.delete(itName, dr)
 		og.createwithCheck(oc, itName, dr)
 
-		exutil.By("3) Install the etcdoperator v0.9.2 with Manual approval")
+		exutil.By("3, install the etcdoperator v0.9.2 with Manual approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-43101",
 			namespace:              oc.Namespace(),
 			catalogSourceName:      "cs-43101",
-			catalogSourceNamespace: "openshift-marketplace",
+			catalogSourceNamespace: oc.Namespace(),
 			channel:                "singlenamespace-alpha",
 			ipApproval:             "Manual",
 			operatorPackage:        "etcd",
@@ -1448,19 +1449,19 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub.update(oc, itName, dr)
 		sub.create(oc, itName, dr)
 
-		exutil.By("4) Apprrove this etcdoperator.v0.9.2, it should be in Complete state")
+		exutil.By("4, apprrove this etcdoperator.v0.9.2, it should be in Complete state")
 		sub.approveSpecificIP(oc, itName, dr, "etcdoperator.v0.9.2", "Complete")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.2", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		// olm.properties: '[{"type": "olm.maxOpenShiftVersion", "value": " "}]'
-		exutil.By("5) This operator's olm.maxOpenShiftVersion is empty, so it should block the upgrade")
+		exutil.By("5, this operator's olm.maxOpenShiftVersion is empty, so it should block the upgrade")
 		CheckUpgradeStatus(oc, "False")
 
-		exutil.By("6) Apprrove this etcdoperator.v0.9.4, it should be in Complete state")
+		exutil.By("6, apprrove this etcdoperator.v0.9.4, it should be in Complete state")
 		sub.approveSpecificIP(oc, itName, dr, "etcdoperator.v0.9.4", "Complete")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.4", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 		// olm.properties: '[{"type": "olm.maxOpenShiftVersion", "value": "4.9"}]'
-		exutil.By("7) 4.9.0-xxx upgraded to 4.10.0-xxx < 4.10.0, or 4.9.1 upgraded to 4.9.x < 4.10.0, so it should NOT block 4.9 upgrade, but block 4.10+ upgrade")
+		exutil.By("7, 4.9.0-xxx upgraded to 4.10.0-xxx < 4.10.0, or 4.9.1 upgraded to 4.9.x < 4.10.0, so it should NOT block 4.9 upgrade, but block 4.10+ upgrade")
 		currentVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.desired.version}").Output()
 		if err != nil {
 			e2e.Failf("Fail to get the OCP version")
@@ -1474,11 +1475,11 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			CheckUpgradeStatus(oc, "True")
 		}
 
-		exutil.By("8) Apprrove this etcdoperator.v0.9.5, it should be in Complete state")
+		exutil.By("8, apprrove this etcdoperator.v0.9.5, it should be in Complete state")
 		sub.approveSpecificIP(oc, itName, dr, "etcdoperator.v0.9.5", "Complete")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "etcdoperator.v0.9.5", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 		// olm.properties: '[{"type": "olm.maxOpenShiftVersion", "value": "4.10.0"}]'
-		exutil.By("9) 4.9.0-xxx upgraded to 4.10.0-xxx < 4.10.0, or 4.9.1 upgraded to 4.9.x < 4.11.0, so it should NOT block 4.10 upgrade, but blocks 4.11+ upgrade")
+		exutil.By("9, 4.9.0-xxx upgraded to 4.10.0-xxx < 4.10.0, or 4.9.1 upgraded to 4.9.x < 4.11.0, so it should NOT block 4.10 upgrade, but blocks 4.11+ upgrade")
 		maxVersion2, _ := semver.ParseTolerant("4.10.0")
 		// current version > the operator's max version: 4.10.0
 		if v.Compare(maxVersion2) > 0 {
