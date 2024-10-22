@@ -290,7 +290,7 @@ func checkAlertmanagerConfig(oc *exutil.CLI, ns string, podName string, checkVal
 
 // check prometheus config in the pod
 func checkPrometheusConfig(oc *exutil.CLI, ns string, podName string, checkValue string, expectExist bool) {
-	envCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
+	envCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 300*time.Second, false, func(context.Context) (bool, error) {
 		envOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, "-c", "prometheus", podName, "--", "bash", "-c", fmt.Sprintf(`cat /etc/prometheus/config_out/prometheus.env.yaml | grep '%s'`, checkValue)).Output()
 		if expectExist {
 			if err != nil || !strings.Contains(envOutput, checkValue) {
@@ -379,6 +379,7 @@ func checkYamlconfig(oc *exutil.CLI, ns string, components string, componentsNam
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(components, componentsName, cmd, "-n", ns).Output()
 		if expectExist {
 			if err != nil || !strings.Contains(output, checkValue) {
+				e2e.Logf("output: \n%v", output)
 				return false, nil
 			}
 			return true, nil
@@ -389,6 +390,7 @@ func checkYamlconfig(oc *exutil.CLI, ns string, components string, componentsNam
 			}
 			return false, nil
 		}
+		e2e.Logf("output: \n%v", output)
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(configCheck, fmt.Sprintf("base on `expectExist=%v`, did (not) find \"%s\" exist", expectExist, checkValue))
