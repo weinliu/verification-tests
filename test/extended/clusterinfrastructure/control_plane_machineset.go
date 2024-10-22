@@ -698,16 +698,18 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 		if publicZone == "" {
 			g.Skip("Because on private clusters we don't use target pools so skip this case for private clusters!!")
 		}
-
-		g.By("Remove targetpool")
-		targetPool, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.targetPools}", "-n", machineAPINamespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		targetPool := "null"
+		g.By("Add targetpool")
 		defer printNodeInfo(oc)
 		defer waitMasterNodeReady(oc)
 		defer waitForClusterStable(oc)
-		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/spec/providerSpec/value/targetPools","value":`+targetPool+`}]`, "--type=json", "-n", machineAPINamespace).Execute()
-		out, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"remove","path":"/spec/template/machines_v1beta1_machine_openshift_io/spec/providerSpec/value/targetPools"}]`, "--type=json", "-n", machineAPINamespace).Output()
+		patchWithTargetPool, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"add","path":"/spec/template/machines_v1beta1_machine_openshift_io/spec/providerSpec/value/targetPools","value":`+targetPool+`}]`, "--type=json", "-n", machineAPINamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(out).To(o.ContainSubstring("Warning: spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.targetPools: TargetPools field is not set on ControlPlaneMachineSet"))
+
+		g.By("Remove targetpool")
+		patchWithoutTargetPool, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `[{"op":"remove","path":"/spec/template/machines_v1beta1_machine_openshift_io/spec/providerSpec/value/targetPools"}]`, "--type=json", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(patchWithTargetPool).To(o.ContainSubstring("Warning: spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.targetPools: TargetPools field is not set on ControlPlaneMachineSet"))
+		o.Expect(patchWithoutTargetPool).To(o.ContainSubstring("Warning: spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.targetPools: TargetPools field is not set on ControlPlaneMachineSet"))
 	})
 })
