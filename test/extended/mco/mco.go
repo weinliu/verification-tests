@@ -302,17 +302,27 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 		behaviourValidator.Validate()
 	})
+
+	/* Map of extensions and packages for each extension
+	{
+		"wasm":                 {"crun-wasm"},
+		"ipsec":                {"NetworkManager-libreswan", "libreswan"},
+		"usbguard":             {"usbguard"},
+		"kerberos":             {"krb5-workstation", "libkadm5"},
+		"kernel-devel":         {"kernel-devel", "kernel-headers"},
+		"sandboxed-containers": {"kata-containers"},
+		"sysstat":              {"sysstat"},
+	} */
 	g.It("Author:sregidor-LEVEL0-Longduration-NonPreRelease-Critical-56131-Install all extensions [Disruptive]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
-
 		var (
 			coreOSMcp                    = GetCoreOsCompatiblePool(oc.AsAdmin())
 			node                         = coreOSMcp.GetCoreOsNodesOrFail()[0]
 			stepText                     = "available extensions"
 			mcName                       = "change-worker-all-extensions"
-			allExtensions                = []string{"usbguard", "kerberos", "kernel-devel", "sandboxed-containers"}
+			allExtensions                = []string{"usbguard", "kerberos", "kernel-devel", "sandboxed-containers", "ipsec", "wasm", "sysstat"}
 			expectedRpmInstalledPackages = []string{"usbguard", "krb5-workstation", "libkadm5", "kernel-devel", "kernel-headers",
-				"kata-containers"}
+				"kata-containers", "NetworkManager-libreswan", "libreswan", "crun-wasm", "sysstat"}
 			textToVerify = TextToVerify{
 				textToVerifyForMC:   "(?s)" + strings.Join(allExtensions, ".*"),
 				textToVerifyForNode: "(?s)" + strings.Join(expectedRpmInstalledPackages, ".*"),
@@ -329,7 +339,6 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 				o.BeFalse(),
 				"Package %s should be uninstalled when we remove the extensions MC", pkg)
 		}
-
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-43310-add kernel arguments, kernel type and extension to the RHCOS and RHEL [Disruptive]", func() {

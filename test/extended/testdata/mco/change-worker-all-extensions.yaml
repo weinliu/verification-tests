@@ -18,6 +18,9 @@ objects:
       - kerberos
       - kernel-devel
       - sandboxed-containers
+      - ipsec
+      - wasm
+      - sysstat
 parameters:
   - name: NAME
   - name: POOL
