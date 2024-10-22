@@ -1272,7 +1272,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		// For customer bug https://issues.redhat.com/browse/OCPBUGS-32202
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
-		nodeServiceTemplate := filepath.Join(buildPruningBaseDir, "nodeservice-template.yaml")
+		genericServiceTemplate := filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
 		testPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 		url := "www.example.com"
 
@@ -1291,40 +1291,56 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		ns := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, ns)
 
-		service := nodePortService{
+		exutil.By("2. Create a hello pod in ns")
+		pod1 := pingPodResourceNode{
 			name:      "hello-pod",
 			namespace: ns,
-			nodeName:  nodeList.Items[0].Name,
-			template:  nodeServiceTemplate,
+			nodename:  nodeList.Items[0].Name,
+			template:  testPodNodeTemplate,
 		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
 
-		defer removeResource(oc, true, true, "service", service.name, "-n", service.namespace)
-		parameters := []string{"--ignore-unknown-parameters=true", "-f", service.template, "-p", "NAME=" + service.name, "NODENAME=" + service.nodeName}
-		exutil.ApplyNsResourceFromTemplate(oc, service.namespace, parameters...)
-		waitPodReady(oc, ns, "hello-pod")
-
-		svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, service.name).Output()
+		exutil.By("3. Create a nodePort type service fronting the above pod")
+		svc := genericServiceResource{
+			servicename:           "test-service",
+			namespace:             ns,
+			protocol:              "TCP",
+			selector:              "hello-pod",
+			serviceType:           "NodePort",
+			ipFamilyPolicy:        "",
+			internalTrafficPolicy: "Cluster",
+			externalTrafficPolicy: "", //This no value parameter will be ignored
+			template:              genericServiceTemplate,
+		}
+		if ipStackType == "dualstack" {
+			svc.ipFamilyPolicy = "PreferDualStack"
+		} else {
+			svc.ipFamilyPolicy = "SingleStack"
+		}
+		defer removeResource(oc, true, true, "service", svc.servicename, "-n", svc.namespace)
+		svc.createServiceFromParams(oc)
+		exutil.By("4. Get NodePort at which service listens.")
+		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(svcOutput, service.name)).Should(o.BeTrue())
+		exutil.By("5. From external, curl NodePort service with its port to make sure NodePort service works")
+		CurlNodePortPass(oc, nodeList.Items[1].Name, nodeList.Items[0].Name, nodePort)
 
-		exutil.By("2. From external, curl NodePort service with its port to make sure NodePort service works")
-		CurlNodePortPass(oc, nodeList.Items[1].Name, nodeList.Items[0].Name, "30012")
-
-		exutil.By("3. Create another test pod on another node, from the test pod to curl local port of external url, verify the connection can succeed\n")
-		pod := pingPodResourceNode{
+		exutil.By("6. Create another test pod on another node, from the test pod to curl local port of external url, verify the connection can succeed\n")
+		pod2 := pingPodResourceNode{
 			name:      "testpod",
 			namespace: ns,
 			nodename:  nodeList.Items[1].Name,
 			template:  testPodNodeTemplate,
 		}
-		pod.createPingPodNode(oc)
-		waitPodReady(oc, ns, pod.name)
+		pod2.createPingPodNode(oc)
+		waitPodReady(oc, ns, pod2.name)
 
 		cmd := fmt.Sprintf("curl --local-port 32012 -v -I -L http://%s", url)
 		expectedString := fmt.Sprintf(`^* Connected to %s \(([\d\.]+)\) port 80 `, url)
 		re := regexp.MustCompile(expectedString)
-		connectErr := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 15*time.Second, false, func(cxt context.Context) (bool, error) {
-			_, execCmdOutput, err := e2eoutput.RunHostCmdWithFullOutput(ns, pod.name, cmd)
+		connectErr := wait.Poll(3*time.Second, 15*time.Second, func() (bool, error) {
+			_, execCmdOutput, err := e2eoutput.RunHostCmdWithFullOutput(ns, pod2.name, cmd)
 			if err != nil {
 				e2e.Logf("Getting err :%v, trying again...", err)
 				return false, nil
