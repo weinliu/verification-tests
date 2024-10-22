@@ -9,10 +9,7 @@ objects:
     name: ${NAME}
     namespace: ${NAMESPACE}
   spec:
-    collector:
-      resources: ${{RESOURCES}}
-      tolerations: ${{TOLERATIONS}}
-      nodeSelector: ${{NODE_SELECTOR}}
+    collector: ${{COLLECTOR}}
     managementState: ${MANAGEMENT_STATE}
     outputs:
     - name: es-created-by-user
@@ -50,12 +47,6 @@ parameters:
   value: "[\"infrastructure\", \"audit\", \"application\"]"
 - name: SERVICE_ACCOUNT_NAME
   value: ""
-- name: TOLERATIONS
-  value: "[]"
-- name: NODE_SELECTOR
-  value: "{}"
-- name: RESOURCES
-  value: "{}"
 - name: MANAGEMENT_STATE
   value: "Managed"
 - name: TUNING
@@ -65,4 +56,6 @@ parameters:
 - name: INSECURE_SKIP_VERIFY
   value: "false"
 - name: SECURITY_PROFILE
+  value: "{}"
+- name: COLLECTOR
   value: "{}"

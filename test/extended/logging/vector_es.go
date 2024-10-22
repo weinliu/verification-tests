@@ -170,7 +170,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author qitang@redhat.com
-		g.It("Author:qitang-CPaasrunOnly-Medium-76073-Send logs from containers in the same pod to separate indices", func() {
+		g.It("Author:qitang-CPaasrunOnly-Medium-76073-Medium-74944-Send logs from containers in the same pod to separate indices and parse json logs", func() {
 			app := oc.Namespace()
 			containerName := "log-76073-" + getRandomString()
 			multiContainerJSONLog := filepath.Join(loggingBaseDir, "generatelog", "multi_container_json_log_template.yaml")
@@ -204,6 +204,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 			defer clf.delete(oc)
 			clf.create(oc, "ES_URL="+eesURL, "ES_VERSION="+ees.version, "INDEX={.kubernetes.container_name||.log_type||\"none\"}")
+			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "parse-json-logs", "type": "parse"}]}, {"op": "add", "path": "/spec/pipelines/0/filterRefs", "value":["parse-json-logs"]}]`
+			clf.update(oc, "", patch, "--type=json")
+			clf.waitForCollectorPodsReady(oc)
 
 			// for container logs, they're indexed by container name
 			// for non-container logs, they're indexed by log_type
@@ -215,13 +218,14 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			ees.waitForIndexAppear(oc, "infrastructure")
 			ees.waitForIndexAppear(oc, "audit")
 
+			exutil.By("check logs in ES, json logs should be parsed to json format")
 			queryContainerLog := func(container string) string {
 				return "{\"size\": 1, \"sort\": [{\"@timestamp\": {\"order\":\"desc\"}}], \"query\": {\"match_phrase\": {\"kubernetes.container_name\": \"" + container + "\"}}}"
 			}
-
 			// in index app-$containerName-0, only logs in container $containerName-0 are stored in it
 			log0 := ees.searchDocByQuery(oc, containerName+"-0", queryContainerLog(containerName+"-0"))
 			o.Expect(len(log0.Hits.DataHits) > 0).To(o.BeTrue())
+			o.Expect(log0.Hits.DataHits[0].Source.Structured.Message != "").Should(o.BeTrue())
 			log01 := ees.searchDocByQuery(oc, containerName+"-0", queryContainerLog(containerName+"-1"))
 			o.Expect(len(log01.Hits.DataHits) == 0).To(o.BeTrue())
 			log02 := ees.searchDocByQuery(oc, containerName+"-0", queryContainerLog(containerName+"-2"))
@@ -230,6 +234,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			// in index app-$containerName-1, only logs in container $containerName-1 are stored in it
 			log1 := ees.searchDocByQuery(oc, containerName+"-1", queryContainerLog(containerName+"-1"))
 			o.Expect(len(log1.Hits.DataHits) > 0).To(o.BeTrue())
+			o.Expect(log1.Hits.DataHits[0].Source.Structured.Message != "").Should(o.BeTrue())
 			log10 := ees.searchDocByQuery(oc, containerName+"-1", queryContainerLog(containerName+"-0"))
 			o.Expect(len(log10.Hits.DataHits) == 0).To(o.BeTrue())
 			log12 := ees.searchDocByQuery(oc, containerName+"-1", queryContainerLog(containerName+"-2"))
@@ -238,10 +243,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			// in index app-$app-project, only logs in container $containerName-2 are stored in it
 			log2 := ees.searchDocByQuery(oc, containerName+"-2", queryContainerLog(containerName+"-2"))
 			o.Expect(len(log2.Hits.DataHits) > 0).To(o.BeTrue())
+			o.Expect(log2.Hits.DataHits[0].Source.Structured.Message != "").Should(o.BeTrue())
 			log20 := ees.searchDocByQuery(oc, containerName+"-2", queryContainerLog(containerName+"-0"))
 			o.Expect(len(log20.Hits.DataHits) == 0).To(o.BeTrue())
 			log21 := ees.searchDocByQuery(oc, containerName+"-2", queryContainerLog(containerName+"-1"))
 			o.Expect(len(log21.Hits.DataHits) == 0).To(o.BeTrue())
+
 		})
 
 		// author qitang@redhat.com

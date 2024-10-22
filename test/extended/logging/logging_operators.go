@@ -714,6 +714,89 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 		}
 		configmap.WaitForResourceToAppear(oc)
 	})
+
+	g.It("Author:qitang-CPaasrunOnly-Critical-74398-Manage logging collector pods via CLF.[Serial]", func() {
+		s := getStorageType(oc)
+		sc, err := getStorageClassName(oc)
+		if err != nil || len(sc) == 0 {
+			g.Skip("can't get storageclass from cluster, skip this case")
+		}
+
+		exutil.By("deploy loki stack")
+		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+		ls := lokiStack{
+			name:          "loki-74398",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-secret-74398",
+			storageClass:  sc,
+			bucketName:    "logging-loki-74398-" + getInfrastructureName(oc),
+			template:      lokiStackTemplate,
+		}
+		defer ls.removeObjectStorage(oc)
+		err = ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		exutil.By("create a CLF to test forward to lokistack")
+		clf := clusterlogforwarder{
+			name:                      "clf-74398",
+			namespace:                 loggingNS,
+			serviceAccountName:        "logcollector-74398",
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
+			secretName:                "lokistack-secret-74398",
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			waitForPodReady:           true,
+		}
+		clf.createServiceAccount(oc)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
+		defer clf.delete(oc)
+		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
+
+		defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "default", oc.Namespace())
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(bearerToken).retry(5)
+		for _, logType := range []string{"infrastructure", "audit"} {
+			lc.waitForLogsAppearByKey(logType, "log_type", logType)
+		}
+
+		exutil.By("check configurations in collector pods")
+		checkResource(oc, true, true, `{"limits":{"cpu":"6","memory":"2Gi"},"requests":{"cpu":"500m","memory":"64Mi"}}`, []string{"daemonset", clf.name, "-n", clf.namespace, "-ojsonpath={.spec.template.spec.containers[].resources}"})
+		checkResource(oc, true, true, `{"kubernetes.io/os":"linux"}`, []string{"daemonset", clf.name, "-n", clf.namespace, "-ojsonpath={.spec.template.spec.nodeSelector}"})
+		checkResource(oc, true, true, `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"},{"effect":"NoSchedule","key":"node.kubernetes.io/disk-pressure","operator":"Exists"}]`, []string{"daemonset", clf.name, "-n", clf.namespace, "-ojsonpath={.spec.template.spec.tolerations}"})
+
+		exutil.By("update collector configurations in CLF")
+		patch := `[{"op":"add","path":"/spec/collector","value":{"nodeSelector":{"logging":"test"},"resources":{"limits":{"cpu":1,"memory":"3Gi"},"requests":{"cpu":1,"memory":"1Gi","ephemeral-storage":"2Gi"}},"tolerations":[{"effect":"NoExecute","key":"test","operator":"Equal","tolerationSeconds":3000,"value":"logging"}]}}]`
+		clf.update(oc, "", patch, "--type=json")
+		WaitUntilPodsAreGone(oc, clf.namespace, "app.kubernetes.io/component=collector")
+		checkResource(oc, true, true, `{"limits":{"cpu":"1","memory":"3Gi"},"requests":{"cpu":"1","ephemeral-storage":"2Gi","memory":"1Gi"}}`, []string{"daemonset", clf.name, "-n", clf.namespace, "-ojsonpath={.spec.template.spec.containers[].resources}"})
+		checkResource(oc, true, true, `{"kubernetes.io/os":"linux","logging":"test"}`, []string{"daemonset", clf.name, "-n", clf.namespace, "-ojsonpath={.spec.template.spec.nodeSelector}"})
+		checkResource(oc, true, true, `[{"effect":"NoSchedule","key":"node-role.kubernetes.io/master","operator":"Exists"},{"effect":"NoSchedule","key":"node.kubernetes.io/disk-pressure","operator":"Exists"},{"effect":"NoExecute","key":"test","operator":"Equal","tolerationSeconds":3000,"value":"logging"}]`, []string{"daemonset", clf.name, "-n", clf.namespace, "-ojsonpath={.spec.template.spec.tolerations}"})
+
+		appProj := oc.Namespace()
+		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("remove the nodeSelector, collector pods should be deployed")
+		patch = `[{"op": "remove", "path": "/spec/collector/nodeSelector"}]`
+		clf.update(oc, "", patch, "--type=json")
+		clf.waitForCollectorPodsReady(oc)
+		lc.waitForLogsAppearByProject("application", appProj)
+	})
 })
 
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease rapidast scan", func() {

@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -407,6 +408,171 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 
 			exutil.By("Check logs in Cloudwatch, should find some logs from openshift* projects")
 			o.Expect(cw.logsFound()).To(o.BeTrue())
+		})
+
+		// author qitang@redhat.com
+		g.It("Author:qitang-CPaasrunOnly-Medium-75415-Validation for multiple cloudwatch outputs in iamRole mode.[Slow]", func() {
+			if !exutil.IsSTSCluster(oc) {
+				g.Skip("Skip for the cluster doesn't have STS.")
+			}
+
+			g.By("init Cloudwatch test spec")
+			clfNS := oc.Namespace()
+			cw := cloudwatchSpec{
+				collectorSAName: "clf-75415",
+				secretName:      "clf-75415",
+				secretNamespace: clfNS,
+				groupName:       "logging-75415-" + infraName + `.{.log_type||"none-typed-logs"}`,
+				logTypes:        []string{"application"},
+			}
+			defer cw.deleteResources(oc)
+			cw.init(oc)
+
+			fakeCW := cloudwatchSpec{
+				collectorSAName: "clf-75415",
+				secretName:      "clf-75415-fake",
+				secretNamespace: clfNS,
+				groupName:       "logging-75415-" + infraName + "-logs",
+				logTypes:        []string{"application"},
+			}
+			defer fakeCW.deleteResources(oc)
+			fakeCW.init(oc)
+
+			staticCW := cloudwatchSpec{
+				collectorSAName: "clf-75415",
+				secretName:      "static-cred",
+				secretNamespace: clfNS,
+				groupName:       "logging-75415-" + infraName + `-static-cred-logs`,
+				logTypes:        []string{"application"},
+			}
+			defer staticCW.deleteResources(oc)
+			staticCW.init(oc)
+
+			exutil.By("Create clusterlogforwarder")
+			clf := clusterlogforwarder{
+				name:                   "clf-75415",
+				namespace:              clfNS,
+				templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-iamRole.yaml"),
+				secretName:             cw.secretName,
+				collectApplicationLogs: true,
+				serviceAccountName:     cw.collectorSAName,
+			}
+			defer clf.delete(oc)
+			clf.createServiceAccount(oc)
+			cw.createClfSecret(oc)
+			clf.create(oc, "REGION="+cw.awsRegion, "GROUP_NAME="+cw.groupName, "INPUT_REFS=[\"application\"]")
+
+			exutil.By("add one output to use the same credentials as the first output")
+			patch := `[{"op": "add", "path": "/spec/outputs/-", "value": {"name": "cloudwatch-2", "type": "cloudwatch", "cloudwatch": {"authentication": {"type": "iamRole", "iamRole": {"token": {"from": "serviceAccount"}, roleARN: {"key": "role_arn", "secretName": "` + cw.secretName + `"}}}, "groupName": "` + fakeCW.groupName + `", "region": "` + fakeCW.awsRegion + `"}}},{"op": "add", "path": "/spec/pipelines/0/outputRefs/-", "value": "cloudwatch-2"}]`
+			clf.update(oc, "", patch, "--type=json")
+			clf.waitForCollectorPodsReady(oc)
+
+			exutil.By("Create log producer")
+			appProj := oc.Namespace()
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("collector pods should send logs to these 2 outputs")
+			o.Expect(cw.logsFound() && fakeCW.logsFound()).Should(o.BeTrue())
+
+			exutil.By("add one output to use static credentials")
+			secret := resource{"secret", staticCW.secretName, clfNS}
+			defer secret.clear(oc)
+			//get credentials
+			cfg := readDefaultSDKExternalConfigurations(context.TODO(), cw.awsRegion)
+			cred, _ := cfg.Credentials.Retrieve(context.TODO())
+			err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secret.name, "--from-literal=aws_access_key_id="+cred.AccessKeyID, "--from-literal=aws_secret_access_key="+cred.SecretAccessKey, "-n", secret.namespace).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			patch = `[{"op": "add", "path": "/spec/outputs/-", "value": {"name": "cloudwatch-3", "type": "cloudwatch", "cloudwatch": {"groupName": "` + staticCW.groupName + `", "region": "` + staticCW.awsRegion + `", "authentication": {"type": "awsAccessKey", "awsAccessKey": {"keyId": {"key": "aws_access_key_id", "secretName": "static-cred"}, "keySecret": {"key": "aws_secret_access_key", "secretName": "static-cred"}}}}}}, {"op": "add", "path": "/spec/pipelines/0/outputRefs/-", "value": "cloudwatch-3"}]`
+			clf.update(oc, "", patch, "--type=json")
+			// wait for 10 seconds for collector pods to load new config
+			time.Sleep(10 * time.Second)
+			clf.waitForCollectorPodsReady(oc)
+
+			cw.deleteGroups("")
+			fakeCW.deleteGroups("")
+			staticCW.deleteGroups("")
+			exutil.By("collector pods should send logs to these 3 outputs")
+			o.Expect(cw.logsFound() && fakeCW.logsFound() && staticCW.logsFound()).Should(o.BeTrue())
+
+			exutil.By("update the second output to use another role_arn")
+			patch = `[{"op": "replace", "path": "/spec/outputs/1/cloudwatch/authentication/iamRole/roleARN/secretName", "value": "` + fakeCW.secretName + `"}]`
+			clf.update(oc, "", patch, "--type=json")
+			checkResource(oc, true, false, "Found multiple different CloudWatch RoleARN authorizations in the outputs spec", []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.outputConditions[*].message}"})
+
+		})
+
+		// author qitang@redhat.com
+		g.It("Author:qitang-CPaasrunOnly-Medium-75417-Validation for multiple CloudWatch outputs in awsAccessKey mode.", func() {
+			if exutil.IsSTSCluster(oc) {
+				g.Skip("Skip for the cluster have STS enabled.")
+			}
+
+			g.By("init Cloudwatch test spec")
+			clfNS := oc.Namespace()
+			cw := cloudwatchSpec{
+				collectorSAName: "clf-75417",
+				secretName:      "clf-75417",
+				secretNamespace: clfNS,
+				groupName:       "logging-75417-" + infraName + `.{.log_type||"none-typed-logs"}`,
+				logTypes:        []string{"application"},
+			}
+			defer cw.deleteResources(oc)
+			cw.init(oc)
+
+			fakeCW := cloudwatchSpec{
+				collectorSAName: "clf-75417",
+				secretName:      "clf-75417-fake",
+				secretNamespace: clfNS,
+				groupName:       "logging-75417-" + infraName + "-logs",
+				logTypes:        []string{"application"},
+			}
+			defer fakeCW.deleteResources(oc)
+			fakeCW.init(oc)
+
+			exutil.By("Create clusterlogforwarder")
+			clf := clusterlogforwarder{
+				name:                   "clf-75417",
+				namespace:              clfNS,
+				templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "cloudwatch-accessKey.yaml"),
+				secretName:             cw.secretName,
+				collectApplicationLogs: true,
+				waitForPodReady:        true,
+				serviceAccountName:     cw.collectorSAName,
+			}
+			defer clf.delete(oc)
+			clf.createServiceAccount(oc)
+			cw.createClfSecret(oc)
+			clf.create(oc, "REGION="+cw.awsRegion, "GROUP_NAME="+cw.groupName, "INPUT_REFS=[\"application\"]")
+
+			exutil.By("add one output to the CLF with same same secret")
+			patch := `[{"op": "add", "path": "/spec/outputs/-", "value": {"name": "new-cloudwatch-2", "type": "cloudwatch", "cloudwatch": {"authentication": {"type": "awsAccessKey", "awsAccessKey": {"keyId": {"key": "aws_access_key_id", "secretName": "` + cw.secretName + `"}, "keySecret": {"key": "aws_secret_access_key", "secretName": "` + cw.secretName + `"}}}, "groupName": "` + fakeCW.groupName + `", "region": "` + fakeCW.awsRegion + `"}}},{"op": "add", "path": "/spec/pipelines/0/outputRefs/-", "value": "new-cloudwatch-2"}]`
+			clf.update(oc, "", patch, "--type=json")
+			clf.waitForCollectorPodsReady(oc)
+
+			exutil.By("Create log producer")
+			appProj := oc.Namespace()
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			o.Expect(cw.logsFound() && fakeCW.logsFound()).Should(o.BeTrue())
+
+			exutil.By("update one of the output to use another secret")
+			//since we can't get another aws key pair, here add a secret with fake aws_access_key_id and aws_secret_access_key
+			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "-n", clf.namespace, fakeCW.secretName, "--from-literal=aws_access_key_id="+getRandomString(), "--from-literal=aws_secret_access_key="+getRandomString()).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			patch = `[{"op": "replace", "path": "/spec/outputs/0/cloudwatch/authentication/awsAccessKey/keyId/secretName", "value": "` + fakeCW.secretName + `"}, {"op": "replace", "path": "/spec/outputs/0/cloudwatch/authentication/awsAccessKey/keySecret/secretName", "value": "` + fakeCW.secretName + `"}]`
+			clf.update(oc, "", patch, "--type=json")
+			//sleep 10 seconds for collector pods to load new credentials
+			time.Sleep(10 * time.Second)
+			clf.waitForCollectorPodsReady(oc)
+
+			cw.deleteGroups("")
+			fakeCW.deleteGroups("")
+			//ensure collector pods still can forward logs to cloudwatch with correct credentials
+			o.Expect(cw.logsFound() || fakeCW.logsFound()).Should(o.BeTrue())
 		})
 
 	})
