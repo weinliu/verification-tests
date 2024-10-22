@@ -6,15 +6,15 @@ export const logsPage = {
     cy.get('#log-unit').type(unitname).type('{enter}');
   },
   selectContainer: (containername) => {
-    cy.get('span[title="Container"]').parent().parent().parent('button[class*="menu-toggle"]').click();
+    cy.get('button[data-test="container-select"]').click();
     cy.contains('span', `${containername}`).parent().parent().parent().parent('button[role="option"]').click();
   },
   selectLogComponent: (componentname: string) => {
-    cy.get('button[aria-label="Select a path"]').click();
+    cy.get('button[data-test="select-path"]').click();
     cy.get('span').contains(componentname).parentsUntil('button[role="option"]').click();
   },
   selectLogFile: (logname: string) => {
-    cy.get('span').contains('Select a log file').parent('button[class*="menu-toggle"]').click();
+    cy.get('button[data-test="select-file"]').click();
     cy.get('span').contains(logname).parentsUntil('button[role="option"]').click();
   },
   checkLogLineExist: () => cy.get('[class*=log-viewer__index]').should('exist'),
