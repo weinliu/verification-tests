@@ -51,6 +51,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		ppAzureConfigMapTemplate   = filepath.Join(testDataDir, "peer-pod-azure-cm-template.yaml")
 		ppLibvirtConfigMapTemplate = filepath.Join(testDataDir, "peer-pod-libvirt-cm-template.yaml")
 		podAnnotatedTemplate       = filepath.Join(testDataDir, "pod-annotations-template.yaml")
+		featureGatesFile           = filepath.Join(testDataDir, "cc-feature-gates-cm.yaml")
 		testrunConfigmapNs         = "default"
 		testrunConfigmapName       = "osc-config"
 		scratchRpmName             string
@@ -92,6 +93,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		podvmImageUrl:      "https://raw.githubusercontent.com/openshift/sandboxed-containers-operator/devel/config/peerpods/podvm/",
 		workloadImage:      "quay.io/openshift/origin-hello-openshift",
 		installKataRPM:     false,
+		workloadToTest:     "kata",
 	}
 
 	g.BeforeEach(func() {
@@ -132,30 +134,31 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 					redirectFile = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
 				}
 				err = applyImageRedirect(oc, redirectFile, redirectType, redirectName)
-				o.Expect(err).NotTo(o.HaveOccurred(), err)
+				o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
 			}
 
 			err = ensureNamespaceIsInstalled(oc, subscription, nsFile)
-			o.Expect(err).NotTo(o.HaveOccurred(), err)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
 
 			err = ensureOperatorGroupIsInstalled(oc, subscription, ogFile)
-			o.Expect(err).NotTo(o.HaveOccurred(), err)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
 
 			checkAndLabelCustomNodes(oc, testrun)
-			// o.Expect(err).NotTo(o.HaveOccurred(), err)
+			// o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
 
 			if kataconfig.eligibility {
 				labelEligibleNodes(oc, testrun)
-				// o.Expect(err).NotTo(o.HaveOccurred(), err)
+				// o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
 			}
 
 			testrun.checked = true
+			e2e.Logf("configmapExists %v\n    testrun %v\n\n", configmapExists, testrun)
 		}
 
 		e2e.Logf("The current platform is %v. OCP %v.%v cluster version: %v", cloudPlatform, ocpMajorVer, ocpMinorVer, clusterVersion)
 
 		err = ensureOpenshiftSandboxedContainerOperatorIsSubscribed(oc, subscription, subTemplate)
-		o.Expect(err).NotTo(o.HaveOccurred(), err)
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
 		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
 
 		// Should be replaced with ensureKataconfigIsCreated
@@ -206,11 +209,11 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 				e2e.Failf("peer-pods-cm NOT applied msg: %v , err: %v", msg, err)
 			} else if cloudPlatform == "azure" || cloudPlatform == "libvirt" {
 				err = createSSHPeerPodsKeys(oc, ppParam, cloudPlatform)
-				o.Expect(err).NotTo(o.HaveOccurred(), err)
+				o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
 			}
 
-			e2e.Logf("patch cm for DISABLECVM=true for OSC 1.5.3 and 1.6.0")
 			if cloudPlatform == "aws" && (strings.Contains(testrun.operatorVer, "1.6.0") || strings.Contains(testrun.operatorVer, "1.5.3")) {
+				e2e.Logf("patch cm for DISABLECVM=true for OSC 1.5.3 and 1.6.0")
 				msg, err = oc.AsAdmin().Run("patch").Args("configmap", ppConfigMapName, "-n", opNamespace, "--type", "merge",
 					"--patch", "{\"data\":{\"DISABLECVM\":\"true\"}}").Output()
 				o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not patch DISABLECVM=true \n error: %v %v", msg, err))
@@ -231,6 +234,12 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 				}
 			}
 		}
+
+		if testrun.workloadToTest == "coco" {
+			err = ensureFeatureGateIsApplied(oc, subscription, featureGatesFile)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: could not apply osc-feature-gates cm: %v", err))
+		}
+
 		// should check kataconfig here & already have checked subscription
 		// check kataconfig
 		// should be replaced with ensureKataconfigIsCreated()
@@ -1081,7 +1090,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 				redirectFile = filepath.Join(testDataDir, "ImageContentSourcePolicy-brew.yaml")
 			}
 			err = applyImageRedirect(oc, redirectFile, redirectType, redirectName)
-			o.Expect(err).NotTo(o.HaveOccurred(), err)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
 		}
 
 		if testrunUpgradeWithSubscription.catalogSourceName != subscription.catalogSourceName {

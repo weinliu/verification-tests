@@ -59,6 +59,7 @@ type TestRunDescription struct {
 	podvmImageUrl      string
 	workloadImage      string
 	installKataRPM     bool
+	workloadToTest     string
 }
 
 // If you changes this please make changes to func createPeerPodSecrets
@@ -100,6 +101,7 @@ var (
 	kataocLabel                         = "node-role.kubernetes.io/kata-oc"
 	customLabel                         = "custom-label=test"
 	kataconfigStatusQuery               = "-o=jsonpath={.status.conditions[?(@.type=='InProgress')].status}"
+	allowedWorkloadTypes                = [3]string{"kata", "peer-pods", "coco"}
 )
 
 func ensureNamespaceIsInstalled(oc *exutil.CLI, sub SubscriptionDescription, nsFile string) (err error) {
@@ -145,6 +147,17 @@ func ensureOpenshiftSandboxedContainerOperatorIsSubscribed(oc *exutil.CLI, sub S
 		}
 	}
 	_, err = subscriptionIsFinished(oc, sub)
+	return err
+}
+
+func ensureFeatureGateIsApplied(oc *exutil.CLI, sub SubscriptionDescription, featureGatesFile string) (err error) {
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "osc-feature-gates", "-n", sub.namespace, "--no-headers").Output()
+	if strings.Contains(msg, "Error from server (NotFound)") {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", featureGatesFile).Output()
+		if err != nil && !strings.Contains(msg, "already exists exit") {
+			err = fmt.Errorf("featureGates cm issue %v %v", msg, err)
+		}
+	}
 	return err
 }
 
@@ -687,9 +700,9 @@ func checkPeerPodConfigMap(oc *exutil.CLI, opNamespace, provider, ppConfigMapNam
 
 	switch provider {
 	case "azure":
-		providerVars = append(providerVars, "CLOUD_PROVIDER", "AZURE_INSTANCE_SIZE", "AZURE_INSTANCE_SIZES", "AZURE_NSG_ID", "AZURE_SUBNET_ID", "VXLAN_PORT", "AZURE_REGION", "AZURE_RESOURCE_GROUP")
+		providerVars = append(providerVars, "CLOUD_PROVIDER", "AZURE_NSG_ID", "AZURE_SUBNET_ID", "VXLAN_PORT", "AZURE_REGION", "AZURE_RESOURCE_GROUP")
 	case "aws":
-		providerVars = append(providerVars, "CLOUD_PROVIDER", "PODVM_INSTANCE_TYPE", "PODVM_INSTANCE_TYPES", "AWS_REGION", "AWS_SG_IDS", "AWS_SUBNET_ID", "AWS_VPC_ID", "VXLAN_PORT")
+		providerVars = append(providerVars, "CLOUD_PROVIDER", "AWS_REGION", "AWS_SG_IDS", "AWS_SUBNET_ID", "AWS_VPC_ID", "VXLAN_PORT")
 	case "libvirt":
 		providerVars = append(providerVars, "CLOUD_PROVIDER")
 	default:
@@ -1323,7 +1336,7 @@ func createApplyPeerPodConfigMap(oc *exutil.CLI, provider string, ppParam Peerpo
 	if err == nil {
 		//check for IMAGE ID in the configmap
 		msg, err, imageID = CheckPodVMImageID(oc, ppConfigMapName, provider, opNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v imageID: %v err: %v", msg, imageID, err))
 		if imageID == "" {
 			e2e.Logf("peer-pods-cm in the right state - does not have the IMAGE ID before the kataconfig install , msg: %v", msg)
 		} else {
@@ -1725,6 +1738,21 @@ func getTestRunConfigmap(oc *exutil.CLI, testrun *TestRunDescription, testrunCon
 		testrun.installKataRPM = gjson.Get(configmapData, "installKataRPM").Bool()
 	} else {
 		errorMessage = fmt.Sprintf("installKataRPM is missing from data\n%v", errorMessage)
+	}
+
+	if gjson.Get(configmapData, "workloadToTest").Exists() {
+		testrun.workloadToTest = gjson.Get(configmapData, "workloadToTest").String()
+		workloadAllowed := false
+		for _, v := range allowedWorkloadTypes {
+			if v == testrun.workloadToTest {
+				workloadAllowed = true
+			}
+		}
+		if !workloadAllowed {
+			errorMessage = fmt.Sprintf("workloadToTest (%v) is not one of the allowed workloads (%v)\n%v", testrun.workloadToTest, allowedWorkloadTypes, errorMessage)
+		}
+	} else {
+		errorMessage = fmt.Sprintf("workloadToTest is missing from data\n%v", errorMessage)
 	}
 
 	if errorMessage != "" {

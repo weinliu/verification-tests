@@ -24,6 +24,7 @@ objects:
       podvmImageUrl: "${PODVMIMAGEURL}"
       workloadImage: "${WORKLOADIMAGE}"
       installKataRPM: "${INSTALLKATARPM}"
+      workloadToTest: "${WORKLOADTOTEST}"  # kata, peer-pods, coco
 
 # oc process --ignore-unknown-parameters=true -f configmap-input-template.yaml -p [name]=[value] [name]=[value] > osc-config.yaml...
 # oc apply -f osc-config.yaml
@@ -63,3 +64,5 @@ parameters:
     value: "quay.io/openshift/origin-hello-openshift"
   - name: INSTALLKATARPM
     value: "false"
+  - name: WORKLOADTOTEST
+    value: "kata"
