@@ -622,11 +622,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	})
 
 	g.It("Author:aramesha-NonPreRelease-High-59746-NetObserv upgrade testing [Serial]", func() {
-		version, _, err := exutil.GetClusterVersion(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if version == "4.17" {
-			g.Skip("Skipping upgrade scenario for 4.17 since 1.6 netobserv can't be deployed on 4.17")
-		}
 		namespace := oc.Namespace()
 
 		g.By("Uninstall operator deployed by BeforeEach and delete operator NS")

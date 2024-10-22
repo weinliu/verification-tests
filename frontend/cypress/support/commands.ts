@@ -1,5 +1,5 @@
 import { nav } from '../../upstream/views/nav';
-import { guidedTour } from 'upstream/views/guided-tour';
+import { guidedTour } from '../../views/tour';
 
 declare global {
     namespace Cypress {

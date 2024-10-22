@@ -1,3 +1,5 @@
+import { guidedTour } from "./tour";
+
 export const netflowPage = {
     visit: () => {
         cy.clearLocalStorage()
@@ -17,6 +19,7 @@ export const netflowPage = {
     visitDeveloper: (project) => {
         cy.clearLocalStorage()
         cy.switchPerspective('Developer');
+        guidedTour.close()
         cy.visit(`/dev-monitoring/ns/${project}/netflow-traffic`)
     },
     toggleFullScreen: () => {
@@ -296,7 +299,7 @@ Cypress.Commands.add('visitNetflowTrafficTab', (page) => {
 
 Cypress.Commands.add('checkNetflowTraffic', (loki = "Enabled") => {
     // overview panels
-    cy.get('li.overviewTabButton').should('exist').click()
+    cy.get('li.overviewTabButton').should('exist').click({ force: true })
     netflowPage.setAutoRefresh()
     cy.wait(2000)
     cy.checkPanel(overviewSelectors.defaultPanels)

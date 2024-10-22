@@ -1,6 +1,7 @@
 import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
 import { netflowPage } from "../../views/netflow-page"
+import { guidedTour } from "../..//views/tour";
 
 const [user1, user1Passwd] = Cypress.env('LOGIN_USERS').split(',')[0].split(':');
 const [user2, user2Passwd] = Cypress.env('LOGIN_USERS').split(',')[1].split(':');
@@ -10,8 +11,7 @@ describe('(OCP-75874 Network_Observability) NetObserv developer view', { tags: [
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${user1}`)
-        cy.login(Cypress.env('LOGIN_IDP'), user1, user1Passwd)
-        cy.switchPerspective('Administrator');
+        cy.uiLogin(Cypress.env('LOGIN_IDP'), user1, user1Passwd)
 
         // specify --env noo_release=upstream to run tests 
         // from most recent "main" image
@@ -34,7 +34,6 @@ describe('(OCP-75874 Network_Observability) NetObserv developer view', { tags: [
 
     it("(OCP-75874, aramesha, Network_Observability) should verify developer view - Loki DataSource", function () {
         netflowPage.visitDeveloper(project)
-        cy.get('#tour-step-footer-secondary').should('exist').click()
 
         // verify Netflow traffic tab
         cy.checkNetflowTraffic()
@@ -54,9 +53,10 @@ describe('(OCP-75874 Network_Observability) NetObserv developer view', { tags: [
         cy.exec(`oc create -f ./fixtures/netobserv/testuser-server-client.yaml`)
 
         // Logout from console as user3 and login as user1
-        cy.uiLogout()
-        cy.login(Cypress.env('LOGIN_IDP'), user2, user2Passwd)
-        cy.get('#tour-step-footer-secondary').should('exist').click()
+        cy.uiLogout().then(() => {
+            cy.visit(Cypress.config('baseUrl'))
+        })
+        cy.uiLogin(Cypress.env('LOGIN_IDP'), user2, user2Passwd)
 
         // Verify Netflow traffic tab Developer view as user1
         netflowPage.visitDeveloper("test-client")
@@ -66,22 +66,23 @@ describe('(OCP-75874 Network_Observability) NetObserv developer view', { tags: [
         cy.exec(`oc adm policy add-role-to-user view ${user3} -n test-server`)
 
         // Logout from console as user3 and login as user3
-        cy.uiLogout()
-        cy.login(Cypress.env('LOGIN_IDP'), user3, user3Passwd)
-        cy.get('#tour-step-footer-secondary').should('exist').click()
+        cy.uiLogout().then(() => {
+            cy.visit(Cypress.config('baseUrl'))
+        })
+        cy.uiLogin(Cypress.env('LOGIN_IDP'), user3, user3Passwd)
 
         // verify Netflow traffic tab as user3
         netflowPage.visitDeveloper("test-server")
         cy.checkNetflowTraffic("Disabled")
-    })
-
-    after("after all tests are done", function () {
         // Login as system:admin from CLI
-        cy.exec(`oc login -u system:admin`)
+        cy.adminCLI(`oc login -u system:admin`)
         cy.adminCLI(`oc delete project test-client`)
         cy.adminCLI(`oc delete project test-server`)
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user netobserv-metrics-reader ${user2}`)
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user netobserv-metrics-reader ${user3}`)
+    })
+
+    after("after all tests are done", function () {
         cy.adminCLI(`oc delete flowcollector cluster`)
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${user1}`)
     })
