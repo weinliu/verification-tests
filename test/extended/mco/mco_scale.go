@@ -97,6 +97,19 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		SimpleScaleUPTest(oc, wMcp, imageVersion, getUserDataIgnitionVersionFromOCPVersion(imageVersion), numNewNodes)
 	})
 
+	// 4.3 is the first image supporting fips
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Critical-76471-Scaleup using 4.12 cloud image[Disruptive]", func() {
+		var (
+			imageVersion = "4.3"
+			numNewNodes  = 1 // the number of nodes scaled up in the new Machineset
+		)
+
+		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, VspherePlatform) // Scale up using 4.3 is only supported in AWS, and Vsphere. GCP is only supported by our automation in versions 4.6+
+		architecture.SkipNonAmd64SingleArch(oc)                                 // arm64 is not supported by OCP until 4.12
+
+		SimpleScaleUPTest(oc, wMcp, imageVersion, getUserDataIgnitionVersionFromOCPVersion(imageVersion), numNewNodes)
+	})
+
 	// 4.12 is the last version using rhel8, in 4.13 ocp starts using rhel9
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Critical-76471-Scaleup using 4.12 cloud image[Disruptive]", func() {
 		var (

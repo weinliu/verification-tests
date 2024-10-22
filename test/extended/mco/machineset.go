@@ -426,7 +426,7 @@ func getUserDataIgnitionVersionFromOCPVersion(baseImageVersion string) string {
 	   4.6: 3.1.0
 	   4.5: 2.2.0
 	   4.4: 2.2.0
-	   4.3: 2.2.0
+	   4.3: 2.2.0    // support for fips
 	   4.2: 2.2.0
 	   4.1: 2.2.0
 	*/
