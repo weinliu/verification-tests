@@ -941,7 +941,7 @@ func getvSphereCredentials(oc *exutil.CLI) (server, dataCenter, dataStore, folde
 	)
 	config, err := configCM.GetDataValue("config")
 	if err != nil {
-		return "", "", "", "", "", "", "", err
+		return
 	}
 
 	cfg, err := ini.Load(strings.NewReader(config))
@@ -955,13 +955,19 @@ func getvSphereCredentials(oc *exutil.CLI) (server, dataCenter, dataStore, folde
 	folder = cfg.Section("Workspace").Key("folder").String()
 	resourcePool = cfg.Section("Workspace").Key("resourcepool-path").String()
 
-	user, err = credsSecret.GetDataValue("vcenter.devqe.ibmc.devcluster.openshift.com.username")
+	decodedData, err := credsSecret.GetDecodedDataMap()
 	if err != nil {
 		return
 	}
-	password, err = credsSecret.GetDataValue("vcenter.devqe.ibmc.devcluster.openshift.com.password")
-	if err != nil {
-		return
+
+	for k, v := range decodedData {
+		item := v
+		if strings.Contains(k, "username") {
+			user = item
+		}
+		if strings.Contains(k, "password") {
+			password = item
+		}
 	}
 
 	return

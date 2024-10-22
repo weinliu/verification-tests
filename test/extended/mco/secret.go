@@ -2,6 +2,8 @@ package mco
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -72,6 +74,31 @@ func (s Secret) Extract() (string, error) {
 func (s Secret) GetDataValue(key string) (string, error) {
 	templateArg := fmt.Sprintf(`--template={{index .data "%s" | base64decode}}`, key)
 	return s.oc.AsAdmin().WithoutNamespace().Run("get").Args(s.GetKind(), s.GetName(), "-n", s.GetNamespace(), templateArg).Output()
+}
+
+// GetDecodedDataMap returns the valus in the .data field as a map[string][string] with the values decoded
+func (s Secret) GetDecodedDataMap() (map[string]string, error) {
+	data := map[string]string{}
+	dataJSON, err := s.Get(`{.data}`)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal([]byte(dataJSON), &data); err != nil {
+		return nil, err
+	}
+
+	for k, vb64 := range data {
+		v, err := base64.StdEncoding.DecodeString(vb64)
+		if err != nil {
+			logger.Errorf("The certiifcate provided in the kubeconfig is not base64 encoded")
+			return nil, err
+		}
+		// Replace the original encoded value with the decoded value
+		data[k] = string(v)
+	}
+
+	return data, nil
 }
 
 // GetDataValueOrFail gets the value stored in the secret's key and fail the test if there is any error
