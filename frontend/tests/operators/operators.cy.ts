@@ -24,7 +24,7 @@ describe('Operators related features', () => {
     const params = {
       ns1: "test1-ocp68675",
       ns2: "test2-ocp68675",
-      operatorName: "Red Hat Streams for Apache Kafka"
+      operatorName: "Streams for Apache Kafka"
     }
     // Prepare data - install Operator AMQ into ns2 operator
     cy.adminCLI(`oc new-project ${params.ns1}`);
@@ -139,4 +139,4 @@ describe('Operators related features', () => {
       .should('contain', 'rhpam-trial1')
       .should('contain', 'rhpam-trial2');
   });
-}) 
+})
