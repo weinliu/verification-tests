@@ -1529,6 +1529,150 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		o.Expect(strings.Contains(cmdOutput.String(), "")).Should(o.BeTrue())
 
 	})
+
+	g.It("Author:qiowang-High-51186-High-54819-Validate ipAddressPoolSelector, ipAddressPool and nodeSelector are honored when advertising service IP address with L2 advertisement [Serial]", func() {
+		var (
+			ns                                   string
+			namespaces                           []string
+			serviceSelectorKey                   = "environ"
+			serviceSelectorValue                 = [1]string{"Test"}
+			namespaceLabelKey                    = "region"
+			namespaceLabelValue                  = [1]string{"NA"}
+			ipAddressPoolSelectorsKey            = "zone"
+			ipAddressPoolSelectorsValues         = [2][2]string{{"east"}, {"west"}}
+			interfaces                           = [3]string{"br-ex", "eno1", "eno2"}
+			workers                              []string
+			ipaddresspools                       []string
+			testID                               = "51186"
+			expectedAddress1                     = "192.168.111.65"
+			expectedAddress2                     = "192.168.111.75"
+			ipAddresspoolTemplate                = filepath.Join(testDataDir, "ipaddresspool-template.yaml")
+			l2AdvertisementTemplate              = filepath.Join(testDataDir, "l2advertisement-template.yaml")
+			loadBalancerServiceAnnotatedTemplate = filepath.Join(testDataDir, "loadbalancer-svc-annotated-template.yaml")
+		)
+
+		exutil.By("1. Obtain the masters, workers and namespace")
+		//Two worker nodes needed to create l2advertisement object
+		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(workerList.Items) < 2 {
+			g.Skip("These cases can only be run for cluster that has atleast two worker nodes")
+		}
+		for i := 0; i < 2; i++ {
+			workers = append(workers, workerList.Items[i].Name)
+		}
+		masterNodeList, err1 := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		ns = oc.Namespace()
+		namespaces = append(namespaces, ns)
+		namespaces = append(namespaces, "test"+testID)
+
+		exutil.By("2. Create two IP addresspools with different labels")
+		for i := 0; i < 2; i++ {
+			ipAddresspool := ipAddressPoolResource{
+				name:                      "ipaddresspool-l2-" + testID + "-" + strconv.Itoa(i),
+				namespace:                 opNamespace,
+				addresses:                 l2Addresses[i][:],
+				namespaces:                namespaces,
+				label1:                    ipAddressPoolSelectorsKey,
+				value1:                    ipAddressPoolSelectorsValues[i][0],
+				priority:                  10,
+				avoidBuggyIPs:             true,
+				autoAssign:                true,
+				serviceLabelKey:           serviceSelectorKey,
+				serviceLabelValue:         serviceSelectorValue[0],
+				serviceSelectorKey:        serviceSelectorKey,
+				serviceSelectorOperator:   "In",
+				serviceSelectorValue:      serviceSelectorValue[:],
+				namespaceLabelKey:         namespaceLabelKey,
+				namespaceLabelValue:       namespaceLabelValue[0],
+				namespaceSelectorKey:      namespaceLabelKey,
+				namespaceSelectorOperator: "In",
+				namespaceSelectorValue:    namespaceLabelValue[:],
+				template:                  ipAddresspoolTemplate,
+			}
+			defer removeResource(oc, true, true, "ipaddresspools", ipAddresspool.name, "-n", ipAddresspool.namespace)
+			o.Expect(createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolTemplate)).To(o.BeTrue())
+			ipaddresspools = append(ipaddresspools, ipAddresspool.name)
+		}
+
+		exutil.By("3. Create L2Advertisement with ipAddressPool and nodeSelectors")
+		l2advertisement := l2AdvertisementResource{
+			name:               "l2-adv" + testID,
+			namespace:          opNamespace,
+			ipAddressPools:     ipaddresspools[:],
+			interfaces:         interfaces[:],
+			nodeSelectorValues: workers[:],
+			template:           l2AdvertisementTemplate,
+		}
+		defer removeResource(oc, true, true, "l2advertisements", l2advertisement.name, "-n", l2advertisement.namespace)
+		o.Expect(createL2AdvertisementCR(oc, l2advertisement, l2AdvertisementTemplate)).To(o.BeTrue())
+
+		exutil.By("4. Create LoadBalancer services using Layer 2 addresses")
+		svc := loadBalancerServiceResource{
+			name:                          "hello-world-cluster",
+			namespace:                     ns,
+			externaltrafficpolicy:         "Cluster",
+			labelKey:                      serviceLabelKey,
+			labelValue:                    serviceLabelValue,
+			annotationKey:                 "metallb.universe.tf/address-pool",
+			annotationValue:               ipaddresspools[0],
+			allocateLoadBalancerNodePorts: serviceNodePortAllocation,
+			template:                      loadBalancerServiceAnnotatedTemplate,
+		}
+		o.Expect(createLoadBalancerService(oc, svc, loadBalancerServiceAnnotatedTemplate)).To(o.BeTrue())
+		statusErr := checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		o.Expect(statusErr).NotTo(o.HaveOccurred())
+
+		exutil.By("5. Check IP address assigned from addresspool, and advertised only on one of the node listed in l2advertisements")
+		svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+		e2e.Logf("The service %s 's External IP is %q", svc.name, svcIP)
+		o.Expect(strings.Contains(svcIP, expectedAddress1)).To(o.BeTrue())
+		o.Expect(validateService(oc, masterNodeList[0], svcIP)).To(o.BeTrue())
+		nodeName := getNodeAnnouncingL2Service(oc, svc.name, svc.namespace)
+		e2e.Logf("Node %s announcing the service IP", nodeName)
+		o.Expect(nodeName).Should(o.Or(o.Equal(workers[0]), o.Equal(workers[1])))
+
+		exutil.By("6. Remove the previously created services")
+		removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+		removeResource(oc, true, true, "replicationcontroller", svc.name, "-n", svc.namespace)
+
+		exutil.By("7. Update L2Advertisement, update ipAddressPool and nodeSelectors, add ipAddressPoolSelectors")
+		patchL2Advertisement := `[{"op": "replace", "path": "/spec/ipAddressPools", "value": [""]}, {"op": "replace", "path": "/spec/nodeSelectors/0/matchExpressions/0/values", "value":["` + workers[1] + `"]}]`
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", opNamespace, "l2advertisement", l2advertisement.name, "--type=json", "-p", patchL2Advertisement).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+		patchIPAddrPoolSelectors := `{"spec":{"ipAddressPoolSelectors":[{"matchExpressions": [{"key": "` + ipAddressPoolSelectorsKey + `","operator": "In","values": ["` + ipAddressPoolSelectorsValues[1][0] + `"]}]}]}}`
+		patchResourceAsAdmin(oc, "l2advertisement/"+l2advertisement.name, patchIPAddrPoolSelectors, "metallb-system")
+
+		exutil.By("8. Create LoadBalancer services requesting address from the second ipaddresspools")
+		svc.annotationValue = ipaddresspools[1]
+		o.Expect(createLoadBalancerService(oc, svc, loadBalancerServiceAnnotatedTemplate)).To(o.BeTrue())
+		statusErr = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		o.Expect(statusErr).NotTo(o.HaveOccurred())
+
+		exutil.By("9. Check IP address assigned from the second addresspool, and advertised only on one of the node listed in l2advertisements")
+		svcIP = getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+		e2e.Logf("The service %s 's External IP is %q", svc.name, svcIP)
+		o.Expect(strings.Contains(svcIP, expectedAddress2)).To(o.BeTrue())
+		o.Expect(validateService(oc, masterNodeList[0], svcIP)).To(o.BeTrue())
+		nodeName = getNodeAnnouncingL2Service(oc, svc.name, svc.namespace)
+		e2e.Logf("Node %s announcing the service IP", nodeName)
+		o.Expect(nodeName).Should(o.Equal(workers[1]))
+
+		exutil.By("10. OCP-54819-Add label to the first worker node")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[0], "zone")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[0], "zone", "east")
+
+		exutil.By("11. OCP-54819-Edit the l2advertisement to modify the node selection")
+		patchL2Advertisement = `[{"op": "replace", "path": "/spec/nodeSelectors/0/matchExpressions/0/key", "value":"zone"}, {"op": "replace", "path": "/spec/nodeSelectors/0/matchExpressions/0/values", "value":["east"]}]`
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", opNamespace, "l2advertisement", l2advertisement.name, "--type=json", "-p", patchL2Advertisement).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By("12. OCP-54819-Check the changes to nodeSelector in L2advertisements are reflected where the service IP is announced")
+		nodeName = getNodeAnnouncingL2Service(oc, svc.name, svc.namespace)
+		e2e.Logf("Node %s announcing the service IP", nodeName)
+		o.Expect(nodeName).Should(o.Equal(workers[0]))
+	})
 })
 
 // L3 Tests
@@ -2363,7 +2507,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 
 	})
 
-	g.It("Author:qiowang-High-51187-Validate ipAddressPoolSelector, ipAddressPool and nodeSelector are honored when advertising service IP address via BGP advertisement [Serial]", func() {
+	g.It("Author:qiowang-High-51187-High-54820-Validate ipAddressPoolSelector, ipAddressPool and nodeSelector are honored when advertising service IP address via BGP advertisement [Serial]", func() {
 		var (
 			workers                              []string
 			nodeIPs                              []string
@@ -2372,6 +2516,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 			namespaces                           []string
 			expectedPaths1                       []string
 			expectedPaths2                       []string
+			expectedPaths3                       []string
 			bgpPassword                          string
 			expectedAddress1                     = "10.10.10.1"
 			expectedAddress2                     = "10.10.12.1"
@@ -2530,6 +2675,19 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 		exutil.By("12. Verify route is advertised")
 		expectedPaths2 = append(expectedPaths2, "1 available", nodeIPs[0])
 		o.Expect(checkBGPv4RouteTableEntry(oc, bgpRouterNamespaceWithSuffix, expectedAddress2, expectedPaths2)).To(o.BeTrue())
+
+		exutil.By("13. OCP-54820-Add label to the second worker node")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workers[1], "zone")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workers[1], "zone", "east")
+
+		exutil.By("14. OCP-54820-Edit the BGPadvertisement to modify the node selection")
+		patchBgpAdvertisement = `[{"op": "replace", "path": "/spec/nodeSelectors/0/matchExpressions/0/key", "value":"zone"}, {"op": "replace", "path": "/spec/nodeSelectors/0/matchExpressions/0/values", "value":["east"]}]`
+		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", opNamespace, "bgpadvertisement", bgpAdvertisement.name, "--type=json", "-p", patchBgpAdvertisement).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		exutil.By("15. OCP-54820-Check the changes to nodeSelector in BGPadvertisements are reflected which node advertises the host prefix for service")
+		expectedPaths3 = append(expectedPaths3, "1 available", nodeIPs[1])
+		o.Expect(checkBGPv4RouteTableEntry(oc, bgpRouterNamespaceWithSuffix, expectedAddress2, expectedPaths3)).To(o.BeTrue())
 	})
 
 })
