@@ -36,6 +36,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		cscantaintTemplate               string
 		cscantaintsTemplate              string
 		cscanSCTemplate                  string
+		daemonsetTemplate                string
+		deployTemplate                   string
+		statefulsetTemplate              string
 		errGetImageProfile               error
 		relatedImageProfile              string
 		tprofileManualRuleTemplate       string
@@ -67,6 +70,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		resourceQuotaYAML                string
 		tprofileHypershfitTemplate       string
 		tpSingleVariableTemplate         string
+		tpThreeVariablesTemplate         string
 		tprofileTwoVariablesTemplate     string
 		tprofileWithoutDescriptionYAML   string
 		tprofileWithoutTitleYAML         string
@@ -90,10 +94,14 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		cscantaintTemplate = filepath.Join(buildPruningBaseDir, "compliancescantaint.yaml")
 		cscantaintsTemplate = filepath.Join(buildPruningBaseDir, "compliancescantaints.yaml")
 		cscanSCTemplate = filepath.Join(buildPruningBaseDir, "compliancescanStorageClass.yaml")
+		deployTemplate = filepath.Join(buildPruningBaseDir, "deployment.yaml")
+		daemonsetTemplate = filepath.Join(buildPruningBaseDir, "daemonset.yaml")
+		statefulsetTemplate = filepath.Join(buildPruningBaseDir, "statefulset.yaml")
 		tprofileManualRuleTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-manual-rule.yaml")
 		tprofileTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile.yaml")
 		tprofileHypershfitTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-hypershift.yaml")
 		tpSingleVariableTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-single-variable.yaml")
+		tpThreeVariablesTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-three-variables.yaml")
 		tprofileTwoVariablesTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-two-variables.yaml")
 		tprofileWithoutVarTemplate = filepath.Join(buildPruningBaseDir, "tailoredprofile-withoutvariable.yaml")
 		scansettingTemplate = filepath.Join(buildPruningBaseDir, "scansetting.yaml")
@@ -600,8 +608,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 				template:        scansettingbindingTemplate,
 			}
 			ccrsShouldPass = []string{
-				"ocp4-cis-api-server-kubelet-client-cert",
-				"ocp4-cis-api-server-kubelet-client-key",
 				"ocp4-cis-node-master-file-groupowner-etcd-pki-cert-files",
 				"ocp4-cis-node-master-file-groupowner-openshift-pki-cert-files",
 				"ocp4-cis-node-master-file-groupowner-openshift-pki-key-files",
@@ -4171,6 +4177,92 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			"ocp4-cis" + "-scc-limit-container-allowed-capabilities", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 
 		g.By("Medium-74227-Medium-74437-Test variables ocp4-var-network-policies-namespaces-exempt-regex and ocp4-var-sccs-with-allowed-capabilities-regex done... !!!\n")
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("Author:xiyuan-NonHyperShiftHOST-NonPreRelease-Medium-76797-Check the variables ocp4-var-x-limit-namespaces-exempt-regex works as expected [Serial][Slow]", func() {
+		var (
+			tpName  = "tp-variables-" + getRandomString()
+			nsTest1 = "ns-76797-" + getRandomString()
+			nsTest2 = "ns-76797-" + getRandomString()
+			nsList  = []string{nsTest1, nsTest2}
+			ssb     = scanSettingBindingDescription{
+				name:            "variables-test-" + getRandomString(),
+				namespace:       subD.namespace,
+				profilekind1:    "TailoredProfile",
+				profilename1:    tpName,
+				profilename2:    "ocp4-high",
+				scansettingname: "default",
+				template:        scansettingbindingTemplate,
+			}
+		)
+
+		defer func() {
+			g.By("Remove ssb and tailoredprofile... !!!\n")
+			cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name},
+				objectTableRef{"tailoredprofile", subD.namespace, tpName},
+				objectTableRef{"ns", nsTest1, nsTest1},
+				objectTableRef{"ns", nsTest2, nsTest2})
+		}()
+
+		g.By("Create workloads .. !!!\n")
+		for _, ns := range nsList {
+			errGetNs := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+			o.Expect(errGetNs).NotTo(o.HaveOccurred())
+			err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deployTemplate, "-p", "NAME="+"deploy-"+ns, "NAMESPACE="+ns)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", daemonsetTemplate, "-p", "NAME="+"daemonset-"+ns, "NAMESPACE="+ns)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", statefulsetTemplate, "-p", "NAME="+"statefulset-"+ns, "NAMESPACE="+ns)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			newCheck("expect", asAdmin, withoutNamespace, contain, "3", ok, []string{"deploy", "deploy-" + ns, "-n", ns, "-o=jsonpath={.status.availableReplicas}"}).check(oc)
+			newCheck("expect", asAdmin, withoutNamespace, contain, "3", ok, []string{"daemonset", "daemonset-" + ns, "-n", ns, "-o=jsonpath={.status.numberReady}"}).check(oc)
+			newCheck("expect", asAdmin, withoutNamespace, contain, "2", ok, []string{"statefulset", "statefulset-" + ns, "-n", ns, "-o=jsonpath={.status.availableReplicas}"}).check(oc)
+		}
+
+		g.By("Set variable for the tailoredprofile !!!\n")
+		varDaemonset := getWorkloadLimitNamespacesExempt(oc, "daemonset")
+		o.Expect(varDaemonset).To(o.ContainSubstring(nsTest1))
+		o.Expect(varDaemonset).To(o.ContainSubstring(nsTest2))
+		varDeployment := getWorkloadLimitNamespacesExempt(oc, "deployment")
+		o.Expect(varDeployment).To(o.ContainSubstring(nsTest1))
+		o.Expect(varDeployment).To(o.ContainSubstring(nsTest2))
+		varStatefulset := getWorkloadLimitNamespacesExempt(oc, "statefulset")
+		o.Expect(varStatefulset).To(o.ContainSubstring(nsTest1))
+		o.Expect(varStatefulset).To(o.ContainSubstring(nsTest2))
+
+		g.By("Create the tailoredprofile !!!\n")
+		errApply := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", tpThreeVariablesTemplate, "-p", "NAME="+tpName, "NAMESPACE="+subD.namespace,
+			"VALUEDAEMONSET="+varDaemonset, "VALDEPLOY="+varDeployment, "VARSTATEFULSET="+varStatefulset)
+		o.Expect(errApply).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"tailoredprofile", "-n", subD.namespace, tpName,
+			"-o=jsonpath={.status.state}"}).check(oc)
+
+		g.By("Create scansettingbinding !!!\n")
+		ssb.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status and result !!!\n")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
+		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssb.name, "2")
+
+		g.By("Verify the rule status through compliancecheckresult and value through apiservers cluster object... !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
+			tpName + "-resource-requests-limits-in-daemonset", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult",
+			"ocp4-high" + "-resource-requests-limits-in-daemonset", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
+			tpName + "-resource-requests-limits-in-deployment", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult",
+			"ocp4-high" + "-resource-requests-limits-in-deployment", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
+			tpName + "-resource-requests-limits-in-statefulset", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult",
+			"ocp4-high" + "-resource-requests-limits-in-statefulset", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+
+		g.By("Medium-76797-Check the variables ocp4-var-x-limit-namespaces-exempt-regex works as expected... !!!\n")
 	})
 
 	// author: xiyuan@redhat.com

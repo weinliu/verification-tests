@@ -1323,3 +1323,29 @@ func checkFailedRulesForTwoProfiles(oc *exutil.CLI, ns string, ssbName string, s
 	sort.Strings(newFailedCcrsSuffixNew)
 	o.Expect(reflect.DeepEqual(newFailedCcrsSuffixNew, failedCcrLatestNew)).Should(o.BeTrue())
 }
+
+func getWorkloadLimitNamespacesExempt(oc *exutil.CLI, workloadKind string) string {
+	var varNs string
+	res, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(workloadKind, "--all-namespaces", "-o", "json").OutputToFile(getRandomString() + "project.json")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The file name  is %s", res)
+	jqCmd := fmt.Sprintf(`cat %s | jq '[ .items[] | select(.metadata.namespace | startswith("kube-") or startswith("openshift-") | not)  | 
+		select(.metadata.namespace != "rhacs-operator" and (true)) | select( .spec.template.spec.containers[].resources.requests.cpu == null  
+		or  .spec.template.spec.containers[].resources.requests.memory == null or .spec.template.spec.containers[].resources.limits.cpu == null 
+		or  .spec.template.spec.containers[].resources.limits.memory == null )  | .metadata.namespace ]' | tr -d [ | tr -d ] | tr -d ',' | tr -d '\"'`, res)
+	result, errCmd := exec.Command("bash", "-c", jqCmd).Output()
+	o.Expect(errCmd).NotTo(o.HaveOccurred())
+	resString := string(result)
+	projectList := strings.Fields(resString)
+	length := len(projectList)
+	for i, ns := range projectList {
+		e2e.Logf("varNs is %s", varNs)
+		e2e.Logf("ns is %s", ns)
+		if i == length-1 {
+			varNs = varNs + string(ns)
+		} else {
+			varNs = varNs + string(ns) + "|"
+		}
+	}
+	return varNs
+}
