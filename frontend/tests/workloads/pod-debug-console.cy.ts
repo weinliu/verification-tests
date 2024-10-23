@@ -38,14 +38,16 @@ describe('Debug console for pods', () => {
     // Get pod name via cli
     cy.visit(`/k8s/ns/${testParams.namespace}/pods/`);
     listPage.filter.by('CrashLoopBackOff');
+    //Due to bug OCPBUGS-43652, add step to avoid pod cannot be clicked on Pod List page
+    cy.get('[data-test-id="dropdown-button"]').click();
     cy.get(`#name [data-test*=crash-loop]`).should('exist').click();
     cy.get('[data-test-id="horizontal-link-Logs"]').should('exist').click();
     cy.get(`[data-test="debug-container-link"]`).then($a => {
       const message = $a.text();
       expect($a, message).to.have.attr("href").contain("debug");
     })
-    cy.byLegacyTestID('dropdown-button').click();
-    cy.get(`[data-test-dropdown-menu=${testParams.name}-container]`).should('exist');
+    cy.get('[data-test="container-select"]').click();
+    cy.get('button').contains(`${testParams.name}-container`);
 
     //Add checkpoint for customer bug OCPBUGS-12244: debug container should not copy main pod network info
     let ipaddress1, ipaddress2;
