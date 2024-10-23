@@ -1545,7 +1545,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			dockerFile := filepath.Join(tmpPath, "Dockerfile")
 			content := getContent(dockerFile)
 			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-helm-rhel9-operator:v" + ocpversion))
-			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-rhel9-operator:v"+ocpversion)
+			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-operator-rhel9:v"+ocpversion)
 
 			managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 			content = getContent(managerAuthProxyPatch)
@@ -2558,7 +2558,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(deployFilepath, ".Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion", ".Values.relatedImage")
 		// update the Dockerfile
 		dockerFile := filepath.Join(tmpPath, "Dockerfile")
-		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-rhel9-operator:v"+ocpversion)
+		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-operator-rhel9:v"+ocpversion)
 		// copy the manager
 		err = copy(filepath.Join(dataPath, "manager.yaml"), filepath.Join(tmpPath, "config", "manager", "manager.yaml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2890,7 +2890,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("step: modify files to generate the quay.io/olmqe images.")
 		// update the Dockerfile
 		dockerFile := filepath.Join(tmpPath, "Dockerfile")
-		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-rhel9-operator:v"+ocpversion)
+		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-operator-rhel9:v"+ocpversion)
 		// update the rbac file
 		rbacFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 		replaceContent(rbacFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:v"+ocpversion, "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
@@ -3699,7 +3699,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(deployFilepath, ".Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion", ".Values.relatedImage")
 		// update the Dockerfile
 		dockerFile := filepath.Join(tmpPath, "Dockerfile")
-		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-rhel9-operator:v"+ocpversion)
+		replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-operator-rhel9:v"+ocpversion)
 		// copy the manager
 		err = copy(filepath.Join(dataPath, "manager.yaml"), filepath.Join(tmpPath, "config", "manager", "manager.yaml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -4863,7 +4863,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			dockerFile := filepath.Join(tmpPath, "Dockerfile")
 			content := getContent(dockerFile)
 			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-helm-rhel9-operator:v" + ocpversion))
-			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-rhel9-operator:v"+ocpversion)
+			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-operator-rhel9:v"+ocpversion)
 
 			managerAuthProxyPatch := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 			content = getContent(managerAuthProxyPatch)
