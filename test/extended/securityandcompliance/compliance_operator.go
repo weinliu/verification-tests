@@ -5284,7 +5284,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-47373-Low-47371-Enable TailoredProfiles without extending a Profile and also validate that title and description [Serial][Slow]", func() {
+	g.It("Author:pdhamdhe-NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Medium-47373-Low-47371-Enable TailoredProfiles without extending a Profile and also validate that title and description [Serial]", func() {
 		var (
 			tprofileDN = tailoredProfileWithoutVarDescription{
 				name:         "new-profile-node",
@@ -5375,6 +5375,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			"-o=jsonpath={.status.state}"}).check(oc)
 		newCheck("expect", asAdmin, withoutNamespace, contain, errmsg, ok, []string{"tailoredprofile", tprofileDNP.name, "-n", tprofileDNP.namespace,
 			"-o=jsonpath={.status.errorMessage}"}).check(oc)
+		patch1 := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/disableRules\"}]")
+		patch2 := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/enableRules/0\"}]")
+		patchResource(oc, asAdmin, withoutNamespace, "tp", tprofileDNP.name, "-n", tprofileDNP.namespace, "--type", "json", "-p", patch1)
+		patchResource(oc, asAdmin, withoutNamespace, "tp", tprofileDNP.name, "-n", tprofileDNP.namespace, "--type", "json", "-p", patch2)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"tailoredprofile", tprofileDNP.name, "-n", tprofileDNP.namespace,
+			"-o=jsonpath={.status.state}"}).check(oc)
 
 		errorMsg := []string{"The TailoredProfile \"profile-description\" is invalid: spec.description: Required value", "The TailoredProfile \"profile-title\" is invalid: spec.title: Required value"}
 		verifyTailoredProfile(oc, errorMsg, subD.namespace, tprofileWithoutDescriptionYAML)
