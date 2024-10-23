@@ -1696,6 +1696,66 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(log, "\"level\":\"RequestResponse\"")).Should(o.BeTrue())
 	})
+	//Author: asahay@redhat.com
+	g.It("Author:asahay-High-60964-Audit logging test - Writing to PVC [Serial]", func() {
+
+		exutil.By("1) Create a PVC")
+		pvc := filepath.Join(buildPruningBaseDir, "pvc-60964.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f="+pvc, "-n", "openshift-keda").Execute()
+		err := oc.AsAdmin().Run("create").Args("-f="+pvc, "-n", "openshift-keda").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2) Create KedaController with log level Metdata")
+		exutil.By("Create CMA Keda Controller ")
+		pvcKedaControllerTemp := filepath.Join(buildPruningBaseDir, "pvcKedaControllerTemp-60964.yaml")
+		pvcKedaController := pvcKedaControllerDescription{
+			level:          "Metadata",
+			template:       pvcKedaControllerTemp,
+			name:           "keda",
+			namespace:      "openshift-keda",
+			watchNamespace: "openshift-keda",
+		}
+
+		defer pvcKedaController.delete(oc)
+		pvcKedaController.create(oc)
+		metricsApiserverPodName := getPodNameByLabel(oc, "openshift-keda", "app=keda-metrics-apiserver")
+		waitPodReady(oc, "openshift-keda", "app=keda-metrics-apiserver")
+
+		var output string
+
+		exutil.By("3) Checking PVC creation")
+		output, err = oc.AsAdmin().Run("get").Args("pvc", "-n", "openshift-keda").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("PVC is %v", output)
+
+		exutil.By("4) Checking KEDA Controller")
+		errCheck := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().Run("get").Args("KedaController", "-n", "openshift-keda").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "keda") {
+				e2e.Logf("Keda Controller has been created Successfully!")
+				return true, nil
+			}
+			return false, nil
+		})
+		e2e.Logf("Output is %s", output)
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("KedaController has not been created"))
+
+		exutil.By("5) Checking status of pods")
+		waitPodReady(oc, "openshift-keda", "app=keda-metrics-apiserver")
+
+		exutil.By("6) Verifying audit logs for 'Metadata'")
+		errCheck = wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+			auditOutput := ExecCommandOnPod(oc, metricsApiserverPodName[0], "openshift-keda", "tail $(ls -t /var/audit-policy/log*/log-out-pvc | head -1)")
+			if strings.Contains(auditOutput, "Metadata") {
+				e2e.Logf("Audit log contains 'Metadata ")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Audit Log does not contain Metadata"))
+
+	})
 
 	// author: weinliu@redhat.com
 	g.It("Author:weinliu-Critical-52384-Automatically scaling pods based on Kafka Metrics[Serial][Slow]", func() {

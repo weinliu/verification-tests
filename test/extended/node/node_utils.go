@@ -487,6 +487,15 @@ type cmaKedaControllerDescription struct {
 	name      string
 	namespace string
 }
+
+type pvcKedaControllerDescription struct {
+	level          string
+	template       string
+	name           string
+	namespace      string
+	watchNamespace string
+}
+
 type runtimeTimeoutDescription struct {
 	name       string
 	labelkey   string
@@ -2060,6 +2069,17 @@ func (cmaKedaController *cmaKedaControllerDescription) delete(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+func (pvcKedaController *pvcKedaControllerDescription) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pvcKedaController.template, "-p", "LEVEL="+pvcKedaController.level, "NAMESPACE="+pvcKedaController.namespace, "WATCHNAMESPACE="+pvcKedaController.watchNamespace)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	waitForDeploymentPodsToBeReady(oc, "openshift-keda", "keda-metrics-apiserver")
+}
+
+func (pvcKedaController *pvcKedaControllerDescription) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", pvcKedaController.namespace, "KedaController", pvcKedaController.name).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 func waitPodReady(oc *exutil.CLI, ns string, label string) {
 	podNameList := getPodNameByLabel(oc, ns, label)
 	exutil.AssertPodToBeReady(oc, podNameList[0], ns)
@@ -2391,4 +2411,23 @@ func checkSigstoreVerified(oc *exutil.CLI, namespace string, podName string, ima
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(waitErr, "check sigstore signature failed!")
+}
+
+func ExecCommandOnPod(oc *exutil.CLI, podname string, namespace string, command string) string {
+	var podOutput string
+	var execpodErr error
+	errExec := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
+		podOutput, execpodErr = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, podname, "--", "/bin/sh", "-c", command).Output()
+		podOutput = strings.TrimSpace(podOutput)
+		if execpodErr != nil {
+			return false, nil
+		}
+		return true, nil
+
+	})
+	if errExec != nil {
+		e2e.Logf(fmt.Sprintf("Run commands %q on pod %q failed of:  %v, output is: %s", command, podname, execpodErr, podOutput))
+	}
+	exutil.AssertWaitPollNoErr(errExec, fmt.Sprintf("Run commands %q on pod %q failed", command, podname))
+	return podOutput
 }
