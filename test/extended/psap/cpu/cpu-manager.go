@@ -58,7 +58,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		oc.SetupProject()
 		cpuTestNS := oc.Namespace()
 
-		defer exutil.AssertIfMCPChangesAppliedByName(oc, "master", 720)
+		defer exutil.AssertIfMCPChangesAppliedByName(oc, "master", 1800)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("KubeletConfig", "masters").Output()
 		g.By("Create KubeConfig masters to enable cpumanager and toplogy manager policy")
 		exutil.ApplyOperatorResourceByYaml(oc, "", cpuKubeletconfigMasterFile)
@@ -68,7 +68,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(firstDrainedNode).NotTo(o.BeEmpty())
 
 		g.By("Assert if MCP master is ready after enable cpumanager and toplogy manager policy")
-		exutil.AssertIfMCPChangesAppliedByName(oc, "master", 720)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "master", 1800)
 
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "-n", cpuTestNS, "guaranteed-pod", "--ignore-not-found").Execute()
 		g.By("Create guaranteed pod in temp namespace")

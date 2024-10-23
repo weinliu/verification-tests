@@ -655,17 +655,34 @@ func DeleteMCAndMCPByName(oc *CLI, mcName string, mcpName string, timeDurationSe
 }
 
 // CreateCustomNodePoolInHypershift retrun custom nodepool yaml
-func CreateCustomNodePoolInHypershift(oc *CLI, cloudProvider, guestClusterName, nodePoolName, nodeCount, instanceType, upgradeType, subnetID, clustersNS string) {
+func CreateCustomNodePoolInHypershift(oc *CLI, cloudProvider, guestClusterName, nodePoolName, nodeCount, instanceType, upgradeType, clustersNS, defaultNodePoolName string) {
 
-	if cloudProvider == "aws" && len(subnetID) == 0 {
+	if cloudProvider == "aws" {
 		cmdString := fmt.Sprintf("hypershift create nodepool %s --cluster-name %s --name %s --node-count %s --instance-type %s --node-upgrade-type %s --namespace %s", cloudProvider, guestClusterName, nodePoolName, nodeCount, instanceType, upgradeType, clustersNS)
 		e2e.Logf("cmdString is %v )", cmdString)
 		_, err := exec.Command("bash", "-c", cmdString).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else if cloudProvider == "azure" {
-
-		cmdString := fmt.Sprintf("hypershift create nodepool %s --cluster-name %s --name %s --node-count %s --instance-type %s --node-upgrade-type %s --subnet-id %s --namespace %s", cloudProvider, guestClusterName, nodePoolName, nodeCount, instanceType, upgradeType, subnetID, clustersNS)
-		_, err := exec.Command("bash", "-c", cmdString).Output()
+		subnetID, err := oc.AsAdmin().Run("get").Args("-n", clustersNS, "nodepool", defaultNodePoolName, "-ojsonpath={.spec.platform.azure.subnetID}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdString := fmt.Sprintf("hypershift create nodepool %s --cluster-name %s --name %s --node-count %s --instance-type %s --node-upgrade-type %s --nodepool-subnet-id %s --namespace %s", cloudProvider, guestClusterName, nodePoolName, nodeCount, instanceType, upgradeType, subnetID, clustersNS)
+		e2e.Logf("cmdString is %v )", cmdString)
+		_, err = exec.Command("bash", "-c", cmdString).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else if cloudProvider == "aks" {
+		subnetID, err := oc.AsAdmin().Run("get").Args("-n", clustersNS, "nodepool", defaultNodePoolName, "-ojsonpath={.spec.platform.azure.subnetID}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		azMKPSKU, err := oc.AsAdmin().Run("get").Args("-n", clustersNS, "nodepool", defaultNodePoolName, "-ojsonpath={.spec.platform.azure.image.azureMarketplace.sku}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		azMKPVersion, err := oc.AsAdmin().Run("get").Args("-n", clustersNS, "nodepool", defaultNodePoolName, "-ojsonpath={.spec.platform.azure.image.azureMarketplace.version}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		azMKPOffer, err := oc.AsAdmin().Run("get").Args("-n", clustersNS, "nodepool", defaultNodePoolName, "-ojsonpath={.spec.platform.azure.image.azureMarketplace.offer}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		azMKPPublisher, err := oc.AsAdmin().Run("get").Args("-n", clustersNS, "nodepool", defaultNodePoolName, "-ojsonpath={.spec.platform.azure.image.azureMarketplace.publisher}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmdString := fmt.Sprintf("hypershift create nodepool azure --cluster-name %s --name %s --node-count %s --instance-type %s --node-upgrade-type %s --nodepool-subnet-id %s --namespace %s --marketplace-offer %s --marketplace-publisher %s --marketplace-sku %s --marketplace-version %s", guestClusterName, nodePoolName, nodeCount, instanceType, upgradeType, subnetID, clustersNS, azMKPOffer, azMKPPublisher, azMKPSKU, azMKPVersion)
+		e2e.Logf("cmdString is %v )", cmdString)
+		_, err = exec.Command("bash", "-c", cmdString).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else {
 		e2e.Logf("Unsupported cloud provider is %v )", cloudProvider)

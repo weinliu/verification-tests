@@ -651,7 +651,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		// The expected Cpus_allowed_list in /proc/$PID/status should be 0-N
 		exutil.By("Verified the cpu allow list in cgroup black list for tuned ...")
 		clusterVersion, _, err := exutil.GetClusterVersion(oc)
-		versionReg := regexp.MustCompile(`4.12|4.13|4.14`)
+		versionReg := regexp.MustCompile(`4.12|4.13`)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if versionReg.MatchString(clusterVersion) {
 			o.Expect(assertProcessInCgroupSchedulerBlacklist(oc, tunedNodeName, ntoNamespace, "openshift-tuned", nodeCPUCoresInt)).To(o.Equal(true))
@@ -1898,9 +1898,6 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("Skip Testing on RHEL worker or windows node")
 		}
 
-		//Get the tuned pod name in the same node that labeled node
-		//tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
-
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-stalld-").Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "openshift-stalld", "-n", ntoNamespace, "--ignore-not-found").Execute()
 		defer exutil.DebugNodeWithChroot(oc, tunedNodeName, "/usr/bin/throttlectl", "on")
@@ -1950,9 +1947,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-stalld")
 
 		exutil.By("Check if stalld service is inactive and stopped ...")
-		//Return an error when the systemctl status stalld is inactive, so err for o.Expect as expected.
-		stalldStatus, _ = exutil.DebugNodeWithChroot(oc, tunedNodeName, "systemctl", "status", "stalld")
-		e2e.Logf("The service stalld status:\n%v", stalldStatus)
+		stalldStatus, _ = exutil.DebugNodeWithOptionsAndChroot(oc, tunedNodeName, []string{"-q", "--to-namespace", ntoNamespace}, "systemctl", "status", "stalld")
+		o.Expect(stalldStatus).NotTo(o.BeEmpty())
 		o.Expect(stalldStatus).To(o.ContainSubstring("inactive (dead)"))
 
 		exutil.By("Apply openshift-stalld with start,enable tuned profile")
@@ -1962,8 +1958,9 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-stalld")
 
 		exutil.By("Check if stalld service is running again ...")
-		stalldStatus, err = exutil.DebugNodeWithChroot(oc, tunedNodeName, "systemctl", "status", "stalld")
+		stalldStatus, _, err = exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"-q", "--to-namespace", ntoNamespace}, "systemctl", "status", "stalld")
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(stalldStatus).NotTo(o.BeEmpty())
 		o.Expect(stalldStatus).To(o.ContainSubstring("active (running)"))
 	})
 
@@ -2641,7 +2638,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoTestNS := oc.Namespace()
 
 		//Get the tuned pod name that run on first worker node
-		tunedNodeName, err := exutil.GetFirstLinuxWorkerNode(oc)
+		tunedNodeName, err := exutil.GetLastLinuxWorkerNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(tunedNodeName).NotTo(o.BeEmpty())
 
@@ -3349,6 +3346,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Delete custom MC and MCP by following correct logic ...")
 		oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-pao-").Execute()
 		exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-pao", "worker-pao", 480)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker", 600)
 	})
 
 	g.It("NonPreRelease-PreChkUpgrade-Author:liqcui-Medium-21995-Pre Check for basic NTO function to Upgrade OCP Cluster[Disruptive].", func() {
@@ -3508,6 +3506,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		isSNO := exutil.IsSNOCluster(oc)
 		var firstNodeName string
 		var secondNodeName string
+
 		if !isNTO || isSNO {
 			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
 		}

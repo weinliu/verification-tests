@@ -1,6 +1,8 @@
 package hypernto
 
 import (
+	"context"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -11,26 +13,33 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                             = exutil.NewCLI("hypernto-test", exutil.KubeConfigPath())
-		ntoNamespace                   = "openshift-cluster-node-tuning-operator"
-		tunedWithSameProfileName       string
-		tunedWithDiffProfileName       string
-		tunedWithInvalidProfileName    string
-		tunedWithNodeLevelProfileName  string
-		tunedWithKernelBootProfileName string
-		isNTO                          bool
-		isNTO2                         bool
-		guestClusterName               string
-		guestClusterNS                 string
-		guestClusterKube               string
-		hostedClusterNS                string
-		guestClusterName2              string
-		guestClusterNS2                string
-		guestClusterKube2              string
-		hostedClusterNS2               string
-		iaasPlatform                   string
-		firstNodePoolName              string
-		secondNodePoolName             string
+		oc                                         = exutil.NewCLIForKubeOpenShift("hypernto-test")
+		ntoNamespace                               = "openshift-cluster-node-tuning-operator"
+		tunedWithDiffProfileNameAKSPidmax          string
+		tunedWithInvalidProfileName                string
+		tunedWithNodeLevelProfileName              string
+		tunedWithNodeLevelProfileNameAKSVMRatio    string
+		tunedWithNodeLevelProfileNameAKSVMRatio18  string
+		tunedWithNodeLevelProfileNameAKSPidmax     string
+		tunedWithNodeLevelProfileNameAKSPidmax16   string
+		tunedWithNodeLevelProfileNameAKSPidmax1688 string
+		tunedWithKernelBootProfileName             string
+		isNTO                                      bool
+		isNTO2                                     bool
+		guestClusterName                           string
+		guestClusterNS                             string
+		guestClusterKube                           string
+		hostedClusterNS                            string
+		guestClusterName2                          string
+		guestClusterNS2                            string
+		guestClusterKube2                          string
+		hostedClusterNS2                           string
+		iaasPlatform                               string
+		firstNodePoolName                          string
+		secondNodePoolName                         string
+		ctx                                        context.Context
+		isAKS                                      bool
+		tunedWithSameProfileNameAKSPidmax          string
 	)
 
 	g.BeforeEach(func() {
@@ -44,14 +53,24 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		isNTO = isHyperNTOPodInstalled(oc, guestClusterNS)
 
 		oc.SetGuestKubeconf(guestClusterKube)
-		tunedWithSameProfileName = exutil.FixturePath("testdata", "psap", "hypernto", "tuned-with-sameprofilename.yaml")
-		tunedWithDiffProfileName = exutil.FixturePath("testdata", "psap", "hypernto", "tuned-with-diffprofilename.yaml")
+		tunedWithSameProfileNameAKSPidmax = exutil.FixturePath("testdata", "psap", "hypernto", "tuned-with-sameprofilename-aks-pidmax.yaml")
+		tunedWithDiffProfileNameAKSPidmax = exutil.FixturePath("testdata", "psap", "hypernto", "tuned-with-diffprofilename-aks-pidmax.yaml")
 		tunedWithInvalidProfileName = exutil.FixturePath("testdata", "psap", "hypernto", "nto-basic-tuning-sysctl-invalid.yaml")
 		tunedWithNodeLevelProfileName = exutil.FixturePath("testdata", "psap", "hypernto", "nto-basic-tuning-sysctl-nodelevel.yaml")
+		tunedWithNodeLevelProfileNameAKSVMRatio = exutil.FixturePath("testdata", "psap", "hypernto", "nto-basic-tuning-sysctl-nodelevel-aks-vmdratio.yaml")
+		tunedWithNodeLevelProfileNameAKSVMRatio18 = exutil.FixturePath("testdata", "psap", "hypernto", "nto-basic-tuning-sysctl-nodelevel-aks-vmdratio-18.yaml")
+		tunedWithNodeLevelProfileNameAKSPidmax = exutil.FixturePath("testdata", "psap", "hypernto", "nto-basic-tuning-sysctl-nodelevel-aks-pidmax.yaml")
+		tunedWithNodeLevelProfileNameAKSPidmax16 = exutil.FixturePath("testdata", "psap", "hypernto", "nto-basic-tuning-sysctl-nodelevel-aks-pidmax-16.yaml")
+		tunedWithNodeLevelProfileNameAKSPidmax1688 = exutil.FixturePath("testdata", "psap", "hypernto", "nto-basic-tuning-sysctl-nodelevel-aks-pidmax-16-88.yaml")
 		tunedWithKernelBootProfileName = exutil.FixturePath("testdata", "psap", "hypernto", "nto-basic-tuning-kernel-boot.yaml")
 
-		// get IaaS platform
-		iaasPlatform = exutil.CheckPlatform(oc)
+		//get IaaS platform
+		ctx = context.Background()
+		if isAKS, _ = exutil.IsAKSCluster(ctx, oc); isAKS {
+			iaasPlatform = "aks"
+		} else {
+			iaasPlatform = exutil.CheckPlatform(oc)
+		}
 		e2e.Logf("Cloud provider is: %v", iaasPlatform)
 	})
 
@@ -61,7 +80,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		supportPlatforms := []string{"aws", "azure"}
+		supportPlatforms := []string{"aws", "azure", "aks"}
 
 		if !implStringArrayContains(supportPlatforms, iaasPlatform) {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
@@ -72,7 +91,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		//Create configmap, it will create custom tuned profile based on this configmap
 		exutil.By("Create configmap hc-nodepool-pidmax in management cluster")
-		exutil.ApplyNsResourceFromTemplate(oc, hostedClusterNS, "--ignore-unknown-parameters=true", "-f", tunedWithSameProfileName, "-p", "TUNEDPROFILENAME=hc-nodepool-pidmax", "SYSCTLPARM=kernel.pid_max", "SYSCTLVALUE=868686", "PRIORITY=20")
+		exutil.ApplyOperatorResourceByYaml(oc, hostedClusterNS, tunedWithSameProfileNameAKSPidmax)
+
 		configmapsInMgmtClusters, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", hostedClusterNS).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(configmapsInMgmtClusters).NotTo(o.BeEmpty())
@@ -125,7 +145,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "hc-nodepool-pidmax")
 
 		exutil.By("Assert recommended profile (hc-nodepool-pidmax) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(hc-nodepool-pidmax\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(hc-nodepool-pidmax\) matches current configuration|static tuning from profile 'hc-nodepool-pidmax' applied`)
 
 		exutil.By("Check if the setting of sysctl kernel.pid_max applied to labeled worker nodes, expected value is 868686")
 		compareSpecifiedValueByNameOnLabelNodeWithRetryInHostedCluster(oc, ntoNamespace, workerNodeName, "sysctl", "kernel.pid_max", "868686")
@@ -143,7 +163,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(openshift-node\) matches current configuration|static tuning from profile 'openshift-node' applied`)
 
 		exutil.By("Check if the custom tuned profile removed from labeled worker nodes, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "openshift-node")
@@ -159,7 +179,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		supportPlatforms := []string{"aws", "azure"}
+		supportPlatforms := []string{"aws", "azure", "aks"}
 
 		if !implStringArrayContains(supportPlatforms, iaasPlatform) {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
@@ -227,7 +247,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(hc-nodepool-invalid\) matches current configuration|static tuning from profile 'hc-nodepool-invalid' applied`)
 
 		exutil.By("Assert Failed to read sysctl parameter in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "20", 300, `ERROR    tuned.plugins.plugin_sysctl: Failed to read sysctl parameter`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "20", 300, `failed to read the original value|sysctl option kernel.pid_maxinvalid will not be set`)
 
 		expectedDegradedStatus, err := oc.AsAdmin().AsGuestKubeconf().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io", workerNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Degraded")].status}'`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -253,7 +273,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(openshift-node\) matches current configuration|static tuning from profile 'openshift-node' applied`)
 
 		exutil.By("Check if the custom tuned profile removed from labeled worker nodes, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "openshift-node")
@@ -273,7 +293,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		supportPlatforms := []string{"aws", "azure"}
+		supportPlatforms := []string{"aws", "azure", "aks"}
 
 		if !implStringArrayContains(supportPlatforms, iaasPlatform) {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
@@ -284,7 +304,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		//Create configmap, it will create custom tuned profile based on this configmap
 		exutil.By("Create configmap hc-nodepool-vmdratio in management cluster")
-		exutil.ApplyNsResourceFromTemplate(oc, hostedClusterNS, "--ignore-unknown-parameters=true", "-f", tunedWithNodeLevelProfileName, "-p", "TUNEDPROFILENAME=hc-nodepool-vmdratio", "SYSCTLPARM=vm.dirty_ratio", "SYSCTLVALUE=56", "PRIORITY=20", "INCLUDE=openshift-node")
+		exutil.ApplyOperatorResourceByYaml(oc, hostedClusterNS, tunedWithNodeLevelProfileNameAKSVMRatio)
+
 		configmapsInMgmtClusters, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", hostedClusterNS).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(configmapsInMgmtClusters).NotTo(o.BeEmpty())
@@ -346,7 +367,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(openshift-node\) matches current configuration|static tuning from profile 'openshift-node' applied`)
 
 		exutil.By("Check if the custom tuned profile removed from worker nodes of nodepool, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, nodePoolName, "openshift-node")
@@ -361,7 +382,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		supportPlatforms := []string{"aws", "azure"}
+		supportPlatforms := []string{"aws", "azure", "aks"}
 
 		if !implStringArrayContains(supportPlatforms, iaasPlatform) {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
@@ -372,7 +393,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		//Create configmap, it will create custom tuned profile based on this configmap
 		exutil.By("Create configmap hc-nodepool-pidmax in management cluster")
-		exutil.ApplyNsResourceFromTemplate(oc, hostedClusterNS, "--ignore-unknown-parameters=true", "-f", tunedWithDiffProfileName, "-p", "TUNEDPROFILENAME=hc-nodepool-pidmax", "SYSCTLPARM=kernel.pid_max", "SYSCTLVALUE=868686", "PRIORITY=20")
+		exutil.ApplyOperatorResourceByYaml(oc, hostedClusterNS, tunedWithDiffProfileNameAKSPidmax)
+
 		configmapsInMgmtClusters, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", hostedClusterNS).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(configmapsInMgmtClusters).NotTo(o.BeEmpty())
@@ -425,7 +447,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "hc-nodepool-pidmax-profile")
 
 		exutil.By("Assert recommended profile (hc-nodepool-pidmax-profile) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(hc-nodepool-pidmax-profile\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(hc-nodepool-pidmax-profile\) matches current configuration|static tuning from profile 'hc-nodepool-pidmax-profile' applied`)
 
 		exutil.By("Check if the setting of sysctl kernel.pid_max applied to labeled worker nodes, expected value is 868686")
 		compareSpecifiedValueByNameOnLabelNodeWithRetryInHostedCluster(oc, ntoNamespace, workerNodeName, "sysctl", "kernel.pid_max", "868686")
@@ -443,7 +465,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodName, "12", 300, `recommended profile \(openshift-node\) matches current configuration|static tuning from profile 'openshift-node' applied`)
 
 		exutil.By("Check if the custom tuned profile removed from labeled worker nodes, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeName, "openshift-node")
@@ -459,7 +481,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		supportPlatforms := []string{"aws", "azure"}
+		supportPlatforms := []string{"aws", "azure", "aks"}
 
 		if !implStringArrayContains(supportPlatforms, iaasPlatform) {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
@@ -473,15 +495,20 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Create custom node pool in hosted cluster")
 		if iaasPlatform == "aws" {
-			exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, "hugepages-nodepool", "1", "m5.xlarge", "InPlace", "", hostedClusterNS)
+			exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, "hugepages-nodepool", "1", "m5.xlarge", "InPlace", hostedClusterNS, "")
 		} else if iaasPlatform == "azure" {
 			//Apply tuned profile to hosted clusters
 			exutil.By("Ge the default nodepool in hosted cluster as secondary nodepool")
 			defaultNodePoolName := getNodePoolNamebyHostedClusterName(oc, guestClusterName, hostedClusterNS)
 			o.Expect(defaultNodePoolName).NotTo(o.BeEmpty())
-			subnetID, err := oc.AsAdmin().Run("get").Args("-n", hostedClusterNS, "nodepool", defaultNodePoolName, "-ojsonpath={.spec.platform.azure.subnetID}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			exutil.CreateCustomNodePoolInHypershift(oc, "azure", guestClusterName, "hugepages-nodepool", "1", "Standard_D4s_v4", "InPlace", subnetID, hostedClusterNS)
+
+			exutil.CreateCustomNodePoolInHypershift(oc, "azure", guestClusterName, "hugepages-nodepool", "1", "Standard_D4s_v4", "InPlace", hostedClusterNS, defaultNodePoolName)
+		} else if iaasPlatform == "aks" {
+			//Apply tuned profile to hosted clusters
+			exutil.By("Ge the default nodepool in hosted cluster as secondary nodepool")
+			defaultNodePoolName := getNodePoolNamebyHostedClusterName(oc, guestClusterName, hostedClusterNS)
+			o.Expect(defaultNodePoolName).NotTo(o.BeEmpty())
+			exutil.CreateCustomNodePoolInHypershift(oc, "aks", guestClusterName, "hugepages-nodepool", "1", "Standard_D4s_v4", "InPlace", hostedClusterNS, defaultNodePoolName)
 		}
 
 		exutil.By("Check if custom node pool is ready in hosted cluster")
@@ -569,7 +596,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		supportPlatforms := []string{"aws", "azure"}
+		supportPlatforms := []string{"aws", "azure", "aks"}
 
 		if !implStringArrayContains(supportPlatforms, iaasPlatform) {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
@@ -583,15 +610,19 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Create custom node pool in hosted cluster")
 		if iaasPlatform == "aws" {
-			exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, "hugepages-nodepool", "1", "m5.xlarge", "InPlace", "", hostedClusterNS)
+			exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, "hugepages-nodepool", "1", "m5.xlarge", "InPlace", hostedClusterNS, "")
 		} else if iaasPlatform == "azure" {
 			//Apply tuned profile to hosted clusters
-			exutil.By("Ge the default nodepool in hosted cluster ")
+			exutil.By("Ge the default nodepool in hosted cluster as secondary nodepool")
 			defaultNodePoolName := getNodePoolNamebyHostedClusterName(oc, guestClusterName, hostedClusterNS)
 			o.Expect(defaultNodePoolName).NotTo(o.BeEmpty())
-			subnetID, err := oc.AsAdmin().Run("get").Args("-n", hostedClusterNS, "nodepool", defaultNodePoolName, "-ojsonpath={.spec.platform.azure.subnetID}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			exutil.CreateCustomNodePoolInHypershift(oc, "azure", guestClusterName, "hugepages-nodepool", "1", "Standard_D4s_v4", "InPlace", subnetID, hostedClusterNS)
+			exutil.CreateCustomNodePoolInHypershift(oc, "azure", guestClusterName, "hugepages-nodepool", "1", "Standard_D4s_v4", "InPlace", hostedClusterNS, defaultNodePoolName)
+		} else if iaasPlatform == "aks" {
+			//Apply tuned profile to hosted clusters
+			exutil.By("Ge the default nodepool in hosted cluster as secondary nodepool")
+			defaultNodePoolName := getNodePoolNamebyHostedClusterName(oc, guestClusterName, hostedClusterNS)
+			o.Expect(defaultNodePoolName).NotTo(o.BeEmpty())
+			exutil.CreateCustomNodePoolInHypershift(oc, "aks", guestClusterName, "hugepages-nodepool", "1", "Standard_D4s_v4", "InPlace", hostedClusterNS, defaultNodePoolName)
 		}
 
 		exutil.By("Check if custom node pool is ready in hosted cluster")
@@ -669,7 +700,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		supportPlatforms := []string{"aws", "azure"}
+		supportPlatforms := []string{"aws", "azure", "aks"}
 
 		if !implStringArrayContains(supportPlatforms, iaasPlatform) {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
@@ -683,15 +714,19 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Create custom node pool in hosted cluster")
 		if iaasPlatform == "aws" {
-			exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, "hugepages-nodepool", "1", "m5.xlarge", "InPlace", "", hostedClusterNS)
+			exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, "hugepages-nodepool", "1", "m5.xlarge", "InPlace", hostedClusterNS, "")
 		} else if iaasPlatform == "azure" {
 			//Apply tuned profile to hosted clusters
-			exutil.By("Ge the default nodepool in hosted cluster ")
+			exutil.By("Ge the default nodepool in hosted cluster as secondary nodepool")
 			defaultNodePoolName := getNodePoolNamebyHostedClusterName(oc, guestClusterName, hostedClusterNS)
 			o.Expect(defaultNodePoolName).NotTo(o.BeEmpty())
-			subnetID, err := oc.AsAdmin().Run("get").Args("-n", hostedClusterNS, "nodepool", defaultNodePoolName, "-ojsonpath={.spec.platform.azure.subnetID}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			exutil.CreateCustomNodePoolInHypershift(oc, "azure", guestClusterName, "hugepages-nodepool", "1", "Standard_D4s_v4", "InPlace", subnetID, hostedClusterNS)
+			exutil.CreateCustomNodePoolInHypershift(oc, "azure", guestClusterName, "hugepages-nodepool", "1", "Standard_D4s_v4", "InPlace", hostedClusterNS, defaultNodePoolName)
+		} else if iaasPlatform == "aks" {
+			//Apply tuned profile to hosted clusters
+			exutil.By("Ge the default nodepool in hosted cluster as secondary nodepool")
+			defaultNodePoolName := getNodePoolNamebyHostedClusterName(oc, guestClusterName, hostedClusterNS)
+			o.Expect(defaultNodePoolName).NotTo(o.BeEmpty())
+			exutil.CreateCustomNodePoolInHypershift(oc, "aks", guestClusterName, "hugepages-nodepool", "1", "Standard_D4s_v4", "InPlace", hostedClusterNS, defaultNodePoolName)
 		}
 
 		exutil.By("Check if custom node pool is ready in hosted cluster")
@@ -783,7 +818,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		supportPlatforms := []string{"aws", "azure"}
+		supportPlatforms := []string{"aws", "azure", "aks"}
 
 		if !implStringArrayContains(supportPlatforms, iaasPlatform) {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
@@ -796,7 +831,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		//Create configmap, it will create custom tuned profile based on this configmap
 		exutil.By("Create configmap hc-nodepool-vmdratio in management cluster")
-		exutil.ApplyNsResourceFromTemplate(oc, hostedClusterNS, "--ignore-unknown-parameters=true", "-f", tunedWithNodeLevelProfileName, "-p", "TUNEDPROFILENAME=hc-nodepool-vmdratio", "SYSCTLPARM=vm.dirty_ratio", "SYSCTLVALUE=56", "PRIORITY=20", "INCLUDE=openshift-node")
+		exutil.ApplyOperatorResourceByYaml(oc, hostedClusterNS, tunedWithNodeLevelProfileNameAKSVMRatio)
+
 		configmapsInMgmtClusters, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", hostedClusterNS).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(configmapsInMgmtClusters).NotTo(o.BeEmpty())
@@ -810,15 +846,19 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Create custom node pool in hosted cluster")
 		if iaasPlatform == "aws" {
-			exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, firstNodePoolName, "1", "m5.xlarge", "InPlace", "", hostedClusterNS)
+			exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, firstNodePoolName, "1", "m5.xlarge", "InPlace", hostedClusterNS, "")
 		} else if iaasPlatform == "azure" {
 			//Apply tuned profile to hosted clusters
-			exutil.By("Ge the default nodepool in hosted cluster ")
+			exutil.By("Ge the default nodepool in hosted cluster as secondary nodepool")
 			defaultNodePoolName := getNodePoolNamebyHostedClusterName(oc, guestClusterName, hostedClusterNS)
 			o.Expect(defaultNodePoolName).NotTo(o.BeEmpty())
-			subnetID, err := oc.AsAdmin().Run("get").Args("-n", hostedClusterNS, "nodepool", defaultNodePoolName, "-ojsonpath={.spec.platform.azure.subnetID}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			exutil.CreateCustomNodePoolInHypershift(oc, "azure", guestClusterName, firstNodePoolName, "1", "Standard_D4s_v4", "InPlace", subnetID, hostedClusterNS)
+			exutil.CreateCustomNodePoolInHypershift(oc, "azure", guestClusterName, firstNodePoolName, "1", "Standard_D4s_v4", "InPlace", hostedClusterNS, defaultNodePoolName)
+		} else if iaasPlatform == "aks" {
+			//Apply tuned profile to hosted clusters
+			exutil.By("Ge the default nodepool in hosted cluster as secondary nodepool")
+			defaultNodePoolName := getNodePoolNamebyHostedClusterName(oc, guestClusterName, hostedClusterNS)
+			o.Expect(defaultNodePoolName).NotTo(o.BeEmpty())
+			exutil.CreateCustomNodePoolInHypershift(oc, "aks", guestClusterName, firstNodePoolName, "1", "Standard_D4s_v4", "InPlace", hostedClusterNS, defaultNodePoolName)
 		}
 
 		exutil.By("Check if custom node pool is ready in hosted cluster")
@@ -948,8 +988,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration|static tuning from profile 'openshift-node' applied`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration|static tuning from profile 'openshift-node' applied`)
 
 		exutil.By("Check if the custom tuned profile removed from worker nodes of nodepool, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "openshift-node")
@@ -962,7 +1002,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		supportPlatforms := []string{"aws", "azure"}
+		supportPlatforms := []string{"aws", "azure", "aks"}
 
 		if !implStringArrayContains(supportPlatforms, iaasPlatform) {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
@@ -976,8 +1016,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		//Create configmap, it will create custom tuned profile based on this configmap
 		exutil.By("Create configmap hc-nodepool-vmdratio and hc-nodepool-pidmax in management cluster")
-		exutil.ApplyNsResourceFromTemplate(oc, hostedClusterNS, "--ignore-unknown-parameters=true", "-f", tunedWithNodeLevelProfileName, "-p", "TUNEDPROFILENAME=hc-nodepool-vmdratio", "SYSCTLPARM=vm.dirty_ratio", "SYSCTLVALUE=56", "PRIORITY=20", "INCLUDE=openshift-node")
-		exutil.ApplyNsResourceFromTemplate(oc, hostedClusterNS, "--ignore-unknown-parameters=true", "-f", tunedWithNodeLevelProfileName, "-p", "TUNEDPROFILENAME=hc-nodepool-pidmax", "SYSCTLPARM=kernel.pid_max", "SYSCTLVALUE=868686", "PRIORITY=20", "INCLUDE=openshift-node")
+		exutil.ApplyOperatorResourceByYaml(oc, hostedClusterNS, tunedWithNodeLevelProfileNameAKSVMRatio)
+		exutil.ApplyOperatorResourceByYaml(oc, hostedClusterNS, tunedWithNodeLevelProfileNameAKSPidmax)
 
 		configmapsInMgmtClusters, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", hostedClusterNS).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -993,15 +1033,19 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Create custom node pool in hosted cluster")
 		if iaasPlatform == "aws" {
-			exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, firstNodePoolName, "1", "m5.xlarge", "InPlace", "", hostedClusterNS)
+			exutil.CreateCustomNodePoolInHypershift(oc, "aws", guestClusterName, firstNodePoolName, "1", "m5.xlarge", "InPlace", hostedClusterNS, "")
 		} else if iaasPlatform == "azure" {
 			//Apply tuned profile to hosted clusters
-			exutil.By("Ge the default nodepool in hosted cluster ")
-			defaultnodePoolName := getNodePoolNamebyHostedClusterName(oc, guestClusterName, hostedClusterNS)
-			o.Expect(defaultnodePoolName).NotTo(o.BeEmpty())
-			subnetID, err := oc.AsAdmin().Run("get").Args("-n", hostedClusterNS, "nodepool", defaultnodePoolName, "-ojsonpath={.spec.platform.azure.subnetID}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			exutil.CreateCustomNodePoolInHypershift(oc, "azure", guestClusterName, firstNodePoolName, "1", "Standard_D4s_v4", "InPlace", subnetID, hostedClusterNS)
+			exutil.By("Ge the default nodepool in hosted cluster as secondary nodepool")
+			defaultNodePoolName := getNodePoolNamebyHostedClusterName(oc, guestClusterName, hostedClusterNS)
+			o.Expect(defaultNodePoolName).NotTo(o.BeEmpty())
+			exutil.CreateCustomNodePoolInHypershift(oc, "azure", guestClusterName, firstNodePoolName, "1", "Standard_D4s_v4", "InPlace", hostedClusterNS, defaultNodePoolName)
+		} else if iaasPlatform == "aks" {
+			//Apply tuned profile to hosted clusters
+			exutil.By("Ge the default nodepool in hosted cluster as secondary nodepool")
+			defaultNodePoolName := getNodePoolNamebyHostedClusterName(oc, guestClusterName, hostedClusterNS)
+			o.Expect(defaultNodePoolName).NotTo(o.BeEmpty())
+			exutil.CreateCustomNodePoolInHypershift(oc, "aks", guestClusterName, firstNodePoolName, "1", "Standard_D4s_v4", "InPlace", hostedClusterNS, defaultNodePoolName)
 		}
 
 		exutil.By("Check if custom node pool is ready in hosted cluster")
@@ -1087,10 +1131,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "hc-nodepool-pidmax")
 
 		exutil.By("Assert recommended profile (hc-nodepool-vmdratio) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(hc-nodepool-vmdratio\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(hc-nodepool-vmdratio\) matches current configuration|static tuning from profile 'hc-nodepool-vmdratio' applied`)
 
 		exutil.By("Assert recommended profile (hc-nodepool-pidmax) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(hc-nodepool-pidmax\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(hc-nodepool-pidmax\) matches current configuration|static tuning from profile 'hc-nodepool-pidmax' applied`)
 
 		exutil.By("Check if the setting of sysctl vm.dirty_ratio applied to worker nodes in the first custom nodepool, expected value is 56")
 		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, firstNodePoolName, "sysctl", "vm.dirty_ratio", "56")
@@ -1146,8 +1190,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration|static tuning from profile 'openshift-node' applied`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration|static tuning from profile 'openshift-node' applied`)
 
 		exutil.By("Check if the custom tuned profile removed from worker nodes of nodepool, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "openshift-node")
@@ -1160,7 +1204,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed - skipping test ...")
 		}
 
-		supportPlatforms := []string{"aws", "azure"}
+		supportPlatforms := []string{"aws", "azure", "aks"}
 
 		if !implStringArrayContains(supportPlatforms, iaasPlatform) {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
@@ -1172,8 +1216,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		//Create configmap, it will create custom tuned profile based on this configmap
 		exutil.By("Create configmap hc-nodepool-vmdratio and hc-nodepool-pidmax in management cluster")
-		exutil.ApplyNsResourceFromTemplate(oc, hostedClusterNS, "--ignore-unknown-parameters=true", "-f", tunedWithNodeLevelProfileName, "-p", "TUNEDPROFILENAME=hc-nodepool-vmdratio", "SYSCTLPARM=vm.dirty_ratio", "SYSCTLVALUE=56", "PRIORITY=20", "INCLUDE=openshift-node")
-		exutil.ApplyNsResourceFromTemplate(oc, hostedClusterNS, "--ignore-unknown-parameters=true", "-f", tunedWithNodeLevelProfileName, "-p", "TUNEDPROFILENAME=hc-nodepool-pidmax", "SYSCTLPARM=kernel.pid_max", "SYSCTLVALUE=868686", "PRIORITY=20", "INCLUDE=openshift-node")
+		exutil.ApplyOperatorResourceByYaml(oc, hostedClusterNS, tunedWithNodeLevelProfileNameAKSVMRatio)
+		exutil.ApplyOperatorResourceByYaml(oc, hostedClusterNS, tunedWithNodeLevelProfileNameAKSPidmax)
 
 		configmapsInMgmtClusters, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", "-n", hostedClusterNS).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1192,7 +1236,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(workerNodeNameInNodepool).NotTo(o.BeEmpty())
 		e2e.Logf("Worker node in first nodepool: %v", workerNodeNameInNodepool)
 
-		//Delete configmap in hosted cluster namespace and disable tuningConfig
+		// //Delete configmap in hosted cluster namespace and disable tuningConfig
 		defer assertIfTunedProfileAppliedOnSpecifiedNodeInHostedCluster(oc, ntoNamespace, workerNodeNameInNodepool, "openshift-node")
 
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", "tuned-hc-nodepool-vmdratio", "-n", guestClusterNS, "--ignore-not-found").Execute()
@@ -1231,7 +1275,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, nodePoolName, "hc-nodepool-pidmax")
 
 		exutil.By("Assert recommended profile (hc-nodepool-pidmax) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInNodePool, "12", 300, `recommended profile \(hc-nodepool-pidmax\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInNodePool, "12", 300, `recommended profile \(hc-nodepool-pidmax\) matches current configuration|static tuning from profile 'hc-nodepool-pidmax' applied`)
 
 		exutil.By("Check if the setting of sysctl kernel.pid_max applied to worker nodes in the default nodepool, expected value is 868686")
 		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, nodePoolName, "sysctl", "kernel.pid_max", "868686")
@@ -1241,13 +1285,13 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertMisMatchTunedSystemSettingsByParamNameOnNodePoolLevelInHostedCluster(oc, ntoNamespace, nodePoolName, "sysctl", "vm.dirty_ratio", "56")
 
 		exutil.By("Chnagge the hc-nodepool-vmdratio with a higher priority in management cluster, the lower number of priority with higher priority")
-		exutil.ApplyNsResourceFromTemplate(oc, hostedClusterNS, "--ignore-unknown-parameters=true", "-f", tunedWithNodeLevelProfileName, "-p", "TUNEDPROFILENAME=hc-nodepool-vmdratio", "SYSCTLPARM=vm.dirty_ratio", "SYSCTLVALUE=56", "PRIORITY=18", "INCLUDE=openshift-node")
+		exutil.ApplyOperatorResourceByYaml(oc, hostedClusterNS, tunedWithNodeLevelProfileNameAKSVMRatio18)
 
 		exutil.By("Check if the tuned profile hc-nodepool-vmdratio applied to all worker node in the nodepool.")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, nodePoolName, "hc-nodepool-vmdratio")
 
 		exutil.By("Assert recommended profile (hc-nodepool-vmdratio) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInNodePool, "12", 300, `recommended profile \(hc-nodepool-vmdratio\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInNodePool, "12", 300, `recommended profile \(hc-nodepool-vmdratio\) matches current configuration|static tuning from profile 'hc-nodepool-vmdratio' applied`)
 
 		exutil.By("Check if the setting of sysctl vm.dirty_ratio applied to worker nodes in the nodepool, expected value is 56")
 		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, nodePoolName, "sysctl", "vm.dirty_ratio", "56")
@@ -1257,7 +1301,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		assertMisMatchTunedSystemSettingsByParamNameOnNodePoolLevelInHostedCluster(oc, ntoNamespace, nodePoolName, "sysctl", "kernel.pid_max", "868686")
 
 		exutil.By("Chnagge custom profile include setting with <openshift-node,hc-nodepool-vmdratio> and set priority to 16 in management cluster, both custom profile take effective")
-		exutil.ApplyNsResourceFromTemplate(oc, hostedClusterNS, "--ignore-unknown-parameters=true", "-f", tunedWithNodeLevelProfileName, "-p", "TUNEDPROFILENAME=hc-nodepool-pidmax", "SYSCTLPARM=kernel.pid_max", "SYSCTLVALUE=868686", "PRIORITY=16", "INCLUDE=openshift-node,hc-nodepool-vmdratio")
+		exutil.ApplyOperatorResourceByYaml(oc, hostedClusterNS, tunedWithNodeLevelProfileNameAKSPidmax16)
 
 		exutil.By("Check if the setting of sysctl vm.dirty_ratio applied to worker nodes in the nodepool, expected value is 56")
 		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, nodePoolName, "sysctl", "vm.dirty_ratio", "56")
@@ -1266,7 +1310,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, nodePoolName, "sysctl", "kernel.pid_max", "868686")
 
 		exutil.By("Chnagge the value of kernel.pid_max of custom profile hc-nodepool-pidmax in management cluster")
-		exutil.ApplyNsResourceFromTemplate(oc, hostedClusterNS, "--ignore-unknown-parameters=true", "-f", tunedWithNodeLevelProfileName, "-p", "TUNEDPROFILENAME=hc-nodepool-pidmax", "SYSCTLPARM=kernel.pid_max", "SYSCTLVALUE=888888", "PRIORITY=16", "INCLUDE=openshift-node,hc-nodepool-vmdratio")
+		exutil.ApplyOperatorResourceByYaml(oc, hostedClusterNS, tunedWithNodeLevelProfileNameAKSPidmax1688)
 
 		exutil.By("Check if the setting of sysctl kernel.pid_max applied to worker nodes in the default nodepool, expected value is 888888")
 		compareSpecifiedValueByNameOnNodePoolLevelWithRetryInHostedCluster(oc, ntoNamespace, nodePoolName, "sysctl", "kernel.pid_max", "888888")
@@ -1294,7 +1338,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration|static tuning from profile 'openshift-node' applied`)
 
 		exutil.By("Check if the custom tuned profile removed from worker nodes of nodepool, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, nodePoolName, "openshift-node")
@@ -1479,14 +1523,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Set first kubeconfig to access first hosted cluster")
 		oc.SetGuestKubeconf(guestClusterKube)
 		exutil.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log in first hosted")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration|static tuning from profile 'openshift-node' applied`)
 		exutil.By("Check if the custom tuned profile removed from worker nodes of nodepool in first hosted cluster, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "openshift-node")
 
 		exutil.By("Set second kubeconfig to access second hosted cluster")
 		oc.SetGuestKubeconf(guestClusterKube2)
 		exutil.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log in second hosted")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration|static tuning from profile 'openshift-node' applied`)
 		exutil.By("Check if the custom tuned profile removed from worker nodes of nodepool in second hosted cluster, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "openshift-node")
 	})
@@ -1700,14 +1744,14 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Set first kubeconfig to access first hosted cluster")
 		oc.SetGuestKubeconf(guestClusterKube)
 		exutil.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log in first hosted")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInFirstNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration|static tuning from profile 'openshift-node' applied`)
 		exutil.By("Check if the custom tuned profile removed from worker nodes of nodepool in first hosted cluster, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, firstNodePoolName, "openshift-node")
 
 		exutil.By("Set second kubeconfig to access second hosted cluster")
 		oc.SetGuestKubeconf(guestClusterKube2)
 		exutil.By("Assert recommended profile (openshift-node) matches current configuration in tuned pod log in second hosted")
-		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration`)
+		assertNTOPodLogsLastLinesInHostedCluster(oc, ntoNamespace, tunedPodNameInSecondNodePool, "12", 300, `recommended profile \(openshift-node\) matches current configuration|static tuning from profile 'openshift-node' applied`)
 		exutil.By("Check if the custom tuned profile removed from worker nodes of nodepool in second hosted cluster, default openshift-node applied to worker node")
 		assertIfTunedProfileAppliedOnNodePoolLevelInHostedCluster(oc, ntoNamespace, secondNodePoolName, "openshift-node")
 	})
