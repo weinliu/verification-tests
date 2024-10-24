@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -308,7 +309,8 @@ func CreateInternalRegistrySecretFromSA(oc *exutil.CLI, saName, saNamespace, sec
 	}
 
 	logger.Infof("Copy the docker.json file to local")
-	err = masterNode.CopyToLocal(tmpDockerConfigFile, tmpDockerConfigFile)
+	// Because several MOSCs can be applied at the same time, MCDs can be restarted several times and it can cause a failure in the CopyToLocal method. We retry to mitigate this scenario
+	err = Retry(5, 5*time.Second, func() error { return masterNode.CopyToLocal(tmpDockerConfigFile, tmpDockerConfigFile) })
 	if err != nil {
 		return nil, fmt.Errorf("Error copying the resulting authorization file to local")
 	}

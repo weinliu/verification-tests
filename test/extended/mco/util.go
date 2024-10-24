@@ -1436,3 +1436,20 @@ func extractJournalLogs(oc *exutil.CLI, outDir string) (totalErr error) {
 
 	return totalErr
 }
+
+// Retry function that retries a given function f, with a specified number of attempts and a delay between attempts
+func Retry(attempts int, delay time.Duration, f func() error) error {
+	var err error
+	for i := 0; i < attempts; i++ {
+		err = f()
+		if err == nil {
+			return nil
+		}
+		logger.Errorf("Attempt %d failed: %v\n", i+1, err)
+
+		if i < attempts-1 {
+			time.Sleep(delay)
+		}
+	}
+	return err
+}
