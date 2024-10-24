@@ -1613,6 +1613,26 @@ func waitForRegexpOutput(oc *exutil.CLI, ns, resourceName, jsonPath, regExpress 
 	return result
 }
 
+// this function check output of oc describe command is polled
+func waitForDescriptionContains(oc *exutil.CLI, ns, resourceName, value string) {
+	n := 0
+	waitErr := wait.PollImmediate(5*time.Second, 180*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", ns, resourceName).Output()
+		if err != nil {
+			return false, err
+		}
+		n++
+		if n%10 == 1 {
+			e2e.Logf("the description is: %v", output)
+		}
+		if strings.Contains(output, value) {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the desired searchString does not appear"))
+}
+
 // this function will search in the polled and described resource details
 func searchInDescribeResource(oc *exutil.CLI, resource, resourceName, match string) string {
 	var output string

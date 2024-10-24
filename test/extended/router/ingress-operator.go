@@ -1393,6 +1393,239 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(len(log) > 1).To(o.BeTrue())
 	})
 
+	// OCPBUGS-33657(including OCPBUGS-34757, OCPBUGS-34110 and OCPBUGS-34888 in OCP-75909)
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-High-75909-Ingress Operator should not always remain in the progressing state [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		nodePortTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+		privateTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-private.yaml")
+		hostnetworkTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-hostnetwork-only.yaml")
+
+		workerNodeCount, _ := exactNodeDetails(oc)
+		if workerNodeCount < 1 {
+			g.Skip("Skipping as we at least need one Linux worker node")
+		}
+
+		// OCPBUGS-34757
+		var (
+			ingctrl34757one = ingressControllerDescription{
+				name:      "bug34757one",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  nodePortTemp,
+			}
+
+			ingctrl34757two = ingressControllerDescription{
+				name:      "bug34757two",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  privateTemp,
+			}
+		)
+
+		exutil.By("1. after the cluster is ready, check openshift-ingress-operator logs, which should not contain updated internal service")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress-operator", "deployment/ingress-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "updated internal service")).NotTo(o.BeTrue())
+
+		exutil.By("2. Create two custom ingresscontrollers for OCPBUGS-34757")
+		baseDomain := getBaseDomain(oc)
+		ingctrl34757one.domain = ingctrl34757one.name + "." + baseDomain
+		ingctrl34757two.domain = ingctrl34757two.name + "." + baseDomain
+		defer ingctrl34757one.delete(oc)
+		ingctrl34757one.create(oc)
+		defer ingctrl34757two.delete(oc)
+		ingctrl34757two.create(oc)
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl34757one.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl34757one.name))
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl34757two.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl34757one.name))
+
+		exutil.By("3. Check the logs again after the custom ingresscontrollers are ready, which should not contain updated internal service")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress-operator", "deployment/ingress-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "updated internal service")).NotTo(o.BeTrue())
+		ingctrl34757one.delete(oc)
+		ingctrl34757two.delete(oc)
+
+		// OCPBUGS-34110
+		exutil.By("4. delete the ingress-operator pod")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-ingress-operator", "pods", "-l", "name=ingress-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForPodWithLabelReady(oc, "openshift-ingress-operator", "name=ingress-operator")
+		exutil.AssertWaitPollNoErr(err, "the ingress-operator pod failed to be ready state within allowed time!")
+		ensureClusterOperatorNormal(oc, "ingress", 1, 120)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress-operator", "deployment/ingress-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "updated IngressClass")).NotTo(o.BeTrue())
+
+		// OCPBUGS-34888
+		var (
+			ingctrlhp34888one = ingctrlHostPortDescription{
+				name:      "bug34888one",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				httpport:  10080,
+				httpsport: 10443,
+				statsport: 10936,
+				template:  hostnetworkTemp,
+			}
+
+			ingctrlhp34888two = ingctrlHostPortDescription{
+				name:      "bug34888two",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				httpport:  11080,
+				httpsport: 11443,
+				statsport: 11936,
+				template:  hostnetworkTemp,
+			}
+		)
+
+		exutil.By("5. Create two custom ingresscontrollers for OCPBUGS-34888")
+		ingctrlhp34888one.domain = ingctrlhp34888one.name + "." + baseDomain
+		ingctrlhp34888two.domain = ingctrlhp34888two.name + "." + baseDomain
+
+		defer ingctrlhp34888one.delete(oc)
+		ingctrlhp34888one.create(oc)
+		defer ingctrlhp34888two.delete(oc)
+		ingctrlhp34888two.create(oc)
+		err = waitForCustomIngressControllerAvailable(oc, ingctrlhp34888one.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp34888one.name))
+		err = waitForCustomIngressControllerAvailable(oc, ingctrlhp34888two.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp34888two.name))
+
+		exutil.By("6. Check there was not the updated router deployment log")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress-operator", "-c", "ingress-operator", "deployment/ingress-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.ContainSubstring("updated router deployment"))
+	})
+
+	// OCPBUGS-33657(including OCPBUGS-35027 and OCPBUGS-35454 in OCP-75907)
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-High-75907-Ingress Operator should not always remain in the progressing state [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		privateTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-private.yaml")
+		hostnetworkTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-hostnetwork-only.yaml")
+
+		workerNodeCount, _ := exactNodeDetails(oc)
+		if workerNodeCount < 1 {
+			g.Skip("Skipping as we at least need one Linux worker node")
+		}
+
+		// OCPBUGS-35027
+		extraParas := "    clientTLS:\n      clientCA:\n        name: client-ca-cert\n      clientCertificatePolicy: Required\n"
+		customTemp35027 := addExtraParametersToYamlFile(privateTemp, "spec:", extraParas)
+		defer os.Remove(customTemp35027)
+		var (
+			ingctrl35027 = ingressControllerDescription{
+				name:      "bug35027",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp35027,
+			}
+		)
+
+		exutil.By("1. Create a configmap with empty configration")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-config", "configmap", "client-ca-cert").Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-config", "configmap", "client-ca-cert").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("configmap/client-ca-cert created"))
+
+		exutil.By("2. Create a ingresscontroller for OCPBUGS-35027")
+		baseDomain := getBaseDomain(oc)
+		ingctrl35027.domain = ingctrl35027.name + "." + baseDomain
+		defer ingctrl35027.delete(oc)
+		ingctrl35027.create(oc)
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl35027.name)
+		o.Expect(err).To(o.HaveOccurred())
+
+		exutil.By("3. Check the event of the custom router pod, which should have the secret router-certs-bug35027 not found info")
+		routerpod35027 := getPodListByLabel(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl35027.name)[0]
+		expInfo := `MountVolume.SetUp failed for volume "default-certificate" : secret "router-certs-bug35027" not found`
+		waitForDescriptionContains(oc, "openshift-ingress", "pod/"+routerpod35027, expInfo)
+
+		exutil.By("4. Delete the custom ingress controller, and then check the logs that clientca-configmap finalizer log should not appear")
+		ingctrl35027.delete(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress-operator", "-c", "ingress-operator", "deployments/ingress-operator", "--tail=20").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, `failed to add client-ca-configmap finalizer: IngressController.operator.openshift.io \"test-client-ca-configmap\" is invalid`)).NotTo(o.BeTrue())
+
+		// OCPBUGS-35454
+		var (
+			ingctrlhp35454 = ingctrlHostPortDescription{
+				name:      "bug35454",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				httpport:  22080,
+				httpsport: 22443,
+				statsport: 22936,
+				template:  hostnetworkTemp,
+			}
+		)
+
+		exutil.By("5. Create the custom ingress controller for OCPBUGS-35454")
+		ingctrlhp35454.domain = ingctrlhp35454.name + "." + baseDomain
+		defer ingctrlhp35454.delete(oc)
+		ingctrlhp35454.create(oc)
+		err = waitForCustomIngressControllerAvailable(oc, ingctrlhp35454.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp35454.name))
+
+		exutil.By(`6. Check the service's spec ports of http/https/metrics`)
+		output = getByJsonPath(oc, "openshift-ingress", "service/router-internal-"+ingctrlhp35454.name, "{.spec.ports}")
+		o.Expect(output).Should(o.And(
+			o.ContainSubstring(`{"name":"http","port":80,"protocol":"TCP","targetPort":"http"}`),
+			o.ContainSubstring(`{"name":"https","port":443,"protocol":"TCP","targetPort":"https"}`),
+			o.ContainSubstring(`{"name":"metrics","port":1936,"protocol":"TCP","targetPort":"metrics"}`)))
+
+		exutil.By(`7. Check the service's ep of http/https/metrics`)
+		output = getByJsonPath(oc, "openshift-ingress", "ep/router-internal-"+ingctrlhp35454.name, "{.subsets[0].ports}")
+		o.Expect(output).Should(o.And(
+			o.ContainSubstring(`{"name":"http","port":22080,"protocol":"TCP"}`),
+			o.ContainSubstring(`{"name":"https","port":22443,"protocol":"TCP"}`),
+			o.ContainSubstring(`{"name":"metrics","port":22936,"protocol":"TCP"}`)))
+
+		exutil.By(`8. Check the configuration update for the custom router deployment and the internal service`)
+		output = getByJsonPath(oc, "openshift-ingress", "deployment/router-"+ingctrlhp35454.name, "{..livenessProbe}")
+		o.Expect(output).Should(o.And(
+			o.ContainSubstring(`"failureThreshold":3`),
+			o.ContainSubstring(`"scheme":"HTTP"`),
+			o.ContainSubstring(`"periodSeconds":10`),
+			o.ContainSubstring(`"successThreshold":1`),
+			o.ContainSubstring(`"timeoutSeconds":1`)))
+
+		output = getByJsonPath(oc, "openshift-ingress", "deployment/router-"+ingctrlhp35454.name, "{..readinessProbe}")
+		o.Expect(output).Should(o.And(
+			o.ContainSubstring(`"failureThreshold":3`),
+			o.ContainSubstring(`"scheme":"HTTP"`),
+			o.ContainSubstring(`"periodSeconds":10`),
+			o.ContainSubstring(`"successThreshold":1`),
+			o.ContainSubstring(`"timeoutSeconds":1`)))
+
+		output = getByJsonPath(oc, "openshift-ingress", "deployment/router-"+ingctrlhp35454.name, "{..startupProbe}")
+		o.Expect(output).Should(o.And(
+			o.ContainSubstring(`"scheme":"HTTP"`),
+			o.ContainSubstring(`"successThreshold":1`),
+			o.ContainSubstring(`"timeoutSeconds":1`)))
+
+		output = getByJsonPath(oc, "openshift-ingress", "deployment/router-"+ingctrlhp35454.name, "{..configMap.defaultMode}")
+		o.Expect(output).To(o.ContainSubstring("420"))
+
+		exutil.By(`9. Check the service's sessionAffinity, which should be None`)
+		output = getByJsonPath(oc, "openshift-ingress", "service/router-internal-"+ingctrlhp35454.name, "{.spec.sessionAffinity}")
+		o.Expect(output).To(o.ContainSubstring("None"))
+
+		exutil.By(`10. Patch the custom ingress controller with other http/https/metrics ports`)
+		jsonpath := `{"spec": { "endpointPublishingStrategy": { "hostNetwork": {"httpPort": 23080, "httpsPort": 23443, "statsPort": 23936 }}}}`
+		patchResourceAsAdmin(oc, ingctrlhp35454.namespace, "ingresscontroller/"+ingctrlhp35454.name, jsonpath)
+		ensureRouterDeployGenerationIs(oc, ingctrlhp35454.name, "2")
+
+		exutil.By(`11. Check the service's ep of http/https/metrics, which should be updated to the specified ports`)
+		output = getByJsonPath(oc, "openshift-ingress", "ep/router-internal-"+ingctrlhp35454.name, "{.subsets[0].ports}")
+		o.Expect(output).Should(o.And(
+			o.ContainSubstring(`{"name":"http","port":23080,"protocol":"TCP"}`),
+			o.ContainSubstring(`{"name":"https","port":23443,"protocol":"TCP"}`),
+			o.ContainSubstring(`{"name":"metrics","port":23936,"protocol":"TCP"}`)))
+	})
+
 	// Test case creater: hongli@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-Critical-22636-The namespaceSelector of router is controlled by ingresscontroller", func() {
 		var (
