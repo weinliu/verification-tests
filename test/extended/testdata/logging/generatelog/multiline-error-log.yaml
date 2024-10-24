@@ -25,7 +25,7 @@ objects:
       metadata:
         annotations:
           capabilities: Seamless Upgrades
-          containerImage: quay.io/openshifttest/multiline-log@sha256:0de95422f5dc40f74cf63a43eba4b754832873def947b63961a9e0e06e3dd118
+          containerImage: quay.io/openshifttest/multiline-log@sha256:31cabe5ffb849e79e12d7105e0d8cba68b9218d302521c8b656bad78987b0502
           support: OpenShift Logging QE
         creationTimestamp: null
         labels:
@@ -36,7 +36,7 @@ objects:
           - /run-go.sh
           command:
           - /bin/sh
-          image: quay.io/openshifttest/multiline-log@sha256:0de95422f5dc40f74cf63a43eba4b754832873def947b63961a9e0e06e3dd118
+          image: quay.io/openshifttest/multiline-log@sha256:31cabe5ffb849e79e12d7105e0d8cba68b9218d302521c8b656bad78987b0502
           imagePullPolicy: IfNotPresent
           name: multiline-log
           resources: {}
@@ -61,7 +61,7 @@ objects:
 - apiVersion: v1
   data:
     multiline-log.cfg: |
-      --rate ${RATE} --log-type ${LOG_TYPE}
+      --stream ${OUT_STREAM} --rate ${RATE} --log-type ${LOG_TYPE}
   kind: ConfigMap
   metadata:
     name: ${NAME}
@@ -72,3 +72,5 @@ parameters:
   value: "all"
 - name: RATE
   value: "30.00"
+- name: OUT_STREAM
+  value: "stdout"
