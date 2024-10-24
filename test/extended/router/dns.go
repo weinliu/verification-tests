@@ -18,6 +18,36 @@ import (
 var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func() {
 	defer g.GinkgoRecover()
 	var oc = exutil.NewCLI("coredns", exutil.KubeConfigPath())
+
+	// incorporate OCP-56047 and OCP-40718 into one
+	// Test case creater: shudili@redhat.com - OCP-56047-Set CoreDNS cache entries for forwarded zones
+	// Test case creater: jechen@redhat.com - OCP-40718-CoreDNS cache should use 900s for positive responses and 30s for negative responses
+	g.It("Author:shudili-Critical-40718-CoreDNS cache should use 900s for positive responses and 30s for negative responses [Disruptive]", func() {
+		exutil.By("Prepare the dns testing node and pod")
+		defer deleteDnsOperatorToRestore(oc)
+		oneDnsPod := forceOnlyOneDnsPodExist(oc)
+
+		// OCP-40718
+		exutil.By("1. Check the cache entries of the default corefiles in CoreDNS")
+		zoneInCoreFile1 := pollReadDnsCorefile(oc, oneDnsPod, ".:5353", "-A20", "cache 900")
+		o.Expect(zoneInCoreFile1).Should(o.And(
+			o.ContainSubstring("cache 900"),
+			o.ContainSubstring("denial 9984 30")))
+
+		// OCP-56047
+		// bug: 2006803
+		exutil.By("2. Patch the dns.operator/default and add a custom forward zone config")
+		resourceName := "dns.operator.openshift.io/default"
+		jsonPatch := "[{\"op\":\"add\", \"path\":\"/spec/servers\", \"value\":[{\"forwardPlugin\":{\"policy\":\"Random\",\"upstreams\":[\"8.8.8.8\"]},\"name\":\"test\",\"zones\":[\"mytest.ocp\"]}]}]"
+		patchGlobalResourceAsAdmin(oc, resourceName, jsonPatch)
+
+		exutil.By("3. Check the cache entries of the custom forward zone in CoreDNS")
+		zoneInCoreFile := pollReadDnsCorefile(oc, oneDnsPod, "mytest.ocp", "-A15", "cache 900")
+		o.Expect(zoneInCoreFile).Should(o.And(
+			o.ContainSubstring("cache 900"),
+			o.ContainSubstring("denial 9984 30")))
+	})
+
 	// Bug: 1916907
 	g.It("Author:mjoseph-High-40867-Deleting the internal registry should not corrupt /etc/hosts [Disruptive]", func() {
 		exutil.By("Step1: Get the Cluster IP of image-registry")
@@ -470,24 +500,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resourceName, "--patch="+cacheWrongValue, "--type=json").Output()
 		o.Expect(output).To(o.ContainSubstring("spec.cache.positiveTTL: Invalid value: \"1.6\""))
 		o.Expect(output).To(o.ContainSubstring("spec.cache.negativeTTL: Invalid value: \"-9s\""))
-	})
-
-	// Bug: 2006803
-	g.It("Author:shudili-Medium-56047-Set CoreDNS cache entries for forwarded zones [Disruptive]", func() {
-		exutil.By("Prepare the dns testing node and pod")
-		defer deleteDnsOperatorToRestore(oc)
-		oneDnsPod := forceOnlyOneDnsPodExist(oc)
-
-		exutil.By("patch the dns.operator/default and add a custom forward zone config")
-		resourceName := "dns.operator.openshift.io/default"
-		jsonPatch := "[{\"op\":\"add\", \"path\":\"/spec/servers\", \"value\":[{\"forwardPlugin\":{\"policy\":\"Random\",\"upstreams\":[\"8.8.8.8\"]},\"name\":\"test\",\"zones\":[\"mytest.ocp\"]}]}]"
-		patchGlobalResourceAsAdmin(oc, resourceName, jsonPatch)
-
-		exutil.By("check the cache entries of the custom forward zone in CoreDNS")
-		zoneInCoreFile := pollReadDnsCorefile(oc, oneDnsPod, "mytest.ocp", "-A15", "cache 900")
-		o.Expect(zoneInCoreFile).Should(o.And(
-			o.ContainSubstring("cache 900"),
-			o.ContainSubstring("denial 9984 30")))
 	})
 
 	// author: shudili@redhat.com
