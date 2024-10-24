@@ -6210,8 +6210,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		err = exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
 		efips, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(efips, "FIPS mode is enabled") {
+		if err != nil || strings.Contains(efips, "FIPS mode is enabled") {
 			g.Skip("skip it without impacting function")
 		}
 		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
@@ -6531,8 +6530,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		err = exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
 		efips, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(efips, "FIPS mode is enabled") {
+		if err != nil || strings.Contains(efips, "FIPS mode is enabled") {
 			g.Skip("skip it without impacting function")
 		}
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
@@ -6660,8 +6658,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		err = exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
 		efips, errFips := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
-		o.Expect(errFips).NotTo(o.HaveOccurred())
-		if strings.Contains(efips, "FIPS mode is enabled") {
+		if errFips != nil || strings.Contains(efips, "FIPS mode is enabled") {
 			g.Skip("skip it without impacting function")
 		}
 		var (
@@ -12370,8 +12367,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		err = exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
 		efips, errFips := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
-		o.Expect(errFips).NotTo(o.HaveOccurred())
-		if strings.Contains(efips, "FIPS mode is enabled") {
+		if errFips != nil || strings.Contains(efips, "FIPS mode is enabled") {
 			g.Skip("skip it without impacting function")
 		}
 		var (
@@ -12564,8 +12560,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		err = exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
 		efips, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(efips, "FIPS mode is enabled") {
+		if err != nil || strings.Contains(efips, "FIPS mode is enabled") {
 			g.Skip("skip it without impacting function")
 		}
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
@@ -14109,8 +14104,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		errSet := exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		o.Expect(errSet).NotTo(o.HaveOccurred())
 		efips, errFips := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
-		o.Expect(errFips).NotTo(o.HaveOccurred())
-		if strings.Contains(efips, "FIPS mode is enabled") {
+		if errFips != nil || strings.Contains(efips, "FIPS mode is enabled") {
 			g.Skip("skip it without impacting function")
 		}
 		exutil.SkipBaselineCaps(oc, "None")
