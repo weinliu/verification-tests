@@ -204,7 +204,7 @@ func (udncrd *udnCRDResource) deleteUdnCRDDef(oc *exutil.CLI) {
 
 func waitUDNCRDApplied(oc *exutil.CLI, ns, crdName string) error {
 	checkErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
-		output, efErr := oc.AsAdmin().WithoutNamespace().Run("wait").Args("UserDefinedNetwork/"+crdName, "-n", ns, "--for", "condition=NetworkReady=True").Output()
+		output, efErr := oc.AsAdmin().WithoutNamespace().Run("wait").Args("UserDefinedNetwork/"+crdName, "-n", ns, "--for", "condition=NetworkAllocationSucceeded=True").Output()
 		if efErr != nil {
 			e2e.Logf("Failed to get UDN %v, error: %s. Trying again", crdName, efErr)
 			return false, nil
