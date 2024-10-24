@@ -2,6 +2,7 @@ package util
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -1040,4 +1041,115 @@ func CountLinuxWorkerNodeNumByOS(oc *CLI) (linuxNum int) {
 	rhelNum := len(rhelWorkerNodes)
 	e2e.Logf("rhcos node is:%v, rhel node is %v", rhcosNum, rhelNum)
 	return rhcosNum + rhelNum
+}
+
+func ShowSystemctlPropertyValueOfServiceUnitByName(oc *CLI, tunedNodeName string, ntoNamespace string, serviceUnit string, propertyName string) string {
+
+	var (
+		propertyValue string
+		err           error
+	)
+	// Example:
+	// Show all properties by systemctl show kubelet
+	// ExecMainStartTimestamp=Fri 2024-09-06 11:16:00 UTC
+	// ExecMainStartTimestampMonotonic=27894650
+
+	allProperties, err := DebugNodeWithOptionsAndChroot(oc, tunedNodeName, []string{"-q", "--to-namespace=" + ntoNamespace}, "systemctl", "show", serviceUnit)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(allProperties, propertyName) {
+		propertyValue, err = DebugNodeWithOptionsAndChroot(oc, tunedNodeName, []string{"-q", "--to-namespace=" + ntoNamespace}, "systemctl", "show", "-p", propertyName, serviceUnit)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		o.Expect(strings.Contains(allProperties, propertyName)).To(o.BeTrue())
+	}
+	//It will return the string like as ExecMainStartTimestampMonotonic=27894650
+	return strings.Trim(propertyValue, "\n")
+}
+
+func GetSystemctlServiceUnitTimestampByPropertyNameWithMonotonic(propertyValue string) int {
+
+	var (
+		serviceUnitTimestamp    int
+		serviceUnitTimestampArr []string
+		err                     error
+	)
+
+	// Extract 27871378 from AssertTimestampMonotonic=27871378
+	serviceUnitTimestampArr = strings.Split(propertyValue, "=")
+	if len(serviceUnitTimestampArr) > 1 && strings.Contains(propertyValue, "Monotonic") {
+		serviceUnitTimestamp, err = strconv.Atoi(serviceUnitTimestampArr[1])
+		e2e.Logf("the serviceUnitTimestamp is [ %v ]", serviceUnitTimestamp)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	return serviceUnitTimestamp
+}
+
+func CPUManagerStatebyNode(oc *CLI, namespace string, nodeName string, ContainerName string) (string, string) {
+
+	var (
+		PODCUPs string
+		CPUNums string
+	)
+
+	cpuManagerStateStdOut, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "-n", namespace, "-q", "--", "chroot", "host", "cat", "/var/lib/kubelet/cpu_manager_state").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(cpuManagerStateStdOut).NotTo(o.BeEmpty())
+
+	var cpuManagerStateInfo map[string]interface{}
+	json.Unmarshal([]byte(cpuManagerStateStdOut), &cpuManagerStateInfo)
+
+	defaultCpuSet := fmt.Sprint(cpuManagerStateInfo["defaultCpuSet"])
+	o.Expect(defaultCpuSet).NotTo(o.BeEmpty())
+
+	Entries := fmt.Sprint(cpuManagerStateInfo["entries"])
+	o.Expect(Entries).NotTo(o.BeEmpty())
+
+	PODUUIDMapCPUs := strings.Split(Entries, " ")
+	Len := len(PODUUIDMapCPUs)
+	for i := 0; i < Len; i++ {
+		if strings.Contains(PODUUIDMapCPUs[i], ContainerName) {
+			PODUUIDMapCPU := strings.Split(PODUUIDMapCPUs[i], ":")
+			CPUNums = strings.Trim(PODUUIDMapCPU[len(PODUUIDMapCPU)-1], "]")
+		}
+		PODCUPs += CPUNums + " "
+	}
+	return defaultCpuSet, PODCUPs
+}
+
+func GetContainerIDByPODName(oc *CLI, podName string, namespace string) string {
+	var containerID string
+	containerIDStdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-n", namespace, `-ojsonpath='{.status.containerStatuses[?(@.name=="etcd")].containerID}`).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(containerIDStdOut).NotTo(o.BeEmpty())
+
+	containerIDArr := strings.Split(containerIDStdOut, "/")
+	Len := len(containerIDArr)
+	if Len > 0 {
+		containerID = containerIDArr[Len-1]
+	}
+	return containerID
+}
+
+func GetPODCPUSet(oc *CLI, namespace string, nodeName string, containerID string) string {
+
+	podCPUSetStdDir, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "-n", namespace, "-q", "--", "chroot", "host", "find", "/sys/fs/cgroup/", "-name", "*crio-"+containerID+"*").Output()
+	e2e.Logf("The podCPUSetStdDir is [ %v ]", podCPUSetStdDir)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(podCPUSetStdDir).NotTo(o.BeEmpty())
+	podCPUSet, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "-n", namespace, "-q", "--", "chroot", "host", "cat", podCPUSetStdDir+"/cpuset.cpus").Output()
+	e2e.Logf("The podCPUSet is [ %v ]", podCPUSet)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(podCPUSet).NotTo(o.BeEmpty())
+	return podCPUSet
+}
+
+// fuction to check given string is in array or not
+func ImplStringArrayContains(stringArray []string, name string) bool {
+	// iterate over the array and compare given string to each element
+	for _, value := range stringArray {
+		if value == name {
+			return true
+		}
+	}
+	return false
 }

@@ -84,18 +84,18 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("The static POD name of etcd is [ %v ]", etcdPODName)
 
 		g.By("Get cpuset of static pod etcd")
-		etcdContainerID := getContainerIDByPODName(oc, etcdPODName, "openshift-etcd")
+		etcdContainerID := exutil.GetContainerIDByPODName(oc, etcdPODName, "openshift-etcd")
 		o.Expect(etcdContainerID).NotTo(o.BeEmpty())
 		e2e.Logf("The container ID of static POD etcd is [ %v ]", etcdContainerID)
 
-		staticPODCPUSet := getPODCPUSet(oc, "openshift-etcd", firstDrainedNode, etcdContainerID)
+		staticPODCPUSet := exutil.GetPODCPUSet(oc, "openshift-etcd", firstDrainedNode, etcdContainerID)
 		e2e.Logf("The static POD cpuset of etcd is [ %v ]", staticPODCPUSet)
 		o.Expect(staticPODCPUSet).NotTo(o.BeEmpty())
 
 		g.By("Assert cpuset of static pod etcd")
 		//The cpu of guaranteed POD is 1 and 8
 		//The default cpuset should be 0,2-7,9-15
-		defaultCpuSet, guaranteedPODCPUs := cpuManagerStatebyNode(oc, "openshift-etcd", firstDrainedNode, "guaranteed-pod")
+		defaultCpuSet, guaranteedPODCPUs := exutil.CPUManagerStatebyNode(oc, "openshift-etcd", firstDrainedNode, "guaranteed-pod")
 		guaranteedPODCPU := strings.Split(guaranteedPODCPUs, " ")
 		e2e.Logf("The guaranteed POD pined CPU is [ %v ]", guaranteedPODCPU)
 		o.Expect(staticPODCPUSet).To(o.ContainSubstring(defaultCpuSet))

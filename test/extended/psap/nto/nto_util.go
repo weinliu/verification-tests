@@ -947,17 +947,6 @@ func assertCONodeTuningStatusWithoutWARNWithRetry(oc *exutil.CLI, timeDurationSe
 	exutil.AssertWaitPollNoErr(err, "The checking of co/node-tuning met with unexpected error, please check")
 }
 
-// fuction to check given string is in array or not
-func implStringArrayContains(stringArray []string, name string) bool {
-	// iterate over the array and compare given string to each element
-	for _, value := range stringArray {
-		if value == name {
-			return true
-		}
-	}
-	return false
-}
-
 // getValueOfSysctlByName parses out the line determining sysctl in the kernel
 func getValueOfSysctlByName(oc *exutil.CLI, ntoNamespace, tunedNodeName, sysctlparm string) string {
 

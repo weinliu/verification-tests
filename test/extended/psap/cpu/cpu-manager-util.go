@@ -1,75 +1,13 @@
 package cpu
 
 import (
-	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
-
-func cpuManagerStatebyNode(oc *exutil.CLI, namespace string, nodeName string, ContainerName string) (string, string) {
-
-	var (
-		PODCUPs string
-		CPUNums string
-	)
-
-	cpuManagerStateStdOut, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "-n", namespace, "-q", "--", "chroot", "host", "cat", "/var/lib/kubelet/cpu_manager_state").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(cpuManagerStateStdOut).NotTo(o.BeEmpty())
-
-	var cpuManagerStateInfo map[string]interface{}
-	json.Unmarshal([]byte(cpuManagerStateStdOut), &cpuManagerStateInfo)
-
-	defaultCpuSet := fmt.Sprint(cpuManagerStateInfo["defaultCpuSet"])
-	o.Expect(defaultCpuSet).NotTo(o.BeEmpty())
-
-	Entries := fmt.Sprint(cpuManagerStateInfo["entries"])
-	o.Expect(Entries).NotTo(o.BeEmpty())
-
-	PODUUIDMapCPUs := strings.Split(Entries, " ")
-	Len := len(PODUUIDMapCPUs)
-	for i := 0; i < Len; i++ {
-		if strings.Contains(PODUUIDMapCPUs[i], ContainerName) {
-			PODUUIDMapCPU := strings.Split(PODUUIDMapCPUs[i], ":")
-			CPUNums = strings.Trim(PODUUIDMapCPU[len(PODUUIDMapCPU)-1], "]")
-		}
-		PODCUPs += CPUNums + " "
-	}
-	return defaultCpuSet, PODCUPs
-}
-
-func getContainerIDByPODName(oc *exutil.CLI, podName string, namespace string) string {
-	var containerID string
-	containerIDStdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-n", namespace, `-ojsonpath='{.status.containerStatuses[?(@.name=="etcd")].containerID}`).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(containerIDStdOut).NotTo(o.BeEmpty())
-
-	containerIDArr := strings.Split(containerIDStdOut, "/")
-	Len := len(containerIDArr)
-	if Len > 0 {
-		containerID = containerIDArr[Len-1]
-	}
-	return containerID
-}
-
-func getPODCPUSet(oc *exutil.CLI, namespace string, nodeName string, containerID string) string {
-
-	podCPUSetStdDir, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "-n", namespace, "-q", "--", "chroot", "host", "find", "/sys/fs/cgroup/", "-name", "*crio-"+containerID+"*").Output()
-	e2e.Logf("The podCPUSetStdDir is [ %v ]", podCPUSetStdDir)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(podCPUSetStdDir).NotTo(o.BeEmpty())
-	podCPUSet, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "-n", namespace, "-q", "--", "chroot", "host", "cat", podCPUSetStdDir+"/cpuset.cpus").Output()
-	e2e.Logf("The podCPUSet is [ %v ]", podCPUSet)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(podCPUSet).NotTo(o.BeEmpty())
-	return podCPUSet
-}
 
 func getFirstDrainedMasterNode(oc *exutil.CLI) string {
 

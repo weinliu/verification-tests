@@ -73,7 +73,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		// get IaaS platform
 		iaasPlatform = exutil.CheckPlatform(oc)
 		e2e.Logf("Cloud provider is: %v", iaasPlatform)
-		ManualPickup = true
+		ManualPickup = false
 
 		podShippedFile = exutil.FixturePath("testdata", "psap", "nto", "pod-shipped.yaml")
 		podSysctlFile = exutil.FixturePath("testdata", "psap", "nto", "nto-sysctl-pod.yaml")
@@ -2367,7 +2367,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		exutil.By("Check if stalld service is running ...")
-		stalldStatus, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"-q"}, "systemctl", "status", "stalld")
+		stalldStatus, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"-q"}, "", "systemctl", "status", "stalld")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldStatus).NotTo(o.BeEmpty())
 		o.Expect(stalldStatus).To(o.ContainSubstring("active (running)"))
@@ -2729,7 +2729,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		// currently test is only supported on AWS, GCP, Azure, ibmcloud, alibabacloud
 		supportPlatforms := []string{"aws", "gcp", "azure", "ibmcloud", "alibabacloud"}
 
-		if !implStringArrayContains(supportPlatforms, iaasPlatform) {
+		if !exutil.ImplStringArrayContains(supportPlatforms, iaasPlatform) {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
 		}
 
@@ -3072,7 +3072,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		// currently test is only supported on AWS, GCP, Azure, ibmcloud, alibabacloud
 		supportPlatforms := []string{"aws", "gcp", "azure", "ibmcloud", "alibabacloud"}
 
-		if !implStringArrayContains(supportPlatforms, iaasPlatform) || isSNO {
+		if !exutil.ImplStringArrayContains(supportPlatforms, iaasPlatform) || isSNO {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
 		}
 
@@ -3225,7 +3225,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		// currently test is only supported on AWS, GCP, Azure, ibmcloud, alibabacloud
 		supportPlatforms := []string{"aws", "gcp", "azure", "ibmcloud", "alibabacloud"}
 
-		if !implStringArrayContains(supportPlatforms, iaasPlatform) || isSNO {
+		if !exutil.ImplStringArrayContains(supportPlatforms, iaasPlatform) || isSNO {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
 		}
 
@@ -3354,7 +3354,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		// currently test is only supported on AWS, GCP, Azure, ibmcloud, alibabacloud
 		supportPlatforms := []string{"aws", "gcp", "azure", "ibmcloud", "alibabacloud"}
 
-		if !implStringArrayContains(supportPlatforms, iaasPlatform) || !isNTO {
+		if !exutil.ImplStringArrayContains(supportPlatforms, iaasPlatform) || !isNTO {
 			g.Skip("NTO is not installed or IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
 		}
 
@@ -3429,7 +3429,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		// currently test is only supported on AWS, GCP, Azure, ibmcloud, alibabacloud
 		supportPlatforms := []string{"aws", "gcp", "azure", "ibmcloud", "alibabacloud"}
 
-		if !implStringArrayContains(supportPlatforms, iaasPlatform) || !isNTO {
+		if !exutil.ImplStringArrayContains(supportPlatforms, iaasPlatform) || !isNTO {
 			g.Skip("NTO is not installed or IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
 		}
 
@@ -3596,5 +3596,131 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(ntoOperatorPodLogs).NotTo(o.BeEmpty())
 		o.Expect(ntoOperatorPodLogs).NotTo(o.ContainSubstring("same priority"))
 
+	})
+
+	g.It("Author:liqcui-Longduration-NonPreRelease-Medium-75555-NTO Tuned pod should starts before workload pods on reboot[Disruptive][Slow].", func() {
+
+		var (
+			paoBaseProfileMCP = exutil.FixturePath("testdata", "psap", "pao", "pao-baseprofile-mcp.yaml")
+			paoBaseProfile    = exutil.FixturePath("testdata", "psap", "pao", "pao-baseprofile.yaml")
+		)
+
+		// // test requires NTO to be installed
+		isSNO := exutil.IsSNOCluster(oc)
+		if !isNTO || isSNO {
+			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
+		}
+
+		skipPAODeploy := skipDeployPAO(oc)
+		isPAOInstalled = exutil.IsPAOInstalled(oc)
+		if skipPAODeploy || isPAOInstalled {
+			e2e.Logf("PAO has been installed and continue to execute test case")
+		} else {
+			isPAOInOperatorHub := exutil.IsPAOInOperatorHub(oc)
+			if !isPAOInOperatorHub {
+				g.Skip("PAO is not in OperatorHub - skipping test ...")
+			}
+			exutil.InstallPAO(oc, paoNamespace)
+		}
+
+		//Prior to choose worker nodes with machineset
+		tunedNodeName = choseOneWorkerNodeToRunCase(oc, 0)
+
+		//Get how many cpus on the specified worker node
+		exutil.By("Get how many cpus cores on the labeled worker node")
+		nodeCPUCores, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.status.capacity.cpu}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeCPUCores).NotTo(o.BeEmpty())
+
+		nodeCPUCoresInt, err := strconv.Atoi(nodeCPUCores)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if nodeCPUCoresInt <= 1 {
+			g.Skip("the worker node don't have enough cpus - skipping test ...")
+		}
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		o.Expect(tunedPodName).NotTo(o.BeEmpty())
+
+		//Re-delete mcp,mc, performance and unlabel node, just in case the test case broken before clean up steps
+		defer func() {
+			exutil.DeleteMCAndMCPByName(oc, "50-nto-worker-pao", "worker-pao", 480)
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("performanceprofile", "pao-baseprofile", "--ignore-not-found").Execute()
+		}()
+
+		labeledNode := exutil.GetNodeListByLabel(oc, "node-role.kubernetes.io/worker-pao")
+		if len(labeledNode) == 0 {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-pao-").Execute()
+			exutil.By("Label the node with node-role.kubernetes.io/worker-pao=")
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-pao=", "--overwrite").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		// currently test is only supported on AWS, GCP, and Azure
+		ocpArch, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.status.nodeInfo.architecture}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if (iaasPlatform == "aws" || iaasPlatform == "gcp") && ocpArch == "amd64" {
+			//Only GCP and AWS support realtime-kenel
+			exutil.By("Apply pao-baseprofile performance profile")
+			exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", paoBaseProfile, "-p", "ISENABLED=true")
+		} else {
+			exutil.By("Apply pao-baseprofile performance profile")
+			exutil.ApplyClusterResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", paoBaseProfile, "-p", "ISENABLED=false")
+		}
+
+		exutil.By("Check Performance Profile pao-baseprofile was created automatically")
+		paoBasePerformanceProfile, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("performanceprofile").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(paoBasePerformanceProfile).NotTo(o.BeEmpty())
+		o.Expect(paoBasePerformanceProfile).To(o.ContainSubstring("pao-baseprofile"))
+
+		exutil.By("Create machine config pool worker-pao")
+		exutil.ApplyOperatorResourceByYaml(oc, "", paoBaseProfileMCP)
+
+		exutil.By("Assert if machine config pool applied for worker nodes")
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-pao", 1200)
+
+		exutil.By("Check openshift-node-performance-pao-baseprofile tuned profile should be automatically created")
+		tunedNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "tuned").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(tunedNames).To(o.ContainSubstring("openshift-node-performance-pao-baseprofile"))
+
+		exutil.By("Check current profile openshift-node-performance-pao-baseprofile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		exutil.By("Check if new NTO profile openshift-node-performance-pao-baseprofile was applied")
+		assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-node-performance-pao-baseprofile")
+
+		exutil.By("Check if profile openshift-node-performance-pao-baseprofile applied on nodes")
+		nodeProfileName, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeProfileName).To(o.ContainSubstring("openshift-node-performance-pao-baseprofile"))
+
+		//$ systemctl status  ocp-tuned-one-shot.service
+		// ocp-tuned-one-shot.service - TuneD service from NTO image
+		// ..
+		// Active: inactive (dead) since Thu 2024-06-20 14:29:32 UTC; 5min ago
+		// notice the tuned in one shot started and finished before kubelet
+		//Return an error when the systemctl status ocp-tuned-one-shot.service is inactive, so err for o.Expect as expected.
+		exutil.By("Check if end time of ocp-tuned-one-shot.service prior to startup time of kubelet service")
+
+		//supported property name
+		// 0.InactiveExitTimestampMonotonic
+		// 1.ExecMainStartTimestampMonotonic
+		// 2.ActiveEnterTimestampMonotonic
+		// 3.StateChangeTimestampMonotonic
+		// 4.ActiveExitTimestampMonotonic
+		// 5.InactiveEnterTimestampMonotonic
+		// 6.ConditionTimestampMonotonic
+		// 7.AssertTimestampMonotonic
+		inactiveExitTimestampMonotonicOfOCPTunedOneShotService := exutil.ShowSystemctlPropertyValueOfServiceUnitByName(oc, tunedNodeName, ntoNamespace, "ocp-tuned-one-shot.service", "InactiveExitTimestampMonotonic")
+		ocpTunedOneShotServiceStatusInactiveExitTimestamp := exutil.GetSystemctlServiceUnitTimestampByPropertyNameWithMonotonic(inactiveExitTimestampMonotonicOfOCPTunedOneShotService)
+
+		execMainStartTimestampMonotonicOfKubelet := exutil.ShowSystemctlPropertyValueOfServiceUnitByName(oc, tunedNodeName, ntoNamespace, "kubelet.service", "ExecMainStartTimestampMonotonic")
+		kubeletServiceStatusExecMainStartTimestamp := exutil.GetSystemctlServiceUnitTimestampByPropertyNameWithMonotonic(execMainStartTimestampMonotonicOfKubelet)
+		e2e.Logf("ocpTunedOneShotServiceStatusInactiveExitTimestamp is: %v, kubeletServiceStatusActiveEnterTimestamp is: %v", ocpTunedOneShotServiceStatusInactiveExitTimestamp, kubeletServiceStatusExecMainStartTimestamp)
+
+		o.Expect(kubeletServiceStatusExecMainStartTimestamp).To(o.BeNumerically(">", ocpTunedOneShotServiceStatusInactiveExitTimestamp))
 	})
 })
