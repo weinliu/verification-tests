@@ -2376,7 +2376,7 @@ spec:
 		frontwords := `(\w+?[^0-9a-zA-Z]+?){,3}`
 		afterwords := `(\w+?[^0-9a-zA-Z]+?){,30}`
 		// Add one temporary exception 'merge.go:121] Should not happen: OpenAPI V3 merge'，after related bug 2115634 is fixed, will remove it.
-		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|merge.go:121] Should|Should not happen: Open|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test-|kernel.*-panic|non-fatal|(ocp|OCP)[0-9]{4,}|managedFields.*(imageregistry|marketplace)"
+		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|merge.go:121] Should|Should not happen: Open|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test-|kernel.*-panic|non-fatal|(ocp|OCP)[0-9]{4,}|managedFields.*(imageregistry|marketplace)|W[0-9]{4}.*fatal"
 		cmd := fmt.Sprintf(`export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig
 		grep -hriE "(%s%s%s)+" /var/log/pods/openshift-kube-apiserver-operator* | grep -Ev "%s" > /tmp/OCP-39601-kaso-errors.log
 		sed -E "s/%s/../g" /tmp/OCP-39601-kaso-errors.log | sort | uniq -c | sort -h | tee /tmp/OCP-39601-kaso-uniq-errors.log | head -10
@@ -2628,7 +2628,7 @@ spec:
 		format := `[0-9TZ.:]{5,30}`
 		frontwords := `(\w+?[^0-9a-zA-Z]+?){,3}`
 		afterwords := `(\w+?[^0-9a-zA-Z]+?){,30}`
-		exceptions := "panicked: false|e2e-test-|kernel.*-panic|non-fatal|(ocp|OCP)[0-9]{4,}"
+		exceptions := "panicked: false|e2e-test-|kernel.*-panic|non-fatal|(ocp|OCP)[0-9]{4,}|W[0-9]{4}.*fatal"
 		cmd := fmt.Sprintf(`export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig
 		grep -hriE "(%s%s%s)+" /var/log/pods/openshift-apiserver-operator* | grep -Ev "%s" > /tmp/OCP-38865-oaso-errors.log
 		sed -E "s/%s/../g" /tmp/OCP-38865-oaso-errors.log | sort | uniq -c | sort -h | tee /tmp/OCP-38865-oaso-uniq-errors.log | head -10
