@@ -4841,7 +4841,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		validateResourceEnv(oc, "openshift-image-registry", "deployment.apps/image-registry", "REGISTRY_STORAGE_S3_CHUNKSIZE=10485760")
 		g.By("Check if push successfully when push large image")
-		localImageName := "FROM quay.io/openshifttest/busybox:multiarch\nRUN dd if=/dev/urandom of=/bigfile bs=1M count=1024"
+		localImageName := "FROM quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f\nRUN dd if=/dev/urandom of=/bigfile bs=1M count=1024"
 		err = oc.AsAdmin().WithoutNamespace().Run("new-build").Args("-D", localImageName, "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check the build logs")
