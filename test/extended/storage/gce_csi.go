@@ -36,6 +36,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if !strings.Contains(cloudProvider, "gcp") {
 			g.Skip("Skip for non-supported cloud provider!!!")
 		}
+
+		provisioner = "pd.csi.storage.gke.io"
 		storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
 		storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
 		pvcTemplate = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
