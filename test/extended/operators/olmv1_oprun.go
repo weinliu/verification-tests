@@ -179,7 +179,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.By("check Insufficient sa from operand")
 		defer ceInsufficient.Delete(oc)
 		ceInsufficient.CreateWithoutCheck(oc)
-		ceInsufficient.CheckClusterExtensionCondition(oc, "Installed", "message", "cannot set blockOwnerDeletion", 10, 60, 0)
+		ceInsufficient.CheckClusterExtensionCondition(oc, "Progressing", "message", "cannot set blockOwnerDeletion", 10, 60, 0)
 
 	})
 
@@ -243,7 +243,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.By("check Insufficient sa from operand rbac")
 		defer ceInsufficient.Delete(oc)
 		ceInsufficient.CreateWithoutCheck(oc)
-		ceInsufficient.CheckClusterExtensionCondition(oc, "Installed", "message", "permissions not currently held", 10, 60, 0)
+		ceInsufficient.CheckClusterExtensionCondition(oc, "Progressing", "message", "permissions not currently held", 10, 60, 0)
 
 	})
 
@@ -323,7 +323,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.By("check Insufficient sa from bundle")
 		defer ce75492Insufficient.Delete(oc)
 		ce75492Insufficient.CreateWithoutCheck(oc)
-		ce75492Insufficient.CheckClusterExtensionCondition(oc, "Installed", "message", "could not get information about the resource CustomResourceDefinition", 10, 60, 0)
+		ce75492Insufficient.CheckClusterExtensionCondition(oc, "Progressing", "message", "could not get information about the resource CustomResourceDefinition", 10, 60, 0)
 
 		exutil.By("check wrong sa")
 		defer ce75492WrongSa.Delete(oc)
@@ -512,14 +512,14 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.By("check webhook fails to be installed")
 		defer ceWBH.Delete(oc)
 		ceWBH.CreateWithoutCheck(oc)
-		ceWBH.CheckClusterExtensionCondition(oc, "Installed", "message", "webhookDefinitions are not supported", 10, 180, 0)
+		ceWBH.CheckClusterExtensionCondition(oc, "Progressing", "message", "webhookDefinitions are not supported", 10, 180, 0)
 		ceWBH.CheckClusterExtensionCondition(oc, "Installed", "reason", "Failed", 10, 180, 0)
 		ceWBH.Delete(oc)
 
 		exutil.By("check non all ns mode fails to be installed.")
 		defer ceNAN.Delete(oc)
 		ceNAN.CreateWithoutCheck(oc)
-		ceNAN.CheckClusterExtensionCondition(oc, "Installed", "message", "do not support targeting all namespaces", 10, 180, 0)
+		ceNAN.CheckClusterExtensionCondition(oc, "Progressing", "message", "do not support targeting all namespaces", 10, 180, 0)
 		ceNAN.CheckClusterExtensionCondition(oc, "Installed", "reason", "Failed", 10, 180, 0)
 		ceNAN.Delete(oc)
 
