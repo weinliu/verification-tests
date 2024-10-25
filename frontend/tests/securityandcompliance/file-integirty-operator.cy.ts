@@ -16,7 +16,7 @@ describe('Operators related features', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-59412,xiyuan,Security_and_Compliance) Install the file integrity operator through web console',{tags:['@smoke','@e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-59412,xiyuan,Security_and_Compliance) Install the file integrity operator through web console',{tags:['@smoke','@e2e','admin','@osd-ccs']}, () => {
     const params = {
       ns: "openshift-file-integrity",
       filename: "fileintegrity.yaml",
@@ -33,7 +33,7 @@ describe('Operators related features', () => {
     cy.checkCommandResult(`oc get pod -l name=file-integrity-operator -n openshift-file-integrity`, 'Running', { retries: 12, interval: 5000 });
 
     //create a fileintegrity
-    cy.exec(`oc apply -f ./fixtures/securityandcompliance/${params.filename} -n ${params.ns}`, { failOnNonZeroExit: true })
+    cy.exec(`oc apply -f ./fixtures/securityandcompliance/${params.filename} -n ${params.ns} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: true })
     .then(output => {
       expect(output.stderr).not.contain('Error');
     })
