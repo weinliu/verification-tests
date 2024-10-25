@@ -1470,6 +1470,140 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	})
 
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-High-76685-olm v1 supports selecting catalogs", func() {
+		exutil.SkipOnProxyCluster(oc)
+		var (
+			baseDir                                  = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate                   = filepath.Join(baseDir, "clustercatalog-withlabel.yaml")
+			clusterextensionTemplate                 = filepath.Join(baseDir, "clusterextensionWithoutChannelVersion.yaml")
+			clusterextensionLabelTemplate            = filepath.Join(baseDir, "clusterextension-withselectorlabel-WithoutChannelVersion.yaml")
+			clusterextensionExpressionsTemplate      = filepath.Join(baseDir, "clusterextension-withselectorExpressions-WithoutChannelVersion.yaml")
+			clusterextensionLableExpressionsTemplate = filepath.Join(baseDir, "clusterextension-withselectorLableExpressions-WithoutChannelVersion.yaml")
+
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
+			ns                           = "ns-76685"
+			sa                           = "sa76685"
+			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			clustercatalog1 = olmv1util.ClusterCatalogDescription{
+				LabelKey:   "olmv1-test",
+				LabelValue: "ocp-76668-1",
+				Name:       "clustercatalog-76685-1",
+				Imageref:   "quay.io/openshifttest/nginxolm-operator-index:nginx76685v1",
+				Template:   clustercatalogTemplate,
+			}
+			clustercatalog2 = olmv1util.ClusterCatalogDescription{
+				LabelKey:   "olmv1-test",
+				LabelValue: "ocp-76685-2",
+				Name:       "clustercatalog-76685-2",
+				Imageref:   "quay.io/openshifttest/nginxolm-operator-index:nginx76685v2",
+				Template:   clustercatalogTemplate,
+			}
+			clustercatalog3 = olmv1util.ClusterCatalogDescription{
+				LabelKey:   "olmv1-test",
+				LabelValue: "ocp-76685-3",
+				Name:       "clustercatalog-76685-3",
+				Imageref:   "quay.io/openshifttest/nginxolm-operator-index:nginx76685v3",
+				Template:   clustercatalogTemplate,
+			}
+			clusterextension = olmv1util.ClusterExtensionDescription{
+				Name:             "clusterextension-76685",
+				InstallNamespace: ns,
+				PackageName:      "nginx76685",
+				SaName:           sa,
+				Template:         clusterextensionTemplate,
+			}
+		)
+
+		exutil.By("1) Create namespace, sa, clustercatalog1 and clustercatalog2")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
+
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
+
+		defer clustercatalog1.Delete(oc)
+		clustercatalog1.Create(oc)
+		defer clustercatalog2.Delete(oc)
+		clustercatalog2.Create(oc)
+
+		exutil.By("2) 2 clustercatalogs with same priority, install clusterextension, selector of clusterextension is empty")
+		defer clusterextension.Delete(oc)
+		clusterextension.CreateWithoutCheck(oc)
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			message, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")]}`)
+			if strings.Contains(message, "multiple catalogs with the same priority") {
+				e2e.Logf("status is %s", message)
+				return true, nil
+			}
+			return false, nil
+		})
+		if errWait != nil {
+			olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+		}
+		exutil.AssertWaitPollNoErr(errWait, "no error message raised")
+		clusterextension.Delete(oc)
+
+		exutil.By("3) 2 clustercatalogs with same priority, install clusterextension, selector of clusterextension is not empty")
+		clusterextension.Template = clusterextensionLabelTemplate
+		clusterextension.LabelKey = "olm.operatorframework.io/metadata.name"
+		clusterextension.LabelValue = clustercatalog1.Name
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+		clusterextension.Delete(oc)
+
+		exutil.By("4) Install 2 clustercatalogs with different priorities, and the selector of  clusterextension is empty")
+		clustercatalog1.Patch(oc, `{"spec":{"priority": 100}}`)
+		clustercatalog2.Patch(oc, `{"spec":{"priority": 1000}}`)
+		clusterextension.Template = clusterextensionTemplate
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v2.0.0"))
+		clusterextension.Delete(oc)
+
+		exutil.By("5) Install 2 clustercatalogs with different priorities, and the selector of clusterextension is not empty")
+		clusterextension.Template = clusterextensionLabelTemplate
+		clusterextension.LabelKey = "olm.operatorframework.io/metadata.name"
+		clusterextension.LabelValue = clustercatalog1.Name
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+
+		exutil.By("6) add ClusterCatalog 3, and modify the selector of clusterextension to use ClusterCatalog 3")
+		defer clustercatalog3.Delete(oc)
+		clustercatalog3.Create(oc)
+		clusterextension.LabelKey = clustercatalog3.LabelKey
+		clusterextension.LabelValue = clustercatalog3.LabelValue
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v3.0.0"))
+		clusterextension.Delete(oc)
+
+		exutil.By("7) matchExpressions")
+		clusterextension.Template = clusterextensionExpressionsTemplate
+		clusterextension.ExpressionsKey = clustercatalog3.LabelKey
+		clusterextension.ExpressionsOperator = "NotIn"
+		clusterextension.ExpressionsValue1 = clustercatalog3.LabelValue
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v2.0.0"))
+
+		exutil.By("8) test both matchLabels and matchExpressions")
+		clusterextension.Template = clusterextensionLableExpressionsTemplate
+		clusterextension.LabelKey = "olm.operatorframework.io/metadata.name"
+		clusterextension.LabelValue = clustercatalog3.Name
+		clusterextension.ExpressionsKey = clustercatalog3.LabelKey
+		clusterextension.ExpressionsOperator = "In"
+		clusterextension.ExpressionsValue1 = clustercatalog1.LabelValue
+		clusterextension.ExpressionsValue2 = clustercatalog2.LabelValue
+		clusterextension.ExpressionsValue3 = clustercatalog3.LabelValue
+		clusterextension.Create(oc)
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v3.0.0"))
+
+	})
+
 	// author: bandrade@redhat.com
 	g.It("ConnectedOnly-Author:bandrade-High-69193-OLMv1 major version zero", func() {
 		exutil.SkipOnProxyCluster(oc)

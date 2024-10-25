@@ -144,6 +144,11 @@ func (clustercatalog *ClusterCatalogDescription) Delete(oc *exutil.CLI) {
 	//add check later
 }
 
+func (clustercatalog *ClusterCatalogDescription) Patch(oc *exutil.CLI, patch string) {
+	_, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("clustercatalog", clustercatalog.Name, "--type", "merge", "-p", patch).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 // Get clustercatalog info content
 func (clustercatalog *ClusterCatalogDescription) GetContent(oc *exutil.CLI) []byte {
 	if clustercatalog.ContentURL == "" {

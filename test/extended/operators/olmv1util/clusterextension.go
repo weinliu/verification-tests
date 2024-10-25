@@ -24,6 +24,11 @@ type ClusterExtensionDescription struct {
 	UpgradeConstraintPolicy string
 	LabelKey                string // default is olmv1-test
 	LabelValue              string // suggest to use case id
+	ExpressionsKey          string
+	ExpressionsOperator     string
+	ExpressionsValue1       string
+	ExpressionsValue2       string
+	ExpressionsValue3       string
 	SourceType              string
 	Template                string
 	InstalledBundle         string
@@ -67,6 +72,21 @@ func (clusterextension *ClusterExtensionDescription) CreateWithoutCheck(oc *exut
 	}
 	if len(clusterextension.LabelValue) > 0 {
 		paremeters = append(paremeters, "LABELVALUE="+clusterextension.LabelValue)
+	}
+	if len(clusterextension.ExpressionsKey) > 0 {
+		paremeters = append(paremeters, "EXPRESSIONSKEY="+clusterextension.ExpressionsKey)
+	}
+	if len(clusterextension.ExpressionsOperator) > 0 {
+		paremeters = append(paremeters, "EXPRESSIONSOPERATOR="+clusterextension.ExpressionsOperator)
+	}
+	if len(clusterextension.ExpressionsValue1) > 0 {
+		paremeters = append(paremeters, "EXPRESSIONSVALUE1="+clusterextension.ExpressionsValue1)
+	}
+	if len(clusterextension.ExpressionsValue2) > 0 {
+		paremeters = append(paremeters, "EXPRESSIONSVALUE2="+clusterextension.ExpressionsValue2)
+	}
+	if len(clusterextension.ExpressionsValue3) > 0 {
+		paremeters = append(paremeters, "EXPRESSIONSVALUE3="+clusterextension.ExpressionsValue3)
 	}
 	if len(clusterextension.SourceType) > 0 {
 		paremeters = append(paremeters, "SOURCETYPE="+clusterextension.SourceType)
