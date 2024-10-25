@@ -3,7 +3,6 @@ package clusterinfrastructure
 import (
 	"path/filepath"
 	"strings"
-	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -172,7 +171,6 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure Upgrade", fun
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = awsClient.AssociateDhcpOptions(vpcID, newDhcpOptionsID)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterID := clusterinfra.GetInfrastructureName(oc)
 
 		g.By("Create a new machineset")
 		infrastructureName := clusterinfra.GetInfrastructureName(oc)
@@ -180,7 +178,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure Upgrade", fun
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 1}
 		ms.CreateMachineSet(oc)
 		//Add a specicacl tag for the original dhcp so that we can find it in PstChkUpgrade case
-		err = awsClient.CreateTag(currentDhcpOptionsID, "specialName", clusterID+"previousdhcp72031")
+		err = awsClient.CreateTag(currentDhcpOptionsID, infrastructureName, "previousdhcp72031")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		machineNameOfMachineSet := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
@@ -201,7 +199,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure Upgrade", fun
 		machinesetName := infrastructureName + "-72031"
 		machineset, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, machinesetName, "-n", machineAPINamespace).Output()
 		if strings.Contains(machineset, "not found") {
-			g.Skip("The machineset machineset-72031 is not created before upgrade, skip this case!")
+			g.Skip("The machineset " + machinesetName + " is not created before upgrade, skip this case!")
 		}
 		clusterinfra.GetAwsCredentialFromCluster(oc)
 		awsClient := exutil.InitAwsSession()
@@ -213,23 +211,23 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure Upgrade", fun
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newDhcpOptionsID, err := awsClient.GetDhcpOptionsIDOfVpc(vpcID)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterID := clusterinfra.GetInfrastructureName(oc)
-		previousDhcpOptionsID, err := awsClient.GetDhcpOptionsIDFromTag("specialName", clusterID+"previousdhcp72031")
+		previousDhcpOptionsID, err := awsClient.GetDhcpOptionsIDFromTag(infrastructureName, "previousdhcp72031")
+		e2e.Logf("previousDhcpOptionsID:" + strings.Join(previousDhcpOptionsID, "*"))
 		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func(dhcpOptionsID []string) {
+			if len(dhcpOptionsID) > 0 {
+				e2e.Logf("previousDhcpOptionsID[0]:" + dhcpOptionsID[0])
+			} else {
+				e2e.Fail("there is no previousDhcpOptionsID")
+			}
+			err := awsClient.DeleteTag(dhcpOptionsID[0], infrastructureName, "previousdhcp72031")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = awsClient.AssociateDhcpOptions(vpcID, dhcpOptionsID[0])
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = awsClient.DeleteDhcpOptions(newDhcpOptionsID)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}(previousDhcpOptionsID)
 
-		defer func() {
-			time.Sleep(10 * time.Second) //Wait 10s before deleting the dhcp to make sure it is de-associated with the vpc.
-			err := awsClient.DeleteDhcpOptions(newDhcpOptionsID)
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}()
-		defer func() {
-			err := awsClient.AssociateDhcpOptions(vpcID, previousDhcpOptionsID[0])
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}()
-		defer func() {
-			err := awsClient.DeleteTag(previousDhcpOptionsID[0], "specialName", clusterID+"previousdhcp72031")
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}()
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
