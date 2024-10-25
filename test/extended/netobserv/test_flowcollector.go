@@ -220,7 +220,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				o.Expect(tlsScheme).To(o.Equal("http"))
 
 				g.By("Wait for a min before scraping metrics")
-				time.Sleep(30 * time.Second)
+				time.Sleep(60 * time.Second)
 
 				g.By("Verify prometheus is able to scrape FLP metrics")
 				verifyFLPMetrics(oc)
@@ -265,7 +265,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				o.Expect(serverName).To(o.Equal(expectedServerName))
 
 				g.By("Wait for a min before scraping metrics")
-				time.Sleep(30 * time.Second)
+				time.Sleep(60 * time.Second)
 
 				g.By("Verify prometheus is able to scrape FLP and Console metrics")
 				verifyFLPMetrics(oc)
@@ -311,6 +311,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				o.Expect(err).NotTo(o.HaveOccurred())
 				tlsScheme = strings.Trim(tlsScheme, "'")
 				o.Expect(tlsScheme).To(o.Equal("http"))
+
+				g.By("Wait for a min before scraping metrics")
+				time.Sleep(60 * time.Second)
 
 				g.By("Verify prometheus is able to scrape eBPF metrics")
 				verifyEBPFMetrics(oc)
@@ -1527,8 +1530,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 
 		g.By("Wait for alerts to be active")
-		waitForAlertToBeActive(oc, "NetObserv-SYNFlood-in")
 		waitForAlertToBeActive(oc, "NetObserv-SYNFlood-out")
+		waitForAlertToBeActive(oc, "NetObserv-SYNFlood-in")
 	})
 	//Add future NetObserv + Loki test-cases here
 
