@@ -1064,8 +1064,11 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 
 			exutil.By("Delete service route on one of the worker node")
 			origSvcRouteStr, getRouteErr := exutil.DebugNode(oc, nodeName, "ip", verFlag, "route", "show", svcSubnet)
+			e2e.Logf("original service route is: -- %s --", origSvcRouteStr)
 			o.Expect(getRouteErr).NotTo(o.HaveOccurred())
-			origSvcRoute := strings.Split(origSvcRouteStr, "\n")[0]
+			re := regexp.MustCompile(svcSubnet + ".*\n")
+			origSvcRouteLine := re.FindAllString(origSvcRouteStr, -1)[0]
+			origSvcRoute := strings.Trim(origSvcRouteLine, "\n")
 			defer func() {
 				svcRoute1, deferErr := exutil.DebugNode(oc, nodeName, "ip", verFlag, "route", "show", svcSubnet)
 				o.Expect(deferErr).NotTo(o.HaveOccurred())
