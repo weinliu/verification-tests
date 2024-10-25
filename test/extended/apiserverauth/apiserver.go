@@ -2873,7 +2873,7 @@ spec:
 	})
 
 	// author: zxiao@redhat.com
-	g.It("Author:zxiao-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-16295-[origin_platformexp_329] 3.7 User can expose the environment variables to pods", func() {
+	g.It("Author:zxiao-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-16295-[origin_platformexp_329] 3.7 User can expose the environment variables to pods [Serial]", func() {
 		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
 		namespace := oc.Namespace()

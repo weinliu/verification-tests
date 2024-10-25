@@ -151,7 +151,7 @@ manifests:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("Author:dpunia-MicroShiftBoth-ConnectedOnly-ROSA-ARO-OSD_CCS-Medium-10969-Create clusterip service", func() {
+	g.It("Author:dpunia-MicroShiftBoth-ConnectedOnly-ROSA-ARO-OSD_CCS-Medium-10969-Create clusterip service [Serial]", func() {
 		var (
 			caseID          = "10969"
 			name            = "ocp-" + caseID + "-openshift"

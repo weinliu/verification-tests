@@ -861,10 +861,10 @@ func apiserverReadinessProbe(tokenValue string, apiserverName string) string {
 	return bodyString
 }
 
-// Get one available service IP, retry 3 times
+// Get one available service IP, retry 30 times
 func getServiceIP(oc *exutil.CLI, clusterIP string) net.IP {
 	var serviceIP net.IP
-	err := wait.PollUntilContextTimeout(context.Background(), 1*time.Second, 3*time.Second, false, func(cxt context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.Background(), 2*time.Second, 60*time.Second, false, func(cxt context.Context) (bool, error) {
 		randomServiceIP := net.ParseIP(clusterIP).To4()
 		if randomServiceIP != nil {
 			randomServiceIP[3] += byte(rand.Intn(254 - 1))
