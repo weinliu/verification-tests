@@ -4936,6 +4936,24 @@ desiredState:
 		checkRebootAction(false, canaryNode, startTime)
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Medium-68683-node-logs feature works fine [Disruptive]", func() {
+		var (
+			wMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			workerNode = wMcp.GetNodesOrFail()[0]
+			mMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
+			masterNode = mMcp.GetNodesOrFail()[0]
+		)
+		verifyCmd := func(node Node) {
+			exutil.By(fmt.Sprintf("Check that the node-logs cmd work for %s node", node.name))
+			nodeLogs, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", node.name, "--tail=20").Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Cannot get the node-logs cmd for %s node", node.name))
+			o.Expect(len(strings.Split(nodeLogs, "\n"))).To(o.BeNumerically(">=", 5)) // check the logs line are greater than 5
+		}
+		verifyCmd(workerNode)
+		verifyCmd(masterNode)
+
+	})
 })
 
 // validate that the machine config 'mc' degrades machineconfigpool 'mcp', due to NodeDegraded error matching expectedNDMessage, expectedNDReason
