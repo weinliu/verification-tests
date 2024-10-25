@@ -104,23 +104,52 @@ var (
 	allowedWorkloadTypes                = [3]string{"kata", "peer-pods", "coco"}
 )
 
-func ensureNamespaceIsInstalled(oc *exutil.CLI, sub SubscriptionDescription, nsFile string) (err error) {
-	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", sub.namespace, "--no-headers").Output()
+func ensureNamespaceIsInstalled(oc *exutil.CLI, namespace, namespaceTemplateFile string) (err error) {
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", namespace, "--no-headers").Output()
 	if err != nil || strings.Contains(msg, "Error from server (NotFound)") {
-		msg, err = oc.AsAdmin().Run("apply").Args("-f", nsFile).Output()
+		namespaceFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", namespaceTemplateFile,
+			"-p", "NAME="+namespace).OutputToFile(getRandomString() + "namespaceFile.json")
+		if err != nil || namespaceFile == "" {
+			if !strings.Contains(namespaceFile, "already exists") {
+				_, statErr := os.Stat(namespaceFile)
+				if statErr != nil {
+					err = fmt.Errorf("ERROR creating the namespace (%v) yaml %s, %v", namespace, namespaceFile, statErr)
+					return err
+				}
+			}
+		}
+
+		msg, err = oc.AsAdmin().Run("apply").Args("-f", namespaceFile).Output()
+		if strings.Contains(msg, "AlreadyExists") {
+			return nil
+		}
 		if err != nil {
-			err = fmt.Errorf("namespace issue %v %v", msg, err)
+			return fmt.Errorf(" applying namespace file (%v) issue: %v %v", namespaceFile, msg, err)
 		}
 	}
 	return err
 }
 
-func ensureOperatorGroupIsInstalled(oc *exutil.CLI, sub SubscriptionDescription, ogFile string) (err error) {
-	msg, err := oc.AsAdmin().Run("get").Args("og", "-n", sub.namespace, "--no-headers").Output()
+func ensureOperatorGroupIsInstalled(oc *exutil.CLI, namespace, templateFile string) (err error) {
+	msg, err := oc.AsAdmin().Run("get").Args("operatorgroup", "-n", namespace, "--no-headers").Output()
 	if err != nil || strings.Contains(msg, "No resources found in") {
-		msg, err = oc.AsAdmin().Run("apply").Args("-f", ogFile, "-n", sub.namespace).Output()
+		operatorgroupFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", templateFile,
+			"-p", "NAME="+namespace, "NAMESPACE="+namespace).OutputToFile(getRandomString() + "operatorgroupFile.json")
+		if err != nil || operatorgroupFile != "" {
+			if !strings.Contains(operatorgroupFile, "already exists") {
+				_, statErr := os.Stat(operatorgroupFile)
+				if statErr != nil {
+					err = fmt.Errorf("ERROR creating the operatorgroup (%v) yaml %v, %v", namespace, operatorgroupFile, statErr)
+					return err
+				}
+			}
+		}
+		msg, err = oc.AsAdmin().Run("apply").Args("-f", operatorgroupFile, "-n", namespace).Output()
+		if strings.Contains(msg, "AlreadyExists") {
+			return nil
+		}
 		if err != nil {
-			err = fmt.Errorf("og issue %v %v", msg, err)
+			return fmt.Errorf("applying operatorgroup file (%v) issue %v %v", operatorgroupFile, msg, err)
 		}
 	}
 	return err

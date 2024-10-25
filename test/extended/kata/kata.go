@@ -29,8 +29,8 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		defaultDeployment          = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
 		defaultPod                 = filepath.Join(testDataDir, "workload-pod-securityContext.yaml")
 		subTemplate                = filepath.Join(testDataDir, "subscription_template.yaml")
-		nsFile                     = filepath.Join(testDataDir, "namespace.yaml")
-		ogFile                     = filepath.Join(testDataDir, "operatorgroup.yaml")
+		namespaceTemplate          = filepath.Join(testDataDir, "namespace.yaml")
+		ogTemplate                 = filepath.Join(testDataDir, "operatorgroup.yaml")
 		redirectFile               = filepath.Join(testDataDir, "ImageTag-DigestMirrorSet.yaml")
 		redirectType               = "ImageTagMirrorSet"
 		redirectName               = "kata-brew-registry"
@@ -137,10 +137,10 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 				o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
 			}
 
-			err = ensureNamespaceIsInstalled(oc, subscription, nsFile)
+			err = ensureNamespaceIsInstalled(oc, subscription.namespace, namespaceTemplate)
 			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
 
-			err = ensureOperatorGroupIsInstalled(oc, subscription, ogFile)
+			err = ensureOperatorGroupIsInstalled(oc, subscription.namespace, ogTemplate)
 			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
 
 			checkAndLabelCustomNodes(oc, testrun)
