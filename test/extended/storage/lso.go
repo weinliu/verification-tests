@@ -507,6 +507,88 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	}
 
 	// author: pewang@redhat.com
+	// https://issues.redhat.com/browse/OCPBUGS-42120
+	g.It("Author:pewang-NonHyperShiftHOST-ROSA-OSD_CCS-High-77070-[bz-storage] [LSO] [scheduler] Pod with LocalVolume is scheduled correctly even if the hostname and nodename of a node do not match [Serial]", func() {
+		// Set the resource definition for the scenario
+		var (
+			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
+			depTemplate = filepath.Join(lsoBaseDir, "dep-template.yaml")
+			lvTemplate  = filepath.Join(lsoBaseDir, "/lso/localvolume-template.yaml")
+			mylv        = newLocalVolume(setLvNamespace(myLso.namespace), setLvTemplate(lvTemplate))
+			pvc         = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(mylv.scname))
+			dep         = newDeployment(setDeploymentTemplate(depTemplate), setDeploymentPVCName(pvc.name))
+		)
+
+		exutil.By("# Create a new project for the scenario")
+		oc.SetupProject() //create new project
+
+		exutil.By("# Create aws ebs volume and attach the volume to a schedulable worker node")
+		myWorker := getOneSchedulableWorker(allNodes)
+		myVolume := newEbsVolume(setVolAz(myWorker.availableZone), setVolClusterIDTagKey(clusterIDTagKey))
+		defer myVolume.delete(ac) // Ensure the volume is deleted even if the case failed on any follow step
+		myVolume.createAndReadyToUse(ac)
+		// Attach the volume to a schedulable linux worker node
+		defer myVolume.detachSucceed(ac)
+		myVolume.attachToInstanceSucceed(ac, oc, myWorker)
+
+		exutil.By("# Change the node hostname label to make it is different with node name")
+		hostNameOri, getHostNameErr := exutil.GetResourceSpecificLabelValue(oc, "node/"+myWorker.name, "", "kubernetes\\.io\\/hostname")
+		o.Expect(getHostNameErr).ShouldNot(o.HaveOccurred())
+		o.Expect(hostNameOri).Should(o.Equal(myWorker.name))
+
+		hostNameNew := fmt.Sprintf("%s-%s", myWorker.name, myWorker.architecture)
+		defer func() {
+			_, recoverErr := exutil.AddLabelsToSpecificResource(oc, "node/"+myWorker.name, "", "kubernetes.io/hostname="+hostNameOri)
+			o.Expect(recoverErr).ShouldNot(o.HaveOccurred())
+			hostNameCurrent, getHostNameErr := exutil.GetResourceSpecificLabelValue(oc, "node/"+myWorker.name, "", "kubernetes\\.io\\/hostname")
+			o.Expect(getHostNameErr).ShouldNot(o.HaveOccurred())
+			o.Expect(hostNameCurrent).Should(o.Equal(hostNameOri))
+		}()
+		_, changeHostNameErr := exutil.AddLabelsToSpecificResource(oc, "node/"+myWorker.name, "", "kubernetes.io/hostname="+hostNameNew)
+		o.Expect(changeHostNameErr).ShouldNot(o.HaveOccurred())
+		hostNameCurrent, getHostNameErr := exutil.GetResourceSpecificLabelValue(oc, "node/"+myWorker.name, "", "kubernetes\\.io\\/hostname")
+		o.Expect(getHostNameErr).ShouldNot(o.HaveOccurred())
+		o.Expect(hostNameCurrent).Should(o.Equal(hostNameNew))
+
+		exutil.By("# Create a localvolume cr use diskPath by id with the attached volume")
+		matchExpressions := []map[string]interface{}{
+			{
+				"key":      "kubernetes.io/hostname",
+				"operator": "In",
+				"values":   []string{hostNameNew},
+			},
+		}
+		nodeSelectorParameters := map[string]interface{}{
+			"jsonPath":         `items.0.spec.nodeSelector.nodeSelectorTerms.0.`,
+			"matchExpressions": matchExpressions,
+		}
+		mylv.deviceID = myVolume.DeviceByID
+		mylv.createWithExtraParameters(oc, nodeSelectorParameters)
+		defer mylv.deleteAsAdmin(oc)
+		mylv.waitAvailable(oc)
+
+		exutil.By("# Create a pvc use the localVolume storageClass and create a pod consume the pvc")
+		pvc.capacity = interfaceToString(getRandomNum(1, myVolume.Size)) + "Gi"
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+		dep.create(oc)
+		defer dep.deleteAsAdmin(oc)
+
+		// The first time PV is actually bound to a PVC, the scheduler searches all nodes and doesn't apply the pre-filter
+		dep.waitReady(oc)
+
+		exutil.By("# Scale down the deployment replicas num to zero")
+		dep.scaleReplicas(oc, "0")
+		dep.waitReady(oc)
+
+		exutil.By("# Scale up the deployment replicas num to 1, the deployment's pod should still be scheduled correctly")
+		dep.scaleReplicas(oc, "1")
+
+		// After the fix patch the scheduler searches all nodes and doesn't apply the pre-filter for the second time
+		dep.waitReady(oc)
+	})
+
+	// author: pewang@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-High-32978-Medium-33905-[LSO] [block volume] LocalVolumeSet CR with maxDeviceCount should provision matched device and could be used by Pod [Serial]", func() {
 		// Set the resource definition for the scenario
 		var (
