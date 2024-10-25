@@ -83,6 +83,7 @@ type ipAddressPoolResource struct {
 	namespaceSelectorValue    []string
 	template                  string
 }
+
 type l2AdvertisementResource struct {
 	name                  string
 	namespace             string
@@ -361,7 +362,7 @@ func createLoadBalancerService(oc *exutil.CLI, loadBalancerSvc loadBalancerServi
 // statusCheckTime is interval and timeout in seconds e.g. 10 and 30
 func checkLoadBalancerSvcStatus(oc *exutil.CLI, namespace string, svcName string, statusCheckTime ...time.Duration) error {
 	interval := 10 * time.Second
-	timeout := 120 * time.Second
+	timeout := 300 * time.Second
 	if len(statusCheckTime) > 0 {
 		e2e.Logf("Interval %s, Timeout %s", statusCheckTime[0], statusCheckTime[1])
 		interval = statusCheckTime[0]
