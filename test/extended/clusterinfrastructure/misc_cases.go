@@ -138,7 +138,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		machineControllerLog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("pod/"+machineControllerPodName, "-c", "machine-controller", "-n", "openshift-machine-api").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(machineControllerLog, "categories cache miss, trying to find category by name, it might take time") || strings.Contains(machineControllerLog, "found cached category id value")).To(o.BeTrue())
+		o.Expect((strings.Contains(machineControllerLog, ", trying to find category by name, it might take time") || strings.Contains(machineControllerLog, "found cached category id value")) && !strings.Contains(machineControllerLog, "unmarshal errors:")).To(o.BeTrue())
 	})
 
 	// author: miyadav@redhat.com
