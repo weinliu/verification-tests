@@ -778,7 +778,7 @@ func (p *projectDescription) delete(oc *exutil.CLI) {
 }
 
 func (p *projectDescription) deleteWithForce(oc *exutil.CLI) {
-	_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "ns", p.name, "--force")
+	_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "ns", p.name, "--force", "--grace-period=0")
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
