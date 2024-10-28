@@ -984,6 +984,10 @@ func (ck checkDescription) check(oc *exutil.CLI) {
 		o.Expect(ok).To(o.BeTrue())
 	case "expect":
 		err := expectedResource(oc, ck.executor, ck.inlineNamespace, ck.expectAction, ck.expectContent, ck.expect, ck.resource...)
+		if err != nil {
+			getResource(oc, asAdmin, withoutNamespace, "pod", "-n", "openshift-marketplace")
+			getResource(oc, asAdmin, withoutNamespace, "event", "-n", "openshift-marketplace")
+		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("expected content %s not found by %v", ck.expectContent, ck.resource))
 	default:
 		err := fmt.Errorf("unknown method")
