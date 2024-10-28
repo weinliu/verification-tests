@@ -48,7 +48,7 @@ describe("yaml editor tests", () => {
     // import multiple resources
     // and check successful creation result on import yaml status page
     cy.visit(`/k8s/cluster/projects/${testName}/yaml`);
-    cy.byTestID('import-yaml').click();
+    importYamlPage.open();
     yamlEditor.isImportLoaded();
     cy.fixture('example-resources-1.yaml').then((resourcesYAML) => {
       yamlEditor.setEditorContent(resourcesYAML);
@@ -71,7 +71,7 @@ describe("yaml editor tests", () => {
 
     // import more resources
     cy.visit(`/k8s/cluster/projects/${testName}/yaml`);
-    cy.byTestID('import-yaml').click();
+    importYamlPage.open();
     yamlEditor.isImportLoaded();
     cy.fixture('example-resources-2.yaml').then((resourcesYAML) => {
       yamlEditor.setEditorContent(resourcesYAML);

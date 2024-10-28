@@ -9,6 +9,10 @@ export const importYamlPage = {
     checkDangerAlert: (alertmsg: RegExp) => {
       cy.contains(/error|Danger|alert/gi).should('exist');
       cy.contains(alertmsg).should('exist');
+    },
+    open: () => {
+      cy.get('button[data-test="quick-create-dropdown"]').click();
+      cy.get('li[data-test="qc-import-yaml"] a').click();
     }
   }
 export const yamlOptions = {
