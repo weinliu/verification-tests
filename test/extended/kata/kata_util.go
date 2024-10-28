@@ -120,7 +120,7 @@ func ensureNamespaceIsInstalled(oc *exutil.CLI, namespace, namespaceTemplateFile
 		}
 
 		msg, err = oc.AsAdmin().Run("apply").Args("-f", namespaceFile).Output()
-		if strings.Contains(msg, "AlreadyExists") {
+		if strings.Contains(msg, "AlreadyExists") || strings.Contains(msg, "unchanged") || strings.Contains(msg, "created") {
 			return nil
 		}
 		if err != nil {
@@ -145,7 +145,7 @@ func ensureOperatorGroupIsInstalled(oc *exutil.CLI, namespace, templateFile stri
 			}
 		}
 		msg, err = oc.AsAdmin().Run("apply").Args("-f", operatorgroupFile, "-n", namespace).Output()
-		if strings.Contains(msg, "AlreadyExists") {
+		if strings.Contains(msg, "AlreadyExists") || strings.Contains(msg, "unchanged") || strings.Contains(msg, "created") {
 			return nil
 		}
 		if err != nil {
