@@ -1683,7 +1683,6 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 			genericServiceTemplate  = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
 			addressespool           []string
 			namespaces              []string
-			nodeAssigned            []string
 			serviceSelectorKey      = "name"
 			serviceSelectorValue    = [1]string{"test-service"}
 			namespaceLabelKey       = "region"
@@ -1692,14 +1691,12 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		)
 
 		exutil.By("1. Get the namespace, masters and workers")
-		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(workerList.Items) < 3 {
+		workerList := excludeSriovNodes(oc)
+		if len(workerList) < 3 {
 			g.Skip("This case requires 3 nodes, but the cluster has less than three nodes")
 		}
 		for i := 0; i < 2; i++ {
-			nodeAssigned = append(nodeAssigned, workerList.Items[i].Name)
-			_, ipaddress := getNodeIP(oc, workerList.Items[i].Name)
+			_, ipaddress := getNodeIP(oc, workerList[i])
 			addressespool = append(addressespool, fmt.Sprintf("%s - %s", ipaddress, ipaddress))
 		}
 
@@ -1740,7 +1737,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 			name:               "l2-adv",
 			namespace:          opNamespace,
 			ipAddressPools:     []string{ipAddresspool.name},
-			nodeSelectorValues: nodeAssigned[:],
+			nodeSelectorValues: workerList[:2],
 			interfaces:         interfaces[:],
 			template:           l2AdvertisementTemplate,
 		}
@@ -1753,7 +1750,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 			pod := pingPodResourceNode{
 				name:      "hello-pod" + strconv.Itoa(i),
 				namespace: ns,
-				nodename:  workerList.Items[2].Name,
+				nodename:  workerList[2],
 				template:  pingPodNodeTemplate,
 			}
 			pod.createPingPodNode(oc)
@@ -1771,7 +1768,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 			template:              genericServiceTemplate,
 		}
 		svc.createServiceFromParams(oc)
-		err = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.servicename)
+		err := checkLoadBalancerSvcStatus(oc, svc.namespace, svc.servicename)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("5. Validate service IP announcement being taken over by another node")
@@ -1780,7 +1777,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		rebootNode(oc, nodeName1)
 		checkNodeStatus(oc, nodeName1, "NotReady")
 		nodeName2 := getNodeAnnouncingL2Service(oc, svc.servicename, ns)
-		o.Expect(strings.Join(nodeAssigned, ",")).Should(o.ContainSubstring(nodeName2))
+		o.Expect(strings.Join(workerList[:2], ",")).Should(o.ContainSubstring(nodeName2))
 		if nodeName2 != nodeName1 {
 			e2e.Logf("%s worker node taker over the service successfully!!!", nodeName2)
 		} else {
@@ -1797,7 +1794,6 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 			ipAddresspoolFile           = filepath.Join(testDataDir, "ipaddresspool-template.yaml")
 			loadBalancerServiceTemplate = filepath.Join(testDataDir, "loadbalancer-svc-template.yaml")
 			l2AdvertisementTemplate     = filepath.Join(testDataDir, "l2advertisement-template.yaml")
-			workers                     []string
 			addressespool               []string
 			namespaces                  []string
 			serviceSelectorKey          = "environ"
@@ -1808,14 +1804,12 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		)
 
 		exutil.By("1. Get the namespace, masters and workers")
-		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(workerList.Items) < 2 {
+		workerList := excludeSriovNodes(oc)
+		if len(workerList) < 2 {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
 		}
 		for i := 0; i < 2; i++ {
-			workers = append(workers, workerList.Items[i].Name)
-			_, ipaddress := getNodeIP(oc, workerList.Items[i].Name)
+			_, ipaddress := getNodeIP(oc, workerList[i])
 			addressespool = append(addressespool, fmt.Sprintf("%s - %s", ipaddress, ipaddress))
 		}
 
@@ -1856,7 +1850,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 			name:               "l2-adv",
 			namespace:          opNamespace,
 			ipAddressPools:     []string{ipAddresspool.name},
-			nodeSelectorValues: workers[:],
+			nodeSelectorValues: workerList[:],
 			interfaces:         interfaces[:],
 			template:           l2AdvertisementTemplate,
 		}
@@ -1876,7 +1870,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		}
 		result = createLoadBalancerService(oc, svc, loadBalancerServiceTemplate)
 		o.Expect(result).To(o.BeTrue())
-		err = checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+		err := checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("rc", "test-rc", "--replicas=10", "-n", ns).Execute()
@@ -1890,7 +1884,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		rebootNode(oc, nodeName1)
 		checkNodeStatus(oc, nodeName1, "NotReady")
 		nodeName2 := getNodeAnnouncingL2Service(oc, svc.name, ns)
-		o.Expect(strings.Join(workers, ",")).Should(o.ContainSubstring(nodeName2))
+		o.Expect(strings.Join(workerList, ",")).Should(o.ContainSubstring(nodeName2))
 		if nodeName2 != nodeName1 {
 			e2e.Logf("%s worker node taker over the service successfully!!!", nodeName2)
 		} else {
