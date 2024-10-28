@@ -4925,4 +4925,57 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			e2e.Failf("Cannot get registry storage bucket tags!")
 		}
 	})
+
+	g.It("Author:xiuwang-NonHyperShiftHOST-Critical-76803-Discovery vnet by tag when set up azure private account [Disruptive]", func() {
+		// This feature test on 4.17+ ipi-on-azure
+		exutil.SkipIfPlatformTypeNot(oc, "Azure")
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure.config.openshift.io", "-o=jsonpath={..status.platformStatus.azure}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "AzureStackCloud") {
+			g.Skip("Skip test for AzureStackCloud.")
+		}
+		if !isIPIAzure(oc) {
+			g.Skip("Skip on upi install.")
+		}
+		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.status.storage.azure.networkAccess.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "Internal") {
+			g.Skip("The cluster is already using Internal networkAccess")
+		}
+		regName, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure.config.openshift.io", "-o=jsonpath={..resourceGroupName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		networkRGName, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure.config.openshift.io", "-o=jsonpath={..networkResourceGroupName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		var patchNetwork string
+		expectedStatus1 := map[string]string{"Progressing": "True"}
+		expectedStatus2 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		if regName == networkRGName {
+			patchNetwork = fmt.Sprintf("{\"spec\":{\"storage\":{\"azure\":{\"networkAccess\":{\"type\":\"Internal\"}}}}}")
+		} else {
+			patchNetwork = fmt.Sprintf("{\"spec\":{\"storage\":{\"azure\":{\"networkAccess\":{\"type\":\"Internal\",\"internal\":{\"networkResourceGroupName\": %s}}}}}}", networkRGName)
+		}
+		defer func() {
+			g.By("Recover image registry change")
+			err := oc.WithoutNamespace().AsAdmin().Run("delete").Args("deploy/cluster-image-registry-operator", "-n", "openshift-image-registry").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = oc.WithoutNamespace().AsAdmin().Run("delete").Args("config.image/cluster").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "image-registry", 360, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus2)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		g.By("Patch image registry to Internal networkaccess")
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", patchNetwork, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 360, expectedStatus1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 240, expectedStatus2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		internalNetwork, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={..status.storage.azure.networkAccess.internal}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(internalNetwork, "privateEndpointName") || !strings.Contains(internalNetwork, "subnetName") || !strings.Contains(internalNetwork, "vnetName") {
+			e2e.Failf("The internal networkaccess does not set successfully")
+		}
+	})
 })

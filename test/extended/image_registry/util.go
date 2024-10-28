@@ -1482,3 +1482,14 @@ func SkipDnsFailure(oc *exutil.CLI) {
 		g.Skip("Dns is not ready, skip the case test!")
 	}
 }
+
+// Upi install on azure is based on azure arm template
+// Ipi install on azure is based on cluster api since 4.17
+func isIPIAzure(oc *exutil.CLI) bool {
+	result, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "openshift-install", "-n", "openshift-config").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if !strings.Contains(result, "NotFound") {
+		return true
+	}
+	return false
+}
