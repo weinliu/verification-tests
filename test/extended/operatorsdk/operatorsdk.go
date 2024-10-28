@@ -912,12 +912,39 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(output).To(o.ContainSubstring("help for bundle-upgrade"))
 	})
 
-	// author: chuo@redhat.com
-	g.It("VMonly-Author:chuo-Medium-34945-ansible Add flag metricsaddr for ansible operator", func() {
-		operatorsdkCLI.showInfo = true
-		result, err := exec.Command("bash", "-c", "ansible-operator run --help").Output()
+	// author: jitli@redhat.com
+	g.It("Author:jitli-VMonly-Medium-34945-ansible Add flag metricsaddr for ansible operator", func() {
+		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
+			g.Skip("HTTP_PROXY is not empty - skipping test ...")
+		}
+		imageTag := "registry-proxy.engineering.redhat.com/rh-osbs/openshift-ose-ansible-rhel9-operator:v" + ocpversion
+		containerCLI := container.NewPodmanCLI()
+		e2e.Logf("create container with image %s", imageTag)
+		id, err := containerCLI.ContainerCreate(imageTag, "test-34945", "/bin/sh", true)
+		defer func() {
+			e2e.Logf("stop container %s", id)
+			containerCLI.ContainerStop(id)
+			e2e.Logf("remove container %s", id)
+			err := containerCLI.ContainerRemove(id)
+			if err != nil {
+				e2e.Failf("Defer: fail to remove container %s", id)
+			}
+		}()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(result).To(o.ContainSubstring("--metrics-bind-address"))
+		e2e.Logf("container id is %s", id)
+
+		e2e.Logf("start container %s", id)
+		err = containerCLI.ContainerStart(id)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("start container %s successful", id)
+
+		commandStr := []string{"ansible-operator", "run", "--help"}
+		output, err := containerCLI.Exec(id, commandStr)
+		if err != nil {
+			e2e.Failf("command %s: %s", commandStr, output)
+		}
+		o.Expect(output).To(o.ContainSubstring("--metrics-bind-address"))
+
 	})
 
 	// author: chuo@redhat.com
