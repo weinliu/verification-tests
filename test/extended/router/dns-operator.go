@@ -13,6 +13,44 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 	defer g.GinkgoRecover()
 	var oc = exutil.NewCLI("dns-operator", exutil.KubeConfigPath())
 
+	// incorporate OCP-26151 and OCP-23278 into one
+	// Test case creater: hongli@redhat.com - OCP-26151-Integrate DNS operator metrics with Prometheus
+	// Test case creater: hongli@redhat.com - OCP-23278-Integrate coredns metrics with monitoring component
+	g.It("Author:mjoseph-Critical-26151-Integrate DNS operator metrics with Prometheus", func() {
+		var (
+			ons        = "openshift-dns-operator"
+			dns        = "openshift-dns"
+			label      = `"openshift.io/cluster-monitoring":"true"`
+			prometheus = "prometheus-k8s"
+		)
+		// OCP-26151
+		exutil.By("1. Check the `cluster-monitoring` label exist in the dns operator namespace")
+		oplabels := getByJsonPath(oc, ons, "ns/openshift-dns-operator", "{.metadata.labels}")
+		o.Expect(oplabels).To(o.ContainSubstring(label))
+
+		exutil.By("2. Check whether servicemonitor exist in the dns operator namespace")
+		smname := getByJsonPath(oc, ons, "servicemonitor/dns-operator", "{.metadata.name}")
+		o.Expect(smname).To(o.ContainSubstring("dns-operator"))
+
+		exutil.By("3. Check whether rolebinding exist in the dns operator namespace")
+		poname := getByJsonPath(oc, ons, "rolebinding/prometheus-k8s", "{.metadata.name}")
+		o.Expect(poname).To(o.ContainSubstring(prometheus))
+
+		// OCP-23278
+		// Bug: 1688969
+		exutil.By("4. Check the `cluster-monitoring` label exist in the dns namespace")
+		polabels := getByJsonPath(oc, dns, "ns/openshift-dns", "{.metadata.labels}")
+		o.Expect(polabels).To(o.ContainSubstring(label))
+
+		exutil.By("5. Check whether servicemonitor exist in the dns namespace")
+		smname1 := getByJsonPath(oc, dns, "servicemonitor/dns-default", "{.metadata.name}")
+		o.Expect(smname1).To(o.ContainSubstring("dns-default"))
+
+		exutil.By("6. Check whether rolebinding exist in the dns namespace")
+		pdname := getByJsonPath(oc, dns, "rolebinding/prometheus-k8s", "{.metadata.name}")
+		o.Expect(pdname).To(o.ContainSubstring(prometheus))
+	})
+
 	// Test case creater: hongli@redhat.com
 	// No dns operator namespace on HyperShift guest cluster so this case is not available
 	g.It("Author:mjoseph-NonHyperShiftHOST-High-37912-DNS operator should show clear error message when DNS service IP already allocated [Disruptive]", func() {

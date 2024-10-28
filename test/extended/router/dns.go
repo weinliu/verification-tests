@@ -166,6 +166,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(logOutput).To(o.ContainSubstring("class all"))
 	})
 
+	// incorporate OCP-40717 into existing OCP-46867
+	// Test case creater: jechen@redhat.com - OCP-40717-Hostname lookup does not delay when master node dow
+	// Test case creater: shudili@redhat.com - OCP-46867-Configure upstream resolvers for CoreDNS flag
 	g.It("Author:shudili-Critical-46867-Configure upstream resolvers for CoreDNS flag [Disruptive]", func() {
 		var (
 			resourceName        = "dns.operator.openshift.io/default"
@@ -206,6 +209,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		defer deleteDnsOperatorToRestore(oc)
 		oneDnsPod := forceOnlyOneDnsPodExist(oc)
 
+		// OCP-40717
+		exutil.By("Check the readiness probe period and timeout parameters are both set to 3 seconds")
+		output, err := oc.AsAdmin().Run("get").Args("pod/"+oneDnsPod, "-n", "openshift-dns", "-o=jsonpath={.spec.containers[0].readinessProbe.periodSeconds}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`3`))
+		output1, err1 := oc.AsAdmin().Run("get").Args("pod/"+oneDnsPod, "-n", "openshift-dns", "-o=jsonpath={.spec.containers[0].readinessProbe.timeoutSeconds}").Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		o.Expect(output1).To(o.ContainSubstring(`3`))
+
+		// OCP-46867
 		exutil.By("Check default values of forward upstream resolvers for CoreDNS")
 		upstreams := pollReadDnsCorefile(oc, oneDnsPod, "forward", "-A2", "resolv.conf")
 		o.Expect(upstreams).To(o.ContainSubstring("forward . /etc/resolv.conf"))
