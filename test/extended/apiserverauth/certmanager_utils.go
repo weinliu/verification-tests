@@ -221,7 +221,7 @@ func createCertManagerOperator(oc *exutil.CLI) {
 	)
 
 	// switch to an available catalogsource
-	catalogSourceName, err := getAvailableCatalogSourceName(oc, catalogSourceNamespace)
+	catalogSourceName, err := getAvailableCatalogSourceName(oc, catalogSourceNamespace, subscriptionName)
 	if len(catalogSourceName) == 0 || err != nil {
 		g.Skip("skip since no available catalogsource was found")
 	}
@@ -455,8 +455,8 @@ func skipIfRouteUnreachable(oc *exutil.CLI) {
 	}
 }
 
-// Get the available CatalogSource's name from specific namespace
-func getAvailableCatalogSourceName(oc *exutil.CLI, namespace string) (string, error) {
+// Get the available CatalogSource's name for specific subscription from given namespace
+func getAvailableCatalogSourceName(oc *exutil.CLI, namespace, subscription string) (string, error) {
 	// check if there are any catalogsources that not READY, otherwise it will block the subscription's readiness
 	// ref: https://docs.openshift.com/container-platform/4.16/operators/understanding/olm/olm-understanding-olm.html#olm-cs-health_olm-understanding-olm
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "catalogsource", `-o=jsonpath={.items[?(@.status.connectionState.lastObservedState!="READY")].metadata.name}`).Output()
@@ -468,16 +468,20 @@ func getAvailableCatalogSourceName(oc *exutil.CLI, namespace string) (string, er
 		return "", nil
 	}
 
-	output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "catalogsource", `-o=jsonpath={.items[*].metadata.name}`).Output()
+	list, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "catalogsource", `-o=jsonpath={.items[*].metadata.name}`).Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get catalogsource from namespace: %s", namespace)
 	}
 
-	// will first check if output contains "qe-app-registry", then "redhat-operators"
+	// the default order is to use "qe-app-registry" first, if it is unavailable then switch to use "redhat-operators"
 	targetCatalogSources := []string{"qe-app-registry", "redhat-operators"}
 	for _, name := range targetCatalogSources {
-		if strings.Contains(output, name) {
-			return name, nil
+		if strings.Contains(list, name) {
+			// check if the specific subscription's packagemanifest exists in the catalogsource
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", namespace, "-l", "catalog="+name, "--field-selector", "metadata.name="+subscription).Output()
+			if strings.Contains(output, subscription) && err == nil {
+				return name, nil
+			}
 		}
 	}
 
