@@ -1241,8 +1241,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", errorLoggerPodTemplate, "-p", "NAME="+podBefore, "NAMESPACE="+ns)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.AssertPodToBeReady(oc, podBefore, ns)
-		newCheck("expect", asAdmin, withoutNamespace, contain, `{"capabilities":{"drop":["MKNOD"]}}`, ok, []string{"pod", podBefore, "-n", ns,
-			"-o=jsonpath={.spec.initContainers[0].securityContext}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "MKNOD", ok, []string{"pod", podBefore, "-n", ns,
+			"-o=jsonpath={.spec.initContainers[0].securityContext.capabilities.drop}"}).check(oc)
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("pod/"+podBefore, "-c", "errorlogger", "-n", ns).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(msg, `/var/log/test.log: Permission denied`)).To(o.BeTrue())
