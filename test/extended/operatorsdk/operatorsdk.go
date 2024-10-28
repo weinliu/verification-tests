@@ -3900,8 +3900,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		// copy api/v1/memcached52814_types.go
 		err = copy(filepath.Join(dataPath, "memcached52814_types.go"), filepath.Join(tmpPath, "api", "v1", "memcached52814_types.go"))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		// copy controllers/memcached52814_controller.go
-		err = copy(filepath.Join(dataPath, "memcached52814_controller.go"), filepath.Join(tmpPath, "controllers", "memcached52814_controller.go"))
+		// copy internal/controller/memcached52814_controller.go
+		err = copy(filepath.Join(dataPath, "memcached52814_controller.go"), filepath.Join(tmpPath, "internal", "controller", "memcached52814_controller.go"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// copy the manager
 		err = copy(filepath.Join(dataPath, "manager.yaml"), filepath.Join(tmpPath, "config", "manager", "manager.yaml"))
