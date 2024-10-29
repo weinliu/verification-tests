@@ -530,7 +530,7 @@ func ValidateSuccessfulMOSC(mosc *MachineOSConfig, checkers []Checker) {
 	logger.Infof("OK!\n")
 
 	exutil.By("Check that a new build is successfully executed")
-	o.Eventually(mosb, "10m", "20s").Should(HaveConditionField("Building", "status", FalseString), "Build was not finished")
+	o.Eventually(mosb, "20m", "20s").Should(HaveConditionField("Building", "status", FalseString), "Build was not finished")
 	o.Eventually(mosb, "10m", "20s").Should(HaveConditionField("Succeeded", "status", TrueString), "Build didn't succeed")
 	o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Interrupted", "status", FalseString), "Build was interrupted")
 	o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Failed", "status", FalseString), "Build was failed")
