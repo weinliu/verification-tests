@@ -4877,7 +4877,10 @@ desiredState:
 			mcName        = "06-kdump-enable-worker-perf-tc-76108"
 			mcUnit        = `{"enabled": true, "name": "kdump.service"}`
 			mcKernelArgs  = "crashkernel=512M"
+			mc            = NewMachineConfig(oc.AsAdmin(), mcName, customMCPName)
 		)
+
+		defer mc.deleteNoWait()
 
 		exutil.By("Create custom MCP")
 		defer DeleteCustomMCP(oc.AsAdmin(), customMCPName)
@@ -4898,8 +4901,6 @@ desiredState:
 		logger.Infof("OK!\n")
 
 		exutil.By("Apply a new MC to the custom pool")
-		mc := NewMachineConfig(oc.AsAdmin(), mcName, customMCPName)
-		defer mc.delete()
 
 		err = mc.Create("-p", "NAME="+mcName, "-p", "POOL="+customMCPName, "-p", fmt.Sprintf("UNITS=[%s]", mcUnit), fmt.Sprintf(`KERNEL_ARGS=["%s"]`, mcKernelArgs))
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating MachineConfig %s", mc.GetName())
@@ -4913,7 +4914,6 @@ desiredState:
 
 		exutil.By("Move one node from the custom pool to the canary custom pool")
 		startTime := canaryNode.GetDateOrFail()
-		defer canaryNode.RemoveLabel("node-role.kubernetes.io/" + canaryMCPName)
 		o.Expect(
 			canaryNode.AddLabel("node-role.kubernetes.io/"+canaryMCPName, ""),
 		).To(o.Succeed(), "Error labeling node %s", canaryNode)
