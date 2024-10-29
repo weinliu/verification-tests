@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -80,8 +81,20 @@ func (mcc Controller) GetIgnoredLogs() string {
 
 // GetLogs returns the MCO controller logs. Logs generated before calling the function "IgnoreLogsBeforeNow" will not be returned
 // This function can return big log so, please, try not to print the returned value in your tests
-func (mcc Controller) GetLogs() (string, error) {
-	podAllLogs, err := mcc.GetRawLogs()
+func (mcc *Controller) GetLogs() (string, error) {
+	var (
+		podAllLogs = ""
+		err        error
+	)
+
+	err = Retry(5, 5*time.Second, func() error {
+		podAllLogs, err = mcc.GetRawLogs()
+		if err != nil {
+			mcc.podName = ""
+		}
+		return err
+	})
+
 	if err != nil {
 		return "", err
 	}

@@ -545,7 +545,16 @@ func (n Node) IsReady() bool {
 
 // GetMCDaemonLogs returns the logs of the MachineConfig daemonset pod for this node. The logs will be grepped using the 'filter' parameter
 func (n Node) GetMCDaemonLogs(filter string) (string, error) {
-	return exutil.GetSpecificPodLogs(n.oc, MachineConfigNamespace, "machine-config-daemon", n.GetMachineConfigDaemon(), filter)
+	var (
+		mcdLogs = ""
+		err     error
+	)
+	err = Retry(5, 5*time.Second, func() error {
+		mcdLogs, err = exutil.GetSpecificPodLogs(n.oc, MachineConfigNamespace, "machine-config-daemon", n.GetMachineConfigDaemon(), filter)
+		return err
+	})
+
+	return mcdLogs, err
 }
 
 // PollMCDaemonLogs returns a function that can be used by gomega Eventually/Consistently functions to poll logs results
