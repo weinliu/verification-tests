@@ -32,6 +32,12 @@ type ConfigMapPayload struct {
 	} `json:"data"`
 }
 
+type ServiceInfo struct {
+	Name        string
+	DisplayName string
+	Status      int
+}
+
 var (
 	mcoNamespace                   = "openshift-machine-api"
 	wmcoNamespace                  = "openshift-windows-machine-config-operator"

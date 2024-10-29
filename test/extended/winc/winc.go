@@ -1067,7 +1067,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		wmcoStartTime, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("endpoints", "-n", wmcoNamespace, "-o=jsonpath={.status.StartTime}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("WMCO start time before restart", wmcoStartTime)
+		e2e.Logf("WMCO start time before restart %v", wmcoStartTime)
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", wmcoID[0], "-n", wmcoNamespace).Output()
 		// checking that the WMCO has no errors and restarted properly
 		poolErr := wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
@@ -2113,4 +2113,222 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			// Add your expectations/assertions to validate the metrics
 		}
 	})
+
+	g.It("Author:rrasouli-Smokerun-Medium-76765-WICD-Remove-Services [Disruptive]", func() {
+		wmcoLogVersion := getWMCOVersionFromLogs(oc)
+		g.By("Step 1: Fetch the WICD ConfigMap and verify its existence")
+		windowsServicesCM, err := popItemFromList(oc, "cm", wicdConfigMap, wmcoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(windowsServicesCM).NotTo(o.BeEmpty(), "Expected to find a WICD ConfigMap")
+
+		g.By("Step 2: Extract services from the ConfigMap and ensure they are properly defined")
+		payload, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", wmcoNamespace, "-o=jsonpath={.data.services}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(payload).NotTo(o.BeEmpty(), "Expected non-empty services payload in ConfigMap")
+
+		var configMapServices []Service
+		err = json.Unmarshal([]byte(payload), &configMapServices)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(configMapServices).NotTo(o.BeEmpty(), "Expected to find services defined in the ConfigMap")
+
+		g.By("Step 3: Retrieve Windows worker information")
+		bastionHost := getSSHBastionHost(oc, iaasPlatform)
+		o.Expect(bastionHost).NotTo(o.BeEmpty(), "Expected to get a bastion host")
+
+		winInternalIP := getWindowsInternalIPs(oc)
+		o.Expect(winInternalIP).NotTo(o.BeEmpty(), "Expected to find Windows worker nodes")
+
+		g.By("Step 4: Scale WMCO to 0 and remove the existing windows-services ConfigMap")
+		defer scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace) // Ensure scaling WMCO back to 1 at the end
+		scaleDeployment(oc, wmcoDeployment, 0, wmcoNamespace)       // Scale down the WMCO to 0
+
+		// Delete the old windows-services ConfigMap
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("cm", windowsServicesCM, "-n", wmcoNamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to delete windows-services %v ConfigMap", windowsServicesCM)
+
+		g.By("Step 5: Generate new service ConfigMap adding fake new services here")
+		manifestFile, err := exutil.GenerateManifestFile(oc, "winc", "wicd_configmap.yaml", map[string]string{
+			"<version>": wmcoLogVersion, // Replace the version dynamically
+			"<new_services>": `[
+				{"name":"new-service-1","path":"C:\\k\\new-service-1.exe --logfile C:\\var\\log\\new-service-1.log","bootstrap":false,"priority":2},
+				{"name":"new-service-2","path":"C:\\k\\new-service-2.exe --logfile C:\\var\\log\\new-service-2.log","bootstrap":false,"priority":3}
+			]`, // New services added dynamically
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Ensure cleanup of the manifest and the resources created
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile, "--ignore-not-found").Execute()
+		defer os.Remove(manifestFile)
+
+		// Create the new windows-services ConfigMap using the generated manifest
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to create a new windows-services ConfigMap")
+
+		// Wait for the ConfigMap to be applied correctly
+		waitForCM(oc, windowsServicesCM, wicdConfigMap, wmcoNamespace)
+
+		g.By("Step 6: Scale WMCO back to 1 and wait for node reconfiguration")
+		scaleDeployment(oc, wmcoDeployment, 1, wmcoNamespace)
+		waitWindowsNodesReady(oc, len(winInternalIP), 15*time.Minute)
+
+		g.By("Step 7: Verify the initial state of services (all should be running)")
+		for _, winhost := range winInternalIP {
+			for _, svc := range configMapServices {
+				msg, err := runPSCommand(bastionHost, winhost, fmt.Sprintf("Get-Service %v", svc.Name), privateKey, iaasPlatform)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(msg).To(o.ContainSubstring("Running"), "Expected service %s to be running initially on %s", svc.Name, winhost)
+			}
+		}
+
+		g.By("Step 8: Simulate service removal (in reverse order to respect priority)")
+		removedServices := make([]string, 0)
+		for i := len(configMapServices) - 1; i >= 0; i-- {
+			serviceName := configMapServices[i].Name
+			removedServices = append(removedServices, serviceName)
+			e2e.Logf("Simulating removal of service: %s", serviceName)
+		}
+
+		g.By("Step 9: Verify service removal order")
+		servicesByPriority := make(map[int][]string)
+		for _, svc := range configMapServices {
+			servicesByPriority[svc.Priority] = append(servicesByPriority[svc.Priority], svc.Name)
+		}
+
+		// Build a map to track when each service was removed
+		serviceRemovalOrder := make(map[string]int)
+		for pos, serviceName := range removedServices {
+			serviceRemovalOrder[serviceName] = pos
+		}
+
+		priorities := make([]int, 0, len(servicesByPriority))
+		for priority := range servicesByPriority {
+			priorities = append(priorities, priority)
+		}
+		sort.Sort(sort.Reverse(sort.IntSlice(priorities)))
+
+		for i := 0; i < len(priorities)-1; i++ {
+			currentPriority := priorities[i]
+			nextPriority := priorities[i+1]
+			currentServices := servicesByPriority[currentPriority]
+			nextServices := servicesByPriority[nextPriority]
+
+			// Get the earliest removal position for each priority group
+			currentEarliestPos := -1
+			nextEarliestPos := -1
+
+			for _, svc := range currentServices {
+				pos, exists := serviceRemovalOrder[svc]
+				if exists && (currentEarliestPos == -1 || pos < currentEarliestPos) {
+					currentEarliestPos = pos
+				}
+			}
+
+			for _, svc := range nextServices {
+				pos, exists := serviceRemovalOrder[svc]
+				if exists && (nextEarliestPos == -1 || pos < nextEarliestPos) {
+					nextEarliestPos = pos
+				}
+			}
+
+			o.Expect(currentEarliestPos).To(o.BeNumerically("<", nextEarliestPos),
+				"Expected services with priority %d to be removed before services with priority %d",
+				currentPriority, nextPriority)
+		}
+
+		g.By("Step 10: Verify services are no longer running on Windows workers and attempt to stop them if necessary")
+		maxRetries := 3
+		retryInterval := 30 * time.Second
+
+		type ServiceStatus struct {
+			Name    string
+			Status  string
+			Retries int
+		}
+		defer waitWindowsNodesReady(oc, len(winInternalIP), 15*time.Minute)
+		serviceStatuses := make(map[string][]ServiceStatus)
+
+		for _, winhost := range winInternalIP {
+			e2e.Logf("Checking services on Windows host: %s", winhost)
+			serviceStatuses[winhost] = []ServiceStatus{}
+
+			for _, serviceName := range removedServices {
+				var serviceStatus string
+				var err error
+				retries := 0
+
+				for i := 0; i < maxRetries; i++ {
+					retries++
+					e2e.Logf("Attempt %d to stop service %s on %s", i+1, serviceName, winhost)
+
+					// Attempt to stop the service forcefully
+					stopCmd := fmt.Sprintf("Stop-Service %v -Force -ErrorAction SilentlyContinue; (Get-Service %v).Status", serviceName, serviceName)
+					serviceStatus, err = runPSCommand(bastionHost, winhost, stopCmd, privateKey, iaasPlatform)
+					if err != nil {
+						e2e.Logf("Error stopping service %s on %s: %v", serviceName, winhost, err)
+						continue
+					}
+
+					serviceStatus = strings.TrimSpace(serviceStatus)
+					e2e.Logf("Service %s status on %s: %s", serviceName, winhost, serviceStatus)
+
+					if serviceStatus != "Running" {
+						break
+					}
+
+					e2e.Logf("Service %s is still running on %s. Retrying in %v...", serviceName, winhost, retryInterval)
+					time.Sleep(retryInterval)
+				}
+
+				serviceStatuses[winhost] = append(serviceStatuses[winhost], ServiceStatus{Name: serviceName, Status: serviceStatus, Retries: retries})
+
+				if err != nil {
+					o.Expect(err).NotTo(o.HaveOccurred(), "Failed to stop service %s on host %s after retries", serviceName, winhost)
+				}
+			}
+		}
+
+		g.By("Step 11: Verify no unexpected services are still running and gather summarized information about services")
+		unexpectedServices := []string{"unwanted-service-1", "unwanted-service-2"} // List of unwanted services
+
+		for _, winhost := range winInternalIP {
+			for _, service := range unexpectedServices {
+				serviceExists := false
+				retries := 0
+
+				// Check if service exists on the node
+				serviceExistsCmd := fmt.Sprintf("Get-Service %v -ErrorAction SilentlyContinue", service)
+				serviceExistsOutput, err := runPSCommand(bastionHost, winhost, serviceExistsCmd, privateKey, iaasPlatform)
+
+				if err == nil && !strings.Contains(serviceExistsOutput, "Cannot find") {
+					serviceExists = true
+				}
+
+				if serviceExists {
+					// Retry checking if the service is stopped (only if it exists)
+					for retries < maxRetries {
+						serviceCheckCmd := fmt.Sprintf("Get-Service %v | Select-Object -ExpandProperty Status", service)
+						serviceStatusOutput, err := runPSCommand(bastionHost, winhost, serviceCheckCmd, privateKey, iaasPlatform)
+
+						if err == nil && strings.Contains(serviceStatusOutput, "Stopped") {
+							e2e.Logf("Service %s is stopped on host %s", service, winhost)
+							break
+						}
+
+						retries++
+						e2e.Logf("Service %s is not stopped yet on host %s. Attempt %d/%d", service, winhost, retries, maxRetries)
+						if retries < maxRetries {
+							time.Sleep(retryInterval)
+						}
+					}
+
+					if retries == maxRetries {
+						// Fail if the service did not stop after retries
+						e2e.Failf("Service %s is still running on host %s after retries", service, winhost)
+					}
+				}
+			}
+			e2e.Logf("Finished checking for unexpected services.")
+		}
+	})
+
 })
