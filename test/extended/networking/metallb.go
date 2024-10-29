@@ -1674,14 +1674,14 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		o.Expect(nodeName).Should(o.Equal(workers[0]))
 	})
 
-	g.It("Author:meinli-Longduration-NonPreRelease-High-43243-The L2 service with externalTrafficPolicy Local continues to service requests even when node announcing the service goes down. [Disruptive]", func() {
+	g.It("Author:meinli-High-43243-The L2 service with externalTrafficPolicy Local continues to service requests even when node announcing the service goes down. [Disruptive]", func() {
 		var (
 			buildPruningBaseDir     = exutil.FixturePath("testdata", "networking")
 			ipAddresspoolFile       = filepath.Join(testDataDir, "ipaddresspool-template.yaml")
 			l2AdvertisementTemplate = filepath.Join(testDataDir, "l2advertisement-template.yaml")
 			pingPodNodeTemplate     = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 			genericServiceTemplate  = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
-			addressespool           []string
+			ipaddresspools          []string
 			namespaces              []string
 			serviceSelectorKey      = "name"
 			serviceSelectorValue    = [1]string{"test-service"}
@@ -1692,65 +1692,64 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 
 		exutil.By("1. Get the namespace, masters and workers")
 		workerList := excludeSriovNodes(oc)
-		if len(workerList) < 3 {
-			g.Skip("This case requires 3 nodes, but the cluster has less than three nodes")
-		}
-		for i := 0; i < 2; i++ {
-			_, ipaddress := getNodeIP(oc, workerList[i])
-			addressespool = append(addressespool, fmt.Sprintf("%s - %s", ipaddress, ipaddress))
+		if len(workerList) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than three nodes")
 		}
 
-		masterNodeList, err1 := exutil.GetClusterNodesBy(oc, "master")
-		o.Expect(err1).NotTo(o.HaveOccurred())
 		ns := oc.Namespace()
 		namespaces = append(namespaces, ns)
-		namespaces = append(namespaces, "test43242")
+		namespaces = append(namespaces, "test43243")
 
 		exutil.By("2. create address pool with addresses from worker nodes")
-		ipAddresspool := ipAddressPoolResource{
-			name:                      "ipaddresspool-l2",
-			namespace:                 opNamespace,
-			addresses:                 addressespool,
-			namespaces:                namespaces,
-			label1:                    ipAddressPoolLabelKey,
-			value1:                    ipAddressPoolLabelVal,
-			avoidBuggyIPs:             true,
-			autoAssign:                true,
-			serviceLabelKey:           serviceSelectorKey,
-			serviceLabelValue:         serviceSelectorValue[0],
-			serviceSelectorKey:        serviceSelectorKey,
-			serviceSelectorOperator:   "In",
-			serviceSelectorValue:      serviceSelectorValue[:],
-			namespaceLabelKey:         namespaceLabelKey,
-			namespaceLabelValue:       namespaceLabelValue[0],
-			namespaceSelectorKey:      namespaceLabelKey,
-			namespaceSelectorOperator: "In",
-			namespaceSelectorValue:    namespaceLabelValue[:],
-			template:                  ipAddresspoolFile,
+		for i := 0; i < 2; i++ {
+			ipAddresspool := ipAddressPoolResource{
+				name:                      "ipaddresspool-l2-" + strconv.Itoa(i),
+				namespace:                 opNamespace,
+				label1:                    ipAddressPoolLabelKey,
+				value1:                    ipAddressPoolLabelVal,
+				addresses:                 l2Addresses[i][:],
+				namespaces:                namespaces[:],
+				priority:                  10,
+				avoidBuggyIPs:             true,
+				autoAssign:                true,
+				serviceLabelKey:           serviceSelectorKey,
+				serviceLabelValue:         serviceSelectorValue[0],
+				serviceSelectorKey:        serviceSelectorKey,
+				serviceSelectorOperator:   "In",
+				serviceSelectorValue:      serviceSelectorValue[:],
+				namespaceLabelKey:         namespaceLabelKey,
+				namespaceLabelValue:       namespaceLabelValue[0],
+				namespaceSelectorKey:      namespaceLabelKey,
+				namespaceSelectorOperator: "In",
+				namespaceSelectorValue:    namespaceLabelValue[:],
+				template:                  ipAddresspoolFile,
+			}
+			defer removeResource(oc, true, true, "ipaddresspools", ipAddresspool.name, "-n", ipAddresspool.namespace)
+			result := createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolFile)
+			o.Expect(result).To(o.BeTrue())
+			ipaddresspools = append(ipaddresspools, ipAddresspool.name)
 		}
-		defer removeResource(oc, true, true, "ipaddresspools", ipAddresspool.name, "-n", ipAddresspool.namespace)
-		result := createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolFile)
-		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("IP address pools %s ", ipaddresspools)
 
 		exutil.By("3. create a L2 advertisement using the above addresspool")
 		l2advertisement := l2AdvertisementResource{
 			name:               "l2-adv",
 			namespace:          opNamespace,
-			ipAddressPools:     []string{ipAddresspool.name},
-			nodeSelectorValues: workerList[:2],
+			ipAddressPools:     ipaddresspools[:],
+			nodeSelectorValues: workerList[:],
 			interfaces:         interfaces[:],
 			template:           l2AdvertisementTemplate,
 		}
 		defer removeResource(oc, true, true, "l2advertisements", l2advertisement.name, "-n", l2advertisement.namespace)
-		result = createL2AdvertisementCR(oc, l2advertisement, l2AdvertisementTemplate)
+		result := createL2AdvertisementCR(oc, l2advertisement, l2AdvertisementTemplate)
 		o.Expect(result).To(o.BeTrue())
 
 		exutil.By("4. create a service with externalTrafficPolicy Local")
 		for i := 0; i < 2; i++ {
 			pod := pingPodResourceNode{
-				name:      "hello-pod" + strconv.Itoa(i),
+				name:      "hello-pod-" + strconv.Itoa(i),
 				namespace: ns,
-				nodename:  workerList[2],
+				nodename:  workerList[i],
 				template:  pingPodNodeTemplate,
 			}
 			pod.createPingPodNode(oc)
@@ -1771,30 +1770,35 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		err := checkLoadBalancerSvcStatus(oc, svc.namespace, svc.servicename)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.servicename)
+		e2e.Logf("The service %s External IP is %q", svc.servicename, svcIP)
+		result = validateService(oc, proxyHost, svcIP+":27017")
+		o.Expect(result).To(o.BeTrue())
+
 		exutil.By("5. Validate service IP announcement being taken over by another node")
 		nodeName1 := getNodeAnnouncingL2Service(oc, svc.servicename, ns)
 		defer checkNodeStatus(oc, nodeName1, "Ready")
 		rebootNode(oc, nodeName1)
 		checkNodeStatus(oc, nodeName1, "NotReady")
 		nodeName2 := getNodeAnnouncingL2Service(oc, svc.servicename, ns)
-		o.Expect(strings.Join(workerList[:2], ",")).Should(o.ContainSubstring(nodeName2))
+		o.Expect(strings.Join(workerList, ",")).Should(o.ContainSubstring(nodeName2))
 		if nodeName2 != nodeName1 {
-			e2e.Logf("%s worker node taker over the service successfully!!!", nodeName2)
+			e2e.Logf("%s worker node taken over the service successfully!!!", nodeName2)
 		} else {
-			e2e.Fail("No worker node taker over the service after reboot")
+			e2e.Fail("No worker node taken over the service after reboot")
 		}
 		// verify the service request after another worker nodeAssigned
-		for i := 0; i < 5; i++ {
-			CurlNode2SvcPass(oc, masterNodeList[0], ns, svc.servicename)
+		for i := 0; i < 2; i++ {
+			o.Expect(validateService(oc, proxyHost, svcIP+":27017")).To(o.BeTrue())
 		}
 	})
 
-	g.It("Author:meinli-Longduration-NonPreRelease-High-43242-The L2 service with externalTrafficPolicy Cluster continues to service requests even when node announcing the service goes down. [Disruptive]", func() {
+	g.It("Author:meinli-High-43242-The L2 service with externalTrafficPolicy Cluster continues to service requests even when node announcing the service goes down. [Disruptive]", func() {
 		var (
 			ipAddresspoolFile           = filepath.Join(testDataDir, "ipaddresspool-template.yaml")
 			loadBalancerServiceTemplate = filepath.Join(testDataDir, "loadbalancer-svc-template.yaml")
 			l2AdvertisementTemplate     = filepath.Join(testDataDir, "l2advertisement-template.yaml")
-			addressespool               []string
+			ipaddresspools              []string
 			namespaces                  []string
 			serviceSelectorKey          = "environ"
 			serviceSelectorValue        = [1]string{"Test"}
@@ -1808,54 +1812,53 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		if len(workerList) < 2 {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
 		}
-		for i := 0; i < 2; i++ {
-			_, ipaddress := getNodeIP(oc, workerList[i])
-			addressespool = append(addressespool, fmt.Sprintf("%s - %s", ipaddress, ipaddress))
-		}
 
-		masterNodeList, err1 := exutil.GetClusterNodesBy(oc, "master")
-		o.Expect(err1).NotTo(o.HaveOccurred())
 		ns := oc.Namespace()
 		namespaces = append(namespaces, ns)
-		namespaces = append(namespaces, "test43243")
+		namespaces = append(namespaces, "test43242")
 
 		exutil.By("2. create address pool with addresses from worker nodes")
-		ipAddresspool := ipAddressPoolResource{
-			name:                      "ipaddresspool-l2",
-			namespace:                 opNamespace,
-			addresses:                 addressespool,
-			namespaces:                namespaces,
-			label1:                    ipAddressPoolLabelKey,
-			value1:                    ipAddressPoolLabelVal,
-			avoidBuggyIPs:             true,
-			autoAssign:                true,
-			serviceLabelKey:           serviceSelectorKey,
-			serviceLabelValue:         serviceSelectorValue[0],
-			serviceSelectorKey:        serviceSelectorKey,
-			serviceSelectorOperator:   "In",
-			serviceSelectorValue:      serviceSelectorValue[:],
-			namespaceLabelKey:         namespaceLabelKey,
-			namespaceLabelValue:       namespaceLabelValue[0],
-			namespaceSelectorKey:      namespaceLabelKey,
-			namespaceSelectorOperator: "In",
-			namespaceSelectorValue:    namespaceLabelValue[:],
-			template:                  ipAddresspoolFile,
+		for i := 0; i < 2; i++ {
+			ipAddresspool := ipAddressPoolResource{
+				name:                      "ipaddresspool-l2-" + strconv.Itoa(i),
+				namespace:                 opNamespace,
+				label1:                    ipAddressPoolLabelKey,
+				value1:                    ipAddressPoolLabelVal,
+				addresses:                 l2Addresses[i][:],
+				namespaces:                namespaces[:],
+				priority:                  10,
+				avoidBuggyIPs:             true,
+				autoAssign:                true,
+				serviceLabelKey:           serviceSelectorKey,
+				serviceLabelValue:         serviceSelectorValue[0],
+				serviceSelectorKey:        serviceSelectorKey,
+				serviceSelectorOperator:   "In",
+				serviceSelectorValue:      serviceSelectorValue[:],
+				namespaceLabelKey:         namespaceLabelKey,
+				namespaceLabelValue:       namespaceLabelValue[0],
+				namespaceSelectorKey:      namespaceLabelKey,
+				namespaceSelectorOperator: "In",
+				namespaceSelectorValue:    namespaceLabelValue[:],
+				template:                  ipAddresspoolFile,
+			}
+			defer removeResource(oc, true, true, "ipaddresspools", ipAddresspool.name, "-n", ipAddresspool.namespace)
+			result := createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolFile)
+			o.Expect(result).To(o.BeTrue())
+			ipaddresspools = append(ipaddresspools, ipAddresspool.name)
 		}
-		defer removeResource(oc, true, true, "ipaddresspools", ipAddresspool.name, "-n", ipAddresspool.namespace)
-		result := createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolFile)
-		o.Expect(result).To(o.BeTrue())
+		e2e.Logf("IP address pools %s ", ipaddresspools)
 
 		exutil.By("3. create a L2 advertisement using the above addresspool")
 		l2advertisement := l2AdvertisementResource{
 			name:               "l2-adv",
 			namespace:          opNamespace,
-			ipAddressPools:     []string{ipAddresspool.name},
+			ipAddressPools:     ipaddresspools[:],
 			nodeSelectorValues: workerList[:],
 			interfaces:         interfaces[:],
 			template:           l2AdvertisementTemplate,
 		}
 		defer removeResource(oc, true, true, "l2advertisements", l2advertisement.name, "-n", l2advertisement.namespace)
-		result = createL2AdvertisementCR(oc, l2advertisement, l2AdvertisementTemplate)
+		result := createL2AdvertisementCR(oc, l2advertisement, l2AdvertisementTemplate)
 		o.Expect(result).To(o.BeTrue())
 
 		exutil.By("4. create a service with externalTrafficPolicy Cluster")
@@ -1878,6 +1881,11 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		err = waitForPodWithLabelReady(oc, ns, "name="+svc.name)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("this pod with label name=%s not ready", svc.name))
 
+		svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+		e2e.Logf("The service %s External IP is %q", svc.name, svcIP)
+		result = validateService(oc, proxyHost, svcIP+":80")
+		o.Expect(result).To(o.BeTrue())
+
 		exutil.By("5. Validate service IP announcement being taken over by another node")
 		nodeName1 := getNodeAnnouncingL2Service(oc, svc.name, ns)
 		defer checkNodeStatus(oc, nodeName1, "Ready")
@@ -1891,10 +1899,8 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 			e2e.Fail("No worker node taker over the service after reboot")
 		}
 		// verify the service request after another worker nodeAssigned
-		svcIP := getLoadBalancerSvcIP(oc, ns, svc.name)
-		for i := 0; i < 5; i++ {
-			request := validateService(oc, masterNodeList[0], svcIP)
-			o.Expect(request).To(o.BeTrue())
+		for i := 0; i < 2; i++ {
+			o.Expect(validateService(oc, proxyHost, svcIP+":80")).To(o.BeTrue())
 		}
 	})
 })
