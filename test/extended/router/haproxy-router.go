@@ -81,6 +81,83 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: shudili@redhat.com
+	// incorporate OCP-34157 and OCP-34163 into one
+	// OCP-34157 [HAProxy-frontend-capture] capture and log specific http Request header via "httpCaptureHeaders" option
+	// OCP-34163 [HAProxy-frontend-capture] capture and log specific http Response headers via "httpCaptureHeaders" option
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-Critical-34157-NetworkEdge capture and log specific http Request header via httpCaptureHeaders option", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		testPod := filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
+		unsecsvc := filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
+		unsecsvcName := "service-unsecure"
+		clientPod := filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+		cltPodName := "hello-pod"
+		cltPodLabel := "app=hello-pod"
+		srv := "gunicorn"
+
+		baseTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+		extraParas := fmt.Sprintf(`
+    logging:
+      access:
+        destination:
+          type: Container
+        httpCaptureHeaders:
+          request:
+          - name:  Host
+            maxLength: 100
+          response:
+          - name: Server
+            maxLength: 100
+`)
+
+		customTemp := addExtraParametersToYamlFile(baseTemp, "spec:", extraParas)
+		defer os.Remove(customTemp)
+
+		ingctrl := ingressControllerDescription{
+			name:      "ocp34157",
+			namespace: "openshift-ingress-operator",
+			domain:    "",
+			template:  customTemp,
+		}
+
+		exutil.By("1.0 Create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("2.0 Deploy a project with a client pod, a backend pod and its service resources")
+		project1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, project1)
+		createResourceFromFile(oc, project1, clientPod)
+		err = waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		createResourceFromFile(oc, project1, testPod)
+		err = waitForPodWithLabelReady(oc, project1, "name=httpbin-pod")
+		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+		createResourceFromFile(oc, project1, unsecsvc)
+
+		exutil.By("3.0 Create a http route, and then curl the route")
+		routehost := unsecsvcName + "34157" + ".apps." + getBaseDomain(oc)
+		routerpod := getNewRouterPod(oc, ingctrl.name)
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst := routehost + ":80:" + podIP
+		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routehost + "/headers", "-I", "--resolve", toDst, "--connect-timeout", "10"}
+		createRoute(oc, project1, "http", unsecsvcName, unsecsvcName, []string{"--hostname=" + routehost})
+		waitForOutput(oc, project1, "route/"+unsecsvcName, "{.status.ingress[0].conditions[0].status}", "True")
+		adminRepeatCmd(oc, curlCmd, "200", 30, 1)
+
+		// check for OCP-34157
+		exutil.By("4.0: check the log which should contain the host")
+		waitRouterLogsAppear(oc, routerpod, routehost)
+
+		// check for OCP-34163
+		exutil.By("5.0: check the log which should contain the backend server info")
+		waitRouterLogsAppear(oc, routerpod, srv)
+	})
+
+	// author: shudili@redhat.com
 	g.It("Author:shudili-Medium-40679-The endpointPublishingStrategy parameter allow TCP/PROXY/empty definition for HostNetwork or NodePort type strategies", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
