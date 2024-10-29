@@ -25,7 +25,12 @@ type Osp struct {
 
 // GetOspInstance represents to list osp instance ...
 func (osp *Osp) GetOspInstance(instanceName string) (string, error) {
-	cmd := fmt.Sprintf("openstack --os-auth-url %s --os-password %s --os-project-id %s --os-username %s --os-domain-name %s server list --name %s -c Name -f value", os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_PASSWORD"), os.Getenv("OSP_DR_PROJECT_ID"), os.Getenv("OSP_DR_USERNAME"), os.Getenv("OSP_DR_USER_DOMAIN_NAME"), instanceName)
+	var cmd string
+	if os.Getenv("OSP_DR_USERNAME") == "" {
+		cmd = fmt.Sprintf("openstack --os-auth-type %s --os-auth-url %s --os-application-credential-id %s --os-application-credential-secret %s server list --name %s -c Name -f value", os.Getenv("OSP_DR_AUTH_TYPE"), os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_APPLICATION_CREDENTIAL_ID"), os.Getenv("OSP_DR_APPLICATION_CREDENTIAL_SECRET"), instanceName)
+	} else {
+		cmd = fmt.Sprintf("openstack --os-auth-url %s --os-password %s --os-project-id %s --os-username %s --os-domain-name %s server list --name %s -c Name -f value", os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_PASSWORD"), os.Getenv("OSP_DR_PROJECT_ID"), os.Getenv("OSP_DR_USERNAME"), os.Getenv("OSP_DR_USER_DOMAIN_NAME"), instanceName)
+	}
 	instance, err := exec.Command("bash", "-c", cmd).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if string(instance) == "" {
@@ -37,7 +42,12 @@ func (osp *Osp) GetOspInstance(instanceName string) (string, error) {
 
 // GetOspInstanceState represents to list osp instance state ...
 func (osp *Osp) GetOspInstanceState(instanceName string) (string, error) {
-	cmd := fmt.Sprintf("openstack --os-auth-url %s --os-password %s --os-project-id %s --os-username %s --os-domain-name %s server list --name %s -c Status -f value", os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_PASSWORD"), os.Getenv("OSP_DR_PROJECT_ID"), os.Getenv("OSP_DR_USERNAME"), os.Getenv("OSP_DR_USER_DOMAIN_NAME"), instanceName)
+	var cmd string
+	if os.Getenv("OSP_DR_USERNAME") == "" {
+		cmd = fmt.Sprintf("openstack --os-auth-type %s --os-auth-url %s --os-application-credential-id %s --os-application-credential-secret %s server list --name %s -c Status -f value", os.Getenv("OSP_DR_AUTH_TYPE"), os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_APPLICATION_CREDENTIAL_ID"), os.Getenv("OSP_DR_APPLICATION_CREDENTIAL_SECRET"), instanceName)
+	} else {
+		cmd = fmt.Sprintf("openstack --os-auth-url %s --os-password %s --os-project-id %s --os-username %s --os-domain-name %s server list --name %s -c Status -f value", os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_PASSWORD"), os.Getenv("OSP_DR_PROJECT_ID"), os.Getenv("OSP_DR_USERNAME"), os.Getenv("OSP_DR_USER_DOMAIN_NAME"), instanceName)
+	}
 	instanceState, err := exec.Command("bash", "-c", cmd).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if string(instanceState) == "" {
@@ -48,9 +58,14 @@ func (osp *Osp) GetOspInstanceState(instanceName string) (string, error) {
 
 // GetStopOspInstance represents to stop osp instance ...
 func (osp *Osp) GetStopOspInstance(instanceName string) error {
-	cmd := fmt.Sprintf("openstack --os-auth-url %s --os-password %s --os-project-id %s --os-username %s --os-domain-name %s server stop %s", os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_PASSWORD"), os.Getenv("OSP_DR_PROJECT_ID"), os.Getenv("OSP_DR_USERNAME"), os.Getenv("OSP_DR_USER_DOMAIN_NAME"), instanceName)
+	var cmd string
+	if os.Getenv("OSP_DR_USERNAME") == "" {
+		cmd = fmt.Sprintf("openstack --os-auth-type %s --os-auth-url %s --os-application-credential-id %s --os-application-credential-secret %s server stop %s", os.Getenv("OSP_DR_AUTH_TYPE"), os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_APPLICATION_CREDENTIAL_ID"), os.Getenv("OSP_DR_APPLICATION_CREDENTIAL_SECRET"), instanceName)
+	} else {
+		cmd = fmt.Sprintf("openstack --os-auth-url %s --os-password %s --os-project-id %s --os-username %s --os-domain-name %s server stop %s", os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_PASSWORD"), os.Getenv("OSP_DR_PROJECT_ID"), os.Getenv("OSP_DR_USERNAME"), os.Getenv("OSP_DR_USER_DOMAIN_NAME"), instanceName)
+	}
 	_, err := exec.Command("bash", "-c", cmd).Output()
-	e2e.Logf("When trying to stop openstack instance, got error:", err)
+	e2e.Logf("When trying to stop openstack instance, got error: %s", err)
 	if err != nil {
 		return fmt.Errorf("Not able to stop VM")
 	}
@@ -59,7 +74,12 @@ func (osp *Osp) GetStopOspInstance(instanceName string) error {
 
 // GetStartOspInstance represents to start osp instance ...
 func (osp *Osp) GetStartOspInstance(instanceName string) error {
-	cmd := fmt.Sprintf("openstack --os-auth-url %s --os-password %s --os-project-id %s --os-username %s --os-domain-name %s server start %s", os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_PASSWORD"), os.Getenv("OSP_DR_PROJECT_ID"), os.Getenv("OSP_DR_USERNAME"), os.Getenv("OSP_DR_USER_DOMAIN_NAME"), instanceName)
+	var cmd string
+	if os.Getenv("OSP_DR_USERNAME") == "" {
+		cmd = fmt.Sprintf("openstack --os-auth-type %s --os-auth-url %s --os-application-credential-id %s --os-application-credential-secret %s server start %s", os.Getenv("OSP_DR_AUTH_TYPE"), os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_APPLICATION_CREDENTIAL_ID"), os.Getenv("OSP_DR_APPLICATION_CREDENTIAL_SECRET"), instanceName)
+	} else {
+		cmd = fmt.Sprintf("openstack --os-auth-url %s --os-password %s --os-project-id %s --os-username %s --os-domain-name %s server start %s", os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_PASSWORD"), os.Getenv("OSP_DR_PROJECT_ID"), os.Getenv("OSP_DR_USERNAME"), os.Getenv("OSP_DR_USER_DOMAIN_NAME"), instanceName)
+	}
 	_, err := exec.Command("bash", "-c", cmd).Output()
 	if err != nil {
 		return fmt.Errorf("Not able to start VM")

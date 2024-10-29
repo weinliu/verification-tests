@@ -93,7 +93,7 @@ func (n ComputeNodes) leaderMasterNodeName(oc *exutil.CLI) ComputeNode {
 	}
 	masterNodeStr := strings.Split(leaderNode, "_")
 	//Changing format for gcp
-	if exutil.CheckPlatform(oc) == "gcp" {
+	if exutil.CheckPlatform(oc) == "gcp" || exutil.CheckPlatform(oc) == "openstack" {
 		masterNodeStr = strings.Split(masterNodeStr[0], ".")
 	}
 	for _, node := range n {

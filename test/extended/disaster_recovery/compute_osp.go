@@ -34,49 +34,50 @@ func GetOspNodes(oc *exutil.CLI, label string) ([]ComputeNode, func()) {
 func OspCredentials(oc *exutil.CLI) {
 	credentials, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/openstack-credentials", "-n", "kube-system", "-o", `jsonpath={.data.clouds\.yaml}`).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// Decode the base64 credentials
 	credential, err := base64.StdEncoding.DecodeString(credentials)
 	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// Define variables for the credentials
 	var (
-		username       string
-		password       string
-		projectID      string
-		authURL        string
-		userDomainName string
-		regionName     string
-		projectName    string
+		username                    string
+		password                    string
+		projectID                   string
+		authURL                     string
+		userDomainName              string
+		regionName                  string
+		projectName                 string
+		authType                    string
+		applicationCredentialId     string
+		applicationCredentialSecret string
 	)
-	credVars := []string{"auth_url", "username", "password", "project_id", "user_domain_name", "region_name", "project_name"}
-	for _, s := range credVars {
-		r, _ := regexp.Compile(`` + s + `:.*`)
-		match := r.FindAllString(string(credential), -1)
-		if strings.Contains(s, "username") {
-			username = strings.Split(match[0], " ")[1]
-			os.Setenv("OSP_DR_USERNAME", username)
+
+	// Define mappings for credentials to environment variables
+	credMap := map[string]*string{
+		"auth_url":                      &authURL,
+		"username":                      &username,
+		"password":                      &password,
+		"project_id":                    &projectID,
+		"user_domain_name":              &userDomainName,
+		"region_name":                   &regionName,
+		"project_name":                  &projectName,
+		"auth_type":                     &authType,
+		"application_credential_id":     &applicationCredentialId,
+		"application_credential_secret": &applicationCredentialSecret,
+	}
+
+	// Extract and set each credential variable using regex
+	for yamlKey, credVar := range credMap {
+		r := regexp.MustCompile(yamlKey + `:\s*([^\n]+)`)
+		match := r.FindStringSubmatch(string(credential))
+		if len(match) == 2 {
+			*credVar = strings.TrimSpace(match[1])
 		}
-		if strings.Contains(s, "password") {
-			password = strings.Split(match[0], " ")[1]
-			os.Setenv("OSP_DR_PASSWORD", password)
-		}
-		if strings.Contains(s, "auth_url") {
-			authURL = strings.Split(match[0], " ")[1]
-			os.Setenv("OSP_DR_AUTH_URL", authURL)
-		}
-		if strings.Contains(s, "project_id") {
-			projectID = strings.Split(match[0], " ")[1]
-			os.Setenv("OSP_DR_PROJECT_ID", projectID)
-		}
-		if strings.Contains(s, "user_domain_name") {
-			userDomainName = strings.Split(match[0], " ")[1]
-			os.Setenv("OSP_DR_USER_DOMAIN_NAME", userDomainName)
-		}
-		if strings.Contains(s, "region_name") {
-			regionName = strings.Split(match[0], " ")[1]
-			os.Setenv("OSP_DR_REGION_NAME", regionName)
-		}
-		if strings.Contains(s, "project_name") {
-			projectName = strings.Split(match[0], " ")[1]
-			os.Setenv("OSP_DR_PROJECT_NAME", projectName)
-		}
+
+		// Set environment variable
+		envVarName := fmt.Sprintf("OSP_DR_%s", strings.ToUpper(yamlKey))
+		os.Setenv(envVarName, *credVar)
 	}
 }
 
