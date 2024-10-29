@@ -118,7 +118,7 @@ const (
 	DefaultExpectTimeout = 10 * time.Second
 
 	// DefaultMinutesWaitingPerNode is the  number of minutes per node that the MCPs will wait to become updated
-	DefaultMinutesWaitingPerNode = 10
+	DefaultMinutesWaitingPerNode = 13
 
 	// KernelChangeIncWait exta minutes that MCPs will wait per node if we change the kernel in a configuration
 	KernelChangeIncWait = 5
