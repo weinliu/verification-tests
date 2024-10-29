@@ -1790,7 +1790,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 			g.Skip("Can't find the cluster operator openshift-samples, skip it.")
 		}
 		// Skip the test if baselinecaps is set to none, v4.12 or v4.13
-		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") || isBaselineCapsSet(oc, "v4.14") || isBaselineCapsSet(oc, "v4.15") || isBaselineCapsSet(oc, "v4.11") && !isEnabledCapability(oc, "DeploymentConfig") {
+		if isBaselineCapsSet(oc, "None") || isBaselineCapsSet(oc, "v4.13") || isBaselineCapsSet(oc, "v4.12") || isBaselineCapsSet(oc, "v4.14") || isBaselineCapsSet(oc, "v4.15") || isBaselineCapsSet(oc, "v4.11") && !isEnabledCapability(oc, "DeploymentConfig") || !isEnabledCapability(oc, "Build") {
 			g.Skip("Skipping the test as baselinecaps have been set to None and some of API capabilities are not enabled!")
 		}
 

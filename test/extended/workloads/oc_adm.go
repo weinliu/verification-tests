@@ -286,8 +286,8 @@ var _ = g.Describe("[sig-cli] Workloads oc adm command works well", func() {
 
 	//yinzhou@redhat.com
 	g.It("Author:yinzhou-ROSA-OSD_CCS-ARO-ConnectedOnly-Low-11111-Buildconfig should support providing cpu and memory usage", func() {
-		if !isEnabledCapability(oc, "ImageRegistry") {
-			g.Skip("Skip for the test due to image registry not installed")
+		if !isEnabledCapability(oc, "ImageRegistry") || !isEnabledCapability(oc, "Build") {
+			g.Skip("Skip for the test due to image registry or build not installed")
 
 		}
 
