@@ -2666,6 +2666,41 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 			e2e.Failf("Failed to run oc client with fips on")
 		}
 	})
+
+	g.It("Author:yinzhou-ROSA-OSD_CCS-ARO-Critical-11882-Return description of resources with cli describe", func() {
+		exutil.By("Create new namespace")
+		oc.SetupProject()
+		project11882 := oc.Namespace()
+		err := oc.WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", project11882, "--name=example-11882", "--import-mode=PreserveOriginal").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if ok := waitForAvailableRsRunning(oc, "deployment", "example-11882", oc.Namespace(), "1"); ok {
+			e2e.Logf("All pods are runnnig now\n")
+		} else {
+			oc.Run("get").Args("events", "-n", project11882).Output()
+			e2e.Failf("Deploment failed to roll out")
+		}
+
+		output, err := oc.Run("describe").Args("svc", "example-11882", "-n", project11882).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "deployment=example-11882")).To(o.BeTrue())
+		svcyamleFile, err := oc.Run("get").Args("svc", "example-11882", "-n", project11882, "-o", "yaml").OutputToFile("svc-11882.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		outputY, err := oc.Run("describe").Args("-f", svcyamleFile).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(outputY, "deployment=example-11882")).To(o.BeTrue())
+		outputL, err := oc.Run("describe").Args("svc", "-l", "app=example-11882", "-n", project11882).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(outputL, "example-11882")).To(o.BeTrue())
+		outputN, err := oc.Run("describe").Args("svc", "example", "-n", project11882).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(outputN, "example-11882")).To(o.BeTrue())
+		rsName, err := oc.Run("get").Args("rs", "-o=jsonpath={.items[0].metadata.name}", "-n", project11882).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		outputM, err := oc.Run("describe").Args("deploy/example-11882", "rs/"+rsName, "-n", project11882).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(outputM, "example-11882")).To(o.BeTrue())
+		o.Expect(strings.Contains(outputM, rsName)).To(o.BeTrue())
+	})
 })
 
 // ClientVersion ...
