@@ -895,15 +895,26 @@ func uploadBaseImageToVsphere(baseImageSrc, baseImageDest, server, dataCenter, d
 			"GOVC_DATASTORE=" + dataStore,
 			"GOVC_RESOURCE_POOL=" + resourcePool,
 			"GOVC_DATACENTER=" + dataCenter,
-			"GOVC_INSECURE=1",
+			"GOVC_INSECURE=true",
 		}
 	)
 	logger.Infof("Uploading base image %s to vsphere with name %s", baseImageSrc, baseImageDest)
 	logger.Infof("%s %s", execBin, uploadCommand)
 
 	uploadCmd := exec.Command(execBin, uploadCommand...)
-	uploadCmd.Env = os.Environ()
+	originalEnv := os.Environ()
 
+	// In prow the GOVC_TLS_CA_CERTS is not correctly set and it is making the govc command fail.
+	// we remove this variable from the environment
+	var newEnv []string
+	for _, envVar := range originalEnv {
+		if strings.HasPrefix(envVar, "GOVC_TLS_CA_CERTS=") {
+			continue
+		}
+		newEnv = append(newEnv, envVar)
+	}
+
+	uploadCmd.Env = newEnv
 	uploadCmd.Env = append(uploadCmd.Env, govcEnv...)
 
 	out, err := uploadCmd.CombinedOutput()
