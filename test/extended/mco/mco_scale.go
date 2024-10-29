@@ -98,7 +98,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 	})
 
 	// 4.3 is the first image supporting fips
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Critical-76471-Scaleup using 4.12 cloud image[Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Critical-77051-Scaleup using 4.3 cloud image[Disruptive]", func() {
 		var (
 			imageVersion = "4.3"
 			numNewNodes  = 1 // the number of nodes scaled up in the new Machineset
