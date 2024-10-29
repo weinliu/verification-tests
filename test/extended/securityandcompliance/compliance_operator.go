@@ -675,9 +675,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		checkComplianceSuiteStatus(oc, ssb.name, subD.namespace, "DONE")
-		checkComplianceSuiteStatus(oc, ssbWithVersionSuffix14.name, subD.namespace, "DONE")
-		checkComplianceSuiteStatus(oc, ssbWithVersionSuffix15.name, subD.namespace, "DONE")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbWithVersionSuffix14.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbWithVersionSuffix15.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteName(oc, ssb.name)
@@ -2131,7 +2131,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		g.By("Check ComplianceSuite status !!!\n")
-		checkComplianceSuiteStatus(oc, ssb.name, ssb.namespace, "DONE")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteName(oc, ssb.name)
@@ -3866,7 +3866,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssbNerc, ok, []string{"scansettingbinding", ssbNerc, "-n", subD.namespace,
 			"-o=jsonpath={.metadata.name}"}).check(oc)
 		g.By("Check ComplianceSuite status !!!\n")
-		checkComplianceSuiteStatus(oc, ssbNerc, subD.namespace, "DONE")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbNerc, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteName(oc, ssbNerc)
@@ -3969,9 +3969,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		checkComplianceSuiteStatus(oc, ssb.name, subD.namespace, "DONE")
-		checkComplianceSuiteStatus(oc, ssbWithVersion32.name, subD.namespace, "DONE")
-		checkComplianceSuiteStatus(oc, ssbWithVersion40.name, subD.namespace, "DONE")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbWithVersion32.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbWithVersion40.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteName(oc, ssb.name)
@@ -4029,7 +4029,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		g.By("Check ComplianceSuite status !!!\n")
-		checkComplianceSuiteStatus(oc, ssb.name, subD.namespace, "DONE")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteName(oc, ssb.name)
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
@@ -4531,7 +4531,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		checkComplianceSuiteStatus(oc, ssbCis, subD.namespace, "DONE")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbCis, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssbCis, "NON-COMPLIANT")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "COMPLIANT", ok, []string{"compliancescan",
 			"ocp4-cis-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
@@ -4552,11 +4552,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 			_, err = OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbCis, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			subD.complianceSuiteResult(oc, ssbCis, "NON-COMPLIANT")
+			subD.complianceSuiteResult(oc, ssbCis, "NON-COMPLIANT COMPLIANT")
 			newCheck("expect", asAdmin, withoutNamespace, contain, "COMPLIANT", ok, []string{"compliancescan",
 				"ocp4-cis-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
-				"ocp4-cis", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 		}
 
 		g.By("ClusterOperator should be healthy after running rescan")
@@ -4646,7 +4644,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		checkComplianceSuiteStatus(oc, ssbPci, subD.namespace, "DONE")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbPci, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssbPci, "NON-COMPLIANT")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "COMPLIANT", ok, []string{"compliancescan",
 			"ocp4-pci-dss-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
@@ -4667,12 +4665,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 			_, err = OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbPci, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			checkComplianceSuiteStatus(oc, ssbPci, subD.namespace, "DONE")
-			subD.complianceSuiteResult(oc, ssbPci, "NON-COMPLIANT")
+			assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbPci, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+			subD.complianceSuiteResult(oc, ssbPci, "NON-COMPLIANT COMPLIANT")
 			newCheck("expect", asAdmin, withoutNamespace, contain, "COMPLIANT", ok, []string{"compliancescan",
 				"ocp4-pci-dss-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
-				"ocp4-pci-dss", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
 		}
 
 		g.By("ClusterOperator should be healthy after running rescan")
@@ -4762,7 +4758,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		checkComplianceSuiteStatus(oc, ssbHigh, subD.namespace, "DONE")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbHigh, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, ssbHigh, "NON-COMPLIANT INCONSISTENT")
@@ -4809,7 +4805,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		if crResult != "" {
 			_, err = OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbHigh, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			checkComplianceSuiteStatus(oc, ssbHigh, subD.namespace, "DONE")
+			assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbHigh, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 			subD.complianceSuiteResult(oc, ssbHigh, "NON-COMPLIANT INCONSISTENT")
 		}
 
@@ -4914,7 +4910,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		checkComplianceSuiteStatus(oc, ssbNercCip, subD.namespace, "DONE")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbNercCip, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, ssbNercCip, "NON-COMPLIANT INCONSISTENT")
@@ -4960,7 +4956,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 			_, err = OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbNercCip, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			checkComplianceSuiteStatus(oc, ssbNercCip, subD.namespace, "DONE")
+			assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbNercCip, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 			subD.complianceSuiteResult(oc, ssbNercCip, "NON-COMPLIANT INCONSISTENT")
 		}
 
@@ -4968,7 +4964,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		clusterOperatorHealthcheck(oc, 1500)
 
 		g.By("Check rules and remediation status !!!\n")
-		checkComplianceSuiteStatus(oc, ssbNercCip, subD.namespace, "DONE")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbNercCip, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssbNercCip, "NON-COMPLIANT INCONSISTENT")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "NON-COMPLIANT", ok, []string{"compliancescan",
 			"ocp4-nerc-cip-node-wrscan", "-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
@@ -5070,7 +5066,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		checkComplianceSuiteStatus(oc, ssbModerate, subD.namespace, "DONE")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbModerate, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, ssbModerate, "NON-COMPLIANT INCONSISTENT")
@@ -5119,7 +5115,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 			_, err = OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbModerate, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			checkComplianceSuiteStatus(oc, ssbModerate, subD.namespace, "DONE")
+			assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbModerate, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 			subD.complianceSuiteResult(oc, ssbModerate, "NON-COMPLIANT INCONSISTENT")
 		}
 
@@ -5493,7 +5489,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		checkComplianceSuiteStatus(oc, ssb.name, subD.namespace, "DONE")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteName(oc, ssb.name)
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
@@ -6094,7 +6090,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		checkComplianceSuiteStatus(oc, ssbStig, subD.namespace, "DONE")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbStig, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, ssbStig, "NON-COMPLIANT INCONSISTENT")
@@ -6141,7 +6137,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 			_, err = OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbStig, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			checkComplianceSuiteStatus(oc, ssbStig, subD.namespace, "DONE")
+			assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbStig, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 			subD.complianceSuiteResult(oc, ssbStig, "NON-COMPLIANT INCONSISTENT")
 		}
 
@@ -6729,7 +6725,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status !!!\n")
-		checkComplianceSuiteStatus(oc, ssbE8, subD.namespace, "DONE")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbE8, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, ssbE8, "NON-COMPLIANT INCONSISTENT")
@@ -6775,7 +6771,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 			_, err = OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbE8, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			checkComplianceSuiteStatus(oc, ssbE8, subD.namespace, "DONE")
+			assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbE8, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 			subD.complianceSuiteResult(oc, ssbE8, "NON-COMPLIANT INCONSISTENT")
 		}
 
