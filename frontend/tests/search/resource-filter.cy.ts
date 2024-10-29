@@ -17,8 +17,7 @@ describe('show shortname in console resourse badge', () => {
 
   it('(OCP-67717,xiyuzhao,UserInterface)Correct shortname in console resource barge',{tags:['@userinterface','@e2e','admin','@rosa','@osd-ccs']}, () => {
     searchPage.navToSearchPage();
-    cy.get('button[aria-label="Options menu"]').click();
-    cy.get('input[type="search"]').clear().type(`far`);
+    cy.get('input[placeholder="Resources"]').clear().type(`far`);
     cy.get(`.co-m-resource-icon.co-m-resource-fenceagentsremediationtemplate`)
       .should('have.text', 'FAR');
   })
