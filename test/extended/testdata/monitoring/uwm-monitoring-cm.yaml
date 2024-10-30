@@ -15,7 +15,7 @@ data:
       retention: 15d
       additionalAlertmanagerConfigs:
       - scheme: http
-        prefix: /
+        pathPrefix: /
         timeout: 30s
         apiVersion: v2
         staticConfigs:
@@ -27,7 +27,7 @@ data:
       retention: 15d
       additionalAlertmanagerConfigs:
       - scheme: http
-        prefix: /
+        pathPrefix: /
         timeout: 30s
         apiVersion: v2
         staticConfigs:

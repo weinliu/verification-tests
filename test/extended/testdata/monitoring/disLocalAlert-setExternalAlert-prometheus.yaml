@@ -11,7 +11,7 @@ data:
     prometheusK8s:
       additionalAlertmanagerConfigs:
       - scheme: http
-        prefix: /
+        pathPrefix: /
         timeout: 30s
         apiVersion: v2
         staticConfigs:
