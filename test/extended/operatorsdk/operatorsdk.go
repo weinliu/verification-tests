@@ -1789,7 +1789,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:xzha-High-42028-Update python kubernetes and python openshift to kubernetes 12.0.0", func() {
+	g.It("Author:xzha-VMonly-ConnectedOnly-High-42028-Check python kubernetes package", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
@@ -1819,14 +1819,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		e2e.Logf("command %s: %s", commandStr, output)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Version:"))
-		o.Expect(output).To(o.ContainSubstring("25.3."))
-
-		commandStr = []string{"pip3", "show", "openshift"}
-		output, err = containerCLI.Exec(id, commandStr)
-		e2e.Logf("command %s: %s", commandStr, output)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Version:"))
-		o.Expect(output).To(o.ContainSubstring("0.12."))
+		o.Expect(output).To(o.ContainSubstring("29.0."))
 
 		e2e.Logf("OCP 42028 SUCCESS")
 	})
