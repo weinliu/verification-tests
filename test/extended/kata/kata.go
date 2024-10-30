@@ -157,7 +157,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		e2e.Logf("The current platform is %v. OCP %v.%v cluster version: %v", cloudPlatform, ocpMajorVer, ocpMinorVer, clusterVersion)
 
-		err = ensureOpenshiftSandboxedContainerOperatorIsSubscribed(oc, subscription, subTemplate)
+		err = ensureOperatorIsSubscribed(oc, subscription, subTemplate)
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
 		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
 
@@ -238,6 +238,26 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		if testrun.workloadToTest == "coco" {
 			err = ensureFeatureGateIsApplied(oc, subscription, featureGatesFile)
 			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: could not apply osc-feature-gates cm: %v", err))
+			trusteeSubscription := SubscriptionDescription{
+				subName:                "trustee-operator",
+				namespace:              "trustee-operator-system",
+				catalogSourceName:      testrun.trusteeCatalogSourcename,
+				catalogSourceNamespace: "openshift-marketplace",
+				channel:                "stable",
+				ipApproval:             "Automatic",
+				operatorPackage:        "trustee-operator",
+				template:               subTemplate,
+			}
+
+			err = ensureNamespaceIsInstalled(oc, trusteeSubscription.namespace, namespaceTemplate)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
+
+			err = ensureOperatorGroupIsInstalled(oc, trusteeSubscription.namespace, ogTemplate)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
+
+			err = ensureOperatorIsSubscribed(oc, trusteeSubscription, subTemplate)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
+
 		}
 
 		// should check kataconfig here & already have checked subscription

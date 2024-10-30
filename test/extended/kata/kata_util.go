@@ -44,22 +44,23 @@ type KataconfigDescription struct {
 }
 
 type TestRunDescription struct {
-	checked            bool
-	catalogSourceName  string
-	channel            string
-	redirectNeeded     bool
-	mustgatherImage    string
-	operatorVer        string
-	eligibility        bool
-	labelSingleNode    bool
-	eligibleSingleNode bool
-	runtimeClassName   string
-	enablePeerPods     bool
-	enableGPU          bool
-	podvmImageUrl      string
-	workloadImage      string
-	installKataRPM     bool
-	workloadToTest     string
+	checked                  bool
+	catalogSourceName        string
+	channel                  string
+	redirectNeeded           bool
+	mustgatherImage          string
+	operatorVer              string
+	eligibility              bool
+	labelSingleNode          bool
+	eligibleSingleNode       bool
+	runtimeClassName         string
+	enablePeerPods           bool
+	enableGPU                bool
+	podvmImageUrl            string
+	workloadImage            string
+	installKataRPM           bool
+	workloadToTest           string
+	trusteeCatalogSourcename string
 }
 
 // If you changes this please make changes to func createPeerPodSecrets
@@ -155,7 +156,7 @@ func ensureOperatorGroupIsInstalled(oc *exutil.CLI, namespace, templateFile stri
 	return err
 }
 
-func ensureOpenshiftSandboxedContainerOperatorIsSubscribed(oc *exutil.CLI, sub SubscriptionDescription, subTemplate string) (err error) {
+func ensureOperatorIsSubscribed(oc *exutil.CLI, sub SubscriptionDescription, subTemplate string) (err error) {
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "--no-headers").Output()
 	if err != nil || strings.Contains(msg, "Error from server (NotFound):") {
 		subFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", sub.template, "-p", "SUBNAME="+sub.subName, "SUBNAMESPACE="+sub.namespace, "CHANNEL="+sub.channel,
@@ -1782,6 +1783,22 @@ func getTestRunConfigmap(oc *exutil.CLI, testrun *TestRunDescription, testrunCon
 		}
 	} else {
 		errorMessage = fmt.Sprintf("workloadToTest is missing from data\n%v", errorMessage)
+	}
+
+	// only if testing coco workloads
+	// not required yet, so set defaults
+	if testrun.workloadToTest == "coco" {
+		trusteeTestrunDataExists := false
+		if gjson.Get(configmapData, "trusteeCatalogSourcename").Exists() {
+			testrun.trusteeCatalogSourcename = gjson.Get(configmapData, "trusteeCatalogSourcename").String()
+			trusteeTestrunDataExists = true
+		} else {
+			testrun.trusteeCatalogSourcename = "redhat-operator"
+			// errorMessage = fmt.Sprintf("Testing coco workload and trusteeCatalogSourcename is missing from data\n%v", errorMessage)
+		}
+		if !trusteeTestrunDataExists {
+			e2e.Logf("Some of the trustee data was not in osc.config. Using defaults in those cases")
+		}
 	}
 
 	if errorMessage != "" {
