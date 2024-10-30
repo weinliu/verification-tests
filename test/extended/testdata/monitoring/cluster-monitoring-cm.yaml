@@ -23,9 +23,6 @@ objects:
           - alertmanager-operated.openshift-user-workload-monitoring.svc:9093
       alertmanagerMain:
         logLevel: debug
-      k8sPrometheusAdapter:
-        audit:
-          profile: Request
       thanosQuerier:
         enableRequestLogging: true
         logLevel: debug

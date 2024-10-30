@@ -2276,7 +2276,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		}
 
 		exutil.By("check monitoring-plugin pods are ready")
-		monitoringPluginPodCheck(oc)
+		getReadyPodsWithLabels(oc, "openshift-monitoring", "app.kubernetes.io/component=monitoring-plugin")
 
 		exutil.By("get monitoring-plugin pod name")
 		monitoringPluginPodNames, err := getAllRunningPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/component=monitoring-plugin")
@@ -2836,6 +2836,64 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		exutil.By("check the secret have a new hash")
 		if strings.Compare(secretBefore, secretAfter) == 0 {
 			e2e.Failf("secret not changed!")
+		}
+	})
+
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-73291-Graduate MetricsServer FeatureGate to GA [Serial]", func() {
+		var (
+			metrics_server_test = filepath.Join(monitoringBaseDir, "metrics_server_test.yaml")
+		)
+		exutil.By("delete uwm-config/cm-config at the end of the case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		exutil.By("check metrics-server pods are ready")
+		getReadyPodsWithLabels(oc, "openshift-monitoring", "app.kubernetes.io/component=metrics-server")
+
+		exutil.By("label master node with metrics-server label")
+		nodeList, err := getNodesWithLabel(oc, "node-role.kubernetes.io/master")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, node := range nodeList {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node, "metricsserver-").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("node", node, "metricsserver=deploy").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("schedule metrics-server pods to master node")
+		createResourceFromYaml(oc, "openshift-monitoring", metrics_server_test)
+		podCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 300*time.Second, true, func(context.Context) (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "app.kubernetes.io/component=metrics-server").Output()
+			if err != nil || strings.Contains(output, "Terminating") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(podCheck, "metrics-server pods did not restarting!")
+
+		exutil.By("confirm metrics-server pods scheduled to master nodes, this step may take few mins")
+		getReadyPodsWithLabels(oc, "openshift-monitoring", "app.kubernetes.io/component=metrics-server")
+		podNames, err := getAllRunningPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/component=metrics-server")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, pod := range podNames {
+			nodeName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", pod, "-ojsonpath={.spec.nodeName}", "-n", "openshift-monitoring").Output()
+			nodeCheck, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-ojsonpath={.metadata.labels}").Output()
+			o.Expect(strings.Contains(string(nodeCheck), "node-role.kubernetes.io/master")).Should(o.BeTrue())
+		}
+		exutil.By("check config applied")
+		for _, pod := range podNames {
+			// % oc -n openshift-monitoring get pod metrics-server-7778dbf79b-8frpq -o jsonpath='{.spec.nodeSelector}' | jq
+			cmd := "-ojsonpath={.spec.nodeSelector}"
+			checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, `"metricsserver":"deploy"`, true)
+			// % oc -n openshift-monitoring get pod metrics-server-7778dbf79b-8frpq -o jsonpath='{.spec.topologySpreadConstraints}' | jq
+			cmd = "-ojsonpath={.spec.topologySpreadConstraints}"
+			checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, `"app.kubernetes.io/name":"metrics-server"`, true)
+			checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, `"maxSkew":2`, true)
+			checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, `"topologyKey":"metricsserver"`, true)
+			checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, `"whenUnsatisfiable":"DoNotSchedule"`, true)
+			// % oc get pod -n openshift-monitoring metrics-server-c8cbfd6ff-pnk2z -o go-template='{{range.spec.containers}}{{"Container Name: "}}{{.name}}{{"\r\nresources: "}}{{.resources}}{{"\n"}}{{end}}'
+			cmd = `-ogo-template={{range.spec.containers}}{{"Container Name: "}}{{.name}}{{"\r\nresources: "}}{{.resources}}{{"\n"}}{{end}}`
+			checkYamlconfig(oc, "openshift-monitoring", "pod", pod, cmd, `resources: map[limits:map[cpu:50m memory:500Mi] requests:map[cpu:10m memory:50Mi]]`, true)
 		}
 	})
 
