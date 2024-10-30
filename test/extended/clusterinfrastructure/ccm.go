@@ -548,7 +548,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-NonHyperShiftHOST-Medium-74047-The cloud-provider and cloud-config flags should be removed from KCM/KAS", func() {
+	// Marking the test flaky due to issue https://issues.redhat.com/browse/OCPBUGS-42756
+	g.It("Author:zhsun-NonHyperShiftHOST-Medium-74047-The cloud-provider and cloud-config flags should be removed from KCM/KAS [Flaky]", func() {
 		SkipIfCloudControllerManagerNotDeployed(oc)
 		g.By("Check no `cloud-provider` and `cloud-config` set on KCM and KAS")
 		kapi, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/config", "-n", "openshift-kube-apiserver", "-o=jsonpath={.data.config\\.yaml}").Output()
