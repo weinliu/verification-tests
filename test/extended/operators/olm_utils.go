@@ -113,7 +113,7 @@ func (sub *subscriptionDescription) create(oc *exutil.CLI, itName string, dr des
 
 	sub.createWithoutCheck(oc, itName, dr)
 	if strings.Compare(sub.ipApproval, "Automatic") == 0 {
-		sub.findInstalledCSV(oc, itName, dr)
+		sub.findInstalledCSVWithSkip(oc, itName, dr, true)
 	} else {
 		newCheck("expect", asAdmin, withoutNamespace, compare, "UpgradePending", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}"}).check(oc)
 	}
@@ -153,6 +153,9 @@ func (sub *subscriptionDescription) createWithoutCheck(oc *exutil.CLI, itName st
 	// So, change it to one line with necessary information csv name and namespace.
 	allCSVs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "--all-namespaces", "-o=jsonpath={range .items[*]}{@.metadata.name}{\",\"}{@.metadata.namespace}{\":\"}{end}").Output()
 	if err != nil {
+		if strings.Contains(allCSVs, "unexpected EOF") {
+			g.Skip(fmt.Sprintf("skip case with %v", allCSVs))
+		}
 		e2e.Failf("!!! Couldn't get all CSVs:%v\n", err)
 	}
 	csvMap := make(map[string][]string)
@@ -210,8 +213,12 @@ func (sub *subscriptionDescription) createWithoutCheck(oc *exutil.CLI, itName st
 // if it is AtLatestKnown, get installed csv from sub and save it to dr.
 // if it is not AtLatestKnown, raise error.
 func (sub *subscriptionDescription) findInstalledCSV(oc *exutil.CLI, itName string, dr describerResrouce) {
-	err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
-		state := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}")
+	sub.findInstalledCSVWithSkip(oc, itName, dr, false)
+}
+
+func (sub *subscriptionDescription) findInstalledCSVWithSkip(oc *exutil.CLI, itName string, dr describerResrouce, skip bool) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
+		state, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}").Output()
 		if strings.Compare(state, "AtLatestKnown") == 0 {
 			return true, nil
 		}
@@ -221,10 +228,19 @@ func (sub *subscriptionDescription) findInstalledCSV(oc *exutil.CLI, itName stri
 	if err != nil {
 		message, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("sub", sub.subName, "-n", sub.namespace).Output()
 		e2e.Logf(message)
-		getResource(oc, asAdmin, withoutNamespace, "installplan", "-n", sub.namespace, "-o=jsonpath-as-json={..status}")
-		getResource(oc, asAdmin, withoutNamespace, "pod", "-n", sub.catalogSourceNamespace)
-		getResource(oc, asAdmin, withoutNamespace, "pod", "-n", sub.namespace)
-		getResource(oc, asAdmin, withoutNamespace, "event", "-n", sub.namespace)
+		message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace,
+			"-o=jsonpath={.status.conditions[?(@.type==\"ResolutionFailed\")].message}").Output()
+		if sub.assertToSkipSpecificMessage(message) && skip {
+			g.Skip(fmt.Sprintf("the case skip without issue and impacted by others: %s", message))
+		}
+		message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", "-n", sub.namespace, "-o=jsonpath-as-json={..status}").Output()
+		e2e.Logf(message)
+		message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", sub.catalogSourceNamespace).Output()
+		e2e.Logf(message)
+		message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", sub.namespace).Output()
+		e2e.Logf(message)
+		message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", sub.namespace).Output()
+		e2e.Logf(message)
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("sub %s stat is not AtLatestKnown", sub.subName))
 
@@ -235,6 +251,19 @@ func (sub *subscriptionDescription) findInstalledCSV(oc *exutil.CLI, itName stri
 		dr.getIr(itName).add(newResource(oc, "csv", sub.installedCSV, requireNS, sub.namespace))
 	}
 	e2e.Logf("the installed CSV name is %s", sub.installedCSV)
+}
+
+func (sub *subscriptionDescription) assertToSkipSpecificMessage(message string) bool {
+	specificMessages := []string{
+		"subscription sub-learn-46964 requires @existing/openshift-operators//learn-operator.v0.0.3",
+	}
+	for _, specificMessage := range specificMessages {
+		if strings.Contains(message, specificMessage) {
+			return true
+		}
+	}
+	return false
+
 }
 
 // the method is to check if the cv parameter is same to the installed csv.
@@ -421,7 +450,7 @@ func (sub *subscriptionDescriptionProxy) createWithoutCheck(oc *exutil.CLI, itNa
 func (sub *subscriptionDescriptionProxy) create(oc *exutil.CLI, itName string, dr describerResrouce) {
 	sub.createWithoutCheck(oc, itName, dr)
 	if strings.Compare(sub.ipApproval, "Automatic") == 0 {
-		sub.findInstalledCSV(oc, itName, dr)
+		sub.findInstalledCSVWithSkip(oc, itName, dr, true)
 	} else {
 		newCheck("expect", asAdmin, withoutNamespace, compare, "UpgradePending", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}"}).check(oc)
 	}

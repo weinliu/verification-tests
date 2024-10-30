@@ -692,8 +692,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				singleNamespace:        single,
 				template:               subTemplate,
 			}
-			defer sub.deleteCSV(itName, dr)
 			defer sub.delete(itName, dr)
+			defer func() {
+				if sub.installedCSV == "" {
+					sub.findInstalledCSV(oc, itName, dr)
+				}
+				sub.deleteCSV(itName, dr)
+			}()
 			sub.create(oc, itName, dr)
 			// skip default namespace's csv status checking since it will fail due to PSA issue
 			if project == "default" {
@@ -1184,8 +1189,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			template:               subTemplate,
 		}
 		defer sub.delete(itName, dr)
+		defer func() {
+			if sub.installedCSV == "" {
+				sub.findInstalledCSV(oc, itName, dr)
+			}
+			sub.deleteCSV(itName, dr)
+		}()
 		sub.create(oc, itName, dr)
-		defer sub.deleteCSV(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", "openshift-operators", "-o=jsonpath={.status.phase}"}).check(oc)
 
 		exutil.By("2) Create testing projects and Multi OperatorGroup")
@@ -1492,9 +1502,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-Medium-43977-OPENSHIFT_VERSIONS in assisted operator subscription does not propagate [Serial]", func() {
 		// From 4.12, improve the ns permissions so that pod can be run successfully.
-		defer exutil.RecoverNamespaceRestricted(oc, "default")
-		_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", "default", "security.openshift.io/scc.podSecurityLabelSync=false", "pod-security.kubernetes.io/enforce=baseline", "pod-security.kubernetes.io/audit=baseline", "pod-security.kubernetes.io/warn=baseline", "--overwrite").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		// it is already privileged for default, so no need to set it.
 
 		// this operator must be installed in the default project since the env variable: MY_POD_NAMESPACE = default
 		exutil.By("1) create the OperatorGroup in the default project")
@@ -1528,8 +1536,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			template:               subTemplate,
 		}
 		defer sub.delete(itName, dr)
+		defer func() {
+			if sub.installedCSV == "" {
+				sub.findInstalledCSV(oc, itName, dr)
+			}
+			sub.deleteCSV(itName, dr)
+		}()
+		// the create method fails due that timeout, but some times csv is created, so need to delete them with defer if you do not delete ns.
 		sub.create(oc, itName, dr)
-		defer sub.deleteCSV(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", "default", "-o=jsonpath={.status.phase}"}).check(oc)
 
 		exutil.By("3) check those env variables")
@@ -2941,7 +2955,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			ipApproval:             "Automatic",
 			operatorPackage:        "learn",
 			startingCSV:            "learn-operator.v0.0.3",
-			singleNamespace:        false,
+			singleNamespace:        true,
 			template:               subTemplate,
 		}
 
@@ -3082,7 +3096,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			ipApproval:             "Automatic",
 			operatorPackage:        "learn",
 			startingCSV:            "learn-operator.v0.0.3",
-			singleNamespace:        false,
+			singleNamespace:        true,
 			template:               subTemplate,
 		}
 		secret := secretDescription{
@@ -3173,7 +3187,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			ipApproval:             "Automatic",
 			operatorPackage:        "learn",
 			startingCSV:            "learn-operator.v0.0.3",
-			singleNamespace:        false,
+			singleNamespace:        true,
 			template:               subTemplate,
 		}
 		secret := secretDescription{
@@ -3316,7 +3330,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 
-		oc.SetupProject()
 		exutil.By("Start to create the CatalogSource CR")
 		cs := catalogSourceDescription{
 			name:        "prometheus-dependency1-cs",
@@ -3338,7 +3351,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 		exutil.By("1) Install the OperatorGroup in a random project")
 
-		oc.SetupProject()
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		og := operatorGroupDescription{
 			name:      "og-27680",
@@ -3405,7 +3417,12 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 
 		defer sub.delete(itName, dr)
-		defer sub.deleteCSV(itName, dr)
+		defer func() {
+			if sub.installedCSV == "" {
+				sub.findInstalledCSV(oc, itName, dr)
+			}
+			sub.deleteCSV(itName, dr)
+		}()
 		sub.create(oc, itName, dr)
 
 		exutil.By("check if camel-k is already installed")
@@ -3708,7 +3725,12 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			template:               subTemplate,
 		}
 		defer sub.delete(itName, dr)
-		defer sub.deleteCSV(itName, dr)
+		defer func() {
+			if sub.installedCSV == "" {
+				sub.findInstalledCSV(oc, itName, dr)
+			}
+			sub.deleteCSV(itName, dr)
+		}()
 		sub.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.phase}"}).check(oc)
 
@@ -10136,7 +10158,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				channel:                "beta",
 				ipApproval:             "Automatic",
 				operatorPackage:        "learn",
-				singleNamespace:        false,
+				singleNamespace:        true,
 				template:               subTemplate,
 			}
 			role = roleDescription{
@@ -12719,10 +12741,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		newCheck("expect", asAdmin, withoutNamespace, compare, "[]", ok, []string{"og", "global-operators", "-n", "openshift-operators", "-o=jsonpath={.status.namespaces}"})
 
 		exutil.By("create subscription targeted at all namespace")
-		sub.create(oc, itName, dr)
 		defer sub.delete(itName, dr)
-		defer sub.deleteCSV(itName, dr)
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", "webhooktests.webhook.operators.coreos.io", "-n", "openshift-operators").Execute()
+		defer func() {
+			if sub.installedCSV == "" {
+				sub.findInstalledCSV(oc, itName, dr)
+			}
+			sub.deleteCSV(itName, dr)
+		}()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", "webhooktests.webhook.operators.coreos.io", "-n", "openshift-operators", "--ignore-not-found").Execute()
+		sub.create(oc, itName, dr)
 
 		err := wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err := oc.AsAdmin().WithoutNamespace().Run("api-resources").Args("-o", "name").Output()
@@ -12794,9 +12821,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		newCheck("expect", asAdmin, withoutNamespace, compare, "[]", ok, []string{"og", "global-operators", "-n", "openshift-operators", "-o=jsonpath={.status.namespaces}"})
 
 		exutil.By("2, Create operator targeted at all namespace")
-		sub.create(oc, itName, dr)
 		defer sub.delete(itName, dr)
-		defer sub.deleteCSV(itName, dr)
+		defer func() {
+			if sub.installedCSV == "" {
+				sub.findInstalledCSV(oc, itName, dr)
+			}
+			sub.deleteCSV(itName, dr)
+		}()
+		sub.create(oc, itName, dr)
 
 		exutil.By("3, Create new namespace")
 		oc.SetupProject()

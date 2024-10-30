@@ -181,6 +181,14 @@ class SummaryClient:
             return True
         if re.search("Get \"https:.*: EOF",message):
             return True
+        if re.search("\"https:.*: unexpected EOF",message):
+            return True
+        if re.search("\"https:.*: use of closed network connection",message):
+            return True
+        if "unable to create the debug pod" in message:
+            return True
+        if re.search("Post \"https:.*: EOF",message):
+            return True
         return False
 
 
