@@ -1385,11 +1385,6 @@ func compareClusterResources(oc *exutil.CLI, cpu, memory string) bool {
 // supportedPlatforms the platform types which the case can be executed on, if it's empty, then skip this check
 func validateInfraForLoki(oc *exutil.CLI, supportedPlatforms ...string) bool {
 	currentPlatform := exutil.CheckPlatform(oc)
-	if currentPlatform == "azure" && exutil.IsWorkloadIdentityCluster(oc) {
-		// skip the case on sts clusters. Todo use sts secret once LOG-4540 is done
-		e2e.Logf("Skip the case on sts clusters")
-		return false
-	}
 	if len(supportedPlatforms) > 0 {
 		return contain(supportedPlatforms, currentPlatform)
 	}
