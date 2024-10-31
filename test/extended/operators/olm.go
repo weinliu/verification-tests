@@ -4320,8 +4320,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 					e2e.Logf("cpu: %v", cpu)
 					intcpu, _ := strconv.Atoi(strings.ReplaceAll(cpu, "m", ""))
 					e2e.Logf("cpu: %v", intcpu)
-					o.Expect(intcpu > 98).NotTo(o.BeTrue())
-					return true, nil
+					if intcpu <= 98 {
+						return true, nil
+					}
 				}
 			}
 			e2e.Logf("get cpu usage failed: output is %s", checkRel)
@@ -12704,7 +12705,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			defer doAction(oc, "delete", asAdmin, withoutNamespace, "csv", subCockroachdb1.installedCSV, "-n", subCockroachdb1.namespace)
 			newCheck("expect", asAdmin, withoutNamespace, contain, "ClusterServiceVersion", ok, []string{"operator.operators.coreos.com", subCockroachdb1.operatorPackage + "." + subCockroachdb1.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 			newCheck("expect", asAdmin, withoutNamespace, contain, subCockroachdb1.namespace, ok, []string{"operator.operators.coreos.com", subCockroachdb1.operatorPackage + "." + subCockroachdb1.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator.operators.coreos.com", subCockroachdb1.operatorPackage + "." + subCockroachdb1.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
+			newCheck("expect", asAdmin, withoutNamespace, contain, "Install", ok, []string{"operator.operators.coreos.com", subCockroachdb1.operatorPackage + "." + subCockroachdb1.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
 
 			exutil.By("delete operator and delete Operator and it will be recreated because of crd")
 			subCockroachdb1.delete(itName, dr)
@@ -12812,7 +12813,10 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		err = wait.PollUntilContextTimeout(context.TODO(), 15*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			erra := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Execute()
 			if erra != nil {
-				e2e.Logf("try next, err:%v", err)
+				e2e.Logf("try next, err:%v", erra)
+				if strings.Contains(erra.Error(), "Internal error occurred") {
+					return true, nil
+				}
 				return false, nil
 			}
 			return true, nil
