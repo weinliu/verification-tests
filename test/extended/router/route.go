@@ -400,13 +400,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("7.0: Check HaProxy if the IP in the whitelist annotation exists")
 		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+unsecureRoute)
-		o.Expect(searchOutput).To(o.ContainSubstring(`acl whitelist src 5.6.7.8`))
+		o.Expect(searchOutput).To(o.ContainSubstring(`acl allowlist src 5.6.7.8`))
 		searchOutput = readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+edgeRoute)
-		o.Expect(searchOutput).To(o.ContainSubstring(`acl whitelist src 5.6.7.8`))
+		o.Expect(searchOutput).To(o.ContainSubstring(`acl allowlist src 5.6.7.8`))
 		searchOutput = readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+passthroughRoute)
-		o.Expect(searchOutput).To(o.ContainSubstring(`acl whitelist src 5.6.7.8`))
+		o.Expect(searchOutput).To(o.ContainSubstring(`acl allowlist src 5.6.7.8`))
 		searchOutput = readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+reenRoute)
-		o.Expect(searchOutput).To(o.ContainSubstring(`acl whitelist src 5.6.7.8`))
+		o.Expect(searchOutput).To(o.ContainSubstring(`acl allowlist src 5.6.7.8`))
 
 	})
 
@@ -450,7 +450,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("7.0: Check HaProxy if the IP in the whitelist annotation exists")
 		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+unsecureRoute)
-		o.Expect(searchOutput).To(o.ContainSubstring(`acl whitelist src 0.0.0.0/0`))
+		o.Expect(searchOutput).To(o.ContainSubstring(`acl allowlist src 0.0.0.0/0`))
 
 	})
 
@@ -679,10 +679,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		podName := getNewRouterPod(oc, "default")
 		//backendName is the leading context of the route
 		backendName := "be_http:" + oc.Namespace() + ":service-unsecure"
-		output = readHaproxyConfig(oc, podName, backendName, "-A10", "acl whitelist")
-		o.Expect(output).To(o.ContainSubstring(`acl whitelist src 192.168.0.0/24`))
-		o.Expect(output).To(o.ContainSubstring(`tcp-request content reject if !whitelist`))
-		o.Expect(output).NotTo(o.ContainSubstring(`acl whitelist src -f /var/lib/haproxy/router/whitelists/`))
+		output = readHaproxyConfig(oc, podName, backendName, "-A10", "acl allowlist")
+		o.Expect(output).To(o.ContainSubstring(`acl allowlist src 192.168.0.0/24`))
+		o.Expect(output).To(o.ContainSubstring(`tcp-request content reject if !allowlist`))
+		o.Expect(output).NotTo(o.ContainSubstring(`acl allowlist src -f /var/lib/haproxy/router/allowlists/`))
 
 		exutil.By("annotate the route with haproxy.router.openshift.io/ip_whitelist with more than 61 CIDR values and verify")
 		setAnnotation(oc, oc.Namespace(), "route/service-unsecure", "haproxy.router.openshift.io/ip_whitelist=192.168.0.0/24 192.168.1.0/24 192.168.2.0/24 192.168.3.0/24 192.168.4.0/24 192.168.5.0/24 192.168.6.0/24 192.168.7.0/24 192.168.8.0/24 192.168.9.0/24 192.168.10.0/24 192.168.11.0/24 192.168.12.0/24 192.168.13.0/24 192.168.14.0/24 192.168.15.0/24 192.168.16.0/24 192.168.17.0/24 192.168.18.0/24 192.168.19.0/24 192.168.20.0/24 192.168.21.0/24 192.168.22.0/24 192.168.23.0/24 192.168.24.0/24 192.168.25.0/24 192.168.26.0/24 192.168.27.0/24 192.168.28.0/24 192.168.29.0/24 192.168.30.0/24 192.168.31.0/24 192.168.32.0/24 192.168.33.0/24 192.168.34.0/24 192.168.35.0/24 192.168.36.0/24 192.168.37.0/24 192.168.38.0/24 192.168.39.0/24 192.168.40.0/24 192.168.41.0/24 192.168.42.0/24 192.168.43.0/24 192.168.44.0/24 192.168.45.0/24 192.168.46.0/24 192.168.47.0/24 192.168.48.0/24 192.168.49.0/24 192.168.50.0/24 192.168.51.0/24 192.168.52.0/24 192.168.53.0/24 192.168.54.0/24 192.168.55.0/24 192.168.56.0/24 192.168.57.0/24 192.168.58.0/24 192.168.59.0/24 192.168.60.0/24 192.168.61.0/24")
@@ -692,9 +692,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("verify the acl whitelist parameter inside router pod for whitelist with 62 CIDR values")
 		//backendName is the leading context of the route
-		output2 := readHaproxyConfig(oc, podName, backendName, "-A10", "acl whitelist")
-		o.Expect(output2).To(o.ContainSubstring(`acl whitelist src -f /var/lib/haproxy/router/whitelists/` + oc.Namespace() + `:service-unsecure.txt`))
-		o.Expect(output2).To(o.ContainSubstring(`tcp-request content reject if !whitelist`))
+		output2 := readHaproxyConfig(oc, podName, backendName, "-A10", "acl allowlist")
+		o.Expect(output2).To(o.ContainSubstring(`acl allowlist src -f /var/lib/haproxy/router/allowlists/` + oc.Namespace() + `:service-unsecure.txt`))
+		o.Expect(output2).To(o.ContainSubstring(`tcp-request content reject if !allowlist`))
 	})
 
 	// author: mjoseph@redhat.com
@@ -981,8 +981,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("Verify the acl whitelist parameter inside router pod with Ipv6 address")
 		defaultPod := getNewRouterPod(oc, "default")
 		backendName := "be_http:" + project1 + ":service-unsecure"
-		output = readHaproxyConfig(oc, defaultPod, backendName, "-A5", "acl whitelist src")
-		o.Expect(output).To(o.ContainSubstring(`acl whitelist src 2600:14a0::/40`))
+		output = readHaproxyConfig(oc, defaultPod, backendName, "-A5", "acl allowlist src")
+		o.Expect(output).To(o.ContainSubstring(`acl allowlist src 2600:14a0::/40`))
 	})
 
 	// author: hongli@redhat.com
