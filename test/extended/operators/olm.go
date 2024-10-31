@@ -7319,6 +7319,30 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	//Set it as serial because it will delete CRD of teiid. It potential impact other cases if it is in parallel.
 	g.It("ConnectedOnly-Author:kuiwang-Medium-39897-operator objects should not be recreated after all other associated resources have been deleted [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		if isAks, _ := exutil.IsAKSCluster(context.TODO(), oc); isAks {
+			g.Skip("skip for ask cluster")
+		}
+		exutil.SkipNoCapabilities(oc, "marketplace")
+		node, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		errGet = exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		efips, errGet := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+		if errGet != nil || strings.Contains(efips, "FIPS mode is enabled") {
+			g.Skip("skip it without impacting function")
+		}
+		infra, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		if infra == "SingleReplica" {
+			g.Skip("it is not supported")
+		}
+		platform := exutil.CheckPlatform(oc)
+		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
+		o.Expect(errProxy).NotTo(o.HaveOccurred())
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || exutil.Is3MasterNoDedicatedWorkerNode(oc) ||
+			os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
