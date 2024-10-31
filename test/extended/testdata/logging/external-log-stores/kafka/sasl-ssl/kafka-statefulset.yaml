@@ -118,6 +118,9 @@ objects:
           image: quay.io/openshifttest/kafka-initutils@sha256:e73ff7a44b43b85b53849c0459ba32e704540852b885a5c78af9753f86a49d68
           imagePullPolicy: IfNotPresent
           name: init-config
+          nodeSelector:
+            kubernetes.io/arch: amd64
+            kubernetes.io/os: linux
           resources: {}
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File

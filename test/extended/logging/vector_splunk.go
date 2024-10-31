@@ -24,11 +24,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	g.Context("Log Forward to splunk", func() {
 		// author anli@redhat.com
 		g.BeforeEach(func() {
-			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if nodes.Items[0].Status.NodeInfo.Architecture != "amd64" {
-				g.Skip("Warning: Only AMD64 is supported currently!")
+			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux,kubernetes.io/arch=amd64"})
+			if err != nil || len(nodes.Items) == 0 {
+				g.Skip("Skip for the cluster doesn't have amd64 node")
 			}
+
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			g.By("deploy CLO")
 			CLO := SubscriptionObjects{
@@ -363,11 +363,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 	g.Context("Splunk Custom Tenant", func() {
 		g.BeforeEach(func() {
-			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if nodes.Items[0].Status.NodeInfo.Architecture != "amd64" {
-				g.Skip("Warning: Only AMD64 is supported currently!")
+			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux,kubernetes.io/arch=amd64"})
+			if err != nil || len(nodes.Items) == 0 {
+				g.Skip("Skip for the cluster doesn't have amd64 node")
 			}
+
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			exutil.By("deploy CLO")
 			CLO := SubscriptionObjects{
@@ -881,13 +881,13 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(strings.Contains(outString, `Invalid value: ".kubernetes.namespace_labels.pod-security.kubernetes.io/audit"`)).To(o.BeTrue())
 			o.Expect(strings.Contains(outString, `body should match '^(\.[a-zA-Z0-9_]+|\."[^"]+")(\.[a-zA-Z0-9_]+|\."[^"]+")*$'`)).To(o.BeTrue())
 
-			exutil.By("verify filtersStatus show error when prune fields include .log_type or .message")
-			patch = `[{"op":"add","path":"/spec/filters","value":[{"name":"prune-logs","prune":{"in":[".log_type",".message"]},"type":"prune"}]},{"op":"add","path":"/spec/pipelines/0/filterRefs","value":["prune-logs"]}]`
+			exutil.By("verify filtersStatus show error when prune fields include .log_type, .message or .log_source")
+			patch = `[{"op":"add","path":"/spec/filters","value":[{"name":"prune-logs","prune":{"in":[".log_type",".message",".log_source"]},"type":"prune"}]},{"op":"add","path":"/spec/pipelines/0/filterRefs","value":["prune-logs"]}]`
 			clf.update(oc, "", patch, "--type=json")
-			checkResource(oc, true, false, `prune-logs: [[".log_type" ".message"] is/are required fields and must be removed from the`+" `in` list.]", []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filterConditions[0].message}"})
+			checkResource(oc, true, false, `prune-logs: [[".log_type" ".message" ".log_source"] is/are required fields and must be removed from the`+" `in` list.]", []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filterConditions[0].message}"})
 			patch = `[{"op":"replace","path":"/spec/filters","value":[{"name":"prune-logs","prune":{"notIn":[".kubernetes",".\"@timestamp\"",".openshift",".hostname"]},"type":"prune"}]}]`
 			clf.update(oc, "", patch, "--type=json")
-			checkResource(oc, true, false, `prune-logs: [[".log_type" ".message"] is/are required fields and must be included in`+" the `notIn` list.]", []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filterConditions[0].message}"})
+			checkResource(oc, true, false, `prune-logs: [[".log_source" ".log_type" ".message"] is/are required fields and must be included in`+" the `notIn` list.]", []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.filterConditions[0].message}"})
 
 		})
 	})

@@ -121,9 +121,9 @@ retry_max_duration_secs = 20`,
 		time.Sleep(1 * time.Minute)
 		otelCollector, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", otel.namespace, "pod", "-l", "app.kubernetes.io/component=opentelemetry-collector", "-ojsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		logs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", otel.namespace, otelCollector, "--tail=30").Output()
+		logs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", otel.namespace, otelCollector, "--tail=60").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(logs, "openshift.log.type:")).Should(o.BeTrue())
+		o.Expect(strings.Contains(logs, "LogRecord")).Should(o.BeTrue())
 
 	})
 
@@ -202,7 +202,7 @@ retry_max_duration_secs = 20`,
 		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 		lc := newLokiClient(route).withToken(bearerToken).retry(5)
 		for _, logType := range []string{"application", "infrastructure", "audit"} {
-			lc.waitForLogsAppearByQuery(logType, "{service_name=~\".+\"}")
+			lc.waitForLogsAppearByKey(logType, "log_type", logType)
 		}
 	})
 

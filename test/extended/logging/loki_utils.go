@@ -1468,27 +1468,42 @@ func removeMinIO(oc *exutil.CLI) {
 // queryAlertManagerForLokiAlerts() queries user-workload alert-manager if isUserWorkloadAM parameter is true.
 // All active alerts should be returned when querying Alert Managers
 func queryAlertManagerForActiveAlerts(oc *exutil.CLI, token string, isUserWorkloadAM bool, alertName string, timeInMinutes int) {
-	authBearer := " \"Authorization: Bearer " + token + "\""
-	var cmd string
+	var err error
 	if !isUserWorkloadAM {
 		alertManagerRoute := getRouteAddress(oc, "openshift-monitoring", "alertmanager-main")
-		amURL := "https://" + alertManagerRoute + "/api/v1/alerts"
-		cmd = "curl -k -H" + authBearer + " " + amURL
+		h := make(http.Header)
+		h.Add("Content-Type", "application/json")
+		h.Add("Authorization", "Bearer "+token)
+		params := url.Values{}
+		err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, time.Duration(timeInMinutes)*time.Minute, true, func(context.Context) (done bool, err error) {
+			resp, err := doHTTPRequest(h, "https://"+alertManagerRoute, "/api/v2/alerts", params.Encode(), "GET", true, 5, nil, 200)
+			if err != nil {
+				return false, err
+			}
+			if strings.Contains(string(resp), alertName) {
+				return true, nil
+			}
+			e2e.Logf("Waiting for alert %s to be in Firing state", alertName)
+			return false, nil
+		})
+
 	} else {
 		userWorkloadAlertManagerURL := "https://alertmanager-user-workload.openshift-user-workload-monitoring.svc:9095/api/v2/alerts"
-		cmd = "curl -k -H" + authBearer + " " + userWorkloadAlertManagerURL
+		authBearer := " \"Authorization: Bearer " + token + "\""
+		cmd := "curl -k -H" + authBearer + " " + userWorkloadAlertManagerURL
+		err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, time.Duration(timeInMinutes)*time.Minute, true, func(context.Context) (done bool, err error) {
+			alerts, err := exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "/bin/sh", "-x", "-c", cmd)
+			if err != nil {
+				return false, err
+			}
+			if strings.Contains(string(alerts), alertName) {
+				return true, nil
+			}
+			e2e.Logf("Waiting for alert %s to be in Firing state", alertName)
+			return false, nil
+		})
 	}
-	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, time.Duration(timeInMinutes)*time.Minute, true, func(context.Context) (done bool, err error) {
-		alerts, err := exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", cmd)
-		if err != nil {
-			return false, err
-		}
-		if strings.Contains(string(alerts), alertName) {
-			return true, nil
-		}
-		e2e.Logf("Waiting for alert %s to be in Firing state", alertName)
-		return false, nil
-	})
+
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Alert %s is not firing after %d minutes", alertName, timeInMinutes))
 }
 

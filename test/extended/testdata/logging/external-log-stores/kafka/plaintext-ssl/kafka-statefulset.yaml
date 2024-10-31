@@ -127,6 +127,9 @@ objects:
           - mountPath: /opt/kafka/libs/extensions
             name: extensions
         restartPolicy: Always
+        nodeSelector:
+          kubernetes.io/arch: amd64
+          kubernetes.io/os: linux
         schedulerName: default-scheduler
         securityContext: {}
         terminationGracePeriodSeconds: 30

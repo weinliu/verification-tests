@@ -91,6 +91,9 @@ objects:
           - mountPath: /var/lib/zookeeper
             name: data
         restartPolicy: Always
+        nodeSelector:
+          kubernetes.io/arch: amd64
+          kubernetes.io/os: linux
         schedulerName: default-scheduler
         securityContext: {}
         terminationGracePeriodSeconds: 10

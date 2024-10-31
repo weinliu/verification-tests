@@ -210,10 +210,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("Author:qitang-CPaasrunOnly-Medium-47036-Vector Forward logs to different AMQ Kafka topics[Slow]", func() {
-			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if nodes.Items[0].Status.NodeInfo.Architecture == "arm64" {
-				g.Skip("Current platform not supported/resources not available for this test!")
+			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux,kubernetes.io/arch=amd64"})
+			if err != nil || len(nodes.Items) == 0 {
+				g.Skip("Skip for the cluster doesn't have amd64 node")
 			}
 
 			g.By("create log producer")
@@ -333,10 +332,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		// author qitang@redhat.com
 		g.It("Author:qitang-CPaasrunOnly-WRS-Medium-48141-V-ICA.03-Vector Forward logs to different Kafka brokers.[Slow]", func() {
-			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux"})
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if nodes.Items[0].Status.NodeInfo.Architecture == "arm64" {
-				g.Skip("Current platform not supported/resources not available for this test!")
+			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux,kubernetes.io/arch=amd64"})
+			if err != nil || len(nodes.Items) == 0 {
+				g.Skip("Skip for the cluster doesn't have amd64 node")
 			}
 
 			g.By("create log producer")

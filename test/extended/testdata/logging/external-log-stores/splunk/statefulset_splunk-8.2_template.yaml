@@ -97,6 +97,9 @@ objects:
           - mountPath: /opt/splunk/var
             name: pvc-var
         dnsPolicy: ClusterFirst
+        nodeSelector:
+          kubernetes.io/arch: amd64
+          kubernetes.io/os: linux
         restartPolicy: Always
         schedulerName: default-scheduler
         securityContext:

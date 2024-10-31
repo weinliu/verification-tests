@@ -57,6 +57,9 @@ objects:
           - name: KAFKA_OPTS
             value: -Djava.security.auth.login.config=/etc/kafka-configmap/kafka_client_jaas.conf
         dnsPolicy: ClusterFirst
+        nodeSelector:
+          kubernetes.io/arch: amd64
+          kubernetes.io/os: linux
         restartPolicy: Always
         schedulerName: default-scheduler
         securityContext: {}
