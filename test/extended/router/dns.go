@@ -452,7 +452,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		iplist := getPodIP(oc, "openshift-ingress-operator", ingressContPod[0])
 		ptrValue := "10.0.30.172.in-addr.arpa"
 		if netutils.IsIPv6String(iplist[0]) {
-			ptrValue = "a.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.2.0.d.f.ip6.arpa"
+			ptrValue = "a.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.3.0.d.f.ip6.arpa"
 		}
 
 		// To find the PTR record
