@@ -258,7 +258,8 @@ data:
 		}
 	})
 
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:jshu-Medium-50869-High-53283 CCO Pod Security Admission change", func() {
+	// Author: jshu@redhat.com mihuang@redhat.com
+	g.It("Author:jshu-NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Medium-50869-High-53283-High-77285- CCO Pod Security Admission change", func() {
 		exutil.By("1.Check cloud-credential-operator pod")
 		ccoPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=cloud-credential-operator", "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -277,8 +278,8 @@ data:
 		o.Expect(seccompProfileType).To(o.Equal("RuntimeDefault"))
 		//Check IAAS platform type
 		iaasPlatform := exutil.CheckPlatform(oc)
-		if iaasPlatform == "aws" {
-			exutil.By("2.Check pod-identity-webhook pod when IAAS is aws")
+		if iaasPlatform == "aws" || iaasPlatform == "azure" || iaasPlatform == "gcp" {
+			exutil.By(fmt.Sprintf("2.Check pod-identity-webhook pod for %s", iaasPlatform))
 			if exutil.IsSNOCluster(oc) {
 				checkWebhookSecurityContext(oc, 1)
 			} else {
