@@ -6,7 +6,6 @@ metadata:
     app: hello-openshift
 spec:
   securityContext:
-    runAsNonRoot: true
     seccompProfile:
       type: RuntimeDefault
   containers:
