@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -207,106 +206,16 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 	// author: geliu@redhat.com
 	g.It("Author:geliu-ROSA-ARO-ConnectedOnly-Medium-62006-RH cert-manager operator can be uninstalled from CLI and then reinstalled [Serial]", func() {
-		e2e.Logf("Create an issuer and certificate before performing deletion")
+		e2e.Logf("uninstall the cert-manager operator and cleanup its operand resources")
+		cleanupCertManagerOperator(oc)
+
+		e2e.Logf("install the cert-manager operator again")
+		createCertManagerOperator(oc)
+
+		e2e.Logf("check if the functionality is normal after the reinstall")
 		createIssuer(oc, oc.Namespace())
 		createCertificate(oc, oc.Namespace())
-		e2e.Logf("Verify the issued certificate")
 		verifyCertificate(oc, "default-selfsigned-cert", oc.Namespace())
-
-		e2e.Logf("Delete subscription and csv")
-		csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "openshift-cert-manager-operator", "-n", "cert-manager-operator", "-o=jsonpath={.status.installedCSV}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("sub", "openshift-cert-manager-operator", "-n", "cert-manager-operator").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("csv", csvName, "-n", "cert-manager-operator").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("get certmanager operator pods, it should be gone.\n")
-		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "cert-manager-operator", "pod").Output()
-			if !strings.Contains(output, "No resources found") || err != nil {
-				e2e.Logf("operator pod still exist\n.")
-				return false, nil
-			}
-			e2e.Logf("operator pod deleted as expected.\n")
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, "operator pod have not been deleted.")
-
-		e2e.Logf("Check cert-manager CRDs and apiservices still exist as expected.\n")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "cert-manager") {
-			e2e.Logf("existing crds:\n%v", output)
-			e2e.Failf("crds don't contain cert-manager")
-		}
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("apiservice").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "cert-manager") {
-			e2e.Logf("existing apiservices:\n%v", output)
-			e2e.Failf("apiservices don't contain cert-manager")
-		}
-		e2e.Logf("Clean up cert-manager-operator NS.\n")
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "cert-manager-operator").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Delete operand.\n")
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "cert-manager").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		e2e.Logf("Patching certmanager/cluster with null finalizers is required, otherwise the delete commands can be stuck.\n")
-		patchPath := "{\"metadata\":{\"finalizers\":null}}"
-		err = oc.AsAdmin().Run("patch").Args("certmanagers.operator", "cluster", "--type=merge", "-p", patchPath).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Delete certmanagers.operator cluster.\n")
-		err = oc.AsAdmin().Run("delete").Args("certmanagers.operator", "cluster").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("Delete cert-manager CRDs")
-		crdList, err := oc.AsAdmin().Run("get").Args("crd").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		regexstr, _ := regexp.Compile(".*" + "cert-?manager" + "[0-9A-Za-z-.]*")
-		crdListArry := regexstr.FindAllString(crdList, -1)
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(append([]string{"crd"}, crdListArry...)...).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		statusErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
-			err = oc.AsAdmin().Run("get").Args("issuer").Execute()
-			if err != nil { // We expect the err to be not nil
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(statusErr, "timeout waiting for the cert-manager's CRDs deletion to take effect")
-
-		e2e.Logf("Check the clusterroles and clusterrolebindings remainders")
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrole").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "cert-manager") {
-			e2e.Logf("existing clusterrole:\n%v", output)
-			e2e.Failf("clusterroles don't contain cert-manager")
-		}
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrolebinding").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(output, "cert-manager") {
-			e2e.Logf("existing clusterrolebinding:\n%v", output)
-			e2e.Failf("clusterrolebindings don't contain cert-manager")
-		}
-
-		e2e.Logf("Clean up the clusterroles and clusterrolebindings remainders")
-		clusterroleList, err := oc.AsAdmin().Run("get").Args("clusterrole").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		regexstr, _ = regexp.Compile(".*" + "cert-?manager" + "[0-9A-Za-z-.:]*")
-		clusterroleListArry := regexstr.FindAllString(clusterroleList, -1)
-		_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args(append([]string{"clusterrole"}, clusterroleListArry...)...).Execute()
-		// Some clusterrole resources returned by `oc get` may be automatically deleted. In such case, `NotTo(o.HaveOccurred())` assertion may fail with "xxxx" not found for those resources. So comment out the assertion.
-		// o.Expect(err).NotTo(o.HaveOccurred())
-		clusterrolebindingList, err := oc.AsAdmin().Run("get").Args("clusterrolebinding").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		regexstr, _ = regexp.Compile("(?m)^[^ ]*cert-?manager[^ ]*")
-		clusterrolebindingListArry := regexstr.FindAllString(clusterrolebindingList, -1)
-		_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args(append([]string{"clusterrolebinding"}, clusterrolebindingListArry...)...).Execute()
-		// Some clusterrolebinding resources returned by `oc get` may be automatically deleted. In such case, `NotTo(o.HaveOccurred())` assertion may fail with "xxxx" not found for those resources. So comment out the assertion.
-		// o.Expect(err).NotTo(o.HaveOccurred())
-
-		e2e.Logf("Install the cert-manager operator again")
-		createCertManagerOperator(oc)
 	})
 
 	// author: geliu@redhat.com

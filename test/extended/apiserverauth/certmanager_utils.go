@@ -208,7 +208,7 @@ func getAzureCloudName(oc *exutil.CLI) string {
 	return azureCloudName
 }
 
-// create cert manager
+// create cert-manager operator
 func createCertManagerOperator(oc *exutil.CLI) {
 	const (
 		subscriptionName       = "openshift-cert-manager-operator"
@@ -291,6 +291,73 @@ func createCertManagerOperator(oc *exutil.CLI) {
 		oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", operandNamespace, "-l", operandPodLabel).Execute()
 	}
 	exutil.AssertWaitPollNoErr(err, "timeout waiting for all operand pods phase to become Running")
+}
+
+// uninstall cert-manager operator and cleanup its operand resources
+func cleanupCertManagerOperator(oc *exutil.CLI) {
+	const (
+		subscriptionName  = "openshift-cert-manager-operator"
+		operatorNamespace = "cert-manager-operator"
+		operatorLabel     = "name=cert-manager-operator"
+		operandNamespace  = "cert-manager"
+		operandLabel      = "app.kubernetes.io/instance=cert-manager"
+	)
+
+	e2e.Logf("=> delete the subscription and installed CSV")
+	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("sub", subscriptionName, "-n", operatorNamespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("csv", csvName, "-n", operatorNamespace).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	e2e.Logf("=> checking the cert-manager operator pod, it should be gone")
+	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, true, func(context.Context) (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", operatorNamespace, "-l", operatorLabel).Output()
+		if strings.Contains(output, "No resources found") || err != nil {
+			e2e.Logf("operator pod is deleted")
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for operator pod to be deleted")
+
+	e2e.Logf("=> delete the operator namespace")
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", operatorNamespace, "--force", "--grace-period=0").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("=> delete the operand namespace")
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", operandNamespace, "--force", "--grace-period=0").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	e2e.Logf("=> delete the 'certmanagers' cluster object")
+	// remove the finalizers from that object first, otherwise the deletion would be stuck
+	err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("certmanagers", "cluster", "--type=merge", `-p={"metadata":{"finalizers":null}}`).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("certmanagers", "cluster").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	e2e.Logf("=> delete the cert-manager operator CRD")
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", "certmanagers.operator.openshift.io").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("=> delete the cert-manager CRD")
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", "-l", operandLabel).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	e2e.Logf("=> checking any of the resource types of cert-manager, it should be gone")
+	statusErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
+		err = oc.AsAdmin().Run("get").Args("issuer").Execute()
+		if err != nil {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(statusErr, "timeout waiting for the cert-manager CRDs deletion to take effect")
+
+	e2e.Logf("=> delete the clusterrolebindings and clusterroles of the the cert-manager")
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebindings", "-l", operandLabel).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrole", "-l", operandLabel).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // create selfsigned issuer
