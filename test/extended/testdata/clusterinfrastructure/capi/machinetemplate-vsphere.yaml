@@ -11,7 +11,7 @@ objects:
     spec:
       template:
         spec:
-          template: ${NAME}-rhcos-generated-region-generated-zone
+          template: ${MACHINETEMPLATE}
           server: ${VSPHERE_SERVER}
           diskGiB: ${{DISKGIB}}
           cloneMode: ${CLONEMODE}
@@ -39,3 +39,4 @@ parameters:
 - name: DISKGIB
 - name: NETWORKNAME
 - name: CLONEMODE
+- name: MACHINETEMPLATE

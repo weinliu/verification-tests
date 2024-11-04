@@ -87,21 +87,22 @@ type capiMachineSetvsphereDescription struct {
 }
 
 type vsphereMachineTemplateDescription struct {
-	kind         string
-	name         string
-	namespace    string
-	server       string
-	diskGiB      int
-	datacenter   string
-	datastore    string
-	folder       string
-	resourcePool string
-	numCPUs      int
-	memoryMiB    int
-	dhcp         bool
-	networkName  string
-	template     string
-	cloneMode    string
+	kind            string
+	name            string
+	namespace       string
+	server          string
+	diskGiB         int
+	datacenter      string
+	datastore       string
+	folder          string
+	resourcePool    string
+	numCPUs         int
+	memoryMiB       int
+	dhcp            bool
+	networkName     string
+	template        string
+	cloneMode       string
+	machineTemplate string
 }
 
 // skipForCAPINotExist skip the test if capi doesn't exist
@@ -184,7 +185,7 @@ func (capiMachineSetgcp *capiMachineSetgcpDescription) deleteCapiMachineSetgcp(o
 
 func (vsphereMachineTemplate *vsphereMachineTemplateDescription) createvsphereMachineTemplate(oc *exutil.CLI) {
 	e2e.Logf("Creating vsphereMachineTemplate ...")
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", vsphereMachineTemplate.template, "-p", "KIND="+vsphereMachineTemplate.kind, "NAME="+vsphereMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "VSPHERE_SERVER="+vsphereMachineTemplate.server, "DISKGIB="+strconv.Itoa(vsphereMachineTemplate.diskGiB), "CLONEMODE="+"linkedClone", "DATASTORE="+vsphereMachineTemplate.datastore, "DATACENTER="+vsphereMachineTemplate.datacenter, "FOLDER="+vsphereMachineTemplate.folder, "RESOURCEPOOL="+vsphereMachineTemplate.resourcePool, "NUMCPUS="+strconv.Itoa(vsphereMachineTemplate.numCPUs), "MEMORYMIB="+strconv.Itoa(vsphereMachineTemplate.memoryMiB), "NETWORKNAME="+vsphereMachineTemplate.networkName)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", vsphereMachineTemplate.template, "-p", "KIND="+vsphereMachineTemplate.kind, "NAME="+vsphereMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "VSPHERE_SERVER="+vsphereMachineTemplate.server, "DISKGIB="+strconv.Itoa(vsphereMachineTemplate.diskGiB), "CLONEMODE="+"linkedClone", "DATASTORE="+vsphereMachineTemplate.datastore, "DATACENTER="+vsphereMachineTemplate.datacenter, "FOLDER="+vsphereMachineTemplate.folder, "RESOURCEPOOL="+vsphereMachineTemplate.resourcePool, "NUMCPUS="+strconv.Itoa(vsphereMachineTemplate.numCPUs), "MEMORYMIB="+strconv.Itoa(vsphereMachineTemplate.memoryMiB), "NETWORKNAME="+vsphereMachineTemplate.networkName, "MACHINETEMPLATE="+vsphereMachineTemplate.machineTemplate)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

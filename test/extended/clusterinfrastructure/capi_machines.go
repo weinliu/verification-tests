@@ -40,6 +40,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		int_diskGiB                    int
 		datacenter                     string
 		datastore                      string
+		machineTemplate                string
 		folder                         string
 		resourcePool                   string
 		numCPUs                        string
@@ -103,6 +104,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			int_diskGiB, err = strconv.Atoi(diskGiB)
 			datacenter, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.workspace.datacenter}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			machineTemplate, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.template}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			datastore, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.workspace.datastore}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -189,20 +192,21 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 			replicas:       1,
 		}
 		vsphereMachineTemplate = vsphereMachineTemplateDescription{
-			kind:         "VSphereMachineTemplate",
-			name:         clusterID,
-			namespace:    "openshift-cluster-api",
-			server:       vsphere_server,
-			diskGiB:      int_diskGiB,
-			datacenter:   datacenter,
-			datastore:    datastore,
-			folder:       folder,
-			resourcePool: resourcePool,
-			numCPUs:      int_numCPUs,
-			memoryMiB:    int_memoryMiB,
-			dhcp:         true,
-			networkName:  networkname,
-			template:     vsphereMachineTemplateTemplate,
+			kind:            "VSphereMachineTemplate",
+			name:            clusterID,
+			namespace:       "openshift-cluster-api",
+			server:          vsphere_server,
+			diskGiB:         int_diskGiB,
+			datacenter:      datacenter,
+			machineTemplate: machineTemplate,
+			datastore:       datastore,
+			folder:          folder,
+			resourcePool:    resourcePool,
+			numCPUs:         int_numCPUs,
+			memoryMiB:       int_memoryMiB,
+			dhcp:            true,
+			networkName:     networkname,
+			template:        vsphereMachineTemplateTemplate,
 		}
 		switch iaasPlatform {
 		case clusterinfra.AWS:
