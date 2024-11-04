@@ -371,6 +371,7 @@ var _ = g.Describe("[sig-apps] Workloads test kcm works well", func() {
 		cronjobF := filepath.Join(buildPruningBaseDir, "cronjob56176.yaml")
 		g.By("create new namespace")
 		oc.SetupProject()
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 
 		g.By("create cronjob")
 		err := oc.Run("create").Args("-f", cronjobF).Execute()

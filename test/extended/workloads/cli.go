@@ -677,6 +677,7 @@ var _ = g.Describe("[sig-cli] Workloads test oc works well", func() {
 		podBaseDir := exutil.FixturePath("testdata", "workloads")
 		initPodFile := filepath.Join(podBaseDir, "initContainer.yaml")
 
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		g.By("Create pod with init container")
 		err := oc.Run("create").Args("-f", initPodFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -893,7 +894,7 @@ var _ = g.Describe("[sig-cli] Workloads test oc works well", func() {
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:knarra-Medium-66989-Workloads oc debug with or without init container for pod", func() {
 		testBaseDir := exutil.FixturePath("testdata", "workloads")
 		initContainerFile := filepath.Join(testBaseDir, "initContainer66989.yaml")
-
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		g.By("Create pod with InitContainer")
 		err := oc.Run("create").Args("-f", initContainerFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1892,6 +1893,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		_, warningOutExe, err := oc.WithoutNamespace().Run("exec").Args("deploymentconfig/dc66124-1", "-n", ns66124, "--", "date").Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(warningOutExe, "DeploymentConfig is deprecated in v4.14")).To(o.BeTrue())
+		exutil.SetNamespacePrivileged(oc, ns66124)
 		_, warningOutDeb, err := oc.WithoutNamespace().Run("debug").Args("deploymentconfig/dc66124-1", "-n", ns66124).Outputs()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(warningOutDeb, "DeploymentConfig is deprecated in v4.14")).To(o.BeTrue())

@@ -29,6 +29,9 @@ var _ = g.Describe("[sig-cli] Workloads test credentials work well", func() {
 		// Get the oc image from the cluster
 		cliImage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("is", "cli", "-n", "openshift", "-o=jsonpath={.spec.tags[0].from.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		// Set privileged namespace
+		exutil.SetNamespacePrivileged(oc, oc.Namespace())
+
 		// Add cluster role to project's default SA
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "system:image-pruner", "system:serviceaccount:"+oc.Namespace()+":default").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
