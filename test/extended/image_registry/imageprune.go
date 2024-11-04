@@ -357,6 +357,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		SkipDnsFailure(oc)
 		// TODO: remove this skip when the builds v1 API will support producing manifest list images
 		architecture.SkipArchitectures(oc, architecture.MULTI)
+		architecture.SkipNonAmd64SingleArch(oc) //guests are arm64 architecture in some profiles, so add the skip
 		// Check if openshift-sample operator installed
 		sampleOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/openshift-samples").Output()
 		if err != nil && strings.Contains(sampleOut, `openshift-samples" not found`) {
