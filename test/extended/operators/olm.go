@@ -6175,7 +6175,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover part of test case: OCP-21404, author: kuiwang@redhat.com
-	g.It("ConnectedOnly-Author:kuiwang-Medium-21404-csv will be RequirementsNotMet after role rule is delete[Serial]", func() {
+	g.It("Author:kuiwang-ConnectedOnly-Medium-21404-csv will be RequirementsNotMet after role rule is delete[Serial] [Flaky]", func() {
 		if isAks, _ := exutil.IsAKSCluster(context.TODO(), oc); isAks {
 			g.Skip("skip for ask cluster")
 		}
@@ -6228,7 +6228,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			og  = ogD
 			sub = subD
 		)
-		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "--selector=node.openshift.io/os_id=rhcos,node-role.kubernetes.io/master=", "-o=jsonpath={.items[0].metadata.name}").Output()
+		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = exutil.SetNamespacePrivileged(oc, oc.Namespace())
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -6831,7 +6831,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		proxy, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") ||
-			strings.Contains(platform, "vsphere") || strings.Contains(platform, "osp") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			strings.Contains(platform, "vsphere") || strings.Contains(platform, "external") || strings.Contains(platform, "osp") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
 			g.Skip("it is not supported")
 		}
 

@@ -256,6 +256,7 @@ func (sub *subscriptionDescription) findInstalledCSVWithSkip(oc *exutil.CLI, itN
 func (sub *subscriptionDescription) assertToSkipSpecificMessage(message string) bool {
 	specificMessages := []string{
 		"subscription sub-learn-46964 requires @existing/openshift-operators//learn-operator.v0.0.3",
+		"error using catalogsource openshift-marketplace/qe-app-registry",
 	}
 	for _, specificMessage := range specificMessages {
 		if strings.Contains(message, specificMessage) {
