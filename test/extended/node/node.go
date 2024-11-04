@@ -1762,14 +1762,10 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		var (
 			scaledObjectStatus string
 		)
+		exutil.By("Create a kedacontroller with default template")
 		kedaControllerDefault := filepath.Join(buildPruningBaseDir, "keda-controller-default.yaml")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
-
-		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
-		if err == nil {
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
-		}
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kedaControllerDefault).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kedaControllerDefault).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		kafaksNs := "kafka-52384"
@@ -1780,40 +1776,55 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		defer removeAmqOperator(oc)
 		createAmqOperator(oc)
 		exutil.By("Test for case OCP-52384")
-		exutil.By("Create a Kafka instance")
+		exutil.By(" 1) Create a Kafka instance")
 		kafka := filepath.Join(buildPruningBaseDir, "kafka-52384.yaml")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + kafka).Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kafka).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Create a Kafka topic")
+		exutil.By("2) Create a Kafka topic")
 		kafkaTopic := filepath.Join(buildPruningBaseDir, "kafka-topic-52384.yaml")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + kafkaTopic).Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kafkaTopic).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.By("Check if Kafka and Kafka topic are ready")
+
+		exutil.By("3) Check if Kafka and Kafka topic are ready")
 		// Wait for Kafka and KafkaTopic to be ready
 		waitForKafkaReady(oc, "my-cluster", kafaksNs)
 		namespace := oc.Namespace()
-		exutil.By("Create a Kafka Comsumer")
-		kafkaComsumerDeployment := filepath.Join(buildPruningBaseDir, "kafka-comsumer-deployment-52384.yaml")
-		defer oc.AsAdmin().Run("delete").Args("-f="+kafkaComsumerDeployment, "-n", namespace).Execute()
-		err = oc.AsAdmin().Run("create").Args("-f="+kafkaComsumerDeployment, "-n", namespace).Execute()
+
+		exutil.By("4) Create a Kafka Consumer")
+		kafkaConsumerDeployment := filepath.Join(buildPruningBaseDir, "kafka-consumer-deployment-52384.yaml")
+		defer oc.AsAdmin().Run("delete").Args("-f="+kafkaConsumerDeployment, "-n", namespace).Execute()
+		err = oc.AsAdmin().Run("create").Args("-f="+kafkaConsumerDeployment, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Create a scaledobjectc")
+		exutil.By("5) Create a scaledobjectc")
 		kafkaScaledobject := filepath.Join(buildPruningBaseDir, "kafka-scaledobject-52384.yaml")
 		defer oc.AsAdmin().Run("delete").Args("-f="+kafkaScaledobject, "-n", namespace).Execute()
 		err = oc.AsAdmin().Run("create").Args("-f="+kafkaScaledobject, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Create a Kafka load")
+		exutil.By("5.1) Check ScaledObject is up")
+		err = wait.Poll(3*time.Second, 300*time.Second, func() (bool, error) {
+			scaledObjectStatus, _ = oc.AsAdmin().Run("get").Args("ScaledObject", "kafka-amqstreams-consumer-scaledobject", "-o=jsonpath={.status.health.s0-kafka-my-topic.status}", "-n", namespace).Output()
+			if scaledObjectStatus == "Happy" {
+				e2e.Logf("ScaledObject is up and working")
+				return true, nil
+			}
+			e2e.Logf("ScaledObject is not in working status, current status: %v", scaledObjectStatus)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "scaling failed")
+		exutil.By("Kafka scaling is up and ready")
+
+		exutil.By("6)Create a Kafka load")
 		kafkaLoad := filepath.Join(buildPruningBaseDir, "kafka-load-52384.yaml")
 		defer oc.AsAdmin().Run("delete").Args("jobs", "--field-selector", "status.successful=1", "-n", namespace).Execute()
 		err = oc.AsAdmin().Run("create").Args("-f="+kafkaLoad, "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Check ScaledObject is up")
+		exutil.By("6.1) Check ScaledObject is up")
 		err = wait.Poll(3*time.Second, 300*time.Second, func() (bool, error) {
 			scaledObjectStatus, _ = oc.AsAdmin().Run("get").Args("ScaledObject", "kafka-amqstreams-consumer-scaledobject", "-o=jsonpath={.status.health.s0-kafka-my-topic.status}", "-n", namespace).Output()
 			if scaledObjectStatus == "Happy" {
@@ -1832,13 +1843,7 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		exutil.By("Create a kedacontroller with default template")
 		kedaControllerDefault := filepath.Join(buildPruningBaseDir, "keda-controller-default.yaml")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
-
-		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
-		if err == nil {
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-keda", "KedaController", "keda").Execute()
-		}
-
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kedaControllerDefault).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kedaControllerDefault).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		var scaledObjectStatus string
@@ -1906,6 +1911,18 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		err = oc.AsAdmin().Run("create").Args("-f="+prometheusComsumer, "-n", cmaNs).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		exutil.By("2.1) Verify the deployment is available")
+		errCheck := wait.Poll(20*time.Second, 280*time.Second, func() (bool, error) {
+			output, err1 := oc.AsAdmin().Run("get").Args("deployment", "-n", cmaNs).Output()
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "test-app") && strings.Contains(output, "1/1") {
+				e2e.Logf("Deployment has been created Sucessfully!")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Depolyment has not been created"))
+
 		exutil.By("3) Create a Service Account")
 		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("sa", "thanos-52385", "-n", cmaNs).Execute()
 		err = oc.WithoutNamespace().AsAdmin().Run("create").Args("sa", "thanos-52385", "-n", cmaNs).Execute()
@@ -1917,26 +1934,36 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		e2e.Logf("err %v, token %v", err, token)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("3.2) Make sure the token is still there and didn't get deleted")
+		exutil.By("3.2) Make sure the token is available")
 		serviceToken, err := oc.AsAdmin().Run("get").Args("secret", "thanos-token", "-n", cmaNs).Output()
 		e2e.Logf("err %v, token %v", err, serviceToken)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		saTokenName := "thanos-token"
 
-		exutil.By("3.3) Define TriggerAuthentication with the Service Account's token")
+		exutil.By("4) Define TriggerAuthentication with the Service Account's token")
 		triggerAuthentication52385.secretname = string(saTokenName[:])
 		triggerAuthentication52385.namespace = cmaNs
 		defer oc.AsAdmin().Run("delete").Args("-n", cmaNs, "TriggerAuthentication", "keda-trigger-auth-prometheus").Execute()
 		triggerAuthentication52385.create(oc)
 
-		exutil.By("4) Create a role for reading metric from Thanos")
+		exutil.By("4.1) Check TriggerAuthentication is Available")
+		triggerauth, err := oc.AsAdmin().Run("get").Args("TriggerAuthentication", "-n", cmaNs).Output()
+		e2e.Logf("Triggerauthentication is %v", triggerauth)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5) Create a role for reading metric from Thanos")
 		role := filepath.Join(buildPruningBaseDir, "role.yaml")
 		defer oc.AsAdmin().Run("delete").Args("-f="+role, "-n", cmaNs).Execute()
 		err = oc.AsAdmin().Run("create").Args("-f="+role, "-n", cmaNs).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("5) Add the role for reading metrics from Thanos to the Service Account")
+		exutil.By("5.1) Check Role is Available")
+		rolecheck, err := oc.AsAdmin().Run("get").Args("Role", "-n", cmaNs).Output()
+		e2e.Logf("Role %v", rolecheck)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5.2) Add the role for reading metrics from Thanos to the Service Account")
 		rolebinding := filepath.Join(buildPruningBaseDir, "rolebinding-52385.yaml")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f="+rolebinding, "-n", cmaNs).Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f="+rolebinding, "-n", cmaNs).Execute()
@@ -1948,13 +1975,26 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f="+scaledobject, "-n", cmaNs).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		exutil.By("6.1) Check ScaledObject is up")
+		err = wait.Poll(3*time.Second, 100*time.Second, func() (bool, error) {
+			scaledObjectStatus, _ = oc.AsAdmin().Run("get").Args("ScaledObject", "prometheus-scaledobject", "-o=jsonpath={.status.health.s0-prometheus.status}", "-n", cmaNs).Output()
+			if scaledObjectStatus == "Happy" {
+				e2e.Logf("ScaledObject is up and working")
+				return true, nil
+			}
+			e2e.Logf("ScaledObject is not in working status, current status: %v", scaledObjectStatus)
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "scaling failed")
+		exutil.By("prometheus scaling is up and ready")
+
 		exutil.By("7) Generate requests to test the application autoscaling")
 		load := filepath.Join(buildPruningBaseDir, "load-52385.yaml")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f="+load, "-n", cmaNs).Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f="+load, "-n", cmaNs).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("8) Check ScaledObject is up")
+		exutil.By("7.1) Check ScaledObject is up")
 		err = wait.Poll(3*time.Second, 100*time.Second, func() (bool, error) {
 			scaledObjectStatus, _ = oc.AsAdmin().Run("get").Args("ScaledObject", "prometheus-scaledobject", "-o=jsonpath={.status.health.s0-prometheus.status}", "-n", cmaNs).Output()
 			if scaledObjectStatus == "Happy" {
@@ -2082,11 +2122,35 @@ var _ = g.Describe("[sig-node] NODE keda", func() {
 		err = oc.AsAdmin().Run("create").Args("-f="+testDeploymentTemp, "-n", cmaNs).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		exutil.By("6.1) Verify the deployment is available")
+		errCheck := wait.Poll(20*time.Second, 280*time.Second, func() (bool, error) {
+			output, err1 := oc.AsAdmin().Run("get").Args("deployment", "-n", cmaNs).Output()
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "busybox") && strings.Contains(output, "1/1") {
+				e2e.Logf("Deployment has been created Sucessfully!")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Depolyment has not been created"))
+
 		exutil.By("7) Create a ScaledObject with a cron trigger with timezone applied.")
 		timezoneScaledObjectTemp := filepath.Join(buildPruningBaseDir, "timezonescaledobject-73296.yaml")
 		defer oc.AsAdmin().Run("delete").Args("-f="+timezoneScaledObjectTemp, "-n", cmaNs).Execute()
 		err = oc.AsAdmin().Run("create").Args("-f="+timezoneScaledObjectTemp, "-n", cmaNs).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("7.1) Verifying the scaledobject readiness")
+		errCheck = wait.Poll(20*time.Second, 380*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().Run("get").Args("scaledobject", "cron-scaledobject", "-n", cmaNs, "-o", "jsonpath={.status.conditions[?(@.status=='True')].status} {.status.conditions[?(@.type=='Ready')].status}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if output == "True True True" {
+				e2e.Logf("ScaledObject is Active and Running.")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("ScaledObject is not ready"))
 
 		PodName := getPodNameByLabel(oc, "openshift-keda", "app=keda-operator")
 		waitPodReady(oc, "openshift-keda", "app=keda-operator")

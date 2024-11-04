@@ -6,11 +6,12 @@ metadata:
 spec:
   kafka:
     config:
+      default.replication.factor: 3
+      inter.broker.protocol.version: '3.7'
+      min.insync.replicas: 2
       offsets.topic.replication.factor: 3
-      transaction.state.log.replication.factor: 3
       transaction.state.log.min.isr: 2
-      log.message.format.version: '2.8'
-      inter.broker.protocol.version: '2.8'
+      transaction.state.log.replication.factor: 3
     storage:
       type: ephemeral
     listeners:
@@ -22,7 +23,7 @@ spec:
         port: 9093
         type: internal
         tls: true
-    version: 3.6.0
+    version: 3.7.0
     replicas: 3
   entityOperator:
     topicOperator: {}
@@ -31,4 +32,3 @@ spec:
     storage:
       type: ephemeral
     replicas: 3
-
