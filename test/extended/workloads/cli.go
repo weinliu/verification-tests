@@ -2585,7 +2585,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		o.Expect(outputWarning).To(o.ContainSubstring("could also match lower priority resource crontabs72217.stable.example.com"))
 	})
 
-	g.It("Author:yinzhou-ROSA-OSD_CCS-ARO-High-75997-Make sure images with different tag but same layers could be mirrored correctly", func() {
+	g.It("Author:yinzhou-ConnectedOnly-ROSA-OSD_CCS-ARO-High-75997-Make sure images with different tag but same layers could be mirrored correctly", func() {
 		customResourceBaseDir := exutil.FixturePath("testdata", "workloads")
 		imageMirrorList := filepath.Join(customResourceBaseDir, "config-images-75997.txt")
 
