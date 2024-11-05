@@ -258,6 +258,21 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			err = ensureOperatorIsSubscribed(oc, trusteeSubscription, subTemplate)
 			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
 
+			trusteeRouteName := "kbs-service"
+			err = ensureTrusteeKbsServiceRouteExists(oc, trusteeSubscription.namespace, "edge", trusteeRouteName)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
+
+			trusteeRouteHost, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", trusteeRouteName, "-o=jsonpath={.spec.host}", "-n", trusteeSubscription.namespace).Output()
+			o.Expect(trusteeRouteHost).NotTo(o.BeEmpty())
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", trusteeRouteHost))
+
+			trusteeURLType := "https"
+			patch := fmt.Sprintf("{\"data\":{\"AA_KBC_PARAMS\": \"cc_kbs::%v://%v\"}}", trusteeURLType, trusteeRouteHost)
+			msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "peer-pods-cm", "--type", "merge", "-p", patch, "-n", subscription.namespace).Output()
+			if err != nil {
+				e2e.Logf("warning patching peer-pods-cm: %v %v", msg, err)
+			}
+			// oc set env ds/peerpodconfig-ctrl-caa-daemon -n openshift-sandboxed-containers-operator REBOOT="$(date)"
 		}
 
 		// should check kataconfig here & already have checked subscription

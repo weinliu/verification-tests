@@ -191,6 +191,27 @@ func ensureFeatureGateIsApplied(oc *exutil.CLI, sub SubscriptionDescription, fea
 	return err
 }
 
+func ensureTrusteeKbsServiceRouteExists(oc *exutil.CLI, namespace, routeType, routeName string) (err error) {
+	var (
+		msg string
+	)
+
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("route", routeName, "-n", namespace, "--no-headers").Output()
+	if err == nil && strings.Contains(msg, routeName) {
+		return nil
+	}
+
+	if strings.Contains(msg, "(NotFound)") {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("route", routeType, "--service="+routeName, "--port", "kbs-port", "-n", namespace).Output()
+		if strings.Contains(msg, "route.route.openshift.io/"+routeName+" created") || strings.Contains(msg, "(AlreadyExists)") {
+			return nil
+		}
+	}
+
+	return err
+
+}
+
 // author: tbuskey@redhat.com, abhbaner@redhat.com
 func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub SubscriptionDescription) (msg string, err error) {
 	// If this is used, label the caller with [Disruptive][Serial][Slow]
