@@ -108,6 +108,108 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 	})
 
+	g.It("Author:asood-Medium-50947-Medium-50948-Verify BGP and L2 Advertisement webhook validation.", func() {
+		workers := []string{"worker-1", "worker-2", "worker-3"}
+		bgpCommunties := []string{"65001:65500"}
+		ipaddrpools := []string{"ipaddresspool-0", "ipaddresspool-1"}
+		bgpPeers := []string{"peer-64500", "peer-65000"}
+		interfaces := []string{"br-ex", "eno1", "eno2"}
+		crMap := make(map[string]string)
+
+		bgpAdvertisementTemplate := filepath.Join(testDataDir, "bgpadvertisement-template.yaml")
+		l2AdvertisementTemplate := filepath.Join(testDataDir, "l2advertisement-template.yaml")
+
+		bgpAdvertisement := bgpAdvertisementResource{
+			name:                  "bgp-adv-50948",
+			namespace:             opNamespace,
+			aggregationLength:     32,
+			aggregationLengthV6:   128,
+			communities:           bgpCommunties[:],
+			ipAddressPools:        ipaddrpools[:],
+			nodeSelectorsKey:      "kubernetes.io/hostname",
+			nodeSelectorsOperator: "In",
+			nodeSelectorValues:    workers[:],
+			peer:                  bgpPeers[:],
+			template:              bgpAdvertisementTemplate,
+		}
+
+		l2advertisement := l2AdvertisementResource{
+			name:               "l2-adv-50947",
+			namespace:          opNamespace,
+			ipAddressPools:     ipaddrpools[:],
+			interfaces:         interfaces[:],
+			nodeSelectorValues: workers[:],
+			template:           l2AdvertisementTemplate,
+		}
+
+		exutil.By("Create BGP and L2 Advertisement")
+		defer removeResource(oc, true, true, "bgpadvertisements", bgpAdvertisement.name, "-n", bgpAdvertisement.namespace)
+		o.Expect(createBGPAdvertisementCR(oc, bgpAdvertisement)).To(o.BeTrue())
+		crMap["bgpadvertisements"] = bgpAdvertisement.name
+
+		defer removeResource(oc, true, true, "l2advertisements", l2advertisement.name, "-n", l2advertisement.namespace)
+		o.Expect(createL2AdvertisementCR(oc, l2advertisement, l2AdvertisementTemplate)).To(o.BeTrue())
+		crMap["l2advertisements"] = l2advertisement.name
+
+		for crType, crName := range crMap {
+			exutil.By(fmt.Sprintf("Validate duplicate ip address pool is rejected for %s", crType))
+			ipaddrpools = append(ipaddrpools, "ipaddresspool-1")
+			addrPoolList, err := json.Marshal(ipaddrpools)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			patchAdvertisement := fmt.Sprintf("{\"spec\":{\"ipAddressPools\": %s}}", string(addrPoolList))
+			patchOutput, patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args(crType, crName, "-n", opNamespace, "--type=merge", "-p", patchAdvertisement).Output()
+			o.Expect(patchErr).To(o.HaveOccurred())
+			o.Expect(strings.Contains(patchOutput, "duplicate definition of ipAddressPools")).To(o.BeTrue())
+
+			exutil.By(fmt.Sprintf("Validate duplicate node is rejected for %s", crType))
+			workers = append(workers, "worker-1")
+			workerList, err := json.Marshal(workers)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			patchAdvertisement = fmt.Sprintf("{\"spec\":{\"nodeSelectors\":[{\"matchExpressions\":[{\"key\":\"kubernetes.io/hostname\",\"operator\":\"In\",\"values\":%s}]}]}}", string(workerList))
+			patchOutput, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args(crType, crName, "-n", opNamespace, "--type=merge", "-p", patchAdvertisement).Output()
+			o.Expect(patchErr).To(o.HaveOccurred())
+			o.Expect(strings.Contains(patchOutput, "duplicate definition of match expression value in label selector")).To(o.BeTrue())
+		}
+		exutil.By("Validate community strings is updated with community object for BGP Advertisements")
+		bgpCommunties = []string{"65001:65500", "community1"}
+		bgpCommStrList, err := json.Marshal(bgpCommunties)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchBgpAdvertisement := fmt.Sprintf("{\"spec\":{\"communities\": %s}}", string(bgpCommStrList))
+		_, patchErr1 := oc.AsAdmin().WithoutNamespace().Run("patch").Args("bgpadvertisement", bgpAdvertisement.name, "-n", bgpAdvertisement.namespace, "--type=merge", "-p", patchBgpAdvertisement).Output()
+		o.Expect(patchErr1).NotTo(o.HaveOccurred())
+
+		exutil.By("Validate duplicate community strings is rejected for BGP Advertisements")
+		bgpCommunties = append(bgpCommunties, "65001:65500")
+		bgpCommStrList, err = json.Marshal(bgpCommunties)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchBgpAdvertisement = fmt.Sprintf("{\"spec\":{\"communities\": %s}}", string(bgpCommStrList))
+		patchOutput, patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("bgpadvertisement", bgpAdvertisement.name, "-n", bgpAdvertisement.namespace, "--type=merge", "-p", patchBgpAdvertisement).Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(strings.Contains(patchOutput, "duplicate definition of community")).To(o.BeTrue())
+
+		exutil.By("Validate duplicate BGP Peer is rejected for BGP Advertisements")
+		bgpPeers = append(bgpPeers, "peer-64500")
+		bgpPeersList, err := json.Marshal(bgpPeers)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchBgpAdvertisement = fmt.Sprintf("{\"spec\":{\"peers\": %s}}", string(bgpPeersList))
+		patchOutput, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("bgpadvertisement", bgpAdvertisement.name, "-n", bgpAdvertisement.namespace, "--type=merge", "-p", patchBgpAdvertisement).Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(strings.Contains(patchOutput, "duplicate definition of peers")).To(o.BeTrue())
+
+		exutil.By("Validate invalid IPv4 aggregation length is rejected for BGP Advertisements")
+		patchBgpAdvertisement = fmt.Sprintf("{\"spec\":{\"aggregationLength\": %d}}", 33)
+		patchOutput, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("bgpadvertisement", bgpAdvertisement.name, "-n", bgpAdvertisement.namespace, "--type=merge", "-p", patchBgpAdvertisement).Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(strings.Contains(patchOutput, "invalid aggregation length")).To(o.BeTrue())
+
+		exutil.By("Validate invalid IPv6 aggregation length is rejected for BGP Advertisements")
+		patchBgpAdvertisement = fmt.Sprintf("{\"spec\":{\"aggregationLengthV6\": %d}}", 129)
+		patchOutput, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("bgpadvertisement", bgpAdvertisement.name, "-n", bgpAdvertisement.namespace, "--type=merge", "-p", patchBgpAdvertisement).Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(strings.Contains(patchOutput, "invalid aggregation length")).To(o.BeTrue())
+
+	})
+
 })
 
 // Tests related to metallb install and CR creation that can be executed more frequently
