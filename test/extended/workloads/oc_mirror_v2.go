@@ -1188,7 +1188,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		defer os.RemoveAll(".oc-mirror.log")
 		defer os.RemoveAll("~/.oc-mirror/")
 		waitErr := wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
-			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
 			if err != nil {
 				e2e.Logf("The mirror2mirror failed, retrying...")
 				return false, nil
