@@ -1,5 +1,7 @@
 import { Deployment } from "views/deployment";
+import { Overview } from "views/overview";
 describe('console configuration tests', () => {
+  const explain_consoleoperator = `oc explain consoles.operator.openshift.io.spec.customization.capabilities`;
   const capabilities_enabled_data = `{"name":"LightspeedButton","visibility":{"state":"Enabled"}}`
   const capabilities_disabled_data = `{"name":"LightspeedButton","visibility":{"state":"Disabled"}}`
   const patch_consoleoperator_lightspeed_enabled = `oc patch console.operator cluster -p '{"spec":{"customization":{"capabilities":[{"name": "LightspeedButton","visibility":{"state":"Enabled"}},{"name": "GettingStartedBanner","visibility":{"state":"Enabled"}}]}}}' --type merge`;
@@ -53,7 +55,6 @@ describe('console configuration tests', () => {
   });
 
   it('(OCP-75320,yapei,UserInterface)Cluster wide setting for showing/hiding Lightspeed button', {tags:['@userinterface','@e2e','@admin','@rosa','@osd-ccs']}, () => {
-    const explain_consoleoperator = `oc explain consoles.operator.openshift.io.spec.customization.capabilities`;
     const patch_invalid_state = `oc patch console.operator cluster -p '{"spec":{"customization":{"capabilities":[{"name": "LightspeedButton","visibility":{"state":"Tested"}}]}}}'  --type merge`;
     const patch_another_entry = `oc patch console.operator cluster --type='json' -p='[{"op": "add", "path": "/spec/customization/capabilities/-", "value":{"name": "TestCap","visibility":{"state":"Enabled"}}}]'`;
     const patch_unsupported_name = `oc patch console.operator cluster -p '{"spec":{"customization":{"capabilities":[{"name": "TestCap","visibility":{"state":"Enabled"}}]}}}'  --type merge`;
@@ -88,4 +89,40 @@ describe('console configuration tests', () => {
       .should('match', /Unsupported value.*TestCap.*supported values.*LightspeedButton.*GettingStartedBanner/)
   });
 
+  it('(OCP-75940,xiyuzhao,Cluster setting for hiding "Getting started resources" banner from Overview', {tags:['@userinterface','@e2e','@admin','@rosa','@osd-ccs']}, () => {
+    const gettingStartBannerEnable= `{"name":"GettingStartedBanner","visibility":{"state":"Enabled"}}`
+    const gettingStartBannerDisable=`{"name":"GettingStartedBanner","visibility":{"state":"Disabled"}}`
+    const patch_consoleoperator_gettingstartbanner_disabled = `oc patch console.operator cluster -p '{"spec":{"customization":{"capabilities":[{"name": "LightspeedButton","visibility":{"state":"Enabled"}},{"name": "GettingStartedBanner","visibility":{"state":"Disabled"}}]}}}' --type merge`;
+    // Check the default vaule for GettingStartedBanner is true, 'Getting started resources' banner exist on Overview page
+    cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+    Overview.goToDashboard();
+    cy.get('[data-test="title"]').as('bannerTitle').should('exist').and('contain.text','Getting started resources');
+    cy.adminCLI(`${explain_consoleoperator}`)
+    .its('stdout')
+    .should('match', /GettingStartedBanner/)
+    cy.adminCLI(`${query_consoleoperator_cmd}`)
+    .its('stdout')
+    .should('include', gettingStartBannerEnable)
+    // Hidden 'Getting started resources' banner on Overview page
+    cy.adminCLI(`${patch_consoleoperator_gettingstartbanner_disabled}`)
+      .its('stdout')
+      .should('include', 'patched')
+    cy.byTestID('refresh-web-console', { timeout: 60000 })
+      .should('exist')
+      .should('be.visible')
+    cy.reload();
+    cy.get('@bannerTitle', { timeout: 10000 }).should('not.exist');
+    cy.adminCLI(`${query_consoleoperator_cmd}`)
+      .its('stdout')
+      .should('include', gettingStartBannerDisable)
+    cy.adminCLI(`${query_configmap_data}`)
+      .its('stdout')
+      .should('match', /name: GettingStartedBanner.*state: Disabled/)
+    cy.window()
+      .its('SERVER_FLAGS.capabilities', { timeout: 30000 })
+      .should((capabilities) => {
+        const banner = capabilities.find(item => item.name === 'GettingStartedBanner');
+        expect(banner?.visibility.state).to.equal('Disabled');
+      });
+  });
 })
