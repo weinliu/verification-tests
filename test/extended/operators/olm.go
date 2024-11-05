@@ -588,8 +588,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-ConnectedOnly-NonHyperShiftHOST-High-59416-Revert Catalog PSA decisions for 4.12 [Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
-		if ClusterHasEnabledFIPS(oc) {
-			g.Skip("FIPS enabled, skip it")
+		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		efips, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+		if err != nil || strings.Contains(efips, "FIPS mode is enabled") {
+			g.Skip("skip it with cmd failure or FIPS enabled")
 		}
 		exutil.By("step 1 -> check openshift-marketplace project labels")
 		labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "openshift-marketplace", "--show-labels").Output()
@@ -11047,8 +11052,9 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.create(oc, itName, dr)
 
 		exutil.By("4.1 check csv")
+		var status string
 		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
-			status := getResource(oc, asAdmin, withoutNamespace, "csv", "nginx70050.v1.0.1", "-n", sub.namespace, "-o=jsonpath={.status.phase}")
+			status, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "nginx70050.v1.0.1", "-n", sub.namespace, "-o=jsonpath={.status.phase}").Output()
 			if strings.Compare(status, "Succeeded") != 0 {
 				e2e.Logf("csv nginx70050.v1.0.1 status is not Succeeded, go next round")
 				return false, nil
@@ -11057,6 +11063,9 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		})
 		if err != nil {
 			getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", namespaceName, "-o=jsonpath-as-json={.status}")
+			if strings.Contains(status, "Unable to connect to the server: proxyconnect tcp") {
+				exutil.AssertWaitPollNoErr(err, status)
+			}
 		}
 		exutil.AssertWaitPollNoErr(err, "csv nginx70050.v1.0.1 is not Succeeded")
 
@@ -12829,6 +12838,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipForSNOCluster(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")

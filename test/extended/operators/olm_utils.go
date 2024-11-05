@@ -257,6 +257,7 @@ func (sub *subscriptionDescription) assertToSkipSpecificMessage(message string) 
 	specificMessages := []string{
 		"subscription sub-learn-46964 requires @existing/openshift-operators//learn-operator.v0.0.3",
 		"error using catalogsource openshift-marketplace/qe-app-registry",
+		"failed to list bundles: rpc error: code = Unavailable desc = connection error",
 	}
 	for _, specificMessage := range specificMessages {
 		if strings.Contains(message, specificMessage) {
