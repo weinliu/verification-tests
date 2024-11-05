@@ -998,6 +998,12 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 
 	//author: minmli@redhat.com
 	g.It("NonHyperShiftHOST-Author:minmli-Medium-59552-Enable image signature verification for Red Hat Container Registries [Serial]", func() {
+		exutil.By("Check if mcp worker exist in current cluster")
+		machineCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", "worker", "-o=jsonpath={.status.machineCount}").Output()
+		if machineCount == "0" {
+			g.Skip("Skip for non-supported platform: mcp worker not exist!")
+		}
+
 		exutil.By("Apply a machine config to set image signature policy for worker nodes")
 		mcImgSig := filepath.Join(buildPruningBaseDir, "machineconfig-image-signature-59552.yaml")
 		mcpName := "worker"
