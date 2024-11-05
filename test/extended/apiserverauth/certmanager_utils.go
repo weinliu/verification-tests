@@ -778,6 +778,10 @@ func setupVaultServer(oc *exutil.CLI, ns string, release string) (string, string
 	e2e.Logf("=> create a pod to install Vault through Helm charts")
 	// set privileged labels for the Vault installer namespace as containerized Helm requires root permission to write config files
 	exutil.SetNamespacePrivileged(oc, ns)
+	defer func() {
+		e2e.Logf("remove added privileged labels from the namespace")
+		exutil.RecoverNamespaceRestricted(oc, ns)
+	}()
 	// store the Helm values regarding Vault TLS config into a configmap
 	helmConfigFile := filepath.Join(buildPruningBaseDir, "helm-vault-tls-config.yaml")
 	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "configmap", configMapName, "--from-file=custom-values.yaml="+helmConfigFile).Execute()
@@ -790,7 +794,6 @@ func setupVaultServer(oc *exutil.CLI, ns string, release string) (string, string
 	defer func() {
 		e2e.Logf("cleanup created clusterrolebinding resource")
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding", installerRolebinding).Execute()
-		oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding", "-l", "app.kubernetes.io/instance="+release).Execute()
 	}()
 	// wait for Vault installer pod completed
 	// TODO(yuewu): need to address potential error caused by Docker's image pull rate limit: https://docs.docker.com/docker-hub/download-rate-limit/
