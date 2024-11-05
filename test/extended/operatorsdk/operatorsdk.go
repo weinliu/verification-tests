@@ -947,6 +947,41 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	})
 
+	// author: jitli@redhat.com
+	g.It("Author:jitli-VMonly-Medium-77166-Check the ansible-operator-plugins version info", func() {
+		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
+			g.Skip("HTTP_PROXY is not empty - skipping test ...")
+		}
+		imageTag := "registry-proxy.engineering.redhat.com/rh-osbs/openshift-ose-ansible-rhel9-operator:v" + ocpversion
+		containerCLI := container.NewPodmanCLI()
+		e2e.Logf("create container with image %s", imageTag)
+		id, err := containerCLI.ContainerCreate(imageTag, "test-77166", "/bin/sh", true)
+		defer func() {
+			e2e.Logf("stop container %s", id)
+			containerCLI.ContainerStop(id)
+			e2e.Logf("remove container %s", id)
+			err := containerCLI.ContainerRemove(id)
+			if err != nil {
+				e2e.Failf("Defer: fail to remove container %s", id)
+			}
+		}()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("container id is %s", id)
+
+		e2e.Logf("start container %s", id)
+		err = containerCLI.ContainerStart(id)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("start container %s successful", id)
+
+		commandStr := []string{"ansible-operator", "version"}
+		output, err := containerCLI.Exec(id, commandStr)
+		if err != nil {
+			e2e.Failf("command %s: %s", commandStr, output)
+		}
+		o.Expect(output).To(o.ContainSubstring("v1.35."))
+
+	})
+
 	// author: chuo@redhat.com
 	g.It("Author:xzha-High-52126-Sync 1.29 to downstream", func() {
 		operatorsdkCLI.showInfo = true
