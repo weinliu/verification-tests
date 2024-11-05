@@ -249,13 +249,14 @@ func getTunedPodNamebyNodeName(oc *exutil.CLI, tunedNodeName, namespace string) 
 }
 
 type ntoResource struct {
-	name        string
-	namespace   string
-	template    string
-	sysctlparm  string
-	sysctlvalue string
-	priority    int
-	label       string
+	name         string
+	namespace    string
+	template     string
+	sysctlparm   string
+	sysctlvalue  string
+	priority     int
+	deferedValue string
+	label        string
 }
 
 func (ntoRes *ntoResource) createTunedProfileIfNotExist(oc *exutil.CLI) {
@@ -295,24 +296,24 @@ func (ntoRes *ntoResource) delete(oc *exutil.CLI) {
 	_ = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ntoRes.namespace, "tuned", ntoRes.name, "--ignore-not-found").Execute()
 }
 
-func (ntoRes *ntoResource) assertTunedProfileApplied(oc *exutil.CLI, workerNodeName string) {
-
-	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
-
-		appliedStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoRes.namespace, "profiles.tuned.openshift.io", workerNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
-		if err == nil && strings.Contains(appliedStatus, "True") {
-			e2e.Logf("Tuned custom profile applied to nodes, the status is %s", appliedStatus)
-			//Check if the new profiles name applied on a node
-			return true, nil
+// assertIfTunedProfileApplied checks the logs for a given tuned pod in a given namespace to see if the expected profile was applied
+func (ntoRes *ntoResource) assertIfTunedProfileApplied(oc *exutil.CLI, namespace string, tunedNodeName string, tunedName string, expectedAppliedStatus string) {
+	o.Eventually(func() bool {
+		appliedStatus, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "profiles.tuned.openshift.io", tunedNodeName, `-ojsonpath='{.status.conditions[?(@.type=="Applied")].status}'`).Output()
+		tunedProfile, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "profiles.tuned.openshift.io", tunedNodeName, "-ojsonpath={.status.tunedProfile}").Output()
+		if err1 != nil || err2 != nil || !strings.Contains(appliedStatus, expectedAppliedStatus) || strings.Contains(appliedStatus, "Unknown") || tunedProfile != tunedName {
+			e2e.Logf("failed to apply profile to nodes, the status is %s and profile is %s, check again", appliedStatus, tunedProfile)
 		}
-		e2e.Logf("The profile [ %v ] is not applied on node [ %v ], try next around \n", ntoRes.name, workerNodeName)
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(err, "New tuned profile isn't applied correctly, please check")
+		return strings.Contains(appliedStatus, expectedAppliedStatus) && tunedProfile == tunedName
+	}, 15*time.Second, time.Second).Should(o.BeTrue())
 }
 
 func (ntoRes *ntoResource) applyNTOTunedProfile(oc *exutil.CLI) {
 	exutil.ApplyNsResourceFromTemplate(oc, ntoRes.namespace, "--ignore-unknown-parameters=true", "-f", ntoRes.template, "-p", "TUNED_PROFILE="+ntoRes.name, "-p", "SYSCTL_NAME="+ntoRes.sysctlparm, "-p", "SYSCTL_VALUE="+ntoRes.sysctlvalue, "-p", "LABEL_NAME="+ntoRes.label)
+}
+
+func (ntoRes *ntoResource) applyNTOTunedProfileWithDeferredAnnotation(oc *exutil.CLI) {
+	exutil.ApplyNsResourceFromTemplate(oc, ntoRes.namespace, "--ignore-unknown-parameters=true", "-f", ntoRes.template, "-p", "TUNED_PROFILE="+ntoRes.name, "-p", "SYSCTL_NAME="+ntoRes.sysctlparm, "-p", "SYSCTL_VALUE="+ntoRes.sysctlvalue, "-p", "LABEL_NAME="+ntoRes.label, "DEFERRED_VALUE="+ntoRes.deferedValue)
 }
 
 // assertDebugSettings

@@ -52,19 +52,20 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		nodeDiffCPUsMCPFile          = exutil.FixturePath("testdata", "psap", "nto", "node-diffcpus-mcp.yaml")
 		tuningMaxPidFile             = exutil.FixturePath("testdata", "psap", "nto", "tuning-maxpid.yaml")
 
-		isNTO              bool
-		isPAOInstalled     bool
-		paoNamespace       = "openshift-performance-addon-operator"
-		iaasPlatform       string
-		ManualPickup       bool
-		podShippedFile     string
-		podSysctlFile      string
-		ntoTunedPidMax     string
-		customTunedProfile string
-		tunedNodeName      string
-		ntoSysctlTemplate  string
-
-		err error
+		isNTO                 bool
+		isPAOInstalled        bool
+		paoNamespace          = "openshift-performance-addon-operator"
+		iaasPlatform          string
+		ManualPickup          bool
+		podShippedFile        string
+		podSysctlFile         string
+		ntoTunedPidMax        string
+		customTunedProfile    string
+		tunedNodeName         string
+		ntoSysctlTemplate     string
+		ntoDeferedUpdate      string
+		ntoDeferedUpdatePatch string
+		err                   error
 	)
 
 	g.BeforeEach(func() {
@@ -80,6 +81,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoTunedPidMax = exutil.FixturePath("testdata", "psap", "nto", "nto-tuned-pidmax.yaml")
 		customTunedProfile = exutil.FixturePath("testdata", "psap", "nto", "custom-tuned-profiles.yaml")
 		ntoSysctlTemplate = exutil.FixturePath("testdata", "psap", "nto", "nto-sysctl-template.yaml")
+		ntoDeferedUpdate = exutil.FixturePath("testdata", "psap", "nto", "deferred-nto-update.yaml")
+		ntoDeferedUpdatePatch = exutil.FixturePath("testdata", "psap", "nto", "deferred-nto-update-patch.yaml")
 	})
 
 	// author: liqcui@redhat.com
@@ -508,8 +511,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("pod", tunedPodName, "-n", ntoNamespace, "tuned.openshift.io/elasticsearch=", "--overwrite").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Check current profile for each node")
-		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
+		exutil.By("Check if customized tuned profile applied on target node")
+		ntoRes.assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "kernel-pid-max", "True")
 
 		exutil.By("Compare if the value kernel.pid_max in on node with labeled pod, should be 128888")
 		compareSysctlValueOnSepcifiedNodeByName(oc, tunedNodeName, "kernel.pid_max", "", "128888")
@@ -574,7 +577,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Check current profile for each node")
-		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
+		ntoRes.assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "user-max-ipc-namespaces", "True")
 
 		exutil.By("Compare if the value user.max_ipc_namespaces in on node with labeled pod, should be 121112")
 		compareSysctlValueOnSepcifiedNodeByName(oc, tunedNodeName, "user.max_ipc_namespaces", "", "121112")
@@ -832,7 +835,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes.createDebugTunedProfileIfNotExist(oc, false)
 
 		//Verify if the new profile is applied
-		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
+		ntoRes.assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "user-max-net-namespaces", "True")
 		profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("user-max-net-namespaces"))
@@ -857,7 +860,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes.createDebugTunedProfileIfNotExist(oc, true)
 
 		//Verify if the new profile is applied
-		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
+		ntoRes.assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "user-max-net-namespaces", "True")
 		profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("user-max-net-namespaces"))
@@ -927,7 +930,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes1.createIRQSMPAffinityProfileIfNotExist(oc)
 
 		exutil.By("Check if new NTO profile was applied")
-		ntoRes1.assertTunedProfileApplied(oc, tunedNodeName)
+		ntoRes1.assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "default-irq-smp-affinity", "True")
 
 		exutil.By("Check values of /proc/irq/default_smp_affinity on worker nodes after enabling isolated_cores=1")
 		isolatedcoresSMPAffinity, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "/host", "cat", "/proc/irq/default_smp_affinity").Output()
@@ -961,7 +964,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes2.createIRQSMPAffinityProfileIfNotExist(oc)
 
 		exutil.By("Check if new NTO profile was applied")
-		ntoRes2.assertTunedProfileApplied(oc, tunedNodeName)
+		ntoRes2.assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "default-irq-smp-affinity", "True")
 
 		exutil.By("Check values of /proc/irq/default_smp_affinity on worker nodes")
 		//We only need to return the value /proc/irq/default_smp_affinity without stdErr
@@ -1124,7 +1127,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes.createTunedProfileIfNotExist(oc)
 
 		//Verify if the new profile is applied
-		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
+		ntoRes.assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "tuning-pidmax", "True")
 		profileCheck, err := getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("tuning-pidmax"))
@@ -1174,7 +1177,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Check logs, profiles, and nodes (profile changes SHOULD be applied since tuned is MANAGED)")
 		//Verify if the new profile is applied
-		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
+		ntoRes.assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "tuning-pidmax", "True")
 		profileCheck, err = getTunedProfile(oc, ntoNamespace, tunedNodeName)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(profileCheck).To(o.Equal("tuning-pidmax"))
@@ -2998,7 +3001,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, ntoTunedPidMax)
 
 		exutil.By("Create tuning-pidmax profile tuning-pidmax applied to nodes")
-		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
+		ntoRes.assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "tuning-pidmax", "True")
 
 		exutil.By("Check current profile for each node")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
@@ -3386,7 +3389,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoRes.applyNTOTunedProfile(oc)
 
 		exutil.By("Create tuning-pidmax profile tuning-pidmax applied to nodes")
-		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
+		ntoRes.assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "tuning-pidmax", "True")
 
 		exutil.By("Check current profile for each node")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
@@ -3462,7 +3465,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		}
 
 		exutil.By("Create tuning-pidmax profile and apply it to nodes")
-		ntoRes.assertTunedProfileApplied(oc, tunedNodeName)
+		ntoRes.assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "tuning-pidmax", "True")
 
 		exutil.By("Check current profile for each node")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
@@ -3574,10 +3577,10 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		secondNTORes.applyNTOTunedProfile(oc)
 
 		exutil.By("Create tuning-pidmax profile and apply it to nodes")
-		firstNTORes.assertTunedProfileApplied(oc, firstNodeName)
+		firstNTORes.assertIfTunedProfileApplied(oc, ntoNamespace, firstNodeName, "tuning-pidmax", "True")
 
 		exutil.By("Create tuning-dirtyratio profile and apply it to nodes")
-		secondNTORes.assertTunedProfileApplied(oc, secondNodeName)
+		secondNTORes.assertIfTunedProfileApplied(oc, ntoNamespace, secondNodeName, "tuning-dirtyratio", "True")
 
 		exutil.By("Check current profile for each node")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
@@ -3722,5 +3725,92 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("ocpTunedOneShotServiceStatusInactiveExitTimestamp is: %v, kubeletServiceStatusActiveEnterTimestamp is: %v", ocpTunedOneShotServiceStatusInactiveExitTimestamp, kubeletServiceStatusExecMainStartTimestamp)
 
 		o.Expect(kubeletServiceStatusExecMainStartTimestamp).To(o.BeNumerically(">", ocpTunedOneShotServiceStatusInactiveExitTimestamp))
+	})
+
+	g.It("Author:liqcui-Longduration-NonPreRelease-Medium-75435-NTO deferred feature with annotation deferred update[Disruptive]", func() {
+
+		isSNO := exutil.IsSNOCluster(oc)
+
+		if !isNTO || isSNO {
+			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
+		}
+
+		machinesetName := getTotalLinuxMachinesetNum(oc)
+		e2e.Logf("len(machinesetName) is %v", machinesetName)
+		if machinesetName > 1 {
+			tunedNodeName = choseOneWorkerNodeToRunCase(oc, 0)
+		} else {
+			tunedNodeName = choseOneWorkerNodeNotByMachineset(oc, 0)
+		}
+
+		labeledNode := exutil.GetNodeListByLabel(oc, "deferred-update")
+
+		if len(labeledNode) == 0 {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "deferred-update-").Execute()
+		}
+
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "deferred-update-profile", "-n", ntoNamespace, "--ignore-not-found").Execute()
+			compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "4096")
+		}()
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		o.Expect(tunedPodName).NotTo(o.BeEmpty())
+
+		exutil.By("Pickup one worker nodes to label node to deferred-update ...")
+
+		if len(labeledNode) == 0 {
+			oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "deferred-update=").Execute()
+		}
+
+		defferedNTORes := ntoResource{
+			name:         "deferred-update-profile",
+			namespace:    ntoNamespace,
+			template:     ntoDeferedUpdate,
+			sysctlparm:   "kernel.shmmni",
+			sysctlvalue:  "8192",
+			label:        "deferred-update",
+			deferedValue: "update",
+		}
+
+		exutil.By("Create deferred-update profile")
+		defferedNTORes.applyNTOTunedProfileWithDeferredAnnotation(oc)
+
+		exutil.By("Create deferred-update profile and apply it to nodes")
+		defferedNTORes.assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "deferred-update-profile", "True")
+
+		exutil.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		exutil.By("Compare if the value kernel.shmmni in on labeled node, should be 8192")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "8192")
+
+		exutil.By("Path tuned with new value of kernel.shmmni to 10240")
+		patchTunedProfile(oc, ntoNamespace, "deferred-update-profile", ntoDeferedUpdatePatch)
+
+		exutil.By("Path the tuned profile with a new value, the new value take effective after node reboot")
+		defferedNTORes.assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "deferred-update-profile", "False")
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile.tuned.openshift.io", tunedNodeName, `-ojsonpath='{.status.conditions[0].message}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.BeEmpty())
+		o.Expect(output).To(o.ContainSubstring("The TuneD daemon profile is waiting for the next node restart"))
+
+		exutil.By("Reboot the node with updated tuned profile")
+		err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ntoNamespace, "-it", tunedPodName, "--", "reboot").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker", 600)
+
+		exutil.By("Compare if the value kernel.shmmni in on labeled node, should be 10240")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "10240")
+
+		exutil.By("Removed deffered tuned custom profile and unlabel node")
+		defferedNTORes.delete(oc)
+
+		exutil.By("Compare if the value kernel.shmmni in on labeled node, it will rollback to 4096")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "4096")
 	})
 })
