@@ -15,6 +15,7 @@ objects:
     myASN: ${{MY_ASN}}
     peerASN: ${{PEER_ASN}}
     peerAddress: "${PEER_IPADDRESS}"
+    peerPort: ${{PEER_PORT}}
 parameters:
 - name: NAME
 - name: NAMESPACE
@@ -24,3 +25,4 @@ parameters:
 - name: MY_ASN
 - name: PEER_ASN
 - name: PEER_IPADDRESS
+- name: PEER_PORT

@@ -104,6 +104,7 @@ type bgpPeerResource struct {
 	myASN         int
 	peerASN       int
 	peerAddress   string
+	peerPort      int
 	template      string
 }
 
@@ -217,6 +218,9 @@ func operatorInstall(oc *exutil.CLI, sub subscriptionResource, ns namespaceResou
 		if strings.Compare(subState, "AtLatestKnown") == 0 {
 			return true, nil
 		}
+		// log full status of sub for installation failure debugging
+		subState, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.name, "-n", sub.namespace, "-o=jsonpath={.status}").Output()
+		e2e.Logf("Status of subscription: %v", subState)
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Subscription %s in namespace %v does not have expected status", sub.name, sub.namespace))
@@ -659,7 +663,7 @@ func checkBGPSessions(oc *exutil.CLI, bgpRouterNamespace string) (status bool) {
 
 func createBGPPeerCR(oc *exutil.CLI, bgppeer bgpPeerResource) (status bool) {
 	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", bgppeer.template, "-p", "NAME="+bgppeer.name, "NAMESPACE="+bgppeer.namespace,
-		"PASSWORD="+bgppeer.password, "KEEPALIVETIME="+bgppeer.keepAliveTime,
+		"PASSWORD="+bgppeer.password, "KEEPALIVETIME="+bgppeer.keepAliveTime, "PEER_PORT="+strconv.Itoa(int(bgppeer.peerPort)),
 		"HOLDTIME="+bgppeer.holdTime, "MY_ASN="+strconv.Itoa(int(bgppeer.myASN)), "PEER_ASN="+strconv.Itoa(int(bgppeer.peerASN)), "PEER_IPADDRESS="+bgppeer.peerAddress)
 	if err != nil {
 		e2e.Logf("Error creating BGP Peer %v", err)

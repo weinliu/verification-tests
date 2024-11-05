@@ -210,6 +210,79 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 	})
 
+	g.It("Author:qiowang-High-46124-Verify webhook validation for BGP peer", func() {
+		exutil.By("1. Create two BGPPeer")
+		BGPPeerTemplate := filepath.Join(testDataDir, "bgppeer-template.yaml")
+		for i := 1; i < 3; i++ {
+			BGPPeerCR := bgpPeerResource{
+				name:          "peer-46124-" + strconv.Itoa(i),
+				namespace:     opNamespace,
+				holdTime:      "30s",
+				keepAliveTime: "10s",
+				password:      "",
+				myASN:         65501,
+				peerASN:       65500 + i,
+				peerAddress:   "10.10.10." + strconv.Itoa(i),
+				peerPort:      6000,
+				template:      BGPPeerTemplate,
+			}
+			defer removeResource(oc, true, true, "bgppeers", BGPPeerCR.name, "-n", BGPPeerCR.namespace)
+			o.Expect(createBGPPeerCR(oc, BGPPeerCR)).To(o.BeTrue())
+		}
+
+		exutil.By("2. Validate two BGPPeer with same peerASN and peerAddress is invalid")
+		patchBGPPeer := `{"spec":{"peerASN":65501,"peerAddress": "10.10.10.1"}}`
+		patchOutput, patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("bgppeer", "peer-46124-2", "-n", opNamespace, "--type=merge", "-p", patchBGPPeer).Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(strings.Contains(patchOutput, "duplicate BGPPeers")).To(o.BeTrue())
+
+		exutil.By("3. Validate two BGPPeer with different peerASN but same peerAddress is invalid")
+		patchBGPPeer = `{"spec":{"peerAddress": "10.10.10.1"}}`
+		patchOutput, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("bgppeer", "peer-46124-2", "-n", opNamespace, "--type=merge", "-p", patchBGPPeer).Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(strings.Contains(patchOutput, "already exists")).To(o.BeTrue())
+
+		exutil.By("4. Validate two BGPPeer with different myASN is invalid")
+		patchBGPPeer = `{"spec":{"myASN": 65502}}`
+		patchOutput, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("bgppeer", "peer-46124-2", "-n", opNamespace, "--type=merge", "-p", patchBGPPeer).Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(strings.Contains(patchOutput, "all myAsn must be equal for the same VRF")).To(o.BeTrue())
+
+		exutil.By("5. Validate BGPPeer with one of the ASN number more than 4294967296 is invalid")
+		patchBGPPeer = `{"spec":{"myASN": 4294967297}}`
+		patchOutput, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("bgppeer", "peer-46124-2", "-n", opNamespace, "--type=merge", "-p", patchBGPPeer).Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(strings.Contains(patchOutput, "spec.myASN in body should be less than or equal to 4294967295")).To(o.BeTrue())
+
+		exutil.By("6. Validate BGPPeer with invalid source address is invalid")
+		patchBGPPeer = `{"spec":{"peerAddress": "10.10.10"}}`
+		patchOutput, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("bgppeer", "peer-46124-2", "-n", opNamespace, "--type=merge", "-p", patchBGPPeer).Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(strings.Contains(patchOutput, "invalid BGPPeer address")).To(o.BeTrue())
+
+		exutil.By("7. Validate BGPPeer with port number greater than 16384 or less than 0 is invalid")
+		patchBGPPeer = `{"spec":{"peerPort": 16385}}`
+		patchOutput, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("bgppeer", "peer-46124-2", "-n", opNamespace, "--type=merge", "-p", patchBGPPeer).Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(strings.Contains(patchOutput, "spec.peerPort in body should be less than or equal to 16384")).To(o.BeTrue())
+		patchBGPPeer = `{"spec":{"peerPort": -1}}`
+		patchOutput, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("bgppeer", "peer-46124-2", "-n", opNamespace, "--type=merge", "-p", patchBGPPeer).Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(strings.Contains(patchOutput, "spec.peerPort in body should be greater than or equal to 0")).To(o.BeTrue())
+
+		exutil.By("8. Validate hold timer and keepalive timer without unit is invalid")
+		patchBGPPeer = `{"spec":{"holdTime": "30", "keepaliveTime": "10"}}`
+		patchOutput, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("bgppeer", "peer-46124-2", "-n", opNamespace, "--type=merge", "-p", patchBGPPeer).Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(strings.Contains(patchOutput, "missing unit")).To(o.BeTrue())
+
+		exutil.By("9. Validate BGPPeer with keepalive timer greater than holdtime is invalid")
+		patchBGPPeer = `{"spec":{"keepaliveTime": "40s"}}`
+		patchOutput, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("bgppeer", "peer-46124-2", "-n", opNamespace, "--type=merge", "-p", patchBGPPeer).Output()
+		o.Expect(patchErr).To(o.HaveOccurred())
+		o.Expect(strings.Contains(patchOutput, "must be lower than holdTime")).To(o.BeTrue())
+	})
+
 })
 
 // Tests related to metallb install and CR creation that can be executed more frequently
