@@ -3,6 +3,7 @@ package networking
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/tidwall/gjson"
 	"strconv"
 	"strings"
 	"time"
@@ -716,4 +717,46 @@ func checkSpecificPolicyStatus(oc *exutil.CLI, policyType string, policyName str
 	}
 
 	return result, resultMsg
+}
+
+func getPolicyMetrics(oc *exutil.CLI, metricsName string, expectedValue string, addArgs ...string) (bool, error) {
+	metricsValue := ""
+	if len(addArgs) > 0 {
+		e2e.Logf("Obtaining meterics for %s rule and %s action", addArgs[0], addArgs[1])
+	}
+	result := true
+	olmToken, err := exutil.GetSAToken(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(olmToken).NotTo(o.BeEmpty())
+	url := fmt.Sprintf("localhost:9090/api/v1/query?query=%s", metricsName)
+	metricsErr := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", olmToken), fmt.Sprintf("%s", url)).Output()
+		if err != nil {
+			e2e.Logf("Unable to get metrics and try again, the error is:%s", err)
+			result = false
+			return result, nil
+		}
+		metric := gjson.Get(output, "data.result.#.metric")
+		for index, metricVal := range metric.Array() {
+			metricMap := metricVal.Map()
+			if strings.Contains((metricMap["__name__"]).String(), "rules") {
+				if !(strings.Contains((metricMap["direction"]).String(), addArgs[0]) && strings.Contains((metricMap["action"]).String(), addArgs[1])) {
+					continue
+				}
+			}
+			val := gjson.Get(output, "data.result."+strconv.Itoa(index)+".value")
+			metricsValue = strings.TrimSuffix(strings.Split(val.String(), ",")[1], "]")
+		}
+		if !strings.Contains(metricsValue, expectedValue) {
+			result = false
+			e2e.Logf("The value for %s is %s not as expected", metricsName, expectedValue)
+			return result, nil
+		} else {
+			result = true
+			e2e.Logf("The value for %s is %s as expected", metricsName, expectedValue)
+			return result, nil
+		}
+	})
+	exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Fail to get metric and the error is:%s", metricsErr))
+	return result, nil
 }

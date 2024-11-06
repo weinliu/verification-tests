@@ -1547,4 +1547,157 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 			CurlPod2NodePass(oc, ns, nodePodMap[workersList.Items[i].Name], ns, egressNode, strconv.Itoa(int(hostport)))
 		}
 	})
+
+	g.It("Author:asood-High-73331-[FdpOvnOvs] BANP and ANP metrics are available. [Serial]", func() {
+		var (
+			testID                   = "73331"
+			testDataDir              = exutil.FixturePath("testdata", "networking")
+			banpCRTemplate           = filepath.Join(testDataDir, "adminnetworkpolicy", "banp-multi-pod-mixed-rule-template.yaml")
+			anpCRTemplate            = filepath.Join(testDataDir, "adminnetworkpolicy", "anp-single-rule-me-template.yaml")
+			anpNodeCRTemplate        = filepath.Join(testDataDir, "adminnetworkpolicy", "anp-single-rule-template-node.yaml")
+			namespaceLabelKey        = "team"
+			namespaceLabelVal        = "qe"
+			podKey                   = "name"
+			podVal                   = "hello-pod"
+			expectedBANPMetricsValue = make(map[string]string)
+			expectedANPMetricsValue  = make(map[string]string)
+			banpEgress               = make(map[string]string)
+			banpIngress              = make(map[string]string)
+			anpEgress                = make(map[string]string)
+			anpIngress               = make(map[string]string)
+		)
+		// Initialize variables
+		banpMetricsList := []string{"ovnkube_controller_baseline_admin_network_policies", "ovnkube_controller_baseline_admin_network_policies_db_objects", "ovnkube_controller_baseline_admin_network_policies_rules"}
+		anpMetricsList := []string{"ovnkube_controller_admin_network_policies", "ovnkube_controller_admin_network_policies_db_objects", "ovnkube_controller_admin_network_policies_rules"}
+		expectedBANPMetricsValue[banpMetricsList[0]] = "1"
+		expectedBANPMetricsValue[banpMetricsList[1]] = "2"
+		expectedANPMetricsValue[anpMetricsList[0]] = "1"
+		expectedANPMetricsValue[anpMetricsList[1]] = "1"
+		actionList := []string{"Allow", "Deny", "Pass"}
+
+		exutil.By("1. Create a BANP with two rules with Allow action for Ingress and Deny action for Egress")
+		banpCR := multiPodMixedRuleBANPPolicyResource{
+			name:          "default",
+			subjectKey:    namespaceLabelKey,
+			subjectVal:    namespaceLabelVal,
+			subjectPodKey: podKey,
+			subjectPodVal: podVal,
+			policyType1:   "ingress",
+			direction1:    "from",
+			ruleName1:     "default-allow-ingress",
+			ruleAction1:   "Allow",
+			ruleKey1:      namespaceLabelKey,
+			ruleVal1:      namespaceLabelVal,
+			rulePodKey1:   podKey,
+			rulePodVal1:   podVal,
+			policyType2:   "egress",
+			direction2:    "to",
+			ruleName2:     "default-deny-egress",
+			ruleAction2:   "Deny",
+			ruleKey2:      namespaceLabelVal,
+			ruleVal2:      namespaceLabelVal,
+			rulePodKey2:   podKey,
+			rulePodVal2:   podVal,
+			template:      banpCRTemplate,
+		}
+		defer removeResource(oc, true, true, "banp", banpCR.name)
+		banpCR.createMultiPodMixedRuleBANP(oc)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("banp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, banpCR.name)).To(o.BeTrue())
+
+		exutil.By(fmt.Sprintf("2. Validate %s and %s metrics for BANP", banpMetricsList[0], banpMetricsList[1]))
+		for i := 0; i < 2; i++ {
+			getPolicyMetrics(oc, banpMetricsList[i], expectedBANPMetricsValue[banpMetricsList[i]])
+
+		}
+
+		banpEgress[actionList[1]] = "1"
+		banpIngress[actionList[0]] = "1"
+		ruleDirection := "Egress"
+		exutil.By(fmt.Sprintf("3. Validate metrics %s for BANP, %s rule and %s action", banpMetricsList[2], ruleDirection, actionList[1]))
+		getPolicyMetrics(oc, banpMetricsList[2], banpEgress[actionList[1]], ruleDirection, actionList[1])
+
+		ruleDirection = "Ingress"
+		exutil.By(fmt.Sprintf("4. Validate metrics %s for BANP, %s rule and %s action", banpMetricsList[2], ruleDirection, actionList[0]))
+		getPolicyMetrics(oc, banpMetricsList[2], banpIngress[actionList[0]], ruleDirection, actionList[0])
+
+		banpIngress[actionList[1]] = "1"
+		exutil.By(fmt.Sprintf("5. Update BANP to add another ingress rule and validate metrics %s", banpMetricsList[2]))
+		patchBANP := fmt.Sprintf("[{\"op\": \"add\", \"path\":\"/spec/ingress/1\", \"value\": {\"name\":\"deny ingress\", \"action\": \"Deny\", \"from\": [{\"pods\":  {\"namespaceSelector\": {\"matchLabels\": {%s: %s}}, \"podSelector\": {}}}]}}]", namespaceLabelKey, namespaceLabelVal)
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("baselineadminnetworkpolicy", banpCR.name, "--type=json", "-p", patchBANP).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+		getPolicyMetrics(oc, banpMetricsList[2], banpIngress[actionList[1]], ruleDirection, actionList[1])
+
+		exutil.By("6. Create a ANP with one ingress rule with deny action.")
+		anpCR := singleRuleANPMEPolicyResource{
+			name:            "anp-" + testID + "-0",
+			subjectKey:      namespaceLabelKey,
+			subjectOperator: "In",
+			subjectVal:      namespaceLabelVal,
+			priority:        25,
+			policyType:      "ingress",
+			direction:       "from",
+			ruleName:        "deny ingress",
+			ruleAction:      "Deny",
+			ruleKey:         namespaceLabelKey,
+			ruleOperator:    "NotIn",
+			ruleVal:         "ns" + testID,
+			template:        anpCRTemplate,
+		}
+		defer removeResource(oc, true, true, "anp", anpCR.name)
+		anpCR.createSingleRuleANPMatchExp(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anpCR.name)).To(o.BeTrue())
+
+		exutil.By(fmt.Sprintf("7. Validate %s and %s metrics for ANP %s", anpMetricsList[0], anpMetricsList[1], anpCR.name))
+		for i := 0; i < 2; i++ {
+			getPolicyMetrics(oc, anpMetricsList[i], expectedANPMetricsValue[anpMetricsList[i]])
+		}
+		ruleDirection = "Ingress"
+		anpIngress[actionList[1]] = "1"
+		exutil.By(fmt.Sprintf("8. Validate metrics %s for ANP, %s rule and %s action", anpMetricsList[2], ruleDirection, actionList[1]))
+		getPolicyMetrics(oc, anpMetricsList[2], anpIngress[actionList[1]], ruleDirection, actionList[1])
+
+		exutil.By("9. Create another ANP with egress pass and allow rule.")
+		anpNodeCR := singleRuleANPPolicyResourceNode{
+			name:       "anp-" + testID + "-1",
+			subjectKey: namespaceLabelKey,
+			subjectVal: namespaceLabelVal,
+			priority:   40,
+			policyType: "egress",
+			direction:  "to",
+			ruleName:   "allow egress",
+			ruleAction: "Allow",
+			ruleKey:    "team",
+			nodeKey:    "node-role.kubernetes.io/worker",
+			ruleVal:    "worker-1",
+			actionname: "pass egress",
+			actiontype: "Pass",
+			template:   anpNodeCRTemplate,
+		}
+		defer removeResource(oc, true, true, "anp", anpNodeCR.name)
+		anpNodeCR.createSingleRuleANPNode(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anpNodeCR.name)).To(o.BeTrue())
+
+		ruleDirection = "Egress"
+		anpEgress[actionList[0]] = "1"
+		anpEgress[actionList[2]] = "1"
+		exutil.By(fmt.Sprintf("10. Validate metrics %s for ANP, %s rule and %s action", anpMetricsList[2], ruleDirection, actionList[0]))
+		getPolicyMetrics(oc, anpMetricsList[2], anpEgress[actionList[0]], ruleDirection, actionList[0])
+
+		exutil.By(fmt.Sprintf("11. Validate metrics %s for ANP, %s rule and %s action", anpMetricsList[2], ruleDirection, actionList[2]))
+		getPolicyMetrics(oc, anpMetricsList[2], anpEgress[actionList[2]], ruleDirection, actionList[2])
+
+		expectedANPMetricsValue[anpMetricsList[0]] = "2"
+		expectedANPMetricsValue[anpMetricsList[1]] = "3"
+		exutil.By(fmt.Sprintf("12. Validate %s and %s metrics for both ANP policies", anpMetricsList[0], anpMetricsList[1]))
+		for i := 0; i < 2; i++ {
+			getPolicyMetrics(oc, anpMetricsList[i], expectedANPMetricsValue[anpMetricsList[i]])
+		}
+
+	})
 })
