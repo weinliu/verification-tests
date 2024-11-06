@@ -809,7 +809,12 @@ func (p *projectDescription) delete(oc *exutil.CLI) {
 }
 
 func (p *projectDescription) deleteWithForce(oc *exutil.CLI) {
-	_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "ns", p.name, "--force", "--grace-period=0")
+	// remove Finalizer
+	_, err := doAction(oc, "delete", asAdmin, withoutNamespace, "all", "--all", "-n", p.name, "--force", "--grace-period=0", "--wait=false")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "csv", "--all", "-n", p.name, "--force", "--grace-period=0", "--wait=false")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "project", p.name, "--force", "--grace-period=0", "--wait=false")
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
