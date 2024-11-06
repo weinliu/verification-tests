@@ -65,22 +65,32 @@ type TestRunDescription struct {
 
 // If you changes this please make changes to func createPeerPodSecrets
 type PeerpodParam struct {
-	AWS_SUBNET_ID            string
-	AWS_VPC_ID               string
-	PODVM_INSTANCE_TYPE      string
-	PROXY_TIMEOUT            string
-	VXLAN_PORT               string
-	AWS_REGION               string
-	AWS_SG_IDS               string
-	PODVM_AMI_ID             string
-	CLOUD_PROVIDER           string
-	AZURE_REGION             string
-	AZURE_RESOURCE_GROUP     string
-	AZURE_IMAGE_ID           string
-	AZURE_INSTANCE_SIZE      string
-	AZURE_NSG_ID             string
-	AZURE_SUBNET_ID          string
-	LIBVIRT_KVM_HOST_ADDRESS string
+	AWS_SUBNET_ID                        string
+	AWS_VPC_ID                           string
+	PODVM_INSTANCE_TYPE                  string
+	PROXY_TIMEOUT                        string
+	VXLAN_PORT                           string
+	AWS_REGION                           string
+	AWS_SG_IDS                           string
+	PODVM_AMI_ID                         string
+	CLOUD_PROVIDER                       string
+	AZURE_REGION                         string
+	AZURE_RESOURCE_GROUP                 string
+	AZURE_IMAGE_ID                       string
+	AZURE_INSTANCE_SIZE                  string
+	AZURE_NSG_ID                         string
+	AZURE_SUBNET_ID                      string
+	LIBVIRT_KVM_HOST_ADDRESS             string
+	LIBVIRT_PODVM_DISTRO                 string
+	LIBVIRT_CAA_SRC                      string
+	LIBVIRT_CAA_REF                      string
+	LIBVIRT_DOWNLOAD_SOURCES             string
+	LIBVIRT_CONFIDENTIAL_COMPUTE_ENABLED string
+	LIBVIRT_UPDATE_PEERPODS_CM           string
+	LIBVIRT_ORG_ID                       string
+	LIBVIRT_BASE_OS_VERSION              string
+	LIBVIRT_IMAGE_NAME                   string
+	LIBVIRT_PODVM_TAG                    string
 }
 
 type UpgradeCatalogDescription struct {
@@ -987,7 +997,7 @@ func createApplyPeerPodSecrets(oc *exutil.CLI, provider string, ppParam PeerpodP
 		} else if provider == "azure" {
 			secretFilePath, err = createAzurePeerPodSecrets(oc, ppParam, ciSecretName, secretTemplate)
 		} else if provider == "libvirt" {
-			secretFilePath, err = createLibvirtPeerPodSecrets(oc, ppParam, ciCmName, secretTemplate)
+			secretFilePath, err = createLibvirtPeerPodSecrets(oc, ppParam, ciSecretName, secretTemplate)
 		} else {
 			msg = fmt.Sprintf("Cloud provider %v is not supported", provider)
 			return msg, fmt.Errorf("%v", msg)
@@ -1006,6 +1016,61 @@ func createApplyPeerPodSecrets(oc *exutil.CLI, provider string, ppParam PeerpodP
 			e2e.Logf("Error: removing secret file %v failed: %v", secretFilePath, errRemove)
 		}
 
+	}
+
+	return msg, err
+}
+
+func createApplyPeerPodsParamLibvirtConfigMap(oc *exutil.CLI, provider string, ppParam PeerpodParam, opNamespace, ppConfigMapName, ppConfigMapTemplate string) (msg string, err error) {
+
+	var (
+		ciCmName   = "peerpods-param-cm"
+		configFile string
+	)
+
+	g.By("Checking if libvirt-podvm-image-cm exists")
+	_, err = checkPeerPodConfigMap(oc, opNamespace, provider, ppConfigMapName)
+	if err == nil {
+		e2e.Logf("libvirt-podvm-image-cm exists - skipping creating it")
+		return msg, err
+
+	} else if err != nil {
+		e2e.Logf("**** libvirt-podvm-image-cm not found on the cluster - proceeding to create it****")
+	}
+
+	// Read params from libvirt-podvm-image-cm and store in ppParam struct
+	msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-n", "default").Output()
+	if err != nil {
+		e2e.Logf("%v Configmap created by QE CI not found: msg %v err: %v", ciCmName, msg, err)
+	} else {
+		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-n", "default", "-o=jsonpath={.data}").Output()
+		if err != nil {
+			e2e.Failf("%v Configmap created by QE CI has error, no .data: %v %v", ciCmName, configmapData, err)
+		}
+
+		ppParam, err := parseCIPpConfigMapData(provider, configmapData)
+		if err != nil {
+			return msg, err
+		}
+
+		// Create libvirt-podvm-image-cm file
+		if provider == "libvirt" {
+			configFile, err = createLibvirtPeerPodsParamConfigMap(oc, ppParam, ppConfigMapTemplate)
+		} else {
+			msg = fmt.Sprintf("Cloud provider %v is not supported", provider)
+			return msg, fmt.Errorf("%v", msg)
+		}
+
+		if err != nil {
+			return msg, err
+		}
+
+		// Apply libvirt-podvm-image-cm file
+		g.By("(Apply libvirt-podvm-image-cm file)")
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configFile).Output()
+		if err != nil {
+			return fmt.Sprintf("Error: applying libvirt-podvm-image-cm %v failed: %v %v", configFile, msg, err), err
+		}
 	}
 
 	return msg, err
@@ -1035,7 +1100,36 @@ func parseLibvirtCIConfigMapData(configmapData string) (PeerpodParam, error) {
 	if gjson.Get(configmapData, "LIBVIRT_KVM_HOST_ADDRESS").Exists() {
 		ppParam.LIBVIRT_KVM_HOST_ADDRESS = gjson.Get(configmapData, "LIBVIRT_KVM_HOST_ADDRESS").String()
 	}
-
+	if gjson.Get(configmapData, "PODVM_DISTRO").Exists() {
+		ppParam.LIBVIRT_PODVM_DISTRO = gjson.Get(configmapData, "PODVM_DISTRO").String()
+	}
+	if gjson.Get(configmapData, "CAA_SRC").Exists() {
+		ppParam.LIBVIRT_CAA_SRC = gjson.Get(configmapData, "CAA_SRC").String()
+	}
+	if gjson.Get(configmapData, "CAA_REF").Exists() {
+		ppParam.LIBVIRT_CAA_REF = gjson.Get(configmapData, "CAA_REF").String()
+	}
+	if gjson.Get(configmapData, "DOWNLOAD_SOURCES").Exists() {
+		ppParam.LIBVIRT_DOWNLOAD_SOURCES = gjson.Get(configmapData, "DOWNLOAD_SOURCES").String()
+	}
+	if gjson.Get(configmapData, "CONFIDENTIAL_COMPUTE_ENABLED").Exists() {
+		ppParam.LIBVIRT_CONFIDENTIAL_COMPUTE_ENABLED = gjson.Get(configmapData, "CONFIDENTIAL_COMPUTE_ENABLED").String()
+	}
+	if gjson.Get(configmapData, "UPDATE_PEERPODS_CM").Exists() {
+		ppParam.LIBVIRT_UPDATE_PEERPODS_CM = gjson.Get(configmapData, "UPDATE_PEERPODS_CM").String()
+	}
+	if gjson.Get(configmapData, "ORG_ID").Exists() {
+		ppParam.LIBVIRT_ORG_ID = gjson.Get(configmapData, "ORG_ID").String()
+	}
+	if gjson.Get(configmapData, "BASE_OS_VERSION").Exists() {
+		ppParam.LIBVIRT_BASE_OS_VERSION = gjson.Get(configmapData, "BASE_OS_VERSION").String()
+	}
+	if gjson.Get(configmapData, "IMAGE_NAME").Exists() {
+		ppParam.LIBVIRT_IMAGE_NAME = gjson.Get(configmapData, "IMAGE_NAME").String()
+	}
+	if gjson.Get(configmapData, "PODVM_TAG").Exists() {
+		ppParam.LIBVIRT_PODVM_TAG = gjson.Get(configmapData, "PODVM_TAG").String()
+	}
 	return ppParam, nil
 }
 
@@ -1096,31 +1190,47 @@ func parseAzureCIConfigMapData(configmapData string) (PeerpodParam, error) {
 }
 
 func createLibvirtPeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretName, secretTemplate string) (string, error) {
-	configmapDatav2, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciSecretName, "-n", "default", "-o=jsonpath={.data}").Output()
-	if err != nil {
-		e2e.Failf("%v Configmap created by QE CI has error, no .data: %v %v", ciSecretName, configmapDatav2, err)
+	var (
+		secretString string
+	)
+	secretString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", ciSecretName, "-n", "default", "-o=jsonpath={.data}").Output()
+	if err != nil || secretString == "" {
+		e2e.Logf("Error: %v CI provided peer pods secret data empty", err)
+		return "", err
 	}
 
-	LIBVIRT_URI := ""
-	LIBVIRT_POOL := ""
-	LIBVIRT_VOL_NAME := ""
-	PROXY_TIMEOUT := ""
+	var (
+		LIBVIRT_URI          string
+		LIBVIRT_POOL         string
+		LIBVIRT_VOL_NAME     string
+		ACTIVATION_KEY       string
+		REDHAT_OFFLINE_TOKEN string
+	)
 
-	if gjson.Get(configmapDatav2, "LIBVIRT_POOL").Exists() {
-		LIBVIRT_POOL = gjson.Get(configmapDatav2, "LIBVIRT_POOL").String()
+	fields := map[string]*string{
+		"LIBVIRT_URI":          &LIBVIRT_URI,
+		"LIBVIRT_POOL":         &LIBVIRT_POOL,
+		"LIBVIRT_VOL_NAME":     &LIBVIRT_VOL_NAME,
+		"ACTIVATION_KEY":       &ACTIVATION_KEY,
+		"REDHAT_OFFLINE_TOKEN": &REDHAT_OFFLINE_TOKEN,
 	}
-	if gjson.Get(configmapDatav2, "LIBVIRT_URI").Exists() {
-		LIBVIRT_URI = gjson.Get(configmapDatav2, "LIBVIRT_URI").String()
-	}
-	if gjson.Get(configmapDatav2, "LIBVIRT_VOL_NAME").Exists() {
-		LIBVIRT_VOL_NAME = gjson.Get(configmapDatav2, "LIBVIRT_VOL_NAME").String()
-	}
-	if gjson.Get(configmapDatav2, "PROXY_TIMEOUT").Exists() {
-		PROXY_TIMEOUT = gjson.Get(configmapDatav2, "PROXY_TIMEOUT").String()
+
+	for key, valuePtr := range fields {
+		encodedValue := gjson.Get(secretString, key).String()
+		if encodedValue == "" {
+			e2e.Logf("Warning: %v field is empty", key)
+			continue
+		}
+		decodedValue, err := decodeSecret(encodedValue)
+		if err != nil {
+			e2e.Logf("Error decoding %v: %v", key, err)
+			return "", err
+		}
+		*valuePtr = decodedValue
 	}
 
 	// Check for libvirt credentials
-	if LIBVIRT_POOL == "" || LIBVIRT_URI == "" || LIBVIRT_VOL_NAME == "" || PROXY_TIMEOUT == "" {
+	if LIBVIRT_POOL == "" || LIBVIRT_URI == "" || LIBVIRT_VOL_NAME == "" || REDHAT_OFFLINE_TOKEN == "" || ACTIVATION_KEY == "" {
 		msg := "Libvirt credentials not found in the data."
 		return msg, fmt.Errorf("Libvirt credentials not found")
 	}
@@ -1135,10 +1245,12 @@ func createLibvirtPeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretN
 			"namespace": "openshift-sandboxed-containers-operator",
 		},
 		"stringData": map[string]string{
-			"CLOUD_PROVIDER":   "libvirt",
-			"LIBVIRT_URI":      LIBVIRT_URI,
-			"LIBVIRT_POOL":     LIBVIRT_POOL,
-			"LIBVIRT_VOL_NAME": LIBVIRT_VOL_NAME,
+			"CLOUD_PROVIDER":       "libvirt",
+			"LIBVIRT_URI":          LIBVIRT_URI,
+			"LIBVIRT_POOL":         LIBVIRT_POOL,
+			"LIBVIRT_VOL_NAME":     LIBVIRT_VOL_NAME,
+			"REDHAT_OFFLINE_TOKEN": REDHAT_OFFLINE_TOKEN,
+			"ACTIVATION_KEY":       ACTIVATION_KEY,
 		},
 	}
 
@@ -1413,6 +1525,7 @@ func createApplyPeerPodConfigMap(oc *exutil.CLI, provider string, ppParam Peerpo
 		}
 
 		e2e.Logf("configmap Data is:\n%v", configmapData)
+
 		ppParam, err := parseCIPpConfigMapData(provider, configmapData)
 		if err != nil {
 			return msg, err
@@ -1502,12 +1615,29 @@ func createLibvirtPeerPodsConfigMap(oc *exutil.CLI, ppParam PeerpodParam, ppConf
 	return configFile, err
 }
 
+func createLibvirtPeerPodsParamConfigMap(oc *exutil.CLI, ppParam PeerpodParam, ppConfigMapTemplate string) (string, error) {
+	g.By("Create libvirt-podvm-image-cm file")
+
+	// Processing configmap template and create " <randomstring>peer-pods-cm.json"
+	configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ppConfigMapTemplate,
+		"-p", "PODVM_DISTRO="+ppParam.LIBVIRT_PODVM_DISTRO, "CAA_SRC="+ppParam.LIBVIRT_CAA_SRC, "CAA_REF="+ppParam.LIBVIRT_CAA_REF, "DOWNLOAD_SOURCES="+ppParam.LIBVIRT_DOWNLOAD_SOURCES, "CONFIDENTIAL_COMPUTE_ENABLED="+ppParam.LIBVIRT_CONFIDENTIAL_COMPUTE_ENABLED, "UPDATE_PEERPODS_CM="+ppParam.LIBVIRT_UPDATE_PEERPODS_CM, "ORG_ID="+ppParam.LIBVIRT_ORG_ID, "BASE_OS_VERSION="+ppParam.LIBVIRT_BASE_OS_VERSION, "IMAGE_NAME="+ppParam.LIBVIRT_IMAGE_NAME, "PODVM_TAG="+ppParam.LIBVIRT_PODVM_TAG).OutputToFile(getRandomString() + "peerpods-param-cm.json")
+
+	if configFile != "" {
+		osStatMsg, configFileExists := os.Stat(configFile)
+		if configFileExists != nil {
+			e2e.Logf("issue creating libvirt-podvm-image-cm file %s, err: %v , osStatMsg: %v", configFile, err, osStatMsg)
+		}
+	}
+
+	return configFile, err
+}
+
 func createSSHPeerPodsKeys(oc *exutil.CLI, ppParam PeerpodParam, provider string) error {
 	g.By("Create ssh keys")
 
 	keyName := "id_rsa_" + getRandomString()
 	pubKeyName := keyName + ".pub"
-	fromFile := "--from-file=id_rsa.pub=./" + pubKeyName
+	fromFile := []string{"--from-file=id_rsa.pub=./" + pubKeyName}
 
 	shredRMCmd := fmt.Sprintf(`shred -f --remove ./%v ./%v`, keyName, pubKeyName)
 	defer exec.Command("bash", "-c", shredRMCmd).CombinedOutput()
@@ -1520,18 +1650,46 @@ func createSSHPeerPodsKeys(oc *exutil.CLI, ppParam PeerpodParam, provider string
 	}
 
 	if provider == "libvirt" {
-		fromFile = fromFile + " --from-file=id_rsa=./" + keyName
-		sshCopyIdCmd := fmt.Sprintf(`ssh-copy-id -i ./%v %v`, pubKeyName, ppParam.LIBVIRT_KVM_HOST_ADDRESS)
+		var (
+			ciCmName     = "peerpods-param-cm"
+			ciSecretName = "peerpods-param-secret"
+		)
+
+		fromFile = append(fromFile, "--from-file=id_rsa=./"+keyName)
+		configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-n", "default", "-o=jsonpath={.data}").Output()
+		if err != nil {
+			e2e.Failf("%v Configmap created by QE CI has error, no .data: %v %v", ciCmName, configmapData, err)
+		}
+
+		ppParam, err = parseCIPpConfigMapData(provider, configmapData)
+		if err != nil {
+			e2e.Failf("Error getting ppParam %v", err)
+		}
+
+		secretData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", ciSecretName, "-n", "default", "-o=jsonpath={.data}").Output()
+		if err != nil {
+			e2e.Failf("%v Secret created by QE CI has error %v", ciSecretName, err)
+		}
+
+		hostpassword, err := decodeSecret(gjson.Get(secretData, "HOST_PASSWORD").String())
+		if err != nil {
+			e2e.Logf("Error: %v CI provided peer pods secret data can't be decoded", err)
+			return err
+		}
+
+		sshCopyIdCmd := fmt.Sprintf(`sshpass -p %v ssh-copy-id -i ./%v %v`, hostpassword, pubKeyName, ppParam.LIBVIRT_KVM_HOST_ADDRESS)
 		retCmd, err = exec.Command("bash", "-c", sshCopyIdCmd).CombinedOutput()
 		if err != nil {
 			e2e.Logf("the error: %v", string(retCmd))
 			return err
 		}
+
 	}
-	secretMsg, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-sandboxed-containers-operator",
-		"secret", "generic", "ssh-key-secret", fromFile).Output()
+
+	sshSecretCmd := append([]string{"-n", "openshift-sandboxed-containers-operator", "secret", "generic", "ssh-key-secret"}, fromFile...)
+	secretMsg, err := oc.AsAdmin().WithoutNamespace().Run("create").Args(sshSecretCmd...).Output()
 	if strings.Contains(secretMsg, "already exists") {
-		e2e.Logf(secretMsg)
+		e2e.Logf(`ssh-key-secret created and it already exists`)
 		return nil
 	}
 	return err

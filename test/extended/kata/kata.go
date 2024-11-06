@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"golang.org/x/exp/slices"
+	"golang.org/x/mod/semver"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -23,38 +24,41 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                         = exutil.NewCLI("kata", exutil.KubeConfigPath())
-		testDataDir                = exutil.FixturePath("testdata", "kata")
-		kcTemplate                 = filepath.Join(testDataDir, "kataconfig.yaml")
-		defaultDeployment          = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
-		defaultPod                 = filepath.Join(testDataDir, "workload-pod-securityContext.yaml")
-		subTemplate                = filepath.Join(testDataDir, "subscription_template.yaml")
-		namespaceTemplate          = filepath.Join(testDataDir, "namespace.yaml")
-		ogTemplate                 = filepath.Join(testDataDir, "operatorgroup.yaml")
-		redirectFile               = filepath.Join(testDataDir, "ImageTag-DigestMirrorSet.yaml")
-		redirectType               = "ImageTagMirrorSet"
-		redirectName               = "kata-brew-registry"
-		clusterVersion             string
-		cloudPlatform              string
-		configmapExists            bool
-		ocpMajorVer                string
-		ocpMinorVer                string
-		minorVer                   int
-		opNamespace                = "openshift-sandboxed-containers-operator"
-		ppParam                    PeerpodParam
-		ppRuntimeClass             = "kata-remote"
-		ppSecretName               = "peer-pods-secret"
-		ppConfigMapName            = "peer-pods-cm"
-		secretTemplateAws          = filepath.Join(testDataDir, "peer-pod-secret-aws.yaml")
-		ppConfigMapTemplate        string
-		ppAWSConfigMapTemplate     = filepath.Join(testDataDir, "peer-pod-aws-cm-template.yaml")
-		ppAzureConfigMapTemplate   = filepath.Join(testDataDir, "peer-pod-azure-cm-template.yaml")
-		ppLibvirtConfigMapTemplate = filepath.Join(testDataDir, "peer-pod-libvirt-cm-template.yaml")
-		podAnnotatedTemplate       = filepath.Join(testDataDir, "pod-annotations-template.yaml")
-		featureGatesFile           = filepath.Join(testDataDir, "cc-feature-gates-cm.yaml")
-		testrunConfigmapNs         = "default"
-		testrunConfigmapName       = "osc-config"
-		scratchRpmName             string
+		oc                               = exutil.NewCLI("kata", exutil.KubeConfigPath())
+		testDataDir                      = exutil.FixturePath("testdata", "kata")
+		kcTemplate                       = filepath.Join(testDataDir, "kataconfig.yaml")
+		defaultDeployment                = filepath.Join(testDataDir, "workload-deployment-securityContext.yaml")
+		defaultPod                       = filepath.Join(testDataDir, "workload-pod-securityContext.yaml")
+		subTemplate                      = filepath.Join(testDataDir, "subscription_template.yaml")
+		namespaceTemplate                = filepath.Join(testDataDir, "namespace.yaml")
+		ogTemplate                       = filepath.Join(testDataDir, "operatorgroup.yaml")
+		redirectFile                     = filepath.Join(testDataDir, "ImageTag-DigestMirrorSet.yaml")
+		redirectType                     = "ImageTagMirrorSet"
+		redirectName                     = "kata-brew-registry"
+		clusterVersion                   string
+		cloudPlatform                    string
+		configmapExists                  bool
+		ocpMajorVer                      string
+		ocpMinorVer                      string
+		minorVer                         int
+		opNamespace                      = "openshift-sandboxed-containers-operator"
+		ppParam                          PeerpodParam
+		ppRuntimeClass                   = "kata-remote"
+		ppSecretName                     = "peer-pods-secret"
+		ppConfigMapName                  = "peer-pods-cm"
+		ppParamsLibvirtConfigMapName     = "libvirt-podvm-image-cm"
+		secretTemplateAws                = filepath.Join(testDataDir, "peer-pod-secret-aws.yaml")
+		secretTemplateLibvirt            = filepath.Join(testDataDir, "peer-pod-secret-libvirt.yaml")
+		ppConfigMapTemplate              string
+		ppAWSConfigMapTemplate           = filepath.Join(testDataDir, "peer-pod-aws-cm-template.yaml")
+		ppAzureConfigMapTemplate         = filepath.Join(testDataDir, "peer-pod-azure-cm-template.yaml")
+		ppLibvirtConfigMapTemplate       = filepath.Join(testDataDir, "peer-pod-libvirt-cm-template.yaml")
+		ppParamsLibvirtConfigMapTemplate = filepath.Join(testDataDir, "peer-pods-param-libvirt-cm-template.yaml")
+		podAnnotatedTemplate             = filepath.Join(testDataDir, "pod-annotations-template.yaml")
+		featureGatesFile                 = filepath.Join(testDataDir, "cc-feature-gates-cm.yaml")
+		testrunConfigmapNs               = "default"
+		testrunConfigmapName             = "osc-config"
+		scratchRpmName                   string
 	)
 
 	subscription := SubscriptionDescription{
@@ -186,10 +190,23 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		// should be ensurePeerPodSecrets & configmaps
 		//create peer pods secret and peer pods cm for OSC prev to 1.7.0
 		if kataconfig.enablePeerPods {
+			baseVer := strings.Split(testrun.operatorVer, "-")[0]
 			if strings.Contains(testrun.operatorVer, "1.6.0") || strings.Contains(testrun.operatorVer, "1.5.3") {
 				msg, err = createApplyPeerPodSecrets(oc, cloudPlatform, ppParam, opNamespace, ppSecretName, secretTemplateAws)
 				if err != nil {
 					err = fmt.Errorf("Cloud Credentials not found") // Generate a custom error
+					e2e.Failf("Cloud Credentials not found. Skipping test suite execution msg: %v , err: %v", msg, err)
+				}
+			} else if semver.Compare("v"+baseVer, "v1.7.0") >= 0 && cloudPlatform == "libvirt" {
+				msg, err = createApplyPeerPodsParamLibvirtConfigMap(oc, cloudPlatform, ppParam, opNamespace, ppParamsLibvirtConfigMapName, ppParamsLibvirtConfigMapTemplate)
+				if err != nil {
+					err = fmt.Errorf("Libvirt configs not found") // Generate a custom error
+					e2e.Failf("Cloud Credentials not found. Skipping test suite execution msg: %v , err: %v", msg, err)
+				}
+
+				msg, err = createApplyPeerPodSecrets(oc, cloudPlatform, ppParam, opNamespace, ppSecretName, secretTemplateLibvirt)
+				if err != nil {
+					err = fmt.Errorf("Libvirt configs not found") // Generate a custom error
 					e2e.Failf("Cloud Credentials not found. Skipping test suite execution msg: %v , err: %v", msg, err)
 				}
 			}
