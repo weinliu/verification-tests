@@ -2038,7 +2038,7 @@ spec:
 		e2e.Logf("Check the kube-apiserver operator status before testing.")
 		preConfigKasStatus := getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
 		if preConfigKasStatus["Available"] != "True" {
-			g.Skip(fmt.Sprintf("The kube-apiserver operator is in unstable status %s, skip.", preConfigKasStatus))
+			g.Skip(fmt.Sprintf("The kube-apiserver operator is in Available:%s status , skip.", preConfigKasStatus))
 		}
 
 		exutil.By("1) Create new namespace for the tests.")
@@ -2212,6 +2212,9 @@ spec:
 
 		exutil.By("12) Delete all bad webhooks, service and check kubeapiserver operators and errors")
 		preConfigKasStatus = getCoStatus(oc, "kube-apiserver", kubeApiserverCoStatus)
+		if preConfigKasStatus["Available"] != "True" {
+			g.Skip(fmt.Sprintf("The kube-apiserver operator is in Available:%s status , skip.", preConfigKasStatus))
+		}
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", validatingWebhookNameNotReachable).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("MutatingWebhookConfiguration", mutatingWebhookNameNotReachable).Execute()
@@ -2224,6 +2227,18 @@ spec:
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", crdWebhookNameNotFound).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Clean up the created Validatingwebhooks by case OCP-73539, avoid interfering with current test execution
+		output, errWebhook := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfigurations", "-o", `jsonpath={.items[*].metadata.name}`).Output()
+		o.Expect(errWebhook).NotTo(o.HaveOccurred())
+		currentValidatingWebhooks := strings.Split(output, " ")
+		e2e.Logf("Current ValidatingWebhooks list:\n")
+		for _, validatingWebHook := range currentValidatingWebhooks {
+			e2e.Logf("\t%s\n", validatingWebHook)
+			if strings.Contains(validatingWebHook, "webhook.netobserv.io") {
+				oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", validatingWebHook, "--ignore-not-found").Execute()
+			}
+		}
 
 		// Before checking APIServer WebhookConditions, need to delete service to avoid bug https://issues.redhat.com/browse/OCPBUGS-15587 in ENV that ingressnodefirewall CRD and config are installed.
 		oc.AsAdmin().Run("delete").Args("service", serviceName, "-n", oc.Namespace(), "--ignore-not-found").Execute()
