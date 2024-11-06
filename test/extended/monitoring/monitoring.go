@@ -1918,6 +1918,44 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				checkYamlconfig(oc, "openshift-user-workload-monitoring", "pod", pod, cmd, `--scrape.timestamp-tolerance=15ms`, true)
 			}
 		})
+
+		// author: tagao@redhat.com
+		g.It("Author:tagao-High-75384-cross-namespace rules for user-workload monitoring [Serial]", func() {
+			var (
+				example_cross_ns_alert     = filepath.Join(monitoringBaseDir, "example_cross_ns_alert.yaml")
+				disable_uwm_cross_ns_rules = filepath.Join(monitoringBaseDir, "disable_uwm_cross_ns_rules.yaml")
+			)
+			exutil.By("delete uwm-config/cm-config at the end of the case")
+			defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+			defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+			exutil.By("Create a user-monitoring-shared namespace and deploy PrometheusRule")
+			oc.SetupProject()
+			ns := oc.Namespace()
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "ns-monitoring-75384", "--ignore-not-found").Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", "ns-monitoring-75384").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			createResourceFromYaml(oc, "ns-monitoring-75384", example_cross_ns_alert)
+
+			exutil.By("check namespace have expect label")
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", ns, "-ojsonpath={.metadata.labels}").Output()
+			o.Expect(output).To(o.ContainSubstring(`"pod-security.kubernetes.io/enforce":"restricted"`))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "ns-monitoring-75384", "-ojsonpath={.metadata.labels}").Output()
+			o.Expect(output).To(o.ContainSubstring(`"pod-security.kubernetes.io/enforce":"restricted"`))
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("check metrics")
+			token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+			checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="TestAlert1", namespace="ns-monitoring-75384"}'`, token, `"namespace":"ns-monitoring-75384"`, 2*uwmLoadTime)
+			checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="TestAlert1", namespace="`+ns+`"}'`, token, `"namespace":"`+ns+`"`, 2*uwmLoadTime)
+
+			exutil.By("disable the feature")
+			createResourceFromYaml(oc, "openshift-monitoring", disable_uwm_cross_ns_rules)
+
+			exutil.By("check the alert should not share across the namespace")
+			checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="TestAlert1", namespace="`+ns+`"}'`, token, `"result":[]`, 2*uwmLoadTime)
+		})
 	})
 
 	//author: tagao@redhat.com
