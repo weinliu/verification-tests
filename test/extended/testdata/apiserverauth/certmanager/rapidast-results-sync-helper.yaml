@@ -9,7 +9,6 @@ objects:
     metadata:
       labels:
         name: "${POD_NAME}"
-        pod-name: "${POD_NAME}"
       name: "${POD_NAME}"
     spec:
       volumes:
@@ -17,12 +16,12 @@ objects:
           persistentVolumeClaim:
             claimName: "${PVC_NAME}"
       containers:
-        - name: "${POD_NAME}"
+        - name: busybox
           image: quay.io/openshifttest/busybox:latest
           imagePullPolicy: IfNotPresent
           command:
             - "sleep"
-            - "300"
+            - "600"
           volumeMounts:
             - name: results-volume
               mountPath: "${VOLUME_MOUNT_PATH}"

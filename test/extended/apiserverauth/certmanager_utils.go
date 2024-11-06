@@ -578,72 +578,75 @@ func skipUnsupportedVersion(oc *exutil.CLI, version string) {
 	}
 }
 
-// rapidastScan performs RapiDAST scan for apiGroupName using configFile and policyFile
-func rapidastScan(oc *exutil.CLI, ns, componentName, apiGroupName, configFile, policyFile string) {
+// rapidastScan performs the RapiDAST scan based on the provided configuration file
+// config examples: https://github.com/RedHatProductSecurity/rapidast/tree/development/config
+func rapidastScan(oc *exutil.CLI, ns, configFile string) {
 	const (
 		serviceAccountName = "rapidast-privileged-sa"
 		configMapName      = "rapidast-configmap"
 		pvcName            = "rapidast-pvc"
-		jobName            = "rapidast-job"
+		podName            = "rapidast-pod"
 	)
 
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 	rbacTemplate := filepath.Join(buildPruningBaseDir, "rapidast-privileged-sa.yaml")
-	jobTemplate := filepath.Join(buildPruningBaseDir, "rapidast-job.yaml")
+	podTemplate := filepath.Join(buildPruningBaseDir, "rapidast-pod.yaml")
 
 	// explicitly skip non-amd64 arch since RapiDAST image only supports amd64
 	architecture.SkipNonAmd64SingleArch(oc)
 
-	// TODO(yuewu): once RapiDAST new image is released with hot-fix PR (https://github.com/RedHatProductSecurity/rapidast/pull/155), this section might be removed
-	e2e.Logf("Set privilege for RapiDAST.")
-	err := exutil.SetNamespacePrivileged(oc, oc.Namespace())
-	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("=> configure the authentication token for RapiDAST scan")
 	params := []string{"-f", rbacTemplate, "-p", "NAME=" + serviceAccountName, "NAMESPACE=" + ns}
 	exutil.ApplyNsResourceFromTemplate(oc, ns, params...)
-
-	e2e.Logf("Update the AUTH_TOKEN and APP_SHORT_NAME in RapiDAST config file.")
+	defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "sa", serviceAccountName).Execute()
 	configFileContent, err := os.ReadFile(configFile)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	token, err := getSAToken(oc, serviceAccountName, ns)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	configFileContentNew := strings.ReplaceAll(string(configFileContent), "AUTH_TOKEN", token)
-	configFileContentNew = strings.ReplaceAll(configFileContentNew, "APP_SHORT_NAME", apiGroupName)
 	err = os.WriteFile(configFile, []byte(configFileContentNew), 0644)
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	e2e.Logf("Create ConfigMap using RapiDAST config and policy file.")
-	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "configmap", configMapName, "--from-file=rapidastconfig.yaml="+configFile, "--from-file=customscan.policy="+policyFile).Execute()
+	e2e.Logf("=> store the RapiDAST config and policy file into a ConfigMap")
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "configmap", configMapName, "--from-file=rapidastconfig.yaml="+configFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "configmap", configMapName).Execute()
 
-	e2e.Logf("Create Job to deploy RapiDAST and perform scan.")
-	params = []string{"-f", jobTemplate, "-p", "JOB_NAME=" + jobName, "SA_NAME=" + serviceAccountName, "CONFIGMAP_NAME=" + configMapName, "PVC_NAME=" + pvcName, "APP_SHORT_NAME=" + apiGroupName}
+	e2e.Logf("=> set privileged labels for RapiDAST namespace")
+	err = exutil.SetNamespacePrivileged(oc, oc.Namespace())
+	o.Expect(err).NotTo(o.HaveOccurred())
+	defer exutil.RecoverNamespaceRestricted(oc, ns)
+
+	e2e.Logf("=> create a Pod to deploy RapiDAST image and perform scan")
+	params = []string{"-f", podTemplate, "-p", "POD_NAME=" + podName, "SA_NAME=" + serviceAccountName, "CONFIGMAP_NAME=" + configMapName, "PVC_NAME=" + pvcName}
 	exutil.ApplyNsResourceFromTemplate(oc, ns, params...)
-	defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "job", jobName).Execute()
-	waitErr := wait.PollUntilContextTimeout(context.Background(), 20*time.Second, 10*time.Minute, true, func(context.Context) (bool, error) {
-		jobStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "job", jobName, `-ojsonpath={.status}`).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(jobStatus, "Complete") {
-			e2e.Logf("RapiDAST Job completed successfully, status: %s.", jobStatus)
+	defer func() {
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "pod", podName).Execute()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "pvc", pvcName).Execute()
+	}()
+
+	// wait for the RapiDAST Pod completed
+	waitErr := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 5*time.Minute, false, func(context.Context) (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "pod", podName).Output()
+		if strings.Contains(output, "Completed") {
+			e2e.Logf("RapiDAST Pod completed successfully")
 			return true, nil
 		}
 		return false, nil
 	})
-
-	podList, err := exutil.GetAllPodsWithLabel(oc, ns, "name="+jobName)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	o.Expect(podList).ShouldNot(o.BeEmpty())
-	podName := podList[0]
 	podLogs, err := exutil.GetSpecificPodLogs(oc, ns, "", podName, "")
 	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("RapiDAST Job's Pod logs: %v", podLogs)
-	exutil.AssertWaitPollNoErr(waitErr, "timeout after 10 minutes waiting for RapiDAST Job completed")
+	exutil.AssertWaitPollNoErr(waitErr, "timeout after 5 minutes waiting for RapiDAST Pod to become Completed")
 
+	e2e.Logf("=> scan 'High' and 'Medium' risk alerts in RapiDAST Pod logs")
 	riskHigh, riskMedium := getRapidastRiskNumberFromLogs(podLogs)
 	e2e.Logf("RapiDAST scan summary: [High risk alerts=%v] [Medium risk alerts=%v]", riskHigh, riskMedium)
-	syncRapidastResultsToArtifactDir(oc, ns, componentName, pvcName)
+
+	e2e.Logf("=> sync RapiDAST result artifacts from PVC to local directory")
+	syncRapidastResultsToArtifactDir(oc, ns, pvcName)
+
 	if riskHigh > 0 || riskMedium > 0 {
-		e2e.Failf("High/Medium risk alerts found! Please check the report and connect ProdSec Team if necessary!")
+		e2e.Failf("High/Medium risk alerts found! Please check the report and contact ProdSec Team if necessary!")
 	}
 }
 
@@ -668,27 +671,27 @@ func getRapidastRiskNumberFromLogs(podLogs string) (riskHigh, riskMedium int) {
 }
 
 // syncRapidastResultsToArtifactDir copies RapiDAST generated results directory from the given PVC to ArtifactDir
-func syncRapidastResultsToArtifactDir(oc *exutil.CLI, ns, componentName, pvcName string) {
+func syncRapidastResultsToArtifactDir(oc *exutil.CLI, ns, pvcName string) {
 	const (
-		resultsPodName           = "results-sync-helper"
-		resultsVolumeMountPath   = "/zap/results"
-		artifactDirSubFolderName = "rapiddastresultscfe"
+		podName                  = "rapidast-results-sync-helper"
+		volumeMountPath          = "/opt/rapidast/results"
+		artifactDirSubFolderName = "rapidast-results-cfe"
 	)
 
-	e2e.Logf("Create temporary Pod to mount PVC")
+	e2e.Logf("create the temporary Pod to mount RapiDAST PVC")
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 	resultsSyncHelperTemplate := filepath.Join(buildPruningBaseDir, "rapidast-results-sync-helper.yaml")
-	params := []string{"-f", resultsSyncHelperTemplate, "-p", "POD_NAME=" + resultsPodName, "VOLUME_MOUNT_PATH=" + resultsVolumeMountPath, "PVC_NAME=" + pvcName}
+	params := []string{"-f", resultsSyncHelperTemplate, "-p", "POD_NAME=" + podName, "VOLUME_MOUNT_PATH=" + volumeMountPath, "PVC_NAME=" + pvcName}
 	exutil.ApplyNsResourceFromTemplate(oc, ns, params...)
-	defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "pod", resultsPodName).Execute()
-	exutil.AssertPodToBeReady(oc, resultsPodName, ns)
+	defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "pod", podName).Execute()
+	exutil.AssertPodToBeReady(oc, podName, ns)
 
-	e2e.Logf("Copy generated results directory from mounted PVC to local ArtifactDir")
+	e2e.Logf("copy generated results directory from mounted PVC to local ARTIFACT_DIR")
 	artifactDirPath := exutil.ArtifactDirPath()
-	resultsDirPath := filepath.Join(artifactDirPath, artifactDirSubFolderName, componentName)
+	resultsDirPath := filepath.Join(artifactDirPath, artifactDirSubFolderName)
 	err := os.MkdirAll(resultsDirPath, os.ModePerm)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", ns, resultsPodName+":"+resultsVolumeMountPath, resultsDirPath).Execute()
+	err = oc.AsAdmin().WithoutNamespace().Run("cp").Args(ns+"/"+podName+":"+volumeMountPath, resultsDirPath, "--retries=5").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("RapiDAST results report can be found in: %s", resultsDirPath)
 }

@@ -1374,19 +1374,11 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("Author:yuewu-CPaasrunOnly-NonPreRelease-ConnectedOnly-Medium-71327-cert-manager Operator should pass DAST scan", func() {
-		// ensure componentName and apiGroupName to follow the file naming conventions
-		const (
-			componentName = "cert-manager"
-			apiGroupName  = "cert-manager.io_v1"
-		)
-
+	g.It("Author:yuewu-CPaasrunOnly-ConnectedOnly-Medium-71327-cert-manager API groups should pass DAST scan", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		configFile := filepath.Join(buildPruningBaseDir, "rapidast-config.yaml")
-		policyFile := filepath.Join(buildPruningBaseDir, "rapidast-scan-policy.xml")
 
-		oc.SetupProject()
-		rapidastScan(oc, oc.Namespace(), componentName, apiGroupName, configFile, policyFile)
+		rapidastScan(oc, oc.Namespace(), configFile)
 	})
 
 	// author: yuewu@redhat.com
