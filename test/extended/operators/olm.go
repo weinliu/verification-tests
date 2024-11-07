@@ -634,7 +634,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		// openshift-test-53914 without the `security.openshift.io/scc.podSecurityLabelSync=true` label
 		// openshift-test-53914 with the `security.openshift.io/scc.podSecurityLabelSync=true` label
 		exutil.By("Starting ../ prepare projects")
-		projects := []string{"openshifttest-53914", "openshift-test1-53914", "openshift-test2-53914", "default", "openshift-test3-53914", "openshift-operators"}
+		projects := []projectDescription{
+			{name: "openshifttest-53914", targetNamespace: ""},
+			{name: "openshift-test1-53914", targetNamespace: ""},
+			{name: "openshift-test2-53914", targetNamespace: ""},
+			{name: "default", targetNamespace: ""},
+			{name: "openshift-test3-53914", targetNamespace: ""},
+			{name: "openshift-operators", targetNamespace: ""},
+		}
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
@@ -642,36 +649,26 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		ogSingleTemplate := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
 		for i, project := range projects {
-			exutil.By(fmt.Sprintf("step-%d, subscribe to learn perator v0.0.3 in project %s", i, project))
-			if project != "default" && project != "openshift-operators" {
-				exutil.By(fmt.Sprintf("step-%d, create project %s", i, project))
-				_, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("new-project", project).Output()
-				if err != nil {
-					e2e.Failf("Fail to create project %s, error:%v", project, err)
-				}
-				defer func(ns string) {
-					exutil.By(fmt.Sprintf(">>>delete project %s", ns))
-					_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", ns, "--force").Output()
-					if err != nil {
-						e2e.Failf("Defer !!!Fail to delete project %s, error:%v", ns, err)
-					}
-				}(project)
+			exutil.By(fmt.Sprintf("step-%d, subscribe to learn perator v0.0.3 in project %s", i, project.name))
+			if project.name != "default" && project.name != "openshift-operators" {
+				project.createwithCheck(oc, itName, dr)
+				defer project.deleteWithForce(oc)
 			}
 			// this project just for verifying the Copied CSV
-			if project == "openshift-test3-53914" {
+			if project.name == "openshift-test3-53914" {
 				continue
 			}
-			if project == "openshift-test2-53914" {
-				_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", project, "security.openshift.io/scc.podSecurityLabelSync=false").Output()
+			if project.name == "openshift-test2-53914" {
+				_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", project.name, "security.openshift.io/scc.podSecurityLabelSync=false").Output()
 				if err != nil {
-					e2e.Failf("Fail to label project %s with security.openshift.io/scc.podSecurityLabelSync=false, error:%v", project, err)
+					e2e.Failf("Fail to label project %s with security.openshift.io/scc.podSecurityLabelSync=false, error:%v", project.name, err)
 				}
 			}
 			var og operatorGroupDescription
-			if project != "openshift-operators" {
+			if project.name != "openshift-operators" {
 				og = operatorGroupDescription{
 					name:      fmt.Sprintf("og%d-53914", i),
-					namespace: project,
+					namespace: project.name,
 					template:  ogSingleTemplate,
 				}
 				defer og.delete(itName, dr)
@@ -679,7 +676,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			}
 
 			var single bool
-			if project == "openshift-operators" {
+			if project.name == "openshift-operators" {
 				single = false
 			} else {
 				single = true
@@ -687,7 +684,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 			sub := subscriptionDescription{
 				subName:                fmt.Sprintf("sub%d-53914", i),
-				namespace:              project,
+				namespace:              project.name,
 				catalogSourceName:      "qe-app-registry",
 				catalogSourceNamespace: "openshift-marketplace",
 				channel:                "beta",
@@ -706,36 +703,36 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			}()
 			sub.create(oc, itName, dr)
 			// skip default namespace's csv status checking since it will fail due to PSA issue
-			if project == "default" {
+			if project.name == "default" {
 				// it takes a long time to update to the Failed status
-				newCheck("present", asAdmin, withoutNamespace, true, "", ok, []string{"csv", "learn-operator.v0.0.3", "-n", project}).check(oc)
+				newCheck("present", asAdmin, withoutNamespace, true, "", ok, []string{"csv", "learn-operator.v0.0.3", "-n", project.name}).check(oc)
 			} else {
-				newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded-TIME-WAIT-120s", ok, []string{"csv", "learn-operator.v0.0.3", "-n", project, "-o=jsonpath={.status.phase}"}).check(oc)
+				newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded-TIME-WAIT-120s", ok, []string{"csv", "learn-operator.v0.0.3", "-n", project.name, "-o=jsonpath={.status.phase}"}).check(oc)
 			}
-			labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", project, "-o=jsonpath={.metadata.labels}").Output()
+			labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", project.name, "-o=jsonpath={.metadata.labels}").Output()
 			if err != nil {
 				e2e.Failf("Fail to get project %s labels, error:%v", project, err)
 			}
 			switch {
-			case project == "openshifttest-53914":
+			case project.name == "openshifttest-53914":
 				if strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
-					e2e.Failf("project %s should NOT be labeled with security.openshift.io/scc.podSecurityLabelSync=true, labels:%s", project, labels)
+					e2e.Failf("project %s should NOT be labeled with security.openshift.io/scc.podSecurityLabelSync=true, labels:%s", project.name, labels)
 				}
-			case project == "openshift-test-53914":
+			case project.name == "openshift-test-53914":
 				if !strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
-					e2e.Failf("project %s should be labeled with security.openshift.io/scc.podSecurityLabelSync=true, labels:%s", project, labels)
+					e2e.Failf("project %s should be labeled with security.openshift.io/scc.podSecurityLabelSync=true, labels:%s", project.name, labels)
 				}
-			case project == "openshift-test2-53914":
+			case project.name == "openshift-test2-53914":
 				if strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
-					e2e.Failf("project %s should NOT be updated with security.openshift.io/scc.podSecurityLabelSync=true, labels:%s", project, labels)
+					e2e.Failf("project %s should NOT be updated with security.openshift.io/scc.podSecurityLabelSync=true, labels:%s", project.name, labels)
 				}
 				// project should be re-labeled  with `security.openshift.io/scc.podSecurityLabelSync=true` after `security.openshift.io/scc.podSecurityLabelSync=false` removed
-				_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", project, "security.openshift.io/scc.podSecurityLabelSync-").Output()
+				_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", project.name, "security.openshift.io/scc.podSecurityLabelSync-").Output()
 				if err != nil {
-					e2e.Failf("Fail to unlabel project %s with security.openshift.io/scc.podSecurityLabelSync-, error:%v", project, err)
+					e2e.Failf("Fail to unlabel project %s with security.openshift.io/scc.podSecurityLabelSync-, error:%v", project.name, err)
 				}
 				err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
-					labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", project, "-o=jsonpath={.metadata.labels}").Output()
+					labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", project.name, "-o=jsonpath={.metadata.labels}").Output()
 					if err != nil || !strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
 						e2e.Logf("The label not updated, re-try: %s", err)
 						return false, nil
@@ -743,13 +740,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 					return true, nil
 				})
 				exutil.AssertWaitPollNoErr(err, "Fail to re-label project openshift-test2-53914 after 60s!")
-			case project == "default":
+			case project.name == "default":
 				if strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
-					e2e.Failf("project %s should NOT be labeled with security.openshift.io/scc.podSecurityLabelSync=true, labels:%s", project, labels)
+					e2e.Failf("project %s should NOT be labeled with security.openshift.io/scc.podSecurityLabelSync=true, labels:%s", project.name, labels)
 				}
-			case project == "openshift-operators":
+			case project.name == "openshift-operators":
 				if !strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
-					e2e.Failf("project %s should be labeled with security.openshift.io/scc.podSecurityLabelSync=true, labels:%s", project, labels)
+					e2e.Failf("project %s should be labeled with security.openshift.io/scc.podSecurityLabelSync=true, labels:%s", project.name, labels)
 				}
 				// The project with a copied CSV in should NOT be labeled with security.openshift.io/scc.podSecurityLabelSync=true
 				labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", "openshift-test3-53914", "-o=jsonpath={.metadata.labels}").Output()
@@ -763,17 +760,17 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			sub.delete(itName, dr)
 			sub.deleteCSV(itName, dr)
 
-			if project != "openshifttest-53914" && project != "default" {
+			if project.name != "openshifttest-53914" && project.name != "default" {
 				//  The `security.openshift.io/scc.podSecurityLabelSync=true` won't be removed.
 				err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
-					labels, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", project, "-o=jsonpath={.metadata.labels}").Output()
+					labels, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", project.name, "-o=jsonpath={.metadata.labels}").Output()
 					if err != nil || !strings.Contains(labels, "\"security.openshift.io/scc.podSecurityLabelSync\":\"true\"") {
-						e2e.Logf("security.openshift.io/scc.podSecurityLabelSync=true should NOT be removed from project %s after CSV removed, labels:%s", project, labels)
+						e2e.Logf("security.openshift.io/scc.podSecurityLabelSync=true should NOT be removed from project %s after CSV removed, labels:%s", project.name, labels)
 						return false, nil
 					}
 					return true, nil
 				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The security.openshift.io/scc.podSecurityLabelSync=true label of project:%s should NOT be removed!", project))
+				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The security.openshift.io/scc.podSecurityLabelSync=true label of project:%s should NOT be removed!", project.name))
 			}
 		}
 	})
