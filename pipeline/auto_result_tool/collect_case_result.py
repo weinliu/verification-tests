@@ -191,6 +191,10 @@ class SummaryClient:
             return True
         if re.search("Post \"https:.*: EOF",message):
             return True
+        if re.search("client.go:.*]: Unauthorized",message):
+            return True
+        if re.search("\"https:.*: Forbidden",message):
+            return True
         return False
 
 
