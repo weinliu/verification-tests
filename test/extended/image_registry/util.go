@@ -1493,3 +1493,16 @@ func isIPIAzure(oc *exutil.CLI) bool {
 	}
 	return false
 }
+
+func hasDuplicate(slice []string, value string) bool {
+	countMap := make(map[string]int)
+	for _, v := range slice {
+		if v == value {
+			countMap[v]++
+			if countMap[v] > 1 {
+				return true
+			}
+		}
+	}
+	return false
+}

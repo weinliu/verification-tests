@@ -4978,4 +4978,65 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			e2e.Failf("The internal networkaccess does not set successfully")
 		}
 	})
+
+	g.It("Author:wewang-NonPreRelease-Longduration-High-76956-Should deduplicate the url for openshift-controller-manager if config.image cluster has duplicated urls [Disruptive]", func() {
+		g.By("Get server host")
+		routeName := getRandomString()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("route", routeName, "-n", "openshift-image-registry").Execute()
+		userroute := exposeRouteFromSVC(oc, "reencrypt", "openshift-image-registry", routeName, "image-registry")
+		waitRouteReady(userroute)
+
+		g.By("Add duplicated routes in config.image/cluster")
+		expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		defer func() {
+			g.By("Recover image registry change")
+			err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"routes":null}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "image-registry", 240, expectedStatus)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "kube-apiserver", 600, expectedStatus)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		patchInfo := fmt.Sprintf("{\"spec\":{\"routes\":[{\"hostname\":\"%s\",\"name\":\"public-name\"},{\"hostname\":\"%s\",\"name\":\"public-name-1\"}]}}", userroute, userroute)
+		out, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("config.image/cluster", "-p", patchInfo, "--type", "merge").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).Should(o.Equal("config.imageregistry.operator.openshift.io/cluster patched"))
+		err = waitCoBecomes(oc, "openshift-apiserver", 480, expectedStatus)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "kube-apiserver", 600, expectedStatus)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Check the co image registry prompts error")
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.status.conditions[?(@.type==\"Degraded\")].message}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("router default) not admitted"))
+		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.status.conditions[?(@.type==\"Degraded\")].status}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.Equal("True"))
+
+		g.By("Check the image.config/cluster with one route")
+		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("image.config/cluster", "-o=jsonpath={.status.externalRegistryHostnames}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, ",") {
+			o.Expect(output).To(o.ContainSubstring(userroute))
+		} else {
+			icStrs := strings.Split(output, ",")
+			checkIcRoute := hasDuplicate(icStrs, userroute)
+			o.Expect(checkIcRoute).To(o.BeFalse())
+		}
+
+		g.By("Check the OpenShiftControllerManager with one route")
+		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("OpenShiftControllerManager/cluster", "-o=jsonpath={.spec.observedConfig.dockerPullSecret.registryURLs}").Output()
+		e2e.Logf(output)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(output, ",") {
+			o.Expect(output).To(o.ContainSubstring(userroute))
+		} else {
+			ocmStrs := strings.Split(output, ",")
+			checkOcmRoute := hasDuplicate(ocmStrs, userroute)
+			o.Expect(checkOcmRoute).To(o.BeFalse())
+		}
+	})
 })
