@@ -33,7 +33,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		preChecks(oc)
 	})
 
-	g.It("NonHyperShiftHOST-Author:rioliu-Critical-42347-health check for machine-config-operator [Serial]", func() {
+	g.It("Author:rioliu-NonHyperShiftHOST-Critical-42347-[P1] health check for machine-config-operator [Serial]", func() {
 		exutil.By("make sure that pools are fully updated before executing the checks")
 		// If any previous test created a MC, it can happen that pools are updating and will report Upgradeable=False, failing the test
 		// The checks in this test case only make sense in a cluster that is not updating any pool
@@ -72,7 +72,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	})
 
-	g.It("Author:rioliu-Longduration-NonPreRelease-Critical-42361-add chrony systemd config [Disruptive]", func() {
+	g.It("Author:rioliu-Longduration-NonPreRelease-Critical-42361-[P2] add chrony systemd config [Disruptive]", func() {
 		exutil.By("create new mc to apply chrony config on worker nodes")
 		mcp := GetCompactCompatiblePool(oc)
 		node := mcp.GetSortedNodesOrFail()[0]
@@ -123,7 +123,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(timecost).Should(o.BeNumerically("<", 10.0))
 	})
 
-	g.It("Author:mhanss-LEVEL0-NonPreRelease-Longduration-Critical-43048-Critical-43064-create/delete custom machine config pool [Disruptive]", func() {
+	g.It("Author:mhanss-LEVEL0-NonPreRelease-Longduration-Critical-43048-Critical-43064-[P1] create/delete custom machine config pool [Disruptive]", func() {
 		if IsCompactOrSNOCluster(oc) {
 			g.Skip("This test case cannot be executed in SNO or Compact clusters")
 		}
@@ -203,7 +203,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		logger.Infof("Custom mcp is deleted successfully!")
 	})
 
-	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42365-add real time kernel argument [Disruptive]", func() {
+	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42365-[P2] add real time kernel argument [Disruptive]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, GCPPlatform)
 		coreOSMcp := GetCoreOsCompatiblePool(oc)
@@ -242,7 +242,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		createMcAndVerifyMCValue(oc, "64k pages kernel", "set-64k-pages-kernel", node, textToVerify, "uname -r; getconf PAGESIZE")
 	})
 
-	g.It("Author:mhanss-LEVEL0-Longduration-NonPreRelease-Critical-42364-add selinux kernel argument [Disruptive]", func() {
+	g.It("Author:mhanss-LEVEL0-Longduration-NonPreRelease-Critical-42364-[P1] add selinux kernel argument [Disruptive]", func() {
 		var (
 			coreOSMcp    = GetCoreOsCompatiblePool(oc)
 			node         = coreOSMcp.GetCoreOsNodesOrFail()[0]
@@ -255,7 +255,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		createMcAndVerifyMCValue(oc, "Kernel argument", "change-worker-kernel-selinux", node, textToVerify, "cat", "/rootfs/proc/cmdline")
 	})
 
-	g.It("Author:sregidor-Longduration-NonPreRelease-High-67825-Use duplicated kernel arguments[Disruptive]", func() {
+	g.It("Author:sregidor-Longduration-NonPreRelease-High-67825-[P2] Use duplicated kernel arguments[Disruptive]", func() {
 		workerNode := skipTestIfOsIsNotCoreOs(oc)
 		textToVerify := TextToVerify{
 			textToVerifyForMC:   "(?s)y=0.*z=4.*y=1.*z=4",
@@ -313,7 +313,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		"sandboxed-containers": {"kata-containers"},
 		"sysstat":              {"sysstat"},
 	} */
-	g.It("Author:sregidor-LEVEL0-Longduration-NonPreRelease-Critical-56131-Install all extensions [Disruptive]", func() {
+	g.It("Author:sregidor-LEVEL0-Longduration-NonPreRelease-Critical-56131-[P1] Install all extensions [Disruptive]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			coreOSMcp                    = GetCoreOsCompatiblePool(oc.AsAdmin())
@@ -341,7 +341,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		}
 	})
 
-	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-43310-add kernel arguments, kernel type and extension to the RHCOS and RHEL [Disruptive]", func() {
+	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-43310-[P2] add kernel arguments, kernel type and extension to the RHCOS and RHEL [Disruptive]", func() {
 		if IsCompactOrSNOCluster(oc.AsAdmin()) {
 			g.Skip("The cluster is SNO/Compact. This test cannot be executed in SNO/Compact clusters")
 		}
@@ -431,7 +431,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		logger.Infof("Max pods are verified in the worker node!")
 	})
 
-	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42369-add container runtime config [Disruptive]", func() {
+	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-42369-[P1] add container runtime config [Disruptive]", func() {
 
 		var (
 			mcp    = GetCompactCompatiblePool(oc.AsAdmin())
@@ -478,7 +478,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		logger.Infof("Container runtime config values are verified in the worker node!")
 	})
 
-	g.It("Author:mhanss-LEVEL0-Longduration-NonPreRelease-Critical-42438-add journald systemd config [Disruptive]", func() {
+	g.It("Author:mhanss-LEVEL0-Longduration-NonPreRelease-Critical-42438-[P2] add journald systemd config [Disruptive]", func() {
 		exutil.By("Create journald systemd config")
 		encodedConf, err := exec.Command("bash", "-c", "cat "+generateTemplateAbsolutePath("journald.conf")+" | base64 | tr -d '\n'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -514,7 +514,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		logger.Infof("Journald config values are verified in the worker node!")
 	})
 
-	g.It("Author:mhanss-Longduration-NonPreRelease-High-43405-High-50508-node drain is not needed for mirror config change in container registry. Nodes not tainted. [Disruptive]", func() {
+	g.It("Author:mhanss-Longduration-NonPreRelease-High-43405-High-50508- [P1] node drain is not needed for mirror config change in container registry. Nodes not tainted. [Disruptive]", func() {
 		logger.Infof("Removing all MCD pods to clean the logs.")
 		o.Expect(RemoveAllMCDPods(oc)).To(o.Succeed(), "Error removing all MCD pods in %s namespace", MachineConfigNamespace)
 		logger.Infof("OK!\n")
@@ -596,11 +596,11 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Longduration-High-42390-Critical-45318-add machine config without ignition version. Block the MCO upgrade rollout if any of the pools are Degraded [Serial]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-42390-Critical-45318-[P1] add machine config without ignition version. Block the Machine-Config-Operator upgrade rollout if any of the pools are Degraded [Serial]", func() {
 		createMcAndVerifyIgnitionVersion(oc, "empty ign version", "change-worker-ign-version-to-empty", "")
 	})
 
-	g.It("Author:mhanss-NonPreRelease-Longduration-High-43124-add machine config with invalid ignition version [Serial]", func() {
+	g.It("Author:mhanss-NonPreRelease-Longduration-High-43124-[P2] add machine config with invalid ignition version [Serial]", func() {
 		createMcAndVerifyIgnitionVersion(oc, "invalid ign version", "change-worker-ign-version-to-invalid", "3.9.0")
 	})
 
@@ -620,7 +620,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(sshKeyOut).Should(o.ContainSubstring("mco_test@redhat.com"))
 	})
 
-	g.It("Author:sregidor-WRS-NonPreRelease-Longduration-High-46897-V-BR.26-add new ssh authorized keys RHEL. OCP>=4.10 [Serial]", func() {
+	g.It("Author:sregidor-WRS-NonPreRelease-Longduration-High-46897-V-BR.26-[P1] add new ssh authorized keys RHEL. OCP>=4.10 [Serial]", func() {
 		skipTestIfClusterVersion(oc, "<", "4.10")
 		workerNode := skipTestIfOsIsNotRhelOs(oc)
 
@@ -646,7 +646,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	})
 
-	g.It("Author:mhanss-NonPreRelease-Longduration-Medium-43084-shutdown machine config daemon with SIGTERM [Disruptive]", func() {
+	g.It("Author:mhanss-NonPreRelease-Longduration-Medium-43084-[P2] shutdown machine config daemon with SIGTERM [Disruptive]", func() {
 		exutil.By("Create new machine config to add additional ssh key")
 		mcName := "add-additional-ssh-authorized-key"
 		mcTemplate := mcName + ".yaml"
@@ -751,7 +751,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	})
 
-	g.It("Author:rioliu-Longduration-NonPreRelease-High-42704-disable auto reboot for mco [Disruptive]", func() {
+	g.It("Author:rioliu-Longduration-NonPreRelease-High-42704-[P1] disable auto reboot for mco [Disruptive]", func() {
 		exutil.By("pause mcp worker")
 		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		defer mcp.pause(false)
@@ -799,7 +799,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		mcp.waitForComplete()
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-Critical-67395-rotate kubernetes certificate authority. Certificates managed via non-MC path.[Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Critical-67395-[P2] rotate kubernetes certificate authority. Certificates managed via non-MC path.[Disruptive]", func() {
 
 		var (
 			wMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
@@ -890,7 +890,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		logger.Infof("mcd log on worker node %s does not contain error messages: %v", workerNode.name, expectedStrings)
 	})
 
-	g.It("Author:mhanss-Longduration-NonPreRelease-Medium-43245-bump initial drain sleeps down to 1min [Disruptive]", func() {
+	g.It("Author:mhanss-Longduration-NonPreRelease-Medium-43245-[P1]bump initial drain sleeps down to 1min [Disruptive]", func() {
 		exutil.By("Start machine-config-controller logs capture")
 		mcc := NewController(oc.AsAdmin())
 		ignoreMccLogErr := mcc.IgnoreLogsBeforeNow()
@@ -980,7 +980,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		// https://bugzilla.redhat.com/show_bug.cgi?id=2092442
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Longduration-High-43278-security fix for unsafe cipher [Serial]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-43278-[P2] security fix for unsafe cipher [Serial]", func() {
 		exutil.By("check go version >= 1.15")
 		_, clusterVersion, cvErr := exutil.GetClusterVersion(oc)
 		o.Expect(cvErr).NotTo(o.HaveOccurred())
@@ -1051,7 +1051,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(stateQuery).Should(o.ContainSubstring(`"node":"` + firstWorkerNode.name + `"`))
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-High-43726-Azure ControllerConfig Infrastructure does not match cluster Infrastructure resource [Serial]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-43726-[P1] azure Controller-Config Infrastructure does not match cluster Infrastructure resource [Serial]", func() {
 		exutil.By("Get machine-config-controller platform status.")
 		mccPlatformStatus := NewResource(oc.AsAdmin(), "controllerconfig", "machine-config-controller").GetOrFail("{.spec.infra.status.platformStatus}")
 		logger.Infof("test mccPlatformStatus:\n %s", mccPlatformStatus)
@@ -1076,7 +1076,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		o.Expect(mccPlatformStatus).To(o.Equal(infraPlatformStatus))
 	})
 
-	g.It("Author:mhanss-NonPreRelease-Longduration-High-42680-change pull secret in the openshift-config namespace [Serial]", func() {
+	g.It("Author:mhanss-NonPreRelease-Longduration-High-42680-[P2] change pull secret in the openshift-config namespace [Serial]", func() {
 		exutil.By("Add a dummy credential in pull secret")
 		secretFile, err := getPullSecret(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1208,7 +1208,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-High-48468-ContainerRuntimeConfig has a limit of 10 per cluster [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-48468-[P1] ContainerRuntimeConfig has a limit of 10 per cluster [Disruptive]", func() {
 		crsLimit := 10
 
 		exutil.By("Pause mcp worker")
@@ -1285,7 +1285,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	})
 
-	g.It("Author:sregidor-Longduration-NonPreRelease-High-46314-Incorrect file contents if compression field is specified [Serial]", func() {
+	g.It("Author:sregidor-Longduration-NonPreRelease-High-46314-[P2] Incorrect file contents if compression field is specified [Serial]", func() {
 		exutil.By("Create a new MachineConfig to provision a config file in zipped format")
 
 		fileContent := `Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
@@ -1430,7 +1430,7 @@ nulla pariatur.`
 		o.Expect(svcUnMaskedOuput).ShouldNot(o.ContainSubstring(inactiveString))
 	})
 
-	g.It("Author:sregidor-Longduration-NonPreRelease-High-46943-Config Drift. Config file. [Serial]", func() {
+	g.It("Author:sregidor-Longduration-NonPreRelease-High-46943-[P1] Config Drift. Config file. [Serial]", func() {
 		exutil.By("Create a MC to deploy a config file")
 		filePath := "/etc/mco-test-file"
 		fileContent := "MCO test file\n"
@@ -1470,7 +1470,7 @@ nulla pariatur.`
 		verifyDriftConfig(mcp, rf, newMode, useForceFile)
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Longduration-High-46965-Avoid workload disruption for GPG Public Key Rotation [Serial]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-46965-[P2] Avoid workload disruption for GPG Public Key Rotation [Serial]", func() {
 
 		exutil.By("create new machine config with base64 encoded gpg public key")
 		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
@@ -1533,7 +1533,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-Longduration-NonPreRelease-High-46999-Config Drift. Config file permissions. [Serial]", func() {
+	g.It("Author:sregidor-Longduration-NonPreRelease-High-46999-[P1] Config Drift. Config file permissions. [Serial]", func() {
 		exutil.By("Create a MC to deploy a config file")
 		filePath := "/etc/mco-test-file"
 		fileContent := "MCO test file\n"
@@ -1573,7 +1573,7 @@ nulla pariatur.`
 		verifyDriftConfig(mcp, rf, newMode, useForceFile)
 	})
 
-	g.It("Author:sregidor-Longduration-NonPreRelease-High-47045-Config Drift. Compressed files. [Serial]", func() {
+	g.It("Author:sregidor-Longduration-NonPreRelease-High-47045-[P2] Config Drift. Compressed files. [Serial]", func() {
 		exutil.By("Create a MC to deploy a config file using compression")
 		filePath := "/etc/mco-compressed-test-file"
 		fileContent := "MCO test file\nusing compression"
@@ -1708,7 +1708,7 @@ nulla pariatur.`
 		verifyDriftConfig(mcp, rf, newMode, useForceFile)
 	})
 
-	g.It("Author:sregidor-Longduration-NonPreRelease-High-51381-cordon node before node drain. OCP >= 4.11 [Serial]", func() {
+	g.It("Author:sregidor-Longduration-NonPreRelease-High-51381-[P1] cordon node before node drain. OCP >= 4.11 [Serial]", func() {
 		exutil.By("Capture initial migration-controller logs")
 		ctrlerContainer := "machine-config-controller"
 		ctrlerPod, podsErr := getMachineConfigControllerPod(oc)
@@ -1887,7 +1887,7 @@ nulla pariatur.`
 		o.Expect(rf.GetNpermissions()).To(o.Equal(fileMode))
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-High-51219-Check ClusterRole rules", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-51219-[P1] Check ClusterRole rules", func() {
 		expectedServiceAcc := MachineConfigDaemon
 		eventsRoleBinding := MachineConfigDaemonEvents
 		eventsClusterRole := MachineConfigDaemonEvents
@@ -2023,7 +2023,7 @@ nulla pariatur.`
 		}
 
 	})
-	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-52373-Modify proxy configuration in paused pools [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-52373-[P2] Modify proxy configuration in paused pools [Disruptive]", func() {
 
 		proxyValue := "http://user:pass@proxy-fake:1111"
 		noProxyValue := "test.52373.no-proxy.com"
@@ -2229,7 +2229,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Longduration-High-53668-when FIPS and realtime kernel are both enabled node should NOT be degraded [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-53668-[P1] when FIPS and realtime kernel are both enabled node should NOT be degraded [Disruptive]", func() {
 		// skip if arm64. realtime kernel is not supported.
 		architecture.SkipNonAmd64SingleArch(oc)
 		// skip the test if fips is not enabled
@@ -2273,7 +2273,7 @@ nulla pariatur.`
 		o.Expect(rtEnabled).Should(o.BeTrue(), "RT kernel is not enabled on node %s", masterNode.GetName())
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-Critical-53960-No failed units in the bootstrap machine", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Critical-53960-[P2] No failed units in the bootstrap machine", func() {
 		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform, AzurePlatform)
 
 		failedUnitsCommand := "sudo systemctl list-units --failed --all"
@@ -2326,7 +2326,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("NonHyperShiftHOST-Author:rioliu-Medium-54937-logs and events are flood with clusterrole and clusterrolebinding [Disruptive]", func() {
+	g.It("Author:rioliu-NonHyperShiftHOST-Medium-54937-[P1] logs and events are flood with clusterrole and clusterrolebinding [Disruptive]", func() {
 
 		exutil.By("get machine-config-operator pod name")
 		mcoPod, getMcoPodErr := getMachineConfigOperatorPod(oc)
@@ -2359,7 +2359,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-54922-daemon: add check before updating kernelArgs [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-54922-[P2] daemon: add check before updating kernelArgs [Disruptive]", func() {
 		var (
 			mcNameArg1         = "tc-54922-kernel-args-1"
 			mcNameArg2         = "tc-54922-kernel-args-2"
@@ -2493,7 +2493,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("NonHyperShiftHOST-Author:rioliu-Medium-54974-silence audit log events for container infra", func() {
+	g.It("Author:rioliu-NonHyperShiftHOST-Medium-54974-[P1] silence audit log events for container infra", func() {
 
 		auditRuleFile := "/etc/audit/rules.d/mco-audit-quiet-containers.rules"
 		auditLogFile := "/var/log/audit/audit.log"
@@ -2663,7 +2663,7 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-56614-Create unit with content and mask=true[Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-56614-[P2] Create unit with content and mask=true[Disruptive]", func() {
 		var (
 			workerNode     = NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
 			maskedString   = "Loaded: masked"
@@ -2708,7 +2708,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-57595-Use empty pull-secret[Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-57595- Use empty pull-secret[Disruptive]", func() {
 		var (
 			pullSecret = GetPullSecret(oc.AsAdmin())
 			wMcp       = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
@@ -2754,7 +2754,7 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-72132-enable FIPS by MCO not supported [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-[P2] Longduration-Medium-72132-enable FIPS by Machine-Config-Operator not supported [Disruptive]", func() {
 		var (
 			mcTemplate = "change-fips.yaml"
 			mcName     = "mco-tc-25819-master-fips"
@@ -2786,7 +2786,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Low-72135-Refuse to disable FIPS mode by MCO[Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Low-72135-[P1] Refuse to disable FIPS mode by  Machine-Config-Operator [Disruptive]", func() {
 		var (
 			mMcName = "99-master-fips"
 			wMcName = "99-worker-fips"
@@ -2820,7 +2820,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-59837-Use wrong user when creating a file [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-59837-[P2] Use wrong user when creating a file [Disruptive]", func() {
 		var (
 			mcName              = "mco-tc-59837-create-file-with-wrong-user"
 			wrongUserFileConfig = `{"contents": {"source": "data:text/plain;charset=utf-8;base64,dGVzdA=="},"mode": 420,"path": "/etc/wronguser-test-file.test","user": {"name": "wronguser"}}`
@@ -2999,7 +2999,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-61555-ImageDigestMirrorSet test [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-61555-[P1] ImageDigestMirrorSet test [Disruptive]", func() {
 		var (
 			idmsName = "tc-61555-digest-mirror"
 			mcp      = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
@@ -3085,7 +3085,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-61558-ImageTagMirrorSet test [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-61558-[P2] ImageTagMirrorSet test [Disruptive]", func() {
 		var (
 			itmsName = "tc-61558-tag-mirror"
 			mcp      = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
@@ -3244,7 +3244,7 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-Low-63784-MCD pivot command should be deprecated", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-Low-63784-[P1] MCD pivot command should be deprecated", func() {
 		var (
 			mMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 			// Note the last space in the first line.
@@ -3268,7 +3268,7 @@ nulla pariatur.`
 		)
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-63477-Deploy files using all available ignition configs. Default 3.4.0[Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-63477-[P2] Deploy files using all available ignition configs. Default 3.4.0[Disruptive]", func() {
 		var (
 			wMcp                   = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			mcNames                = "mc-tc-63477"
@@ -3383,7 +3383,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Low-72136-Reject MCs with ignition containing kernelArguments [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Low-72136-[P1] Reject MCs with ignition containing kernelArguments [Disruptive]", func() {
 		var (
 			mcName = "mco-tc-66376-reject-ignition-kernel-arguments"
 			mcp    = GetCompactCompatiblePool(oc.AsAdmin())
@@ -3401,7 +3401,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-66436-disable weak SSH cipher suites [Serial]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-66436-[P2] disable weak SSH cipher suites [Serial]", func() {
 
 		var (
 			// the list of weak cipher suites can be found here:  https://issues.redhat.com/browse/OCPBUGS-15202
@@ -3566,7 +3566,7 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-Low-66046-Check image registry certificates", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-Low-66046-[P1] Check image registry certificates", func() {
 
 		if !IsCapabilityEnabled(oc, "ImageRegistry") {
 			g.Skip("ImageRegistry is not installed, skip this test")
@@ -3653,7 +3653,7 @@ nulla pariatur.`
 		}
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-64833-Do not make an 'orig' copy for config.json file [Serial]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-64833-[P2] Do not make an 'orig' copy for config.json file [Serial]", func() {
 
 		var (
 			mMcp                = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
@@ -3698,7 +3698,7 @@ nulla pariatur.`
 		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason, false)
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Critical-68695-MCO should not be degraded when image-registry is not installed [Serial]", func() {
+	g.It("Author:rioliu-NonPreRelease-Critical-68695-[P1] Machine-Config-Operator should not be degraded when image-registry is not installed [Serial]", func() {
 
 		// for cluster setup, we need to use upi-on-aws + baselineCapabilitySet: None, because ipi needs known capability `machine-api`
 		exutil.By("check whether capability ImageRegistry is enabled, if yes, skip the test")
@@ -3712,7 +3712,7 @@ nulla pariatur.`
 			"co/machine-config Degraded condition status is not the expected one: %s", mco.GetConditionByType("Degraded"))
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-68687-HostToContainer propagation in MCD [Serial]", func() {
+	g.It("Author:rioliu-NonPreRelease-High-68687-[P2] HostToContainer propagation in MCD [Serial]", func() {
 
 		platform := exutil.CheckPlatform(oc)
 		assertFunc := func(gm o.Gomega, mountPropagations string) {
@@ -3824,7 +3824,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Medium-69091-MCO skips reboot when configuration matches during node bootstrap pivot [Serial]", func() {
+	g.It("Author:sregidor-NonPreRelease-Medium-69091-[P1] Machine-Config-Operator skips reboot when configuration matches during node bootstrap pivot [Serial]", func() {
 		var (
 			MachineConfigDaemonFirstbootService = "machine-config-daemon-firstboot.service"
 		)
@@ -3847,7 +3847,7 @@ nulla pariatur.`
 		exutil.By("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonPreRelease-High-68736-machine config server supports bootstrap with IR certs [Serial]", func() {
+	g.It("Author:sregidor-NonPreRelease-High-68736-[P2] machine config server supports bootstrap with IR certs [Serial]", func() {
 		var (
 			mcsBinary              = "/usr/bin/machine-config-server"
 			bootstrapSubCmd        = "bootstrap"
@@ -3884,7 +3884,7 @@ nulla pariatur.`
 		}
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Medium-68686-MCD No invalid memory address or nil pointer dereference when kubeconfig file is not present in a node [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Medium-68686-[P1] MCD No invalid memory address or nil pointer dereference when kubeconfig file is not present in a node [Disruptive]", func() {
 		var (
 			node           = GetCompactCompatiblePool(oc.AsAdmin()).GetNodesOrFail()[0]
 			kubeconfig     = "/etc/kubernetes/kubeconfig"
@@ -3954,7 +3954,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Medium-68684-machine-config-controller pod restart should not make nodes unschedulable [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Medium-68684-[P2] machine-config-controller pod restart should not make nodes unschedulable [Disruptive]", func() {
 		var (
 			controller = NewController(oc.AsAdmin())
 			masterNode = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster).GetNodesOrFail()[0]
@@ -4054,7 +4054,7 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 	})
 
-	g.It("NonHyperShiftHOST-Author:rioliu-Critical-70090-apiserver-url.env file can be created on all cluster nodes [Serial]", func() {
+	g.It("Author:rioliu-NonHyperShiftHOST-Critical-70090-[P1] apiserver-url.env file can be created on all cluster nodes [Serial]", func() {
 		exutil.By("Check file apiserver-url.env on all linux nodes")
 		apiserverURLEnvFile := "/etc/kubernetes/apiserver-url.env"
 		allNodes, err := NewNodeList(oc.AsAdmin()).GetAllLinux()
@@ -4071,7 +4071,7 @@ nulla pariatur.`
 		}
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Longduration-High-70125-Test patch annotation way of updating a paused pool [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-70125-[P2] Test patch annotation way of updating a paused pool [Disruptive]", func() {
 
 		var (
 			workerMcp  = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
@@ -4250,7 +4250,7 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-72025-nmstate keeps service yamls[Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-72025-[P1] nmstate keeps service yamls[Disruptive]", func() {
 		var (
 			node                             = GetCompactCompatiblePool(oc.AsAdmin()).GetNodesOrFail()[0]
 			nmstateConfigFileFullPath        = "/etc/nmstate/mco-tc-72025-basic-nmsconfig.yml"
@@ -4299,7 +4299,7 @@ desiredState:
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-72008-recreate currentconfig missing on the filesystem [Disruptive]", func() {
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-72008-[P2] recreate currentconfig missing on the filesystem [Disruptive]", func() {
 		var (
 			mcp               = GetCompactCompatiblePool(oc.AsAdmin())
 			mcName            = "mco-tc-72008"
@@ -4358,7 +4358,7 @@ desiredState:
 			logger.Infof("node/%s %s", node, nodeUpdate)
 		}
 	})
-	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-73148-prune renderedmachineconfigs [Disruptive]", func() {
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-73148-[P1] prune renderedmachineconfigs [Disruptive]", func() {
 		var (
 			mcName                    = "fake-worker-pass-1"
 			mcList                    = NewMachineConfigList(oc.AsAdmin())
@@ -4492,7 +4492,7 @@ desiredState:
 
 	})
 
-	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-73155-prune renderedmachineconfigs in updating pools[Disruptive]", func() {
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-73155-[P2] prune renderedmachineconfigs in updating pools[Disruptive]", func() {
 		var (
 			wMcp        = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			mcList      = NewMachineConfigList(oc.AsAdmin())
@@ -4656,7 +4656,7 @@ desiredState:
 		behaviourValidatorRemove.Validate()
 	})
 
-	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-High-74540-kubelet does not start after reboot due to dependency issue[Disruptive]", func() {
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-High-74540-[P1] kubelet does not start after reboot due to dependency issue[Disruptive]", func() {
 		var (
 			unitEnabled    = true
 			unitName       = "hello.service"
@@ -4723,7 +4723,7 @@ desiredState:
 		logger.Infof("OK \n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-74608-Env file /etc/kubernetes/node.env should not be overwritten after a node restart [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-74608-[P2] Env file /etc/kubernetes/node.env should not be overwritten after a node restart [Disruptive]", func() {
 		// /etc/kubernetes/node.env only exists in AWS
 		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform)
 
@@ -4796,7 +4796,7 @@ desiredState:
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-75149-Update pool with manually cordoned nodes [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-75149-[P1] Update pool with manually cordoned nodes [Disruptive]", func() {
 		SkipIfSNO(oc.AsAdmin())
 		var (
 			mcp    = GetCompactCompatiblePool(oc.AsAdmin())
@@ -4868,7 +4868,7 @@ desiredState:
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-Longduration-NonPreRelease-Critical-76108-MachineConfig inheritance. Canary rollout update [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-Longduration-NonPreRelease-Critical-76108-[P2] MachineConfig inheritance. Canary rollout update [Disruptive]", func() {
 		SkipIfCompactOrSNO(oc) // We can't create custom pools if only the master pool exists
 
 		var (

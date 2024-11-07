@@ -29,7 +29,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		skipTestIfOCBIsEnabled(oc)
 	})
 
-	g.It("Author:sregidor-NonPreRelease-High-73494-OCB Wiring up Productionalized Build Controller. New 4.16 OCB API [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-High-73494-[P1] OCB Wiring up Productionalized Build Controller. New 4.16 OCB API [Disruptive]", func() {
 		var (
 			infraMcpName = "infra"
 			moscName     = "tc-73494-infra"
@@ -61,7 +61,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Medium-73599-OCB Validate MachineOSConfig. New 41.6 OCB API [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Medium-73599-[P2] OCB Validate MachineOSConfig. New 41.6 OCB API [Disruptive]", func() {
 		var (
 			infraMcpName = "infra"
 			moscName     = "tc-73599-infra"
@@ -173,7 +173,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Critical-73496-OCB use custom Containerfile. New 4.16 OCB API[Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Critical-73496-[P1] OCB use custom Containerfile. New 4.16 OCB API[Disruptive]", func() {
 		// Remove this "skip" checks once the functionality to disable OCL is implemented
 		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
 
@@ -216,7 +216,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		testContainerFile([]ContainerFile{{Content: containerFileContent}}, MachineConfigNamespace, mcp, checkers)
 	})
 
-	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-73436-OCB Use custom Containerfile with rhel enablement [Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-73436-[P2] OCB Use custom Containerfile with rhel enablement [Disruptive]", func() {
 		// Remove this "skip" checks once the functionality to disable OCL is implemented
 		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
 
@@ -278,7 +278,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		testContainerFile([]ContainerFile{}, tmpNamespaceName, mcp, checkers)
 	})
 
-	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-72003-OCB Opting into on-cluster builds must respect maxUnavailable setting. Workers.[Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-72003-[P1] OCB Opting into on-cluster builds must respect maxUnavailable setting. Workers.[Disruptive]", func() {
 		// Remove this "skip" checks once the functionality to disable OCL is implemented
 		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
 		SkipIfSNO(oc.AsAdmin())                       // This test makes no sense in SNO
@@ -330,7 +330,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		o.Expect(DisableOCL(mosc)).To(o.Succeed(), "Error cleaning up %s", mosc)
 		logger.Infof("OK!\n")
 	})
-	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-73497-OCB build images in many MCPs at the same time [Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-73497-[P2] OCB build images in many MCPs at the same time [Disruptive]", func() {
 		SkipIfSNO(oc.AsAdmin()) // This test makes no sense in SNO
 
 		var (

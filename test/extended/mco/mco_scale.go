@@ -43,7 +43,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		preChecks(oc)
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-63894-Scaleup using 4.1 cloud image[Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-63894-[P1] Scaleup using 4.1 cloud image[Disruptive]", func() {
 		var (
 			imageVersion = "4.1" // OCP4.1 ami for AWS and use-east2 zone: https://github.com/openshift/installer/blob/release-4.1/data/data/rhcos.json
 			numNewNodes  = 1     // the number of nodes scaled up in the new Machineset
@@ -98,7 +98,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 	})
 
 	// 4.3 is the first image supporting fips
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Critical-77051-Scaleup using 4.3 cloud image[Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Critical-76471-[P2] Scaleup using 4.3 cloud image[Disruptive]", func() {
 		var (
 			imageVersion = "4.3"
 			numNewNodes  = 1 // the number of nodes scaled up in the new Machineset
@@ -111,7 +111,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 	})
 
 	// 4.12 is the last version using rhel8, in 4.13 ocp starts using rhel9
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Critical-76471-Scaleup using 4.12 cloud image[Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Critical-76471-[P1] Scaleup using 4.12 cloud image[Disruptive]", func() {
 		var (
 			imageVersion = "4.12"
 			numNewNodes  = 1 // the number of nodes scaled up in the new Machineset
@@ -122,7 +122,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 		SimpleScaleUPTest(oc, wMcp, imageVersion, getUserDataIgnitionVersionFromOCPVersion(imageVersion), numNewNodes)
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-52822-Create new config resources with 2.2.0 ignition boot image nodes [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-52822-[P1] Create new config resources with 2.2.0 ignition boot image nodes [Disruptive]", func() {
 		var (
 			newMsName  = "copied-machineset-modified-tc-52822"
 			kcName     = "change-maxpods-kubelet-config"
@@ -329,7 +329,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-64623-Machine Config Server CA rotation. IPI. [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-64623-[P1] Machine Config Server CA rotation. IPI. [Disruptive]", func() {
 		var (
 			initialNumWorkers = len(wMcp.GetNodesOrFail())
 			numNewNodes       = 1
@@ -422,7 +422,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-73636-Pinned images in scaled nodes [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-73636-[P2] Pinned images in scaled nodes [Disruptive]", func() {
 		// The pinnedimageset feature is currently only supported in techpreview
 		skipIfNoTechPreview(oc.AsAdmin())
 

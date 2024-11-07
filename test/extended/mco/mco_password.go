@@ -42,7 +42,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		preChecks(oc)
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-High-59417-MCD create/update password with MachineConfig in CoreOS nodes[Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-59417-[P1] MCD create/update password with MachineConfig in CoreOS nodes[Disruptive]", func() {
 		var (
 			mcName = "tc-59417-test-core-passwd"
 		)
@@ -126,7 +126,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-High-60129-MCD create/update password with MachineConfig in RHEL nodes[Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-60129-[P2] MCD create/update password with MachineConfig in RHEL nodes[Disruptive]", func() {
 		var (
 			mcName = "tc-60129-test-core-passwd"
 		)
@@ -224,7 +224,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		validateMcpRenderDegraded(mc, mcp, expectedRDMessage, expectedRDReason)
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-High-59424-ssh keys can be found in new dir on RHCOS9 node [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-High-59424-[P1] ssh keys can be found in new dir on RHCOS9 node [Disruptive]", func() {
 		var (
 			allCoreOsNodes = wMcp.GetCoreOsNodesOrFail()
 			allMasters     = mMcp.GetNodesOrFail()
@@ -266,7 +266,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		}
 	})
 
-	g.It("Author:sregidor-LEVEL0-WRS-NonPreRelease-Longduration-Critical-59426-V-BR.26-ssh keys can be updated in new dir on RHCOS9 node[Disruptive]", func() {
+	g.It("Author:sregidor-LEVEL0-WRS-NonPreRelease-Longduration-Critical-59426-V-BR.26-[P2] ssh keys can be updated in new dir on RHCOS9 node[Disruptive]", func() {
 
 		var (
 			mcName = "tc-59426-add-ssh-key"
@@ -373,7 +373,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		o.Expect(err).NotTo(o.HaveOccurred(), "Ssh login should not be allowed in node %s and should report a 'permission denied' error:\n %s", node.GetName(), bresp)
 		logger.Infof("OK!\n")
 	})
-	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-64986-Remove all ssh keys [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-64986-[P1] Remove all ssh keys [Disruptive]", func() {
 		var (
 			sshMCName    = "99-" + mcp.GetName() + "-ssh"
 			backupMCFile = filepath.Join(e2e.TestContext.OutputDir, "tc-64986-"+sshMCName+".backup.json")
@@ -434,7 +434,7 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonPreRelease-High-75552-apply ssh keys when root owns .ssh [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-High-75552-[P2] apply ssh keys when root owns .ssh [Disruptive]", func() {
 		var (
 			node         = mcp.GetSortedNodesOrFail()[0]
 			authKeysdDir = NewRemoteFile(node, "/home/core/.ssh/authorized_keys.d")

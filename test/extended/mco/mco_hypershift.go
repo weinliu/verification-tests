@@ -85,7 +85,7 @@ var _ = g.Describe("[sig-mco] MCO hypershift", func() {
 		logger.Infof("test dir %s is cleaned up", tmpdir)
 	})
 
-	g.It("HyperShiftMGMT-Author:rioliu-Longduration-NonPreRelease-High-54328-hypershift Add new file on hosted cluster node via config map [Disruptive]", func() {
+	g.It("Author:rioliu-Longduration-HyperShiftMGMT-NonPreRelease-High-54328-hypershift Add new file on hosted cluster node via config map [Disruptive]", func() {
 
 		// create node pool with replica=2
 		// destroy node pool then delete config map
@@ -110,7 +110,7 @@ var _ = g.Describe("[sig-mco] MCO hypershift", func() {
 
 	})
 
-	g.It("HyperShiftMGMT-Author:rioliu-Longduration-NonPreRelease-High-54366-hypershift Update release image of node pool [Disruptive]", func() {
+	g.It("Author:rioliu-Longduration-HyperShiftMGMT-NonPreRelease-High-54366-hypershift Update release image of node pool [Disruptive]", func() {
 		// check arch, only support amd64
 		architecture.SkipNonAmd64SingleArch(oc)
 		// check latest accepted build, if it is same as hostedcluster version, skip this case
@@ -132,7 +132,7 @@ var _ = g.Describe("[sig-mco] MCO hypershift", func() {
 
 	})
 
-	g.It("HyperShiftMGMT-Author:rioliu-Longduration-NonPreRelease-High-55356-hypershift Honor MaxUnavailable for inplace upgrades [Disruptive]", func() {
+	g.It("Author:rioliu-Longduration-HyperShiftMGMT-NonPreRelease-High-55356-[P1] hypershift Honor MaxUnavailable for inplace upgrades [Disruptive]", func() {
 
 		// create node pool with replica=3
 		// destroy node pool then delete config map

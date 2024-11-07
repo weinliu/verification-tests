@@ -34,7 +34,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		preChecks(oc)
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-63865-MCDRebootError alert[Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-63865-[P1] MCDRebootError alert[Disruptive]", func() {
 		var (
 			mcName                 = "mco-tc-63865-reboot-alert"
 			filePath               = "/etc/mco-tc-63865-test.test"
@@ -108,7 +108,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		checkFixedAlert(oc, mcp, expectedAlertName)
 	})
 
-	g.It("Author:sregidor-VMonly-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-63866-MCDPivotError alert[Disruptive]", func() {
+	g.It("Author:sregidor-VMonly-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-63866- [P2] MCDPivotError alert[Disruptive]", func() {
 		var (
 			mcName                = "mco-tc-63866-pivot-alert"
 			expectedAlertName     = "MCDPivotError"
@@ -281,7 +281,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-73841-KubeletHealthState alert [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-73841-[P1] KubeletHealthState alert [Disruptive]", func() {
 		var (
 			node                               = mcp.GetSortedNodesOrFail()[0]
 			fixed                              = false
@@ -331,7 +331,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-75862-Add alert for users of deprecating the Image Registry workaround [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-75862-[P2] Add alert for users of deprecating the Image Registry workaround [Disruptive]", func() {
 
 		var (
 			expectedAlertName                  = "MCODrainOverrideConfigMapAlert"

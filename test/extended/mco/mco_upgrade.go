@@ -34,7 +34,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 		logger.Infof("test dir %s is cleaned up", tmpdir)
 	})
 
-	g.It("NonHyperShiftHOST-Author:rioliu-PstChkUpgrade-NonPreRelease-High-45550-upgrade cluster is failed on RHEL node", func() {
+	g.It("Author:rioliu-PstChkUpgrade-NonHyperShiftHOST-NonPreRelease-High-45550-[P1] upgrade cluster is failed on RHEL node", func() {
 
 		skipTestIfOsIsNotRhelOs(oc)
 
@@ -52,7 +52,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 	})
 
-	g.It("NonHyperShiftHOST-Author:rioliu-PstChkUpgrade-NonPreRelease-High-55748-Upgrade failed with Transaction in progress", func() {
+	g.It("Author:rioliu-PstChkUpgrade-NonHyperShiftHOST-NonPreRelease-High-55748-[P2] Upgrade failed with Transaction in progress", func() {
 
 		exutil.By("check machine config daemon log to verify no error `Transaction in progress` found")
 
@@ -67,7 +67,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 		}
 	})
 
-	g.It("NonHyperShiftHOST-Author:rioliu-PstChkUpgrade-NonPreRelease-High-59427-ssh keys can be migrated to new dir when node is upgraded from RHCOS8 to RHCOS9", func() {
+	g.It("Author:rioliu-PstChkUpgrade-NonHyperShiftHOST-NonPreRelease-High-59427-ssh keys can be migrated to new dir when node is upgraded from RHCOS8 to RHCOS9", func() {
 
 		var (
 			oldAuthorizedKeyPath = "/home/core/.ssh/authorized_key"
@@ -104,7 +104,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 	})
 
-	g.It("NonHyperShiftHOST-Author:sregidor-PreChkUpgrade-NonPreRelease-High-62154-Don't render new MC until base MCs update [Disruptive]", func() {
+	g.It("Author:sregidor-PreChkUpgrade-NonHyperShiftHOST-NonPreRelease-High-62154-[P1] Don't render new MC until base MCs update [Disruptive]", func() {
 		var (
 			kcName     = "mco-tc-62154-kubeletconfig"
 			kcTemplate = generateTemplateAbsolutePath("generic-kubelet-config.yaml")
@@ -135,7 +135,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 	})
 
-	g.It("NonHyperShiftHOST-Author:sregidor-PstChkUpgrade-NonPreRelease-High-62154-Don't render new MC until base MCs update  [Disruptive]", func() {
+	g.It("Author:sregidor-PstChkUpgrade-NonHyperShiftHOST-NonPreRelease-High-62154-[P2] Don't render new MC until base MCs update  [Disruptive]", func() {
 
 		var (
 			kcName     = "mco-tc-62154-kubeletconfig"
@@ -201,7 +201,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 	})
 
-	g.It("NonHyperShiftHOST-Author:sregidor-PstChkUpgrade-NonPreRelease-Critical-64781-MCO should be compliant with CIS benchmark rule", func() {
+	g.It("Author:sregidor-PstChkUpgrade-NonHyperShiftHOST-NonPreRelease-Critical-64781-[P2] MAchine-Config-Operator should be compliant with CIS benchmark rule", func() {
 		exutil.By("Verify that machine-config-opeartor pod is not using the default SA")
 
 		o.Expect(
@@ -245,7 +245,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-PreChkUpgrade-NonPreRelease-High-70813-ManagedBootImages update boot image of machineset [Serial]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-PreChkUpgrade-NonPreRelease-High-70813-[P1] ManagedBootImages update boot image of machineset [Serial]", func() {
 		// Bootimages Update functionality is only available in GCP(GA) and AWS(Techpreview)
 		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform, AWSPlatform)
 		if exutil.CheckPlatform(oc) == AWSPlatform {
@@ -303,7 +303,7 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-PstChkUpgrade-NonPreRelease-High-70813-ManagedBootImages update boot image of machineset [Serial]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-PstChkUpgrade-NonPreRelease-High-70813-[P2] ManagedBootImages update boot image of machineset [Serial]", func() {
 		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
 		// Bootimages Update functionality is only available in GCP(GA) and AWS(Techpreview)
 		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform, AWSPlatform)

@@ -37,7 +37,7 @@ var _ = g.Describe("[sig-mco] MCO Layering", func() {
 		logger.Infof("test dir %s is cleaned up", tmpdir)
 	})
 
-	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Critical-54085-Update osImage changing /etc /usr and rpm [Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Critical-54085-[P1] Update osImage changing /etc /usr and rpm [Disruptive]", func() {
 
 		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE)
 		// Because of https proxies using their own user-ca certificate, we need to take into account the openshift-config-user-ca-bundle.crt file
@@ -192,7 +192,7 @@ RUN update-ca-trust && \
 		logger.Infof("OK!\n")
 
 	})
-	g.It("Author:sregidor-ConnectedOnly-NonPreRelease-Longduration-Medium-54052-Not bootable layered osImage provided[Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-NonPreRelease-Longduration-Medium-54052-[P2] Not bootable layered osImage provided[Disruptive]", func() {
 		var (
 			nonBootableImage = "quay.io/openshifttest/hello-openshift:1.2.0"
 			layeringMcName   = "not-bootable-image-tc54052"
@@ -216,7 +216,7 @@ RUN update-ca-trust && \
 		checkInvalidOsImagesDegradedStatus(oc.AsAdmin(), nonPullableImage, layeringMcName, expectedNDMessage, expectedNDReason)
 	})
 
-	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Critical-54159-Apply a new osImage on a cluster with already installed rpms [Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Critical-54159-[P1] Apply a new osImage on a cluster with already installed rpms [Disruptive]", func() {
 		var (
 			rpmName         = "wget"
 			yumRepoTemplate = generateTemplateAbsolutePath("centos.repo")
@@ -406,7 +406,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Medium-54049-Verify base images in the release image", func() {
+	g.It("Author:sregidor-NonPreRelease-Medium-54049-[P2] Verify base images in the release image", func() {
 		var (
 			oldMachineConfigOsImage = "machine-os-content"
 			coreExtensions          = "rhel-coreos-extensions"
@@ -457,7 +457,7 @@ RUN echo "echo 'Hello world! '$(whoami)" > /usr/bin/tc_54159_rpm_and_osimage && 
 		logger.Infof("OK!\n")
 
 	})
-	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-54909-Configure extensions while using a custom osImage [Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-54909-[P1] Configure extensions while using a custom osImage [Disruptive]", func() {
 		// Due to https://issues.redhat.com/browse/OCPBUGS-31255 in this test case pools will be degraded intermittently. They will be degraded and automatically fixed in a few minutes/seconds
 		// Because of that we need to use WaitForUpdatedStatus instead of waitForComplete, since WaitForUpdatedStatus will not fail if a pool is degraded for just a few minutes but the configuration is applied properly
 		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE)
@@ -725,7 +725,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 
 	})
 
-	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-54915-Configure kerneltype while using a custom osImage [Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-54915-[P1] Configure kerneltype while using a custom osImage [Disruptive]", func() {
 		// Due to https://issues.redhat.com/browse/OCPBUGS-31255 in this test case pools will be degraded intermittently. They will be degraded and automatically fixed in a few minutes/seconds
 		// Because of that we need to use WaitForUpdatedStatus instead of waitForComplete, since WaitForUpdatedStatus will not fail if a pool is degraded for just a few minutes but the configuration is applied properly
 
@@ -944,7 +944,7 @@ RUN printf '[baseos]\nname=CentOS-$releasever - Base\nbaseurl=http://mirror.stre
 
 	})
 
-	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Medium-55002-Get OSImageURL override related metric data available in telemetry [Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Medium-55002-[P2] Get OSImageURL override related metric data available in telemetry [Disruptive]", func() {
 		// Due to https://issues.redhat.com/browse/OCPBUGS-31255 in this test case pools will be degraded intermittently. They will be degraded and automatically fixed in a few minutes/seconds
 		// Because of that we need to use WaitForUpdatedStatus instead of waitForComplete, since WaitForUpdatedStatus will not fail if a pool is degraded for just a few minutes but the configuration is applied properly
 		var (
@@ -1168,7 +1168,7 @@ RUN touch %s
 		logger.Infof("OK\n")
 	})
 
-	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-67789-Configure 64k-pages kerneltype while using a custom osImage [Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-67789-[P1] Configure 64k-pages kerneltype while using a custom osImage [Disruptive]", func() {
 		var (
 			mcTemplate64k      = "set-64k-pages-kernel.yaml"
 			rpmName            = "zsh"

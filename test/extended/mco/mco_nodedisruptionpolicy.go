@@ -43,11 +43,11 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 		o.Expect(enabledFeatureGates).Should(o.ContainSubstring("NodeDisruptionPolicy"), "featureGate: NodeDisruptionPolicy is not in enabled list")
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-73368-NodeDisruptionPolicy files with action None [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-High-73368-[P1] NodeDisruptionPolicy files with action None [Disruptive]", func() {
 		testFileBasedPolicy(oc, "73368", []Action{NewCommonAction(NodeDisruptionPolicyActionNone)}, []string{LogPerformingPostConfigNone})
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Longduration-High-73374-NodeDisruptionPolicy files with action Reboot [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-73374-[P2] NodeDisruptionPolicy files with action Reboot [Disruptive]", func() {
 		testFileBasedPolicy(oc, "73374", []Action{NewCommonAction(NodeDisruptionPolicyActionReboot)}, []string{})
 	})
 
@@ -55,11 +55,11 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 		testFileBasedPolicy(oc, "73375", []Action{NewRestartAction(TestService)}, []string{LogPerformingPostConfigRestart, LogServiceRestartedSuccessfully})
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-73378-NodeDisruptionPolicy files with action Reload [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-High-73378-[P1] NodeDisruptionPolicy files with action Reload [Disruptive]", func() {
 		testFileBasedPolicy(oc, "73378", []Action{NewReloadAction(TestService)}, []string{LogPerformingPostConfigReload, LogServiceReloadedSuccessfully})
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-73385-NodeDisruptionPolicy files with action DaemonReload [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-High-73385-[P2] NodeDisruptionPolicy files with action DaemonReload [Disruptive]", func() {
 		testFileBasedPolicy(oc, "73385", []Action{NewCommonAction(NodeDisruptionPolicyActionDaemonReload)}, []string{LogPerformingPostConfigDaemonReload, LogDaemonReloadedSuccessfully})
 	})
 
@@ -67,7 +67,7 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 		testFileBasedPolicy(oc, "73388", []Action{NewCommonAction(NodeDisruptionPolicyActionDrain)}, []string{})
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Longduration-High-73389-NodeDisruptionPolicy files with multiple actions [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-73389-[P1] NodeDisruptionPolicy files with multiple actions [Disruptive]", func() {
 		testFileBasedPolicy(oc, "73389", []Action{
 			NewCommonAction(NodeDisruptionPolicyActionDrain),
 			NewCommonAction(NodeDisruptionPolicyActionDaemonReload),
@@ -83,11 +83,11 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 		})
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-73414-NodeDisruptionPolicy units with action None [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-High-73414-[P1] NodeDisruptionPolicy units with action None [Disruptive]", func() {
 		testUnitBasedPolicy(oc, "73414", []Action{NewCommonAction(NodeDisruptionPolicyActionNone)}, []string{LogPerformingPostConfigNone})
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Longduration-High-73413-NodeDisruptionPolicy units with action Reboot [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-73413-[P2] NodeDisruptionPolicy units with action Reboot [Disruptive]", func() {
 		testUnitBasedPolicy(oc, "73413", []Action{NewCommonAction(NodeDisruptionPolicyActionReboot)}, []string{})
 	})
 
@@ -107,11 +107,11 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 		})
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-73417-NodeDisruptionPolicy sshkey with action None [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-High-73417-[P1] NodeDisruptionPolicy sshkey with action None [Disruptive]", func() {
 		testSSHKeyBasedPolicy(oc, "73417", []Action{NewCommonAction(NodeDisruptionPolicyActionNone)}, []string{LogPerformingPostConfigNone})
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Longduration-High-73418-NodeDisruptionPolicy sshkey with action Reboot [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-73418-[P2] NodeDisruptionPolicy sshkey with action Reboot [Disruptive]", func() {
 		testSSHKeyBasedPolicy(oc, "73418", []Action{NewCommonAction(NodeDisruptionPolicyActionReboot)}, []string{})
 	})
 
@@ -131,7 +131,7 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 		})
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-73489-NodeDisruptionPolicy MachineConfigurations is only effective with name cluster", func() {
+	g.It("Author:rioliu-NonPreRelease-High-73489-[P1] NodeDisruptionPolicy MachineConfigurations is only effective with name cluster", func() {
 
 		var (
 			filePath    = generateTempFilePath(e2e.TestContext.OutputDir, "invalidmc-*")
@@ -149,7 +149,7 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Longduration-Medium-75109-NodeDisruptionPolicy files allow paths to be defined for non-disruptive updates [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-Medium-75109-[P2] NodeDisruptionPolicy files allow paths to be defined for non-disruptive updates [Disruptive]", func() {
 		var (
 			mcp  = GetCompactCompatiblePool(oc.AsAdmin())
 			node = mcp.GetSortedNodesOrFail()[0]
@@ -281,6 +281,7 @@ var _ = g.Describe("[sig-mco] MCO NodeDisruptionPolicy", func() {
 			"The configuration was applied but the deployed file doesn't have the right content")
 		logger.Infof("OK!\n")
 	})
+
 })
 
 // test func for file based policy test cases

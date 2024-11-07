@@ -38,7 +38,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 
 		preChecks(oc)
 	})
-	g.It("Author:sregidor-NonHyperShiftHOST-Medium-66048-Check image registry user bundle certificate [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-Medium-66048-[P1] Check image registry user bundle certificate [Disruptive]", func() {
 
 		if !IsCapabilityEnabled(oc.AsAdmin(), "ImageRegistry") {
 			g.Skip("ImageRegistry is not installed, skip this test")
@@ -160,7 +160,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 			logger.Infof("OK!\n")
 		}
 	})
-	g.It("Author:sregidor-NonHyperShiftHOST-High-67660-MCS generates ignition configs with certs [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-High-67660-[P2] MCS generates ignition configs with certs [Disruptive]", func() {
 		var (
 			proxy                      = NewResource(oc.AsAdmin(), "proxy", "cluster")
 			certFileKey                = "ca-bundle.crt"
@@ -415,7 +415,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 	// If we execute this test case, when this rotation happens the kubeconfig file needs to be updated to use new certificates and all test cases start failing because of this
 	// If we don't execute this test case, when this rotation happens the kubeconfig needs no update
 	// We will skip this test case in prow jobs and we will execute it only out of CI
-	g.It("Author:sregido-DEPRECATED-NonHyperShiftHOST-NonPreRelease-Critical-70857-boostrap-kubeconfig must be updated when kube-apiserver server CA is rotated [Disruptive]", func() {
+	g.It("Author:sregido-DEPRECATED-NonHyperShiftHOST-NonPreRelease-Critical-70857-boostrap-[P1] kubeconfig must be updated when kube-apiserver server CA is rotated [Disruptive]", func() {
 		var (
 			mco                      = NewResource(oc.AsAdmin(), "co", "machine-config")
 			kubernetesKubeconfigPath = "/etc/kubernetes/kubeconfig"
@@ -511,7 +511,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-Critical-75222-tlSecurityProfile switch and check the expected tlsMinVersion and cipheres suite are seen in MCS,MSS and rbac-kube-proxy pod logs[Disruptive]", func() {
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Longduration-Critical-75222-[P2] tlSecurityProfile switch and check the expected tlsMinVersion and cipheres suite are seen in MCS,MSS and rbac-kube-proxy pod logs[Disruptive]", func() {
 
 		var (
 			apiServer = NewResource(oc.AsAdmin(), "apiserver", "cluster")
@@ -684,7 +684,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		logger.Infof("OK!\n")
 
 	})
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-76587-MCS port should not expose weak ciphers to external client from master node IP [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Critical-76587-[P1] MCS port should not expose weak ciphers to external client from master node IP [Disruptive]", func() {
 		var (
 			node            = mcp.GetSortedNodesOrFail()[0]
 			port            = 22623
