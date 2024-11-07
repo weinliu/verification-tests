@@ -4842,12 +4842,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		validateResourceEnv(oc, "openshift-image-registry", "deployment.apps/image-registry", "REGISTRY_STORAGE_S3_CHUNKSIZE=10485760")
 		g.By("Check if push successfully when push large image")
 		localImageName := "FROM quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f\nRUN dd if=/dev/urandom of=/bigfile bs=1M count=1024"
-		err = oc.AsAdmin().WithoutNamespace().Run("new-build").Args("-D", localImageName, "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("new-build").Args("-D", localImageName, "--to=73769-test", "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		g.By("Check the build logs")
-		logInfo = "Successfully pushed image-registry.openshift-image-registry.svc:5000/" + oc.Namespace() + "/busybox"
+		logInfo = "Successfully pushed image-registry.openshift-image-registry.svc:5000/" + oc.Namespace() + "/73769-test"
 		err = wait.Poll(2*time.Minute, 10*time.Minute, func() (bool, error) {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("bc/busybox", "-n", oc.Namespace()).Output()
+			output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("bc/73769-test", "-n", oc.Namespace()).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Contains(output, logInfo) {
 				return true, nil
