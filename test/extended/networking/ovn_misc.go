@@ -1432,4 +1432,44 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		o.Expect(ovnPod).ShouldNot(o.BeEmpty())
 		exutil.AssertPodToBeReady(oc, ovnPod, "openshift-ovn-kubernetes")
 	})
+
+	// author: meinli@redhat.com
+	g.It("Author:meinli-Medium-45146-Pod should be healthy when gw IP is single stack on dual stack cluster", func() {
+		// https://bugzilla.redhat.com/show_bug.cgi?id=1986708
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			pingPodTemplate     = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		)
+		ipStackType := checkIPStackType(oc)
+		if ipStackType != "dualstack" {
+			g.Skip("This case is only validate in DualStack cluster, skip it!!!")
+		}
+		exutil.By("1. Get namespace")
+		ns := oc.Namespace()
+
+		exutil.By("2. Create a pod in ns namespace")
+		pod := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod.name, "-n", pod.namespace).Execute()
+		pod.createPingPod(oc)
+		waitPodReady(oc, pod.namespace, pod.name)
+
+		exutil.By("3. Patch annotation for hello-pod")
+		annotationsCmd := fmt.Sprintf(`{ "metadata":{
+			"annotations": {
+			  "k8s.ovn.org/routing-namespaces": "%s",
+			  "k8s.ovn.org/routing-network": "foo",
+			  "k8s.v1.cni.cncf.io/network-status": "[{\"name\":\"foo\",\"interface\":\"net1\",\"ips\":[\"172.19.0.5\"],\"mac\":\"01:23:45:67:89:10\"}]"
+			}
+		  }
+		}`, ns)
+		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("pod", pod.name, "-n", ns, "-p", annotationsCmd, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4. Verify pod is healthy and running")
+		waitPodReady(oc, ns, pod.name)
+	})
 })
