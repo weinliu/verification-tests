@@ -1446,3 +1446,14 @@ func Retry(attempts int, delay time.Duration, f func() error) error {
 	}
 	return err
 }
+
+// GetLastNLines returns the last N lines from a string
+func GetLastNLines(s string, n int) string {
+	lines := strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
+	lenLines := len(lines)
+	if lenLines > n {
+		return strings.Join(lines[lenLines-n:], "\n")
+	}
+	return strings.Join(lines, "\n")
+
+}

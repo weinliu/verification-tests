@@ -274,20 +274,25 @@ func (mcp *MachineConfigPool) estimateWaitDuration() time.Duration {
 	},
 		"5m", "5s").Should(o.BeNumerically(">=", 0), fmt.Sprintf("machineCount field has no value in MCP %s", mcp.name))
 
+	logger.Infof("Num nodes: %d, wait time per node %d minutes", totalNodes, mcp.MinutesWaitingPerNode)
+
 	// If the pool has no node configured, we wait at least 2.0 minute.
 	// There are tests that create pools with 0 nodes and wait for the pools to be updated. They cant wait 0 minutes.
 	// We wait 2.0 minutes and not 1 minute because many functions do not poll immediately and they wait a 1 minute interval before starting to poll.
 	// If we wait less than this interval the wait function will always fail
 	if totalNodes == 0 {
+		logger.Infof("Defining waiting time for pool with no nodes")
 		return time.Duration(emptyMCPWaitDuration * float64(minutesDuration))
 	}
 
 	if mcp.IsMaster() {
+		logger.Infof("Increase waiting time because it is master pool")
 		masterAdjust = 1.3 // if the pool is the master pool, we wait an extra 30% time
 	}
 
 	// Because of https://issues.redhat.com/browse/OCPBUGS-37501 in SNO MCPs can take up to 3 minutes more to be updated because the MCC is not taking the lease properly
 	if IsSNO(mcp.GetOC().AsAdmin()) {
+		logger.Infof("Increase waiting time because it is SNO")
 		snoModifier = 3
 	}
 
@@ -752,8 +757,7 @@ func (mcp *MachineConfigPool) waitForComplete() {
 	timeToWait := mcp.estimateWaitDuration()
 	logger.Infof("Waiting %s for MCP %s to be completed.", timeToWait, mcp.name)
 
-	immediate := false
-	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(_ context.Context) (bool, error) {
+	waitFunc := func(_ context.Context) (bool, error) {
 		defer g.GinkgoRecover()
 		// If there are degraded machines, stop polling, directly fail
 		degradedstdout, degradederr := mcp.getDegradedMachineCount()
@@ -787,12 +791,32 @@ func (mcp *MachineConfigPool) waitForComplete() {
 			return true, nil
 		}
 		return false, nil
-	})
+	}
+
+	immediate := false
+	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, waitFunc)
+	isDegraded := strings.Contains(err.Error(), "degraded")
+	logger.Infof("Error: %s --- degraded: %t", err.Error(), isDegraded)
+	if err != nil && !isDegraded {
+		mccLogs, logErr := NewController(mcp.GetOC()).GetLogs()
+		if logErr != nil {
+			logger.Errorf("Error getting MCC logs. Cannot check if drain is taking too long")
+		} else {
+			mccLatestLogs := GetLastNLines(mccLogs, 20)
+			if strings.Contains(mccLatestLogs, "error when evicting") {
+				logger.Infof("Some pods are taking too long to be evicted:\n%s", mccLatestLogs)
+				logger.Infof("Waiting for MCP %s another round! %s", mcp.name, timeToWait)
+				immediate = true
+				err = wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, waitFunc)
+			}
+		}
+	}
 
 	if err != nil {
 		exutil.ArchiveMustGatherFile(mcp.GetOC(), extractJournalLogs)
 		DebugDegradedStatus(mcp)
 	}
+
 	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), fmt.Sprintf("mc operation is not completed on mcp %s: %s", mcp.name, err))
 }
 
@@ -1551,10 +1575,11 @@ func DebugDegradedStatus(mcp *MachineConfigPool) {
 		maxMCCLines = 30
 		maxMCDLines = 30
 	)
+
+	logger.Infof("START DEBUG")
 	_ = mcp.GetOC().Run("get").Args("co", "machine-config").Execute()
 	_ = mcp.GetOC().Run("get").Args("mcp").Execute()
 	_ = mcp.GetOC().Run("get").Args("nodes", "-o", "wide").Execute()
-
 	logger.Infof("Not updated MCP %s", mcp.GetName())
 	logger.Infof("%s", mcp.PrettyString())
 	logger.Infof("#######################\n\n")
@@ -1570,13 +1595,7 @@ func DebugDegradedStatus(mcp *MachineConfigPool) {
 				if err != nil {
 					logger.Infof("Error getting MCD logs for node %s", node.GetName())
 				}
-				mcdLines := strings.Split(mcdLogs, "\n")
-				lenMCDLogs := len(mcdLines)
-
-				if lenMCDLogs > maxMCDLines {
-					mcdLogs = strings.Join(mcdLines[lenMCDLogs-maxMCCLines:], "\n")
-				}
-				logger.Infof("Node %s MCD logs:\n%s", node.GetName(), mcdLogs)
+				logger.Infof("Node %s MCD logs:\n%s", node.GetName(), GetLastNLines(mcdLogs, maxMCDLines))
 				logger.Infof("#######################\n\n")
 				logger.Infof("MachineConfigNode:\n%s", node.GetMachineConfigNode().PrettyString())
 				logger.Infof("#######################\n\n")
@@ -1586,15 +1605,10 @@ func DebugDegradedStatus(mcp *MachineConfigPool) {
 		logger.Infof("Error getting the list of degraded nodes: %s", err)
 	}
 
-	mccLogLines, err := mcc.GetLogsAsList()
+	mccLogs, err := mcc.GetLogs()
 	if err != nil {
 		logger.Infof("Error getting the logs from MCC: %s", err)
-	} else {
-		mccLogs := strings.Join(mccLogLines, "\n")
-		lenLogs := len(mccLogLines)
-		if lenLogs > maxMCCLines {
-			mccLogs = strings.Join(mccLogLines[lenLogs-maxMCCLines:], "\n")
-		}
-		logger.Infof("Last %d lines of MCC:\n%s", maxMCCLines, mccLogs)
 	}
+	logger.Infof("Last %d lines of MCC:\n%s", maxMCCLines, GetLastNLines(mccLogs, maxMCCLines))
+	logger.Infof("END DEBUG")
 }
