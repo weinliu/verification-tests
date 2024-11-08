@@ -532,7 +532,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		o.Expect(extractedLogs[0].File == "").Should(o.BeTrue())
 		o.Expect(extractedLogs[0].Kubernetes.Annotations == nil).Should(o.BeTrue())
 		o.Expect(extractedLogs[0].Kubernetes.NamespaceName == "").Should(o.BeTrue())
-		o.Expect(extractedLogs[0].Kubernetes.Lables["test.logging.io/logging.qe-test-label"] == "").Should(o.BeTrue())
+		o.Expect(extractedLogs[0].Kubernetes.Lables["test_logging_io_logging_qe-test-label"] == "").Should(o.BeTrue())
 
 		exutil.By("Prune .hostname, the CLF should be rejected")
 		patch = `[{"op": "replace", "path": "/spec/filters/0/prune/in", "value": [".hostname",".kubernetes.namespace_name",".kubernetes.labels.\"test.logging.io/logging.qe-test-label\"",".file",".kubernetes.annotations"]}]`
@@ -540,11 +540,11 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		checkResource(oc, true, false, "\"prune-logs\" prunes the `.hostname` field which is required for output: \"gcp-logging\" of type \"googleCloudLogging\"", []string{"clusterlogforwarders.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.pipelineConditions[0].message}"})
 
 		exutil.By("Update CLF to only reserve several fields")
-		patch = `[{"op": "replace", "path": "/spec/filters/0/prune", "value": {"notIn": [".log_type",".message",".kubernetes",".\"@timestamp\"",".openshift",".hostname"]}}]`
+		patch = `[{"op": "replace", "path": "/spec/filters/0/prune", "value": {"notIn": [".log_type",".log_source",".message",".kubernetes",".\"@timestamp\"",".openshift",".hostname"]}}]`
 		clf.update(oc, "", patch, "--type=json")
 		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
-		// sleep 30 seconds for collector pods to send new data to google cloud logging
-		time.Sleep(30 * time.Second)
+		// sleep 60 seconds for collector pods to send new data to google cloud logging
+		time.Sleep(60 * time.Second)
 
 		exutil.By("Check logs in google cloud logging")
 		err = gcl.waitForLogsAppearByNamespace(ns)
@@ -557,15 +557,15 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		o.Expect(len(extractedLogs) > 0).Should(o.BeTrue())
 		o.Expect(extractedLogs[0].File == "").Should(o.BeTrue())
 		o.Expect(extractedLogs[0].Kubernetes.Annotations != nil).Should(o.BeTrue())
-		o.Expect(extractedLogs[0].Kubernetes.Lables["test.logging.io/logging.qe-test-label"] == "logging-71753-test").Should(o.BeTrue())
+		o.Expect(extractedLogs[0].Kubernetes.Lables["test_logging_io_logging_qe-test-label"] == "logging-71753-test").Should(o.BeTrue())
 
 		exutil.By("Prune .hostname, the CLF should be rejected")
-		patch = `[{"op": "replace", "path": "/spec/filters/0/prune/notIn", "value": [".log_type",".message",".kubernetes",".\"@timestamp\"",".openshift"]}]`
+		patch = `[{"op": "replace", "path": "/spec/filters/0/prune/notIn", "value": [".log_type",".log_source",".message",".kubernetes",".\"@timestamp\"",".openshift"]}]`
 		clf.update(oc, "", patch, "--type=json")
 		checkResource(oc, true, false, "\"prune-logs\" prunes the `.hostname` field which is required for output: \"gcp-logging\" of type \"googleCloudLogging\"", []string{"clusterlogforwarders.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.pipelineConditions[0].message}"})
 
 		exutil.By("Combine in and notIn")
-		patch = `[{"op": "replace", "path": "/spec/filters/0/prune", "value": {"notIn": [".log_type",".message",".kubernetes",".\"@timestamp\"",".hostname"],
+		patch = `[{"op": "replace", "path": "/spec/filters/0/prune", "value": {"notIn": [".log_type",".log_source",".message",".kubernetes",".\"@timestamp\"",".hostname"],
 		"in": [".kubernetes.namespace_name",".kubernetes.labels.\"test.logging.io/logging.qe-test-label\"",".file",".kubernetes.annotations"]}}]`
 		clf.update(oc, "", patch, "--type=json")
 		WaitForDaemonsetPodsToBeReady(oc, clf.namespace, clf.name)
