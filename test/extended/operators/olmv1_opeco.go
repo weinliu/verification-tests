@@ -75,17 +75,15 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		clustercatalog.Create(oc)
 
 		exutil.By("Add image pollInterval time")
-		err = oc.AsAdmin().Run("patch").Args("clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"image":{"pollInterval":"20s"}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"image":{"pollIntervalMinutes": 1}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		pollInterval, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.spec.source.image.pollInterval}").Output()
+		pollInterval, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.spec.source.image.pollIntervalMinutes}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(string(pollInterval)).To(o.ContainSubstring("20s"))
+		o.Expect(string(pollInterval)).To(o.ContainSubstring("1"))
 		clustercatalog.WaitCatalogStatus(oc, "true", "Serving", 0)
 
 		exutil.By("Collect the initial image status information")
-		lastPollAttempt, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.lastSuccessfulPollAttempt}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
 		resolvedRef, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -104,19 +102,16 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		e2e.Logf("Successful tag v2")
 
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 90*time.Second, false, func(ctx context.Context) (bool, error) {
-			lastPollAttempt2, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.lastSuccessfulPollAttempt}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
 			resolvedRef2, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("clustercatalog", clustercatalog.Name, "-o=jsonpath={.status.resolvedSource.image.ref}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			if lastPollAttempt == lastPollAttempt2 || resolvedRef == resolvedRef2 {
-				e2e.Logf("lastPollAttempt:%v,lastPollAttempt2:%v", lastPollAttempt, lastPollAttempt2)
+			if resolvedRef == resolvedRef2 {
 				e2e.Logf("resolvedRef:%v,resolvedRef2:%v", resolvedRef, resolvedRef2)
 				return false, nil
 			}
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(errWait, "Error lastPollAttempt or resolvedRef are same")
+		exutil.AssertWaitPollNoErr(errWait, "Error resolvedRef are same")
 
 		exutil.By("check the index content changes")
 		v2bundlesDataOut, err := clustercatalog.UnmarshalContent(oc, "bundle")
@@ -175,10 +170,10 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 			baseDir             = exutil.FixturePath("testdata", "olm", "v1")
 			catalogPollTemplate = filepath.Join(baseDir, "clustercatalog-secret.yaml")
 			clustercatalog      = olmv1util.ClusterCatalogDescription{
-				Name:         "clustercatalog-69124",
-				Imageref:     "quay.io/olmqe/olmtest-operator-index:nginxolm69124",
-				PollInterval: "1m",
-				Template:     catalogPollTemplate,
+				Name:                "clustercatalog-69124",
+				Imageref:            "quay.io/olmqe/olmtest-operator-index:nginxolm69124",
+				PollIntervalMinutes: "1",
+				Template:            catalogPollTemplate,
 			}
 		)
 		exutil.By("Create clustercatalog")
@@ -186,9 +181,9 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		clustercatalog.Create(oc)
 
 		exutil.By("Check image pollInterval time")
-		errMsg, err := oc.AsAdmin().Run("patch").Args("clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"image":{"pollInterval":"1mm"}}}}`, "--type=merge").Output()
+		errMsg, err := oc.AsAdmin().Run("patch").Args("clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"image":{"pollIntervalMinutes":"1mm"}}}}`, "--type=merge").Output()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(strings.Contains(errMsg, "Invalid value: \"1mm\": spec.source.image.pollInterval in body")).To(o.BeTrue())
+		o.Expect(strings.Contains(errMsg, "Invalid value: \"1mm\": spec.source.image.pollIntervalMinutes in body")).To(o.BeTrue())
 
 		exutil.By("Check type value")
 		errMsg, err = oc.AsAdmin().Run("patch").Args("clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"type":"redhat"}}}`, "--type=merge").Output()
@@ -366,11 +361,11 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 				Template:  saClusterRoleBindingTemplate,
 			}
 			clustercatalog = olmv1util.ClusterCatalogDescription{
-				Name:         "clustercatalog-70817-quay",
-				Imageref:     "quay.io/olmqe/olmtest-operator-index-private:nginxolm70817",
-				PullSecret:   "fake-secret-70817",
-				PollInterval: "1m",
-				Template:     clustercatalogTemplate,
+				Name:                "clustercatalog-70817-quay",
+				Imageref:            "quay.io/olmqe/olmtest-operator-index-private:nginxolm70817",
+				PullSecret:          "fake-secret-70817",
+				PollIntervalMinutes: "1",
+				Template:            clustercatalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
 				Name:             "clusterextension-70817",

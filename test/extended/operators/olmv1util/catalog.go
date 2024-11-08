@@ -24,16 +24,16 @@ const (
 )
 
 type ClusterCatalogDescription struct {
-	Name         string
-	PullSecret   string
-	TypeName     string
-	Imageref     string
-	ContentURL   string
-	Status       string
-	PollInterval string
-	LabelKey     string // default is olmv1-test
-	LabelValue   string // suggest to use case id
-	Template     string
+	Name                string
+	PullSecret          string
+	TypeName            string
+	Imageref            string
+	ContentURL          string
+	Status              string
+	PollIntervalMinutes string
+	LabelKey            string // default is olmv1-test
+	LabelValue          string // suggest to use case id
+	Template            string
 }
 
 func (clustercatalog *ClusterCatalogDescription) Create(oc *exutil.CLI) {
@@ -58,8 +58,8 @@ func (clustercatalog *ClusterCatalogDescription) CreateWithoutCheck(oc *exutil.C
 	if len(clustercatalog.Imageref) > 0 {
 		paremeters = append(paremeters, "IMAGE="+clustercatalog.Imageref)
 	}
-	if len(clustercatalog.PollInterval) > 0 {
-		paremeters = append(paremeters, "POLLINTERVAL="+clustercatalog.PollInterval)
+	if len(clustercatalog.PollIntervalMinutes) > 0 {
+		paremeters = append(paremeters, "POLLINTERVALMINUTES="+clustercatalog.PollIntervalMinutes)
 	}
 	if len(clustercatalog.LabelKey) > 0 {
 		paremeters = append(paremeters, "LABELKEY="+clustercatalog.LabelKey)
