@@ -2228,18 +2228,6 @@ spec:
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("crd", crdWebhookNameNotFound).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		// Clean up the created Validatingwebhooks by case OCP-73539, avoid interfering with current test execution
-		output, errWebhook := oc.AsAdmin().WithoutNamespace().Run("get").Args("validatingwebhookconfigurations", "-o", `jsonpath={.items[*].metadata.name}`).Output()
-		o.Expect(errWebhook).NotTo(o.HaveOccurred())
-		currentValidatingWebhooks := strings.Split(output, " ")
-		e2e.Logf("Current ValidatingWebhooks list:\n")
-		for _, validatingWebHook := range currentValidatingWebhooks {
-			e2e.Logf("\t%s\n", validatingWebHook)
-			if strings.Contains(validatingWebHook, "webhook.netobserv.io") {
-				oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", validatingWebHook, "--ignore-not-found").Execute()
-			}
-		}
-
 		// Before checking APIServer WebhookConditions, need to delete service to avoid bug https://issues.redhat.com/browse/OCPBUGS-15587 in ENV that ingressnodefirewall CRD and config are installed.
 		oc.AsAdmin().Run("delete").Args("service", serviceName, "-n", oc.Namespace(), "--ignore-not-found").Execute()
 		kasOperatorCheckForStep(oc, preConfigKasStatus, "10", "deleting all bad webhooks with unknown service references")

@@ -98,7 +98,14 @@ func compareAPIServerWebhookConditions(oc *exutil.CLI, conditionReason interface
 			o.Expect(err).NotTo(o.HaveOccurred())
 			//Inline conditional statement for evaluating 1) reason and status together,2) only status.
 			webhookConditionStatus := gjson.Get(webhookError, `status`).String()
-			if containsAnyWebHookReason(webhookError, conditionReason) && webhookConditionStatus == conditionStatus {
+
+			// If webhook errors from the created flowcollectorconversionwebhook by case OCP-73539,
+			// the webhook condition status will be "True", not the expected "False"
+			if strings.Contains(webhookError, "flows.netobserv.io: dial tcp") {
+				conditionStatus = "True"
+			}
+			isWebhookConditionMet := containsAnyWebHookReason(webhookError, conditionReason) && webhookConditionStatus == conditionStatus
+			if isWebhookConditionMet {
 				e2e.Logf("kube-apiserver admission webhook errors as \n %s ::: %s ::: %s ::: %s", conditionStatus, webhookError, webHookErrorConditionType, conditionReason)
 				o.Expect(webhookError).Should(o.MatchRegexp(`"type":"%s"`, webHookErrorConditionType), "Mismatch in 'type' of admission errors reported")
 				o.Expect(webhookError).Should(o.MatchRegexp(`"status":"%s"`, conditionStatus), "Mismatch in 'status' of admission errors reported")
