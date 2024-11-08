@@ -21,8 +21,19 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc = exutil.NewCLI("ocmirrorv2", exutil.KubeConfigPath())
+		oc                 = exutil.NewCLI("ocmirrorv2", exutil.KubeConfigPath())
+		WORKLOADS_TEST_E2E = "TEST_E2E"
 	)
+
+	g.JustBeforeEach(func() {
+		//temporary workaround for OCPBUGS-43986
+		os.Setenv(WORKLOADS_TEST_E2E, "true")
+	})
+
+	g.JustAfterEach(func() {
+		os.Unsetenv(WORKLOADS_TEST_E2E)
+	})
+
 	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:knarra-Medium-72973-support mirror multi-arch additional images for v2 [Serial]", func() {
 		dirname := "/tmp/case72973"
 		defer os.RemoveAll(dirname)
