@@ -136,7 +136,8 @@ func (mc *MachineConfig) GetKernelTypeSafe() string {
 
 // HasExtensionsSafe  returns true if the MC has any extension configured
 func (mc *MachineConfig) HasExtensionsSafe() bool {
-	return mc.GetSafe(`{.spec.extensions}`, "[]") != "[]"
+	ext := mc.GetSafe(`{.spec.extensions}`, "[]")
+	return ext != "[]" && ext != ""
 }
 
 // GetAuthorizedKeysByUserAsList returns the authorizedkeys that this MC defines for the given user as a list of strings
