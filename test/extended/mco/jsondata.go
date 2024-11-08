@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
 	"k8s.io/client-go/util/jsonpath"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -18,7 +19,8 @@ func JSON(jsonString string) *JSONData {
 	}
 
 	if err := json.Unmarshal([]byte(jsonString), &jsonData.data); err != nil {
-		e2e.Failf("Data is not in json format:\n %s", jsonString)
+		logger.Errorf("Data is not in json format:\n %s", jsonString)
+		return nil
 	}
 	return &jsonData
 }

@@ -2618,20 +2618,17 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 
 		exutil.By("Verify that the alert is triggered")
-		o.Eventually(getAlertsByName, "5m", "20s").WithArguments(oc, expectedAlertName).
-			Should(o.HaveLen(1),
-				"1 %s alert and only 1 should have been triggered!", expectedAlertName)
+		var alertJSON []JSONData
+		var alertErr error
+		o.Eventually(func() ([]JSONData, error) {
+			alertJSON, alertErr = getAlertsByName(oc, expectedAlertName)
+			return alertJSON, alertErr
+		}, "5m", "20s").Should(o.HaveLen(1),
+			"Expected 1 %s alert and only 1 to be triggered!", expectedAlertName)
 		logger.Infof("OK!\n")
 
 		exutil.By("Verify that the alert has the right message")
-		alertJSON, err := getAlertsByName(oc, expectedAlertName)
-
 		logger.Infof("Found %s alerts: %s", expectedAlertName, alertJSON)
-
-		o.Expect(err).NotTo(o.HaveOccurred(),
-			"Error trying to get the %s alert", expectedAlertName)
-		o.Expect(alertJSON).To(o.HaveLen(1),
-			"One and only one %s alert should be reported because of the eviction problems", expectedAlertName)
 
 		expectedDescription := fmt.Sprintf("Drain failed on %s , updates may be blocked. For more details check MachineConfigController pod logs: oc logs -f -n openshift-machine-config-operator machine-config-controller-xxxxx -c machine-config-controller", workerNode.GetName())
 		o.Expect(alertJSON[0].Get("annotations").Get("description").ToString()).Should(o.ContainSubstring(expectedDescription),

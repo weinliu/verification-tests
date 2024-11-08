@@ -408,13 +408,13 @@ func checkFiredAlert(oc *exutil.CLI, mcp *MachineConfigPool, params checkFiredAl
 	}
 
 	exutil.By("Verify that the alert is triggered")
-	o.Eventually(getAlertsByName, "5m", "20s").WithArguments(oc, params.expectedAlertName).
-		Should(o.HaveLen(1),
-			"Expected 1 %s alert and only 1 to be triggered!", params.expectedAlertName)
-
-	alertJSON, err := getAlertsByName(oc, params.expectedAlertName)
-	o.Expect(err).NotTo(o.HaveOccurred(),
-		"Error trying to get the %s alert", params.expectedAlertName)
+	var alertJSON []JSONData
+	var alertErr error
+	o.Eventually(func() ([]JSONData, error) {
+		alertJSON, alertErr = getAlertsByName(oc, params.expectedAlertName)
+		return alertJSON, alertErr
+	}, "5m", "20s").Should(o.HaveLen(1),
+		"Expected 1 %s alert and only 1 to be triggered!", params.expectedAlertName)
 
 	logger.Infof("Found %s alerts: %s", params.expectedAlertName, alertJSON)
 	alertMap := alertJSON[0].ToMap()
@@ -469,9 +469,11 @@ func checkFiredAlert(oc *exutil.CLI, mcp *MachineConfigPool, params checkFiredAl
 	}
 
 	logger.Infof("Checking alert's state")
-	alertJSON, err = getAlertsByName(oc, params.expectedAlertName)
-	o.Expect(err).NotTo(o.HaveOccurred(),
-		"Error trying to get the %s alert", params.expectedAlertName)
+	o.Eventually(func() ([]JSONData, error) {
+		alertJSON, alertErr = getAlertsByName(oc, params.expectedAlertName)
+		return alertJSON, alertErr
+	}, "5m", "20s").Should(o.HaveLen(1),
+		"Expected 1 %s alert and only 1 to be triggered!", params.expectedAlertName)
 
 	logger.Infof("Found %s alerts: %s", params.expectedAlertName, alertJSON)
 

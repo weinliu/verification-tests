@@ -485,15 +485,18 @@ func getAlertsByName(oc *exutil.CLI, alertName string) ([]JSONData, error) {
 		return nil, monErr
 	}
 
-	allAerts, allAlertErr := mon.GetAlerts()
+	allAlerts, allAlertsErr := mon.GetAlerts()
 
-	if allAlertErr != nil {
-		return nil, allAlertErr
+	if allAlertsErr != nil {
+		return nil, allAlertsErr
 	}
 
-	logger.Infof("get all alerts: %s\n", allAerts)
+	logger.Infof("get all alerts: %s\n", allAlerts)
 
-	jsonObj := JSON(allAerts)
+	jsonObj := JSON(allAlerts)
+	if jsonObj == nil {
+		return nil, fmt.Errorf("Cannot parse json string: %s", allAlerts)
+	}
 	filteredAlerts, filteredAlertErr := jsonObj.GetJSONPath(fmt.Sprintf(`{.data.alerts[?(@.labels.alertname=="%s")]}`, alertName))
 
 	if filteredAlertErr != nil {
