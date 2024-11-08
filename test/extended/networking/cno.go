@@ -1,7 +1,9 @@
 package networking
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 
@@ -9,6 +11,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 var _ = g.Describe("[sig-networking] SDN CNO", func() {
@@ -375,5 +378,32 @@ var _ = g.Describe("[sig-networking] SDN CNO", func() {
 			status := getNetworkDiagnosticsAvailable(oc)
 			return status == "true"
 		}, "300s", "10s").Should(o.BeTrue(), "NetworkDiagnosticsAvailable is not in true status")
+	})
+
+	// author: meinli@redhat.com
+	g.It("Author:meinli-NonPreRelease-Medium-51727-ovsdb-server and northd should not core dump on node restart [Disruptive]", func() {
+		// https://bugzilla.redhat.com/show_bug.cgi?id=1944264
+
+		exutil.By("1. Get one node to reboot")
+		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(workerList.Items) < 1 {
+			g.Skip("This case requires 1 nodes, but the cluster has none. Skip it!!!")
+		}
+		worker := workerList.Items[0].Name
+		defer checkNodeStatus(oc, worker, "Ready")
+		rebootNode(oc, worker)
+		checkNodeStatus(oc, worker, "NotReady")
+		checkNodeStatus(oc, worker, "Ready")
+
+		exutil.By("2. Check the node core dump output")
+		mustgatherDir := "/tmp/must-gather-51727"
+		defer os.RemoveAll(mustgatherDir)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--dest-dir="+mustgatherDir, "--", "/usr/bin/gather_core_dumps").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		files, err := os.ReadDir(mustgatherDir + "/quay-io-openshift-release-dev-ocp-*" + "/node_core_dumps")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(files).Should(o.BeEmpty())
 	})
 })
