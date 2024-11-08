@@ -358,7 +358,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, project1, "route/route-reen", "{.status.ingress[0].conditions[0].status}", "True")
 
 		exutil.By("3.0: Annotate unsecure, edge, reencrypt and passthrough route")
-		result := getClientIP(oc)
+		clusterType := checkIPStackType(oc)
+		result := getClientIP(oc, clusterType)
 		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_whitelist=`+result)
 		findAnnotation := getAnnotation(oc, project1, "route", unsecureRoute)
 		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"` + result + `"`))
@@ -1084,6 +1085,209 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		output, err = oc.Run("get").Args("-n", oc.Namespace(), "route", "myedge").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("ExternalCertificateValidationFailed"))
+	})
+
+	// author: iamin@redhat.com
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-77080-NetworkEdge Only host in allowlist can access unsecure/edge/reencrypt/passthrough routes", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			unSecSvcName        = "service-unsecure1"
+			signedPod           = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+		)
+
+		exutil.By("1.0: Deploy a project with Pod and Services")
+		project1 := oc.Namespace()
+		routerpod := getNewRouterPod(oc, "default")
+		srvPodList := createResourceFromWebServerRC(oc, project1, signedPod, "web-server-rc")
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+
+		exutil.By("2.0: Create an unsecure, edge, reencrypt and passthrough route")
+		unsecureRoute := "route-unsecure"
+		unsecureHost := unsecureRoute + "-" + project1 + ".apps." + getBaseDomain(oc)
+		edgeRoute := "route-edge"
+		edgeHost := edgeRoute + "-" + project1 + ".apps." + getBaseDomain(oc)
+		passthroughRoute := "route-passthrough"
+		passthroughHost := passthroughRoute + "-" + project1 + ".apps." + getBaseDomain(oc)
+		reenRoute := "route-reen"
+		reenHost := reenRoute + "-" + project1 + ".apps." + getBaseDomain(oc)
+
+		createRoute(oc, project1, "http", unsecureRoute, unSecSvcName, []string{})
+		waitForOutput(oc, project1, "route/route-unsecure", "{.status.ingress[0].conditions[0].status}", "True")
+		createRoute(oc, project1, "edge", edgeRoute, unSecSvcName, []string{})
+		waitForOutput(oc, project1, "route/route-edge", "{.status.ingress[0].conditions[0].status}", "True")
+		createRoute(oc, project1, "passthrough", passthroughRoute, "service-secure1", []string{})
+		waitForOutput(oc, project1, "route/route-passthrough", "{.status.ingress[0].conditions[0].status}", "True")
+		createRoute(oc, project1, "reencrypt", reenRoute, "service-secure1", []string{})
+		waitForOutput(oc, project1, "route/route-reen", "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("3.0: Annotate unsecure, edge, reencrypt and passthrough route")
+		clusterType := checkIPStackType(oc)
+		pubIP := getClientIP(oc, clusterType)
+		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_allowlist=`+pubIP)
+		findAnnotation := getAnnotation(oc, project1, "route", unsecureRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"` + pubIP + `"`))
+		setAnnotation(oc, project1, "route/"+edgeRoute, `haproxy.router.openshift.io/ip_allowlist=`+pubIP)
+		findAnnotation = getAnnotation(oc, project1, "route", edgeRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"` + pubIP + `"`))
+		setAnnotation(oc, project1, "route/"+passthroughRoute, `haproxy.router.openshift.io/ip_allowlist=`+pubIP)
+		findAnnotation = getAnnotation(oc, project1, "route", passthroughRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"` + pubIP + `"`))
+		setAnnotation(oc, project1, "route/"+reenRoute, `haproxy.router.openshift.io/ip_allowlist=`+pubIP)
+		findAnnotation = getAnnotation(oc, project1, "route", reenRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"` + pubIP + `"`))
+
+		exutil.By("4.0: access the routes using the IP from the allowlist")
+		waitForOutsideCurlContains("http://"+unsecureHost, "", `Hello-OpenShift `+srvPodList[0]+` http-8080`)
+		waitForOutsideCurlContains("https://"+edgeHost, "-k", `Hello-OpenShift `+srvPodList[0]+` http-8080`)
+		waitForOutsideCurlContains("https://"+passthroughHost, "-k", `Hello-OpenShift `+srvPodList[0]+` https-8443 default`)
+		waitForOutsideCurlContains("https://"+reenHost, "-k", `Hello-OpenShift `+srvPodList[0]+` https-8443 default`)
+
+		exutil.By("5.0: re-annotate routes with a random IP")
+		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_allowlist=1050::5:600:300c:326b`)
+		findAnnotation = getAnnotation(oc, project1, "route", unsecureRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"1050::5:600:300c:326b`))
+		setAnnotation(oc, project1, "route/"+edgeRoute, `haproxy.router.openshift.io/ip_allowlist=8.8.8.8`)
+		findAnnotation = getAnnotation(oc, project1, "route", edgeRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"8.8.8.8`))
+		setAnnotation(oc, project1, "route/"+passthroughRoute, `haproxy.router.openshift.io/ip_allowlist=1050::5:600:300c:326b`)
+		findAnnotation = getAnnotation(oc, project1, "route", passthroughRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"1050::5:600:300c:326b`))
+		setAnnotation(oc, project1, "route/"+reenRoute, `haproxy.router.openshift.io/ip_allowlist=8.8.4.4`)
+		findAnnotation = getAnnotation(oc, project1, "route", reenRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"8.8.4.4`))
+
+		exutil.By("6.0: attempt to access the routes without an IP in the allowlist")
+		waitForOutsideCurlContains("http://"+unsecureHost, "-k", `exit status`)
+		waitForOutsideCurlContains("https://"+edgeHost, "-k", `exit status`)
+		waitForOutsideCurlContains("https://"+passthroughHost, "-k", `exit status`)
+		waitForOutsideCurlContains("https://"+reenHost, "-k", `exit status`)
+
+		exutil.By("7.0: Check HaProxy if the IP in the allowlist annotation exists")
+		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+unsecureRoute)
+		o.Expect(searchOutput).To(o.And(o.ContainSubstring(`acl allowlist src 1050::5:600:300c:326b`), o.ContainSubstring(`tcp-request content reject if !allowlist`)))
+		searchOutput = readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+edgeRoute)
+		o.Expect(searchOutput).To(o.And(o.ContainSubstring(`acl allowlist src 8.8.8.8`), o.ContainSubstring(`tcp-request content reject if !allowlist`)))
+		searchOutput = readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+passthroughRoute)
+		o.Expect(searchOutput).To(o.And(o.ContainSubstring(`acl allowlist src 1050::5:600:300c:326b`), o.ContainSubstring(`tcp-request content reject if !allowlist`)))
+		searchOutput = readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+reenRoute)
+		o.Expect(searchOutput).To(o.And(o.ContainSubstring(`acl allowlist src 8.8.4.4`), o.ContainSubstring(`tcp-request content reject if !allowlist`)))
+
+	})
+
+	// author: iamin@redhat.com
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-77082-NetworkEdge Route gives allowlist precedence when whitelist and allowlist annotations are both present", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPod             = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			unSecSvcName        = "service-unsecure"
+		)
+
+		exutil.By("1.0: Deploy a project with Pod and Services")
+		project1 := oc.Namespace()
+		routerpod := getNewRouterPod(oc, "default")
+		srvPodList := createResourceFromWebServerRC(oc, project1, testPod, "web-server-rc")
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+
+		exutil.By("2.0: Create an unsecure route")
+		unsecureRoute := "route-unsecure"
+		unsecureHost := unsecureRoute + "-" + project1 + ".apps." + getBaseDomain(oc)
+		createRoute(oc, project1, "http", unsecureRoute, unSecSvcName, []string{})
+		waitForOutput(oc, project1, "route/route-unsecure", "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("3.0: Annotate unsecure route")
+		clusterType := checkIPStackType(oc)
+		pubIP := getClientIP(oc, clusterType)
+		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_whitelist=`+pubIP)
+		findAnnotation := getAnnotation(oc, project1, "route", unsecureRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"` + pubIP + `"`))
+
+		exutil.By("4.0: access the route using the IP from the whitelist")
+		waitForOutsideCurlContains("http://"+unsecureHost, "", `Hello-OpenShift `+srvPodList[0]+` http-8080`)
+
+		exutil.By("5.0: add allowlist annotation with non valid host IP")
+		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_allowlist=1.2.3.4`)
+		findAnnotation = getAnnotation(oc, project1, "route", unsecureRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"1.2.3.4`))
+
+		exutil.By("6.0: attempt to access the routes without an IP in the allowlist")
+		waitForOutsideCurlContains("http://"+unsecureHost, "-k", `exit status`)
+
+		exutil.By("7.0: annotate route with a valid public client IP in the allowlist and an invalid host IP in the whitelist")
+		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_allowlist=`+pubIP)
+		findAnnotation = getAnnotation(oc, project1, "route", unsecureRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"` + pubIP + `"`))
+
+		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_whitelist=1.2.3.4`)
+		findAnnotation1 := getAnnotation(oc, project1, "route", unsecureRoute)
+		o.Expect(findAnnotation1).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"1.2.3.4`))
+
+		waitForOutsideCurlContains("http://"+unsecureHost, "", `Hello-OpenShift `+srvPodList[0]+` http-8080`)
+
+		exutil.By("8.0: Check HaProxy if the allowlist annotation exists and tcp request exist")
+		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+unsecureRoute)
+		o.Expect(searchOutput).To(o.And(o.ContainSubstring(`acl allowlist src`), o.ContainSubstring(`tcp-request content reject if !allowlist`)))
+
+	})
+
+	// author: iamin@redhat.com
+	// Combines OCP-77091 and OCP 77086 tests for allowlist epic NE:1100
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-High-77091-NetworkEdge Route does not enable allowlist with than 61 CIDRs and if invalid IP annotation is given", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPod             = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			unSecSvcName        = "service-unsecure"
+		)
+
+		exutil.By("1.0: Deploy a project with Pod and Services")
+		project1 := oc.Namespace()
+		routerpod := getNewRouterPod(oc, "default")
+		srvPodList := createResourceFromWebServerRC(oc, project1, testPod, "web-server-rc")
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+
+		exutil.By("2.0: Create an edge route")
+		edgeRoute := "route-edge"
+		edgeHost := edgeRoute + "-" + project1 + ".apps." + getBaseDomain(oc)
+		createRoute(oc, project1, "edge", edgeRoute, unSecSvcName, []string{})
+		waitForOutput(oc, project1, "route/route-edge", "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("3.0: annotate route with an invalid IP and try to access route")
+		setAnnotation(oc, project1, "route/"+edgeRoute, `haproxy.router.openshift.io/ip_allowlist=192.abc.123.0`)
+		findAnnotation := getAnnotation(oc, project1, "route", edgeRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"192.abc.123.0`))
+
+		waitForOutsideCurlContains("https://"+edgeHost, "-k", `Hello-OpenShift `+srvPodList[0]+` http-8080`)
+
+		exutil.By("4.0: Check HaProxy to confirm the allowlist annotation does not occur")
+		searchOutput1 := readHaproxyConfig(oc, routerpod, project1, "-A6", project1+":"+edgeRoute)
+		o.Expect(searchOutput1).NotTo(o.And(o.ContainSubstring(`acl allowlist src`), o.ContainSubstring(`tcp-request content reject if !allowlist`)))
+
+		//OCP-77091 route does not enable whitelist with more than 61 CIDRs
+		exutil.By("5.0: Create an unsecure route")
+		unsecureRoute := "route-unsecure"
+		createRoute(oc, project1, "http", unsecureRoute, unSecSvcName, []string{})
+		waitForOutput(oc, project1, "route/route-unsecure", "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("6.0: Annotate unsecure route with 61 CIDRs")
+		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_allowlist=192.168.0.0/24 192.168.1.0/24 192.168.2.0/24 192.168.3.0/24 192.168.4.0/24 192.168.5.0/24 192.168.6.0/24 192.168.7.0/24 192.168.8.0/24 192.168.9.0/24 192.168.10.0/24 192.168.11.0/24 192.168.12.0/24 192.168.13.0/24 192.168.14.0/24 192.168.15.0/24 192.168.16.0/24 192.168.17.0/24 192.168.18.0/24 192.168.19.0/24 192.168.20.0/24 192.168.21.0/24 192.168.22.0/24 192.168.23.0/24 192.168.24.0/24 192.168.25.0/24 192.168.26.0/24 192.168.27.0/24 192.168.28.0/24 192.168.29.0/24 192.168.30.0/24 192.168.31.0/24 192.168.32.0/24 192.168.33.0/24 192.168.34.0/24 192.168.35.0/24 192.168.36.0/24 192.168.37.0/24 192.168.38.0/24 192.168.39.0/24 192.168.40.0/24 192.168.41.0/24 192.168.42.0/24 192.168.43.0/24 192.168.44.0/24 192.168.45.0/24 192.168.46.0/24 192.168.47.0/24 192.168.48.0/24 192.168.49.0/24 192.168.50.0/24 192.168.51.0/24 192.168.52.0/24 192.168.53.0/24 192.168.54.0/24 192.168.55.0/24 192.168.56.0/24 192.168.57.0/24 192.168.58.0/24 192.168.59.0/24 192.168.60.0/24`)
+		findAnnotation = getAnnotation(oc, project1, "route", unsecureRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"`))
+
+		exutil.By("7.0: Check HaProxy if the allowlist annotation exists and tcp request exist")
+		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+unsecureRoute)
+		o.Expect(searchOutput).To(o.And(o.ContainSubstring(`acl allowlist src 192.168.0.0/24`), o.ContainSubstring(`tcp-request content reject if !allowlist`)))
+
+		exutil.By("8.0: add allowlist annotation with more than 61 CIDRs")
+		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_allowlist=192.168.0.0/24 192.168.1.0/24 192.168.2.0/24 192.168.3.0/24 192.168.4.0/24 192.168.5.0/24 192.168.6.0/24 192.168.7.0/24 192.168.8.0/24 192.168.9.0/24 192.168.10.0/24 192.168.11.0/24 192.168.12.0/24 192.168.13.0/24 192.168.14.0/24 192.168.15.0/24 192.168.16.0/24 192.168.17.0/24 192.168.18.0/24 192.168.19.0/24 192.168.20.0/24 192.168.21.0/24 192.168.22.0/24 192.168.23.0/24 192.168.24.0/24 192.168.25.0/24 192.168.26.0/24 192.168.27.0/24 192.168.28.0/24 192.168.29.0/24 192.168.30.0/24 192.168.31.0/24 192.168.32.0/24 192.168.33.0/24 192.168.34.0/24 192.168.35.0/24 192.168.36.0/24 192.168.37.0/24 192.168.38.0/24 192.168.39.0/24 192.168.40.0/24 192.168.41.0/24 192.168.42.0/24 192.168.43.0/24 192.168.44.0/24 192.168.45.0/24 192.168.46.0/24 192.168.47.0/24 192.168.48.0/24 192.168.49.0/24 192.168.50.0/24 192.168.51.0/24 192.168.52.0/24 192.168.53.0/24 192.168.54.0/24 192.168.55.0/24 192.168.56.0/24 192.168.57.0/24 192.168.58.0/24 192.168.59.0/24 192.168.60.0/24 192.168.61.0/24`)
+		findAnnotation = getAnnotation(oc, project1, "route", unsecureRoute)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"`))
+
+		exutil.By("9.0: Check HaProxy if the allowlist annotation exists and tcp request exist")
+		searchOutput = readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+unsecureRoute)
+		o.Expect(searchOutput).To(o.And(o.ContainSubstring(`acl allowlist src -f /var/lib/haproxy/router/allowlists/`+project1+":"+unsecureRoute+".txt"), o.ContainSubstring(`tcp-request content reject if !allowlist`)))
+		o.Expect(searchOutput).NotTo(o.ContainSubstring(`acl allowlist src 192.168.0.0/24`))
 	})
 
 })

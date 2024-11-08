@@ -1920,8 +1920,15 @@ func getPublicSubnetList(oc *exutil.CLI) []string {
 	return publicSubnetList
 }
 
-func getClientIP(oc *exutil.CLI) string {
-	res, _ := http.Get("https://api.ipify.org")
-	result, _ := ioutil.ReadAll(res.Body)
-	return string(result)
+// retrieve the IPV6 or IPV4 public client address of a cluster
+func getClientIP(oc *exutil.CLI, clusterType string) string {
+	if strings.Contains(clusterType, "ipv6single") || strings.Contains(clusterType, "dualstack") {
+		res, _ := http.Get("https://api64.ipify.org")
+		result, _ := ioutil.ReadAll(res.Body)
+		return string(result)
+	} else {
+		res, _ := http.Get("https://api.ipify.org")
+		result, _ := ioutil.ReadAll(res.Body)
+		return string(result)
+	}
 }
