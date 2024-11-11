@@ -22,7 +22,7 @@ import (
 var _ = g.Describe("[sig-apps] Workloads test kubescheduler operator works well", func() {
 	defer g.GinkgoRecover()
 
-	var oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
+	var oc = exutil.NewCLIForKubeOpenShift("default-" + getRandomString())
 
 	// author: yinzhou@redhat.com
 	// Adding NonHyperShiftHOST due to bug https://issues.redhat.com/browse/HOSTEDCP-936
@@ -310,7 +310,7 @@ var _ = g.Describe("[sig-apps] Workloads test kubescheduler operator works well"
 	})
 
 	// author: knarra@redhat.com
-	g.It("HyperShiftMGMT-NonPreRelease-PstChkUpgrade-Author:knarra-High-60542-Guard controller set the readiness probe endpoint explicitly", func() {
+	g.It("Author:knarra-NonPreRelease-NonHyperShiftHOST-PstChkUpgrade-High-60542-Guard controller set the readiness probe endpoint explicitly", func() {
 		// If SNO cluster skip the case as there is no quorum guard pod present in there
 		exutil.SkipForSNOCluster(oc)
 

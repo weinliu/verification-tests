@@ -1,13 +1,14 @@
 package workloads
 
 import (
+	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
@@ -15,47 +16,30 @@ import (
 var _ = g.Describe("[sig-apps] Workloads", func() {
 	defer g.GinkgoRecover()
 	const (
+		ns       = "openshift-controller-manager"
 		hostport = "8443"
 	)
 	var (
-		oc             = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
-		labels         string
-		ns             string
-		kubeconfigFile string
+		oc = exutil.NewCLI("default-"+getRandomString(), exutil.KubeConfigPath())
 	)
-	g.It("HyperShiftMGMT-Author:wewang-Medium-29780-Controller metrics reported from openshift-controller-manager [Flaky]", func() {
-		guestClusterName, guestClusterKubeconfig, hostedClusterName := exutil.ValidHypershiftAndGetGuestKubeConfWithNoSkip(oc)
-		if guestClusterKubeconfig != "" {
-			e2e.Logf("GuestClusterkubeconfig is %s", guestClusterKubeconfig)
-			oc.SetGuestKubeconf(guestClusterKubeconfig)
-			ns = hostedClusterName + "-" + guestClusterName
-			labels = "hypershift.openshift.io/control-plane-component=openshift-controller-manager"
-		} else {
-			kubeconfigFile = os.Getenv("KUBECONFIG")
-			oc.SetGuestKubeconf(kubeconfigFile)
-			ns = "openshift-controller-manager"
-			labels = "app=openshift-controller-manager-a"
-		}
+	g.It("Author:wewang-NonHyperShiftHOST-Medium-29780-Controller metrics reported from openshift-controller-manager [Flaky]", func() {
 		g.By("check controller metrics")
-		token, err := oc.AsAdmin().AsGuestKubeconf().WithoutNamespace().Run("create").Args("token", "-n", "openshift-monitoring", "prometheus-k8s").Output()
+		token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", "-n", "openshift-monitoring", "prometheus-k8s").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		foundMetrics := false
+		podList, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{})
 		if err != nil {
 			e2e.Logf("Error listing pods: %v", err)
 		}
 
-		g.By("Retreive podlist based on ns & labels")
-		podList, err := exutil.GetAllPodsWithLabel(oc, ns, labels)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		for _, p := range podList {
+		for _, p := range podList.Items {
 			foundAvaliableDc := false
 			foundFailDc := false
 			foundCancelDc := false
 			//https://access.redhat.com/solutions/5356961
 			//cURL to NO_PROXY CIDR addresses are not working as expected, it's not openshift issue.
 			//Change to use 127.0.0.1, so it could work on proxy cluster.
-			results, err := getBearerTokenURLViaPod(ns, p, fmt.Sprintf("https://%s:%s/metrics", "127.0.0.1", hostport), token)
+			results, err := getBearerTokenURLViaPod(ns, p.Name, fmt.Sprintf("https://%s:%s/metrics", "127.0.0.1", hostport), token)
 
 			o.Expect(err).NotTo(o.HaveOccurred())
 			foundAvaliableDc = strings.Contains(string(results), "openshift_apps_deploymentconfigs_complete_rollouts_total{phase=\"available\"}")

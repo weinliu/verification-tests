@@ -1602,7 +1602,7 @@ func getPruneResourceName(pruneCMD string) []string {
 
 // WaitForDeploymentPodsToBeReady waits for the specific deployment to be ready
 func waitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name string) {
-	err := wait.Poll(10*time.Second, 300*time.Second, func() (done bool, err error) {
+	err := wait.Poll(20*time.Second, 300*time.Second, func() (done bool, err error) {
 		deployment, err := oc.AdminKubeClient().AppsV1().Deployments(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
 			if apierrors.IsNotFound(err) {
