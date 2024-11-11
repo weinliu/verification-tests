@@ -1022,7 +1022,7 @@ func (ck checkDescription) check(oc *exutil.CLI) {
 		err := expectedResource(oc, ck.executor, ck.inlineNamespace, ck.expectAction, ck.expectContent, ck.expect, ck.resource...)
 		if err != nil {
 			getResource(oc, asAdmin, withoutNamespace, "pod", "-n", "openshift-marketplace")
-			getResource(oc, asAdmin, withoutNamespace, "event", "-n", "openshift-marketplace")
+			getResource(oc, asAdmin, withoutNamespace, "og", "-n", oc.Namespace(), "-o", "yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("expected content %s not found by %v", ck.expectContent, ck.resource))
 	default:
