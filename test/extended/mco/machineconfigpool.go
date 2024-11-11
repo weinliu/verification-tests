@@ -795,9 +795,7 @@ func (mcp *MachineConfigPool) waitForComplete() {
 
 	immediate := false
 	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, waitFunc)
-	isDegraded := strings.Contains(err.Error(), "degraded")
-	logger.Infof("Error: %s --- degraded: %t", err.Error(), isDegraded)
-	if err != nil && !isDegraded {
+	if err != nil && !strings.Contains(err.Error(), "degraded") {
 		mccLogs, logErr := NewController(mcp.GetOC()).GetLogs()
 		if logErr != nil {
 			logger.Errorf("Error getting MCC logs. Cannot check if drain is taking too long")
