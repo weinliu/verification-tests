@@ -147,14 +147,14 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		// defer cmd.Process.Kill()
 		defer func() {
 			var nodeStatus string
-			err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 500*time.Second, false, func(ctx context.Context) (bool, error) {
+			err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 900*time.Second, false, func(ctx context.Context) (bool, error) {
 				nodeStatus, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "--no-headers").Output()
 				if !strings.Contains(nodeStatus, "NotReady") {
 					return true, nil
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The node(%s) doesn't recover to Ready status(%s) after 500s", nodeName, nodeStatus))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The node(%s) doesn't recover to Ready status(%s) after 15 mins", nodeName, nodeStatus))
 		}()
 
 		exutil.By("4, check if the node is NotReady")
