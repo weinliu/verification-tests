@@ -1642,6 +1642,7 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 	//author: jiajliu@redhat.com
 	g.It("Author:jiajliu-Medium-53906-The architecture info in clusterversion’s status should be correct", func() {
 		const heterogeneousArchKeyword = "multi"
+		expectedArchMsg := "architecture=\"Multi\""
 		exutil.By("Get release info from current cluster")
 		releaseInfo, err := getReleaseInfo(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1675,8 +1676,8 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		} else {
 			e2e.Logf("This current release is a heterogeneous payload")
 			// It's a heterogeneous payload, the architecture info in clusterversion’s status should be multi.
-			e2e.Logf("Expected arch info: %v", heterogeneousArchKeyword)
-			o.Expect(cvArchInfo).To(o.ContainSubstring(heterogeneousArchKeyword))
+			e2e.Logf("Expected arch info: %v", expectedArchMsg)
+			o.Expect(cvArchInfo).To(o.ContainSubstring(expectedArchMsg))
 		}
 	})
 
