@@ -771,7 +771,7 @@ func setSecureRegistryEnableAuth(oc *exutil.CLI, ns, regName, htpasswdFile, imag
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Custom registry does not update")
-	newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pods", "-n", ns, "-l", "app=" + regName}).check(oc)
+	checkPodsRunningWithLabel(oc, ns, "app="+regName, 1)
 	return regRoute
 }
 
