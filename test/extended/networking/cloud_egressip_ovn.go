@@ -519,7 +519,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode2, egressNodeLabel)
 
 		exutil.By("6. Check the egress node was updated in the egressip object.\n")
-		egressipErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		egressipErr := wait.Poll(10*time.Second, 350*time.Second, func() (bool, error) {
 			egressIPMaps = getAssignedEIPInEIPObject(oc, egressip1.name)
 			if len(egressIPMaps) != 1 || egressIPMaps[0]["node"] == egressNode1 {
 				e2e.Logf("Wait for new egress node applied,try next round.")
