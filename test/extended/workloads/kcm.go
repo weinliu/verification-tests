@@ -867,6 +867,43 @@ var _ = g.Describe("[sig-apps] Workloads test kcm works well", func() {
 		o.Expect(wpAnnotation).To(o.ContainSubstring(`"target.workload.openshift.io/management":"{\"effect\": \"PreferredDuringScheduling\"}"`))
 	})
 
+	g.It("Author:yinzhou-Longduration-NonHyperShiftHOST-NonPreRelease-ROSA-OSD_CCS-ARO-Medium-73887-validate for alert KubeDeploymentReplicasMismatch [Disruptive]", func() {
+		workerNodeList, err := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("workernodeList is %v", workerNodeList)
+
+		defer func() {
+			for _, v := range workerNodeList {
+				oc.AsAdmin().WithoutNamespace().Run("adm").Args("uncordon", fmt.Sprintf("%s", v)).Execute()
+			}
+			for _, v := range workerNodeList {
+				err = checkNodeUncordoned(oc, v)
+				exutil.AssertWaitPollNoErr(err, "node is not ready")
+			}
+		}()
+		if len(workerNodeList) == 1 {
+			e2e.Logf("Only one worker node, no need to cordon action\n")
+		} else {
+			for nodeNum := 0; nodeNum < len(workerNodeList)-1; nodeNum++ {
+				err = oc.AsAdmin().Run("adm").Args("cordon", workerNodeList[nodeNum]).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}
+		resourceBaseDir := exutil.FixturePath("testdata", "workloads")
+		deploymentFile := filepath.Join(resourceBaseDir, "deployment-73887.yaml")
+
+		defer oc.AsAdmin().Run("delete").Args("-f", deploymentFile, "-n", "default").Execute()
+		err = oc.AsAdmin().Run("create").Args("-f", deploymentFile, "-n", "default").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if ok := waitForAvailableRsRunning(oc, "deployment", "replicas-mismatch", "default", "5"); !ok {
+			e2e.Logf("All pods are not runnnig now\n")
+			token, err := exutil.GetSAToken(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(token).NotTo(o.BeEmpty())
+			checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="KubeDeploymentReplicasMismatch"}'`, token, "replicas-mismatch", 600)
+		}
+	})
 })
 
 var _ = g.Describe("[sig-cli] Workloads kube-controller-manager on Microshift", func() {
