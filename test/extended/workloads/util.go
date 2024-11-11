@@ -2292,6 +2292,13 @@ func installCustomOperator(oc *exutil.CLI, operatorSub *customsub, operatorOG *o
 	if ok := waitForAvailableRsRunning(oc, "deploy", operatorDeoloy, operatorNamespace, operatorunningNum); ok {
 		e2e.Logf("installed operator runnnig now\n")
 	} else {
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", operatorNamespace, "sub").Execute()
+		if err != nil {
+			e2e.Logf("Could not retreive subscription")
+		} else {
+			err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", operatorNamespace, "sub").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 		e2e.Failf("All pods related to deployment are not running")
 	}
 
