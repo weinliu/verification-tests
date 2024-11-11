@@ -44,14 +44,15 @@ type awsMachineTemplateDescription struct {
 }
 
 type gcpMachineTemplateDescription struct {
-	name        string
-	namespace   string
-	region      string
-	image       string
-	machineType string
-	clusterID   string
-	subnetwork  string
-	template    string
+	name           string
+	namespace      string
+	region         string
+	image          string
+	machineType    string
+	clusterID      string
+	subnetwork     string
+	serviceAccount string
+	template       string
 }
 
 type capiMachineSetAWSDescription struct {
@@ -144,7 +145,13 @@ func (awsMachineTemplate *awsMachineTemplateDescription) deleteAWSMachineTemplat
 
 func (gcpMachineTemplate *gcpMachineTemplateDescription) createGCPMachineTemplate(oc *exutil.CLI) {
 	e2e.Logf("Creating gcpMachineTemplate ...")
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", gcpMachineTemplate.template, "-p", "NAME="+gcpMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "IMAGE="+gcpMachineTemplate.image, "REGION="+gcpMachineTemplate.region, "CLUSTERID="+gcpMachineTemplate.clusterID, "MACHINETYPE="+gcpMachineTemplate.machineType, "SUBNETWORK="+gcpMachineTemplate.subnetwork)
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", gcpMachineTemplate.template, "-p", "NAME="+gcpMachineTemplate.name, "NAMESPACE="+clusterAPINamespace, "IMAGE="+gcpMachineTemplate.image, "REGION="+gcpMachineTemplate.region, "CLUSTERID="+gcpMachineTemplate.clusterID, "MACHINETYPE="+gcpMachineTemplate.machineType, "SUBNETWORK="+gcpMachineTemplate.subnetwork, "SERVICEACCOUNT="+gcpMachineTemplate.serviceAccount)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (gcpMachineTemplatepdbal *gcpMachineTemplateDescription) createGCPMachineTemplatePdBal(oc *exutil.CLI) {
+	e2e.Logf("Creating gcpMachineTemplate with pd balanced disk...")
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", gcpMachineTemplatepdbal.template, "-p", "NAME="+gcpMachineTemplatepdbal.name, "NAMESPACE="+clusterAPINamespace, "IMAGE="+gcpMachineTemplatepdbal.image, "REGION="+gcpMachineTemplatepdbal.region, "CLUSTERID="+gcpMachineTemplatepdbal.clusterID, "MACHINETYPE="+gcpMachineTemplatepdbal.machineType, "SUBNETWORK="+gcpMachineTemplatepdbal.subnetwork, "SERVICEACCOUNT="+gcpMachineTemplatepdbal.serviceAccount)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

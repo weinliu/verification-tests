@@ -15,7 +15,7 @@ objects:
           instanceType: ${MACHINETYPE}
           ipForwarding: Enabled
           rootDeviceSize: 128
-          rootDeviceType: pd-ssd
+          rootDeviceType: pd-balanced
           serviceAccounts:
             email: ${SERVICEACCOUNT}
             scopes:

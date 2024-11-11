@@ -13,49 +13,52 @@ import (
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc                             = exutil.NewCLI("capi-machines", exutil.KubeConfigPath())
-		iaasPlatform                   clusterinfra.PlatformType
-		clusterID                      string
-		region                         string
-		profile                        string
-		instanceType                   string
-		zone                           string
-		ami                            string
-		subnetName                     string
-		subnetID                       string
-		sgName                         string
-		image                          string
-		machineType                    string
-		subnetwork                     string
-		capiBaseDir                    string
-		clusterTemplate                string
-		awsMachineTemplateTemplate     string
-		gcpMachineTemplateTemplate     string
-		capiMachinesetAWSTemplate      string
-		capiMachinesetgcpTemplate      string
-		capiMachinesetvsphereTemplate  string
-		vsphereMachineTemplateTemplate string
-		vsphere_server                 string
-		diskGiB                        string
-		int_diskGiB                    int
-		datacenter                     string
-		datastore                      string
-		machineTemplate                string
-		folder                         string
-		resourcePool                   string
-		numCPUs                        string
-		int_numCPUs                    int
-		networkname                    string
-		memoryMiB                      string
-		int_memoryMiB                  int
+		oc                              = exutil.NewCLI("capi-machines", exutil.KubeConfigPath())
+		iaasPlatform                    clusterinfra.PlatformType
+		clusterID                       string
+		region                          string
+		profile                         string
+		instanceType                    string
+		zone                            string
+		ami                             string
+		subnetName                      string
+		subnetID                        string
+		sgName                          string
+		image                           string
+		machineType                     string
+		subnetwork                      string
+		serviceAccount                  string
+		capiBaseDir                     string
+		clusterTemplate                 string
+		awsMachineTemplateTemplate      string
+		gcpMachineTemplateTemplate      string
+		gcpMachineTemplateTemplatepdbal string
+		capiMachinesetAWSTemplate       string
+		capiMachinesetgcpTemplate       string
+		capiMachinesetvsphereTemplate   string
+		vsphereMachineTemplateTemplate  string
+		vsphere_server                  string
+		diskGiB                         string
+		int_diskGiB                     int
+		datacenter                      string
+		datastore                       string
+		machineTemplate                 string
+		folder                          string
+		resourcePool                    string
+		numCPUs                         string
+		int_numCPUs                     int
+		networkname                     string
+		memoryMiB                       string
+		int_memoryMiB                   int
 
-		err                error
-		cluster            clusterDescription
-		awsMachineTemplate awsMachineTemplateDescription
-		gcpMachineTemplate gcpMachineTemplateDescription
-		capiMachineSetAWS  capiMachineSetAWSDescription
-		capiMachineSetgcp  capiMachineSetgcpDescription
-		clusterNotInCapi   clusterDescriptionNotInCapi
+		err                     error
+		cluster                 clusterDescription
+		awsMachineTemplate      awsMachineTemplateDescription
+		gcpMachineTemplate      gcpMachineTemplateDescription
+		gcpMachineTemplatepdbal gcpMachineTemplateDescription
+		capiMachineSetAWS       capiMachineSetAWSDescription
+		capiMachineSetgcp       capiMachineSetgcpDescription
+		clusterNotInCapi        clusterDescriptionNotInCapi
 
 		vsphereMachineTemplate vsphereMachineTemplateDescription
 		capiMachineSetvsphere  capiMachineSetvsphereDescription
@@ -96,6 +99,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			subnetwork, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.networkInterfaces[0].subnetwork}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
+			serviceAccount, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachineset, randomMachinesetName, "-n", machineAPINamespace, "-o=jsonpath={.spec.template.spec.providerSpec.value.serviceAccounts[0].email}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
 		case clusterinfra.VSphere:
 			vsphere_server, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.vsphere.vcenters[0].server}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -135,6 +140,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 			awsMachineTemplateTemplate = filepath.Join(capiBaseDir, "machinetemplate-aws-id.yaml")
 		}
 		gcpMachineTemplateTemplate = filepath.Join(capiBaseDir, "machinetemplate-gcp.yaml")
+		gcpMachineTemplateTemplatepdbal = filepath.Join(capiBaseDir, "machinetemplate-gcp-pd-bal.yaml")
 		capiMachinesetAWSTemplate = filepath.Join(capiBaseDir, "machinesetaws.yaml")
 		capiMachinesetgcpTemplate = filepath.Join(capiBaseDir, "machinesetgcp.yaml")
 
@@ -163,14 +169,27 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 			template:     awsMachineTemplateTemplate,
 		}
 		gcpMachineTemplate = gcpMachineTemplateDescription{
-			name:        "gcp-machinetemplate",
-			region:      region,
-			image:       image,
-			machineType: machineType,
-			subnetwork:  subnetwork,
-			clusterID:   clusterID,
-			template:    gcpMachineTemplateTemplate,
+			name:           "gcp-machinetemplate",
+			region:         region,
+			image:          image,
+			machineType:    machineType,
+			subnetwork:     subnetwork,
+			serviceAccount: serviceAccount,
+			clusterID:      clusterID,
+			template:       gcpMachineTemplateTemplate,
 		}
+		//gcpMachineTemplateTemplate-pd-bal
+		gcpMachineTemplatepdbal = gcpMachineTemplateDescription{
+			name:           "gcp-machinetemplate",
+			region:         region,
+			image:          image,
+			machineType:    machineType,
+			subnetwork:     subnetwork,
+			serviceAccount: serviceAccount,
+			clusterID:      clusterID,
+			template:       gcpMachineTemplateTemplatepdbal,
+		}
+
 		capiMachineSetAWS = capiMachineSetAWSDescription{
 			name:        "capi-machineset",
 			clusterName: clusterID,
@@ -252,7 +271,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
-	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-Longduration-High-53100-Create machineset with CAPI on gcp [Disruptive][Slow]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-NonPreRelease-Longduration-High-53100-Medium-74794-Create machineset with CAPI on gcp [Disruptive][Slow]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.GCP)
 		skipForCAPINotExist(oc)
@@ -260,17 +279,41 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		g.By("Create capi machineset")
 		cluster.createCluster(oc)
 
-		defer gcpMachineTemplate.deleteGCPMachineTemplate(oc)
-		gcpMachineTemplate.createGCPMachineTemplate(oc)
+		// rootDeviceTypes included to cover multiple cases
+		rootDeviceTypes := map[string]string{
+			"pd-ssd":      "53100",
+			"pd-balanced": "74794",
+		}
+		for rootDeviceType, machineNameSuffix := range rootDeviceTypes {
 
-		capiMachineSetgcp.name = "capi-machineset-53100"
-		defer waitForCapiMachinesDisappergcp(oc, capiMachineSetgcp.name)
-		defer capiMachineSetgcp.deleteCapiMachineSetgcp(oc)
-		capiMachineSetgcp.createCapiMachineSetgcp(oc)
-		machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(capiMachine, "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-cluster-api").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = matchProviderIDWithNode(oc, capiMachine, machineName, "openshift-cluster-api")
-		o.Expect(err).NotTo(o.HaveOccurred())
+			g.By("Patching GCPMachineTemplate with rootDeviceType: " + rootDeviceType)
+			if rootDeviceType == "pd-ssd" {
+				gcpMachineTemplate.createGCPMachineTemplate(oc)
+			} else if rootDeviceType == "pd-balanced" {
+				gcpMachineTemplatepdbal.createGCPMachineTemplatePdBal(oc)
+			}
+			capiMachineSetgcp.name = "capi-machineset-" + machineNameSuffix
+			defer waitForCapiMachinesDisappergcp(oc, capiMachineSetgcp.name)
+			defer capiMachineSetgcp.deleteCapiMachineSetgcp(oc)
+			capiMachineSetgcp.createCapiMachineSetgcp(oc)
+
+			// Retrieve the machine name and validate it with the node
+			machineName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(capiMachine, "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-cluster-api").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			// Match the provider ID with the node for verification
+			_, err = matchProviderIDWithNode(oc, capiMachine, machineName, "openshift-cluster-api")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			// gcpmachinetemplate is immutable
+			capiMachineSetgcp.deleteCapiMachineSetgcp(oc)
+			waitForCapiMachinesDisappergcp(oc, capiMachineSetgcp.name)
+			if rootDeviceType == "pd-ssd" {
+				gcpMachineTemplate.deleteGCPMachineTemplate(oc)
+			} else if rootDeviceType == "pd-balanced" {
+				gcpMachineTemplatepdbal.deleteGCPMachineTemplate(oc)
+			}
+		}
 	})
 
 	// author: zhsun@redhat.com
