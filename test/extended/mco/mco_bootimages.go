@@ -38,7 +38,7 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 		preChecks(oc)
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74238-[P1] BootImages not updated by default [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74238-[P1][OnCLayer] BootImages not updated by default [Disruptive]", func() {
 		var (
 			fakeImageName            = "fake-coreos-bootimage-name"
 			duplicatedMachinesetName = "cloned-tc-74238"
@@ -69,7 +69,7 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74240-[P2] ManagedBootImages. Restore All MachineSet images [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74240-[P2][OnCLayer] ManagedBootImages. Restore All MachineSet images [Disruptive]", func() {
 		var (
 			fakeImageName = "fake-coreos-bootimage-name"
 
@@ -167,15 +167,15 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74239-ManagedBootImages. Restore Partial MachineSet images [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74239-[OnCLayer] ManagedBootImages. Restore Partial MachineSet images [Disruptive]", func() {
 		var (
 			fakeImageName = "fake-coreos-bootimage-name"
 
 			coreosBootimagesCM     = NewConfigMap(oc.AsAdmin(), MachineConfigNamespace, "coreos-bootimages")
 			machineSet             = NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAllOrFail()[0]
-			clonedMSLabelName      = "cloned-tc-74240-label"
-			clonedMSNoLabelName    = "cloned-tc-74240-no-label"
-			clonedMSLabelOwnedName = "cloned-tc-74240-label-owned"
+			clonedMSLabelName      = "cloned-tc-74239-label"
+			clonedMSNoLabelName    = "cloned-tc-74239-no-label"
+			clonedMSLabelOwnedName = "cloned-tc-74239-label-owned"
 			labelName              = "test"
 			labelValue             = "update"
 
@@ -262,7 +262,7 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74764-[P1] ManagedBootImages. Delete machineset when error [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74764-[P1][OnCLayer] ManagedBootImages. Delete machineset when error [Disruptive]", func() {
 		var (
 			machineConfiguration = GetMachineConfiguration(oc.AsAdmin())
 			machineSet           = NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAllOrFail()[0]
@@ -333,7 +333,7 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74751-[P2] ManagedBootImages. Fix errors [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-74751-[P2][OnCLayer] ManagedBootImages. Fix errors [Disruptive]", func() {
 		var (
 			coreosBootimagesCM          = NewConfigMap(oc.AsAdmin(), MachineConfigNamespace, "coreos-bootimages")
 			machineConfiguration        = GetMachineConfiguration(oc.AsAdmin())

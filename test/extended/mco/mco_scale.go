@@ -422,7 +422,7 @@ var _ = g.Describe("[sig-mco] MCO scale", func() {
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-73636-[P2] Pinned images in scaled nodes [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-73636-[P2][OnCLayer] Pinned images in scaled nodes [Disruptive]", func() {
 		// The pinnedimageset feature is currently only supported in techpreview
 		skipIfNoTechPreview(oc.AsAdmin())
 

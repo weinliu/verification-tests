@@ -179,7 +179,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		checkFixedAlert(oc, coMcp, expectedAlertName)
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-62075-MCCPoolAlert. Test support for a node pool hierarchy [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-62075-[OnCLayer] MCCPoolAlert. Test support for a node pool hierarchy [Disruptive]", func() {
 
 		var (
 			iMcpName              = "infra"
@@ -331,7 +331,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-75862-[P2] Add alert for users of deprecating the Image Registry workaround [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-75862-[P2][OnCLayer] Add alert for users of deprecating the Image Registry workaround [Disruptive]", func() {
 
 		var (
 			expectedAlertName                  = "MCODrainOverrideConfigMapAlert"

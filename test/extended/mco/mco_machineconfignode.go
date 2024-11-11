@@ -27,7 +27,7 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 		}
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Critical-69184-[P1] Enable feature gate MachineConfigNodes [Serial]", func() {
+	g.It("Author:rioliu-NonPreRelease-Critical-69184-[P1][OnCLayer] Enable feature gate MachineConfigNodes [Serial]", func() {
 		// need to check whether featureGate MachineConfigNodes is in enabled list
 		exutil.By("Check whether featureGate: MachineConfigNodes is enabled")
 		featureGate := NewResource(oc.AsAdmin(), "featuregate", "cluster")
@@ -36,7 +36,7 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 		o.Expect(enabled).Should(o.ContainSubstring("MachineConfigNodes"), "featureGate: MachineConfigNodes cannot be found")
 	})
 
-	g.It("Author:rioliu-NonPreRelease-High-69187-[P2] validate MachineConfigNodes properties [Serial]", func() {
+	g.It("Author:rioliu-NonPreRelease-High-69187-[P2][OnCLayer] validate MachineConfigNodes properties [Serial]", func() {
 
 		nodes := NewNodeList(oc.AsAdmin()).GetAllLinuxWorkerNodesOrFail()
 
@@ -73,7 +73,7 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Longduration-High-69197-validate MachineConfigNode condition status transition [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-69197-[OnCLayer] validate MachineConfigNode condition status transition [Disruptive]", func() {
 
 		var (
 			mcName     = "create-test-file"
@@ -162,7 +162,7 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Medium-69205-[P1] MachineConfigNode corresponding condition status is Unknown when node is degraded [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-Medium-69205-[P1][OnCLayer] MachineConfigNode corresponding condition status is Unknown when node is degraded [Disruptive]", func() {
 
 		var (
 			mcName            = "change-workers-extension-usbguard"
@@ -214,7 +214,7 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Longduration-High-69755-[P2] MachineConfigNode resources should be synced when node is created/deleted [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-69755-[P2][OnCLayer] MachineConfigNode resources should be synced when node is created/deleted [Disruptive]", func() {
 
 		var (
 			provisioningMachine Machine
@@ -280,7 +280,7 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-High-74644-[P2] Scope each MCN object to only be accessible from its associated MCD [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-High-74644-[P2][OnCLayer] Scope each MCN object to only be accessible from its associated MCD [Disruptive]", func() {
 		SkipIfSNO(oc.AsAdmin())
 		var (
 			nodes              = exutil.OrFail[[]Node](NewNodeList(oc.AsAdmin()).GetAllLinux())

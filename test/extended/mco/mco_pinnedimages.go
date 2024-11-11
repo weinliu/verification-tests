@@ -35,7 +35,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		preChecks(oc)
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-73659-[P1] Pinned images when disk-pressure [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-73659-[P1][OnCLayer] Pinned images when disk-pressure [Disruptive]", func() {
 		var (
 			waitForPinned                        = time.Minute * 5
 			pinnedImageSetName                   = "tc-73659-pin-images-disk-pressure"
@@ -124,7 +124,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-High-73623-[P2] Pin images [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-High-73623-[P2][OnCLayer] Pin images [Disruptive]", func() {
 		var (
 			waitForPinned      = time.Minute * 5
 			pinnedImageSetName = "tc-73623-pin-images"
@@ -183,7 +183,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-73653-Pinned images with a ImageDigestMirrorSet mirroring a single repository [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-73653-[OnCLayer] Pinned images with a ImageDigestMirrorSet mirroring a single repository [Disruptive]", func() {
 		var (
 			idmsName    = "tc-73653-mirror-single-repository"
 			idmsMirrors = `[{"mirrors":["quay.io/openshifttest/busybox"], "source": "example-repo.io/digest-example/mybusy", "mirrorSourcePolicy":"NeverContactSource"}]`
@@ -195,7 +195,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		DigestMirrorTest(oc, mcp, idmsName, idmsMirrors, pinnedImage, pinnedImageSetName)
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-73657-[P1] Pinned images with a ImageDigestMirrorSet mirroring a domain [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-73657-[P1][OnCLayer] Pinned images with a ImageDigestMirrorSet mirroring a domain [Disruptive]", func() {
 		var (
 			idmsName    = "tc-73657-mirror-domain"
 			idmsMirrors = `[{"mirrors":["quay.io:443"], "source": "example-domain.io:443", "mirrorSourcePolicy":"NeverContactSource"}]`
@@ -207,7 +207,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		DigestMirrorTest(oc, mcp, idmsName, idmsMirrors, pinnedImage, pinnedImageSetName)
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-73361-[P2] Pinnedimageset invalid pinned images [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-73361-[P2][OnCLayer] Pinnedimageset invalid pinned images [Disruptive]", func() {
 		var (
 			invalidPinnedImage = "quay.io/openshiftfake/fakeimage@sha256:0415f56ccc05526f2af5a7ae8654baec97d4a614f24736e8eef41a4591f08019"
 			pinnedImageSetName = "tc-73361-invalid-pinned-image"
@@ -240,7 +240,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-73631-Pinned images garbage collection [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-73631-[OnCLayer] Pinned images garbage collection [Disruptive]", func() {
 		var (
 			waitForPinned       = time.Minute * 5
 			pinnedImageSetName  = "tc-73631-pinned-images-garbage-collector"
@@ -310,7 +310,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-73635-[P1] Pod can use pinned images while no access to the registry [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-73635-[P1][OnCLayer] Pod can use pinned images while no access to the registry [Disruptive]", func() {
 		var (
 			waitForPinned      = time.Minute * 5
 			pinnedImageSetName = "tc-73635-pinned-images-no-registry"
@@ -430,7 +430,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-73630-[P2] Pin release images [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-73630-[P2][OnCLayer] Pin release images [Disruptive]", func() {
 		var (
 			waitForPinned            = time.Minute * 30
 			pinnedImageSetName       = "tc-73630-pinned-imageset-release"
@@ -461,7 +461,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 
 	})
 
-	g.It("Author:sserafin-NonHyperShiftHOST-NonPreRelease-Longduration-High-73648-A rebooted node reconciles with the pinned images status [Disruptive]", func() {
+	g.It("Author:sserafin-NonHyperShiftHOST-NonPreRelease-Longduration-High-73648-[OnCLayer] A rebooted node reconciles with the pinned images status [Disruptive]", func() {
 		var (
 			waitForPinned      = time.Minute * 5
 			pinnedImageSetName = "tc-73648-pinned-image"
