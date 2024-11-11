@@ -1455,5 +1455,17 @@ func GetLastNLines(s string, n int) string {
 		return strings.Join(lines[lenLines-n:], "\n")
 	}
 	return strings.Join(lines, "\n")
+}
 
+// RemoveDuplicates remove duplicated values from a slice
+func RemoveDuplicates[T comparable](list []T) []T {
+	allKeys := make(map[T]bool)
+	fileterdList := []T{}
+	for _, item := range list {
+		if !allKeys[item] {
+			allKeys[item] = true
+			fileterdList = append(fileterdList, item)
+		}
+	}
+	return fileterdList
 }

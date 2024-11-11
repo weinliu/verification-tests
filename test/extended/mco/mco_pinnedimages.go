@@ -434,7 +434,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		var (
 			waitForPinned            = time.Minute * 30
 			pinnedImageSetName       = "tc-73630-pinned-imageset-release"
-			pinnedImages             = getReleaseInfoPullspecOrFail(oc.AsAdmin())
+			pinnedImages             = RemoveDuplicates(getReleaseInfoPullspecOrFail(oc.AsAdmin()))
 			node                     = mcp.GetNodesOrFail()[0]
 			minGigasAvailableInNodes = 40
 		)
@@ -560,7 +560,8 @@ func getReleaseInfoPullspecOrFail(oc *exutil.CLI) []string {
 	o.Expect(master.CopyFromLocal(adminKubeConfig, remoteAdminKubeConfig)).To(o.Succeed(),
 		"Error copying kubeconfig file to master node")
 
-	stdout, _, err := master.DebugNodeWithChrootStd("oc", "adm", "release", "info", "-o", "pullspec", "--registry-config", "/var/lib/kubelet/config.json", "--kubeconfig", remoteAdminKubeConfig)
+	releaseInfoCommand := fmt.Sprintf("oc adm release info -o pullspec --registry-config /var/lib/kubelet/config.json --kubeconfig %s", remoteAdminKubeConfig)
+	stdout, _, err := master.DebugNodeWithChrootStd("sh", "-c", "set -a; source /etc/mco/proxy.env; "+releaseInfoCommand)
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting image release pull specs")
 	return strings.Split(stdout, "\n")
 }
