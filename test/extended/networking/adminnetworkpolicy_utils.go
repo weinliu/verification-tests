@@ -721,8 +721,13 @@ func checkSpecificPolicyStatus(oc *exutil.CLI, policyType string, policyName str
 
 func getPolicyMetrics(oc *exutil.CLI, metricsName string, expectedValue string, addArgs ...string) (bool, error) {
 	metricsValue := ""
-	if len(addArgs) > 0 {
-		e2e.Logf("Obtaining meterics for %s rule and %s action", addArgs[0], addArgs[1])
+	switch argCount := len(addArgs); argCount {
+	case 1:
+		e2e.Logf("Obtaining metrics %s for DB Object - %s", metricsName, addArgs[0])
+	case 2:
+		e2e.Logf("Obtaining metrics %s for %s rule and %s action", metricsName, addArgs[0], addArgs[1])
+	default:
+		e2e.Logf("Obtaining metrics %s without any additional arguments", metricsName)
 	}
 	result := true
 	olmToken, err := exutil.GetSAToken(oc)
@@ -743,13 +748,17 @@ func getPolicyMetrics(oc *exutil.CLI, metricsName string, expectedValue string, 
 				if !(strings.Contains((metricMap["direction"]).String(), addArgs[0]) && strings.Contains((metricMap["action"]).String(), addArgs[1])) {
 					continue
 				}
+			} else if strings.Contains((metricMap["__name__"]).String(), "db") {
+				if !(strings.Contains((metricMap["table_name"]).String(), addArgs[0])) {
+					continue
+				}
 			}
 			val := gjson.Get(output, "data.result."+strconv.Itoa(index)+".value")
 			metricsValue = strings.TrimSuffix(strings.Split(val.String(), ",")[1], "]")
 		}
 		if !strings.Contains(metricsValue, expectedValue) {
 			result = false
-			e2e.Logf("The value for %s is %s not as expected", metricsName, expectedValue)
+			e2e.Logf("The value for %s is not %s as expected", metricsName, expectedValue)
 			return result, nil
 		} else {
 			result = true

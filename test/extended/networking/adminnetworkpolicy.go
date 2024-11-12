@@ -1099,7 +1099,7 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 		checkACLLogs(oc, nsList[1], coloredPods[nsList[1]], subjectNs, coloredPods[subjectNs], "fail", aclLogSearchString, ovnkubeNodeColoredPods[subjectNs], false)
 
 	})
-	g.It("Author:asood-High-73604-[FdpOvnOvs] BANP and ANP validation", func() {
+	g.It("Author:asood-High-73604-BANP and ANP validation. [Serial]", func() {
 		var (
 			testID           = "73604"
 			testDataDir      = exutil.FixturePath("testdata", "networking")
@@ -1548,7 +1548,7 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 		}
 	})
 
-	g.It("Author:asood-High-73331-[FdpOvnOvs] BANP and ANP metrics are available. [Serial]", func() {
+	g.It("Author:asood-High-73331-BANP and ANP metrics are available. [Serial]", func() {
 		var (
 			testID                   = "73331"
 			testDataDir              = exutil.FixturePath("testdata", "networking")
@@ -1569,11 +1569,14 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 		// Initialize variables
 		banpMetricsList := []string{"ovnkube_controller_baseline_admin_network_policies", "ovnkube_controller_baseline_admin_network_policies_db_objects", "ovnkube_controller_baseline_admin_network_policies_rules"}
 		anpMetricsList := []string{"ovnkube_controller_admin_network_policies", "ovnkube_controller_admin_network_policies_db_objects", "ovnkube_controller_admin_network_policies_rules"}
-		expectedBANPMetricsValue[banpMetricsList[0]] = "1"
-		expectedBANPMetricsValue[banpMetricsList[1]] = "2"
-		expectedANPMetricsValue[anpMetricsList[0]] = "1"
-		expectedANPMetricsValue[anpMetricsList[1]] = "1"
 		actionList := []string{"Allow", "Deny", "Pass"}
+		dbObjects := []string{"ACL", "Address_Set"}
+		expectedBANPMetricsValue[banpMetricsList[0]] = "1"
+		expectedBANPMetricsValue[dbObjects[0]] = "2"
+		expectedANPMetricsValue[anpMetricsList[0]] = "1"
+		expectedANPMetricsValue[dbObjects[0]] = "1"
+
+		ipStackType := checkIPStackType(oc)
 
 		exutil.By("1. Create a BANP with two rules with Allow action for Ingress and Deny action for Egress")
 		banpCR := multiPodMixedRuleBANPPolicyResource{
@@ -1606,10 +1609,17 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(output, banpCR.name)).To(o.BeTrue())
 
-		exutil.By(fmt.Sprintf("2. Validate %s and %s metrics for BANP", banpMetricsList[0], banpMetricsList[1]))
+		exutil.By(fmt.Sprintf("2.1 Validate %s metrics for BANP", banpMetricsList[0]))
+		getPolicyMetrics(oc, banpMetricsList[0], expectedBANPMetricsValue[banpMetricsList[0]])
+		// Address set
+		if ipStackType == "dualstack" {
+			expectedBANPMetricsValue[dbObjects[1]] = "4"
+		} else {
+			expectedBANPMetricsValue[dbObjects[1]] = "2"
+		}
 		for i := 0; i < 2; i++ {
-			getPolicyMetrics(oc, banpMetricsList[i], expectedBANPMetricsValue[banpMetricsList[i]])
-
+			exutil.By(fmt.Sprintf("2.2.%d Validate %s - %s metrics for BANP", i, banpMetricsList[1], dbObjects[i]))
+			getPolicyMetrics(oc, banpMetricsList[1], expectedBANPMetricsValue[dbObjects[i]], dbObjects[i])
 		}
 
 		banpEgress[actionList[1]] = "1"
@@ -1650,10 +1660,18 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(output, anpCR.name)).To(o.BeTrue())
+		// Address set
+		if ipStackType == "dualstack" {
+			expectedANPMetricsValue[dbObjects[1]] = "2"
+		} else {
+			expectedANPMetricsValue[dbObjects[1]] = "1"
+		}
 
-		exutil.By(fmt.Sprintf("7. Validate %s and %s metrics for ANP %s", anpMetricsList[0], anpMetricsList[1], anpCR.name))
+		exutil.By(fmt.Sprintf("7.1 Validate %s metrics for ANP %s", anpMetricsList[0], anpCR.name))
+		getPolicyMetrics(oc, anpMetricsList[0], expectedANPMetricsValue[anpMetricsList[0]])
 		for i := 0; i < 2; i++ {
-			getPolicyMetrics(oc, anpMetricsList[i], expectedANPMetricsValue[anpMetricsList[i]])
+			exutil.By(fmt.Sprintf("7.2.%d Validate %s - %s metrics  for ANP %s", i, anpMetricsList[1], dbObjects[i], anpCR.name))
+			getPolicyMetrics(oc, anpMetricsList[1], expectedANPMetricsValue[dbObjects[i]], dbObjects[i])
 		}
 		ruleDirection = "Ingress"
 		anpIngress[actionList[1]] = "1"
@@ -1693,10 +1711,19 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 		getPolicyMetrics(oc, anpMetricsList[2], anpEgress[actionList[2]], ruleDirection, actionList[2])
 
 		expectedANPMetricsValue[anpMetricsList[0]] = "2"
-		expectedANPMetricsValue[anpMetricsList[1]] = "3"
-		exutil.By(fmt.Sprintf("12. Validate %s and %s metrics for both ANP policies", anpMetricsList[0], anpMetricsList[1]))
+		expectedANPMetricsValue[dbObjects[0]] = "3"
+		// Address set
+		if ipStackType == "dualstack" {
+			expectedANPMetricsValue[dbObjects[1]] = "6"
+		} else {
+			expectedANPMetricsValue[dbObjects[1]] = "3"
+		}
+
+		exutil.By(fmt.Sprintf("12.1 Validate %s metrics for both ANP policies", anpMetricsList[0]))
+		getPolicyMetrics(oc, anpMetricsList[0], expectedANPMetricsValue[anpMetricsList[0]])
 		for i := 0; i < 2; i++ {
-			getPolicyMetrics(oc, anpMetricsList[i], expectedANPMetricsValue[anpMetricsList[i]])
+			exutil.By(fmt.Sprintf("12.2.%d Validate %s - %s metrics for both ANP policies", i, anpMetricsList[1], dbObjects[i]))
+			getPolicyMetrics(oc, anpMetricsList[1], expectedANPMetricsValue[dbObjects[i]], dbObjects[i])
 		}
 
 	})
