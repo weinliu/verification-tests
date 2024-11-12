@@ -116,13 +116,17 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			exutil.By("# Create deployment with the created pvc and wait for the volume should be mounted failed")
 			dep.create(oc)
 			defer dep.deleteAsAdmin(oc)
+			var podsList []string
+			o.Eventually(func() []string {
+				podsList = dep.getPodListWithoutFilterStatus(oc)
+				return podsList
+			}, 60*time.Second, 5*time.Second).ShouldNot(o.BeEmpty())
 			o.Eventually(func() string {
-				output := describePod(oc, dep.namespace, dep.getPodListWithoutFilterStatus(oc)[0])
+				output := describePod(oc, dep.namespace, podsList[0])
 				return output
 			}, 120*time.Second, 5*time.Second).Should(o.ContainSubstring("MountVolume.MountDevice failed for volume \"" + pvc.getVolumeName(oc) + "\""))
 
 			exutil.By("# Check volume mount failure alert node name match for " + alertName)
-			podsList := dep.getPodListWithoutFilterStatus(oc)
 			nodeName, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("-n", dep.namespace, "pod/"+podsList[0], "-o", "jsonpath='{.spec.nodeName}'").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !checkAlertNodeNameMatchDesc(oc, alertName, strings.Trim(nodeName, "'")) {
@@ -208,8 +212,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			exutil.By("# Create deployment with the created pvc and wait for the volume should be attached failed")
 			dep.create(oc)
 			defer dep.deleteAsAdmin(oc)
+			var podsList []string
+			o.Eventually(func() []string {
+				podsList = dep.getPodListWithoutFilterStatus(oc)
+				return podsList
+			}, 60*time.Second, 5*time.Second).ShouldNot(o.BeEmpty())
 			o.Eventually(func() string {
-				output := describePod(oc, dep.namespace, dep.getPodListWithoutFilterStatus(oc)[0])
+				output := describePod(oc, dep.namespace, podsList[0])
 				return output
 			}, 120*time.Second, 5*time.Second).Should(o.ContainSubstring("AttachVolume.Attach failed for volume \"" + pv.name + "\""))
 
