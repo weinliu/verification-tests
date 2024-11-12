@@ -3,6 +3,7 @@ import { testName } from '../../upstream/support';
 import { Deployment } from "views/deployment";
 import { Pages } from "views/pages";
 import { guidedTour } from '../../upstream/views/guided-tour';
+import { importYamlPage } from "views/yaml-page";
 
 describe('show warning info for resources', () => {
   before(() => {
@@ -43,7 +44,7 @@ describe('show warning info for resources', () => {
     cy.contains(`${WARNING_BAR}`).should('exist');
 
     cy.visit(`/k8s/cluster/projects/${testName}/yaml`);
-    cy.byTestID('import-yaml').click();
+    importYamlPage.open();
     cy.wait(3000);
     cy.get('.ocs-yaml-editor__root')
         .selectFile('./fixtures/warning-policy/multiple-import.yaml', {action: 'drag-drop'});
