@@ -287,6 +287,46 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		exutil.By("################### Test phase finished ######################")
 	})
+
+	// author: pewang@redhat.com
+	// OCP-77579 - [vSphere CSI Driver] should mount volume succeed on multipath enabled nodes
+	// https://issues.redhat.com/browse/OCPBUGS-33798
+	g.It("Author:pewang-NonHyperShiftHOST-High-77579-[vSphere CSI Driver][bz-storage] should mount volume succeed on multipath enabled nodes [Disruptive]", func() {
+
+		// Set the resource definition for the scenario
+		var (
+			storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
+			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate        = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			myPvc              = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName("thin-csi"))
+			myPod              = newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(myPvc.name))
+			myNode             = getOneSchedulableWorker(getAllNodesInfo(oc))
+		)
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject()
+
+		exutil.By("# Enable multipath on myNode")
+		_, enableMultipathdErr := execCommandInSpecificNode(oc, myNode.name, "touch /etc/multipath.conf && systemctl restart multipathd")
+		o.Expect(enableMultipathdErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to enable multipathd on node %q", myNode.name))
+		defer func() {
+			_, recoverMultipathdErr := execCommandInSpecificNode(oc, myNode.name, "rm -f /etc/multipath.conf && systemctl restart multipathd")
+			o.Expect(recoverMultipathdErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to recover multipathd configuration on node %q", myNode.name))
+		}()
+
+		exutil.By("# Create a pvc with the preset csi storageclass")
+		myPvc.create(oc)
+		defer myPvc.deleteAsAdmin(oc)
+
+		exutil.By("# Create pod with the created pvc and wait for the pod ready")
+		// Schedule the pod to the multipath enabled node
+		myPod.createWithNodeAffinity(oc, "kubernetes.io/hostname", "In", []string{myNode.name})
+		defer myPod.deleteAsAdmin(oc)
+		myPod.waitReady(oc)
+
+		exutil.By("# Check the pod volume can be read and write")
+		myPod.checkMountedVolumeCouldRW(oc)
+	})
 })
 
 // function to check storage cluster operator common steps
