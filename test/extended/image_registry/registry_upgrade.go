@@ -159,6 +159,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: xiuwang@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-PreChkUpgrade-Author:xiuwang-Critical-24345-Set proxy in Image-registry-operator before upgrade", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 		g.By("Check if it's a proxy cluster")
 		httpProxy, httpsProxy, noProxy := saveGlobalProxy(oc)
 		if !strings.Contains(httpProxy, "http") {

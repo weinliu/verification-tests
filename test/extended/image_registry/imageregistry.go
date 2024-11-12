@@ -117,6 +117,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("Author:wewang-LEVEL0-Critical-24262-Image registry operator can read/overlap global proxy setting [Disruptive]", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 		var (
 			buildFile = filepath.Join(imageRegistryBaseDir, "inputimage.yaml")
 			buildsrc  = bcSource{
@@ -2102,6 +2105,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	// author: jitli@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:jitli-Medium-12766-Allow imagestream request build config triggers by different mode", func() {
 
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to build not installed")
+		}
 		oc.SetupProject()
 		g.By("Import an image to create imagestream")
 		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/ruby-27@sha256:8f71dd40e3f55d90662a63cb9f02b59e75ed7ac1e911c7919fd14fbfad431348", "ruby-test12766:latest", "-n", oc.Namespace()).Execute()
@@ -3885,6 +3891,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	g.It("Author:xiuwang-High-56905-Medium-56925-Retrieve and describe image manifest list", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 		g.By("Create manifest imagestream")
 		var object imageObject
 		err := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/ruby-27@sha256:8f71dd40e3f55d90662a63cb9f02b59e75ed7ac1e911c7919fd14fbfad431348", "ruby56905:latest", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
@@ -3988,6 +3997,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	g.It("Author:xiuwang-ConnectedOnly-Critical-61973-High-61974-import-mode add to new-app/new-build to support manifest list", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 		cmds := [2]string{"new-app", "new-build"}
 		for _, cmd := range cmds {
 			g.By("With bad import mode")
@@ -4626,6 +4638,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:wewang-Medium-68181-OpenShift APIServer should performs a GET request to valid endpoint results in API server [Disruptive]", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 		g.By("In default image registry cluster Managed")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.managementState}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -4824,6 +4839,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	g.It("Author:xiuwang-NonHyperShiftHOST-Critical-73769-Add chunksize for s3 api compatible object storage [Disruptive]", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 
 		g.By("Add chunkSizeMiB parameter")

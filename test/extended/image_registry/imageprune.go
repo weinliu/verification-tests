@@ -183,6 +183,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	//Author: xiuwang@redhat.com
 	g.It("Author:xiuwang-Medium-15126-Registry hard prune procedure works well [Serial]", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 		if !checkRegistryUsingFSVolume(oc) {
 			g.Skip("Skip for cloud storage")
 		}
@@ -354,6 +357,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	//author: wewang@redhat.com
 	g.It("ConnectedOnly-Author:wewang-High-16495-High-19196-No prune layer of a valid Image due to minimum aging and prune images when DC reference to invalid image [Disruptive]", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 		SkipDnsFailure(oc)
 		// TODO: remove this skip when the builds v1 API will support producing manifest list images
 		architecture.SkipArchitectures(oc, architecture.MULTI)
