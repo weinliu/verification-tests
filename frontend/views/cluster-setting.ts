@@ -8,7 +8,7 @@ export const ClusterSettingPage = {
   goToConsolePlugins: () => {
     cy.visit('/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins');
     cy.wait(30000);
-    cy.get('th[data-label="Name"]',{timeout: 60000}).should('exist');
+    cy.get('tbody tr', {timeout: 30000});
   },
   clickToClustSettingDetailTab: () => cy.get('[data-test-id="horizontal-link-Details"]').click(),
   checkUpstreamUrlDisabled: () => cy.get('button[data-test-id*="upstream-server-url"]').should("have.attr", "aria-disabled").and("eq", "true"),

@@ -33,6 +33,7 @@ describe('features for get started resources', () => {
     cy.get('button[data-test~="user-impersonation"]').as('user-impersonate-button').should('exist');
     cy.get('@user-impersonate-button').click();
     cy.get('[data-test="quickstart drawer"]').should('exist');
+    cy.get('[data-testid="qs-drawer-close"] button').click();
     cy.exec(`oc get packagemanifests.packages.operators.coreos.com --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | grep lightspeed-operator`, {failOnNonZeroExit: false}).then((result) => {
       if (result.stdout.includes('lightspeed')) {
         Overview.ExploreNewFeature('OpenShift Lightspeed');
