@@ -64,7 +64,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("externaldns", crName).Output()
 		// To avoid connection refused flake error, as the controller CR creation needs extra prepare time after the operator pod is ready
 		time.Sleep(3 * time.Second)
-		sedCmd := fmt.Sprintf(`sed -i 's/basedomain/%s/g' %s`, baseDomain, sampleAWS)
+		sedCmd := fmt.Sprintf(`sed -i'' -e 's/basedomain/%s/g' %s`, baseDomain, sampleAWS)
 		_, err = exec.Command("bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sampleAWS).Output()
@@ -263,5 +263,81 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", routeNamespace, "route", routeName, delLabel, "--overwrite").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Desired change: DELETE canary-openshift-ingress-canary.apps."+baseDomain+" CNAME [Id: /hostedzone/"+privateZoneId+"]")
+	})
+})
+
+var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS on STS should", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc                = exutil.NewCLI("externaldnssts", exutil.KubeConfigPath())
+		operatorNamespace = "external-dns-operator"
+		operatorLabel     = "name=external-dns-operator"
+		operandLabelKey   = "app.kubernetes.io/instance="
+		addLabel          = "external-dns.mydomain.org/publish=yes"
+		delLabel          = "external-dns.mydomain.org/publish-"
+		recordsReadyLog   = "All records are already up to date"
+	)
+	g.BeforeEach(func() {
+		// skip ARM64 arch
+		architecture.SkipNonAmd64SingleArch(oc)
+	})
+
+	// this case runs only on AWS STS and hypershift cluster
+	g.It("Author:mjoseph-ConnectedOnly-ROSA-OSD_CCS-High-74949-ExternalDNS operand support on STS cluster", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "extdns")
+			sampleAWSSTS        = filepath.Join(buildPruningBaseDir, "sample-aws-sts-rt.yaml")
+			crName              = "sample-aws-sts-rt"
+			operandLabel        = operandLabelKey + crName
+			routeNamespace      = "openshift-ingress-canary"
+			routeName           = "canary"
+		)
+
+		exutil.By("1. Ensure the case is runnable on the cluster")
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		if !exutil.IsSTSCluster(oc) {
+			g.Skip("Skip for non-STS cluster")
+		}
+		// this case cannot be executed on a shared vpc cluster
+		privateZoneIAMRole, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.platform.aws}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(privateZoneIAMRole, "privateZoneIAMRole") {
+			g.Skip("Skipping since this case will not run on a shared vpc cluster")
+		}
+
+		exutil.By("2. Create the External DNS Operator")
+		createExternalDNSOperator(oc)
+		waitErr := waitForPodWithLabelReady(oc, operatorNamespace, operatorLabel)
+		exutil.AssertWaitPollNoErr(waitErr, "the external dns operator pod is not ready")
+
+		exutil.By("3. Prepare the STS related credentials like role, policy and secret for the cluster")
+		defer clearUpExDnsStsCluster(oc, "74949")
+		prepareStsCredForCluster(oc, "74949")
+
+		exutil.By("4. Create STS ExternalDNS CR `sample-aws-sts-rt` and ensure operand pod is ready")
+		baseDomain := getBaseDomain(oc)
+		// get the Hosted zone ID from AWS route53
+		privateZoneID := getPrivateZoneID(oc, baseDomain)
+		updateFilebySedCmd(sampleAWSSTS, "basedomain", baseDomain)
+		updateFilebySedCmd(sampleAWSSTS, "privatezone", privateZoneID)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("externaldns", crName).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sampleAWSSTS).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandLabel)
+		exutil.AssertWaitPollNoErr(waitErr, "the external dns operand pod is not ready")
+		ensureLogsContainString(oc, operatorNamespace, operandLabel, recordsReadyLog)
+
+		exutil.By("5. Add label to canary route, ensure ExternalDNS added the record")
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", routeNamespace, "route", routeName, delLabel, "--overwrite").Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", routeNamespace, "route", routeName, addLabel).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Desired change: CREATE external-dns-canary-openshift-ingress-canary")
+
+		exutil.By("6. Remove label from the canary route, ensure ExternalDNS deleted the record")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", routeNamespace, "route", routeName, delLabel, "--overwrite").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Desired change: DELETE external-dns-canary-openshift-ingress-canary")
 	})
 })
