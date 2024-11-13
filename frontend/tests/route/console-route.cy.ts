@@ -26,6 +26,7 @@ describe('console-route', () => {
       .then(result => expect(result.stdout).contains(params.host));
     cy.adminCLI('oc patch ingress.config cluster --type merge -p \'{"spec":{"appsDomain":"testdomain.com"}}\'');
     cy.adminCLI('oc delete route console -n openshift-console');
+    cy.wait(5000);
     cy.checkCommandResult('oc get route -n openshift-console', 'console', { retries: 5, interval: 5000 });
     cy.adminCLI('oc get route console -n openshift-console -o template --template="{{.spec.host}}"')
       .then(result => expect(result.stdout).contains(params.host));
