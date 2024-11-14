@@ -904,6 +904,20 @@ var _ = g.Describe("[sig-apps] Workloads test kcm works well", func() {
 			checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="KubeDeploymentReplicasMismatch"}'`, token, "replicas-mismatch", 600)
 		}
 	})
+
+	g.It("Author:yinzhou-ROSA-OSD_CCS-ARO-Medium-73886-Validate for alert KubeJobFailed", func() {
+		resourceBaseDir := exutil.FixturePath("testdata", "workloads")
+		jobFile := filepath.Join(resourceBaseDir, "kubejobfailed-73886.yaml")
+
+		defer oc.AsAdmin().Run("delete").Args("-f", jobFile, "-n", "default").Execute()
+		err := oc.AsAdmin().Run("create").Args("-f", jobFile, "-n", "default").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		token, err := exutil.GetSAToken(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="KubeJobFailed"}'`, token, "fail-job", 600)
+	})
 })
 
 var _ = g.Describe("[sig-cli] Workloads kube-controller-manager on Microshift", func() {
