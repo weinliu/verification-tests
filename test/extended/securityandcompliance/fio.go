@@ -95,6 +95,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 	g.It("Author:xiyuan-LEVEL0-NonHyperShiftHOST-ConnectedOnly-ROSA-ARO-OSD_CCS-WRS-Critical-34388-High-27760-V-EST.01-check file-integrity-operator could report failure and persist the failure logs on to a ConfigMap [Serial]", func() {
 		g.By("Create fileintegrity")
 		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.debug = true
 		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace,
 			"GRACEPERIOD="+strconv.Itoa(fi1.graceperiod), "DEBUG="+strconv.FormatBool(fi1.debug), "NODESELECTORKEY="+fi1.nodeselectorkey, "NODESELECTORVALUE="+fi1.nodeselectorvalue)
 		o.Expect(err).NotTo(o.HaveOccurred())

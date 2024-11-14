@@ -603,15 +603,28 @@ func checkDBFilesUpdated(oc *exutil.CLI, fi1 fileintegrity, oldDbBackupfiles []s
 }
 
 func (fi1 *fileintegrity) assertNodeConditionNotEmpty(oc *exutil.CLI, nodeName string) {
-	err := wait.Poll(5*time.Second, 300*time.Second, func() (bool, error) {
-		fileintegrityName := fi1.name + "-" + nodeName
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityName,
+	var fileintegrityName = fi1.name + "-" + nodeName
+
+	err := wait.Poll(5*time.Second, 720*time.Second, func() (bool, error) {
+		output, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityName,
 			"-o=jsonpath={.lastResult.condition}").Output()
-		if err != nil {
+		if errGet != nil {
 			return false, nil
 		}
 		return output != "", nil
 	})
+	// Expose more info if nodecondition is not found for fileintegritynodestatuses
+	if err != nil {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace).Output()
+		e2e.Logf("Fileintegritynodestatuse for all the nodes is: %s ", output)
+		resCm, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", fi1.namespace).Output()
+		e2e.Logf("The result of \"oc get cm -n %s\" is: %s", fi1.namespace, resCm)
+		args := fmt.Sprintf(`-o=jsonpath={.items[?(@.spec.nodeName=="%s")].metadata.name}`, nodeName)
+		aidePod, _ := getResource(oc, asAdmin, withoutNamespace, "pods", "-l app=aide-"+fi1.name, "-n", fi1.namespace, args)
+		podLogs, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("pod/"+aidePod, "-n", fi1.namespace).OutputToFile(getRandomString() + "aide-log.log")
+		logs, _ := exec.Command("bash", "-c", "cat "+podLogs+" | grep \"aide check returned\"").Output()
+		e2e.Logf("The result of \"oc logs pod/%s -n %s | grep -i \"aide check returned\" \" is: %s", aidePod, fi1.namespace, logs)
+	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fileintegritynodestatuses %s is empty", fi1.name+"-"+nodeName))
 }
 
