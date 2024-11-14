@@ -721,18 +721,50 @@ func CopyToFile(fromPath string, toFilename string) string {
 func ExecCommandOnPod(oc *exutil.CLI, podname string, namespace string, command string) string {
 	var podOutput string
 	var execpodErr error
+
 	errExec := wait.PollUntilContextTimeout(context.Background(), 15*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 		podOutput, execpodErr = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespace, podname, "--", "/bin/sh", "-c", command).Output()
 		podOutput = strings.TrimSpace(podOutput)
+		e2e.Logf("Attempting to execute command on pod %v. Output: %v, Error: %v", podname, podOutput, execpodErr)
+
 		if execpodErr != nil {
-			return false, nil
+			// Check for TLS internal error and handle CSR approval if detected, https://access.redhat.com/solutions/4307511
+			matchTLS, _ := regexp.MatchString(`(?i)tls.*internal error`, podOutput)
+			if matchTLS {
+				e2e.Logf("Detected TLS error in output for pod %v: %v", podname, podOutput)
+
+				// Attempt to approve any pending CSRs
+				getCsr, getCsrErr := getPendingCSRs(oc)
+				if getCsrErr != nil {
+					e2e.Logf("Error retrieving pending CSRs: %v", getCsrErr)
+					return false, nil
+				}
+
+				for _, csr := range getCsr {
+					e2e.Logf("Approving CSR: %v", csr)
+					appCsrErr := oc.WithoutNamespace().AsAdmin().Run("adm").Args("certificate", "approve", csr).Execute()
+					if appCsrErr != nil {
+						e2e.Logf("Error approving CSR %v: %v", csr, appCsrErr)
+						return false, nil
+					}
+				}
+
+				e2e.Logf("Pending CSRs approved. Retrying command on pod %v...", podname)
+				return false, nil
+			} else {
+				e2e.Logf("Command execution error on pod %v: %v", podname, execpodErr)
+				return false, nil
+			}
 		} else if podOutput != "" {
+			e2e.Logf("Successfully retrieved non-empty output from pod %v: %v", podname, podOutput)
 			return true, nil
 		} else {
+			e2e.Logf("Received empty output from pod %v. Retrying...", podname)
 			return false, nil
 		}
 	})
-	exutil.AssertWaitPollNoErr(errExec, fmt.Sprintf("Not able to run command on pod %v :: %v :: %v :: %v", podname, command, podOutput, execpodErr))
+
+	exutil.AssertWaitPollNoErr(errExec, fmt.Sprintf("Unable to run command on pod %v :: %v :: Output: %v :: Error: %v", podname, command, podOutput, execpodErr))
 	return podOutput
 }
 
