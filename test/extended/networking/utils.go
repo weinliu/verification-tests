@@ -4121,3 +4121,23 @@ func (namedPortPod *namedPortPodResource) createNamedPortPod(oc *exutil.CLI) {
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create named port pod %v", namedPortPod.name))
 }
+
+func cpOVNKubeTraceToLocal(oc *exutil.CLI, dstPath string) {
+	exutil.By("Copy the ovnkube-trace binary file to local host")
+	nodeList, getNodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+	o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+	podName := ovnkubeNodePod(oc, nodeList.Items[0].Name)
+	outputs, cmdErr := exec.Command("bash", "-c", "cat /etc/redhat-release").Output()
+	o.Expect(cmdErr).NotTo(o.HaveOccurred())
+	e2e.Logf("rhel version is: %s", string(outputs))
+	srcFile := "/usr/lib/rhel8/ovnkube-trace"
+	if strings.Contains(string(outputs), "Red Hat Enterprise Linux release 9") {
+		srcFile = "/usr/bin/ovnkube-trace"
+	}
+	mkdirErr := os.MkdirAll(dstPath, 0777)
+	o.Expect(mkdirErr).NotTo(o.HaveOccurred())
+	cpErr := oc.AsAdmin().WithoutNamespace().Run("cp").Args("openshift-ovn-kubernetes/"+podName+":"+srcFile, dstPath+"/ovnkube-trace", "--retries=5").Execute()
+	o.Expect(cpErr).NotTo(o.HaveOccurred())
+	chmodErr := exec.Command("bash", "-c", "chmod +x "+dstPath+"/ovnkube-trace").Run()
+	o.Expect(chmodErr).NotTo(o.HaveOccurred())
+}
