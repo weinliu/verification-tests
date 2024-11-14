@@ -181,6 +181,8 @@ class SummaryClient:
             return True
         if "context was not found for specified context" in message:
             return True
+        if "received unexpected HTTP status" in message:
+            return True
         if re.search("Get \"https:.*: EOF",message):
             return True
         if re.search("\"https:.*: unexpected EOF",message):
