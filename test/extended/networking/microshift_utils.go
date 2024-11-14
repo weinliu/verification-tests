@@ -14,6 +14,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
+	netutils "k8s.io/utils/net"
 )
 
 // get file contents to be modified for Ushift
@@ -122,6 +123,19 @@ func removeIPRules(oc *exutil.CLI, nodePort, nodeIP, nodeName string) {
 
 func checkIPrules(oc *exutil.CLI, nodePort, nodeIP, iprules string) bool {
 	regexText := fmt.Sprintf("tcp dport %v ip daddr %v drop", nodePort, nodeIP)
+	re := regexp.MustCompile(regexText)
+	found := re.MatchString(iprules)
+	if found {
+		e2e.Logf("%s --Line found.", regexText)
+		return true
+	} else {
+		e2e.Logf("%s --Line not found.", regexText)
+		return false
+	}
+
+}
+func checkIPv6rules(oc *exutil.CLI, nodePort, nodeIP, iprules string) bool {
+	regexText := fmt.Sprintf("tcp dport %v ip6 daddr %v drop", nodePort, nodeIP)
 	re := regexp.MustCompile(regexText)
 	found := re.MatchString(iprules)
 	if found {
@@ -277,4 +291,78 @@ func getMicroshiftPodMultiNetworks(oc *exutil.CLI, namespace string, podName str
 	o.Expect(err1).NotTo(o.HaveOccurred())
 	podIPv6 := strings.TrimSpace(podv6Output)
 	return podIPv4, podIPv6
+}
+
+func checkMicroshiftIPStackType(oc *exutil.CLI) string {
+	podNetwork, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("pod", "-n", "openshift-dns", "-l", "dns.operator.openshift.io/daemonset-node-resolver",
+		"-o=jsonpath='{ .items[*].status.podIPs[*].ip }'").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("pod network is %v", podNetwork)
+
+	if strings.Count(podNetwork, ":") >= 2 && strings.Count(podNetwork, ".") >= 2 {
+		return "dualstack"
+	} else if strings.Count(podNetwork, ":") >= 2 {
+		return "ipv6single"
+	} else if strings.Count(podNetwork, ".") >= 2 {
+		return "ipv4single"
+	}
+	return ""
+}
+
+// Return IPv6
+func getMicroshiftNodeIPV6(oc *exutil.CLI) string {
+	ipStack := checkMicroshiftIPStackType(oc)
+	o.Expect(ipStack).ShouldNot(o.BeEmpty())
+	o.Expect(ipStack).NotTo(o.Equal("ipv4single"))
+	nodeName := getMicroshiftNodeName(oc)
+	if ipStack == "ipv6single" {
+		e2e.Logf("Its a Single Stack Cluster, either IPv4 or IPv6")
+		InternalIP, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[?(@.type==\"InternalIP\")].address}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The node's Internal IP is %q", InternalIP)
+		return InternalIP
+	}
+	if ipStack == "dualstack" {
+		e2e.Logf("Its a Dual Stack Cluster")
+		InternalIP1, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[0].address}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The node's 1st Internal IP is %q", InternalIP1)
+		InternalIP2, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[1].address}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The node's 2nd Internal IP is %q", InternalIP2)
+		if netutils.IsIPv6String(InternalIP1) {
+			return InternalIP1
+		}
+		return InternalIP2
+	}
+	return ""
+}
+
+// Return IPv6 and IPv4 in vars respectively for Dual Stack and IPv4/IPv6 in 2nd var for single stack Clusters, and var1 will be nil in those cases
+func getMicroshiftNodeIP(oc *exutil.CLI, nodeName string) (string, string) {
+	ipStack := checkMicroshiftIPStackType(oc)
+	if (ipStack == "ipv6single") || (ipStack == "ipv4single") {
+		e2e.Logf("Its a Single Stack Cluster, either IPv4 or IPv6")
+		InternalIP, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[?(@.type==\"InternalIP\")].address}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The node's Internal IP is %q", InternalIP)
+		return "", InternalIP
+	}
+	e2e.Logf("Its a Dual Stack Cluster")
+	InternalIP1, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[0].address}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The node's 1st Internal IP is %q", InternalIP1)
+	InternalIP2, err := oc.AsAdmin().Run("get").Args("node", nodeName, "-o=jsonpath={.status.addresses[1].address}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The node's 2nd Internal IP is %q", InternalIP2)
+	if netutils.IsIPv6String(InternalIP1) {
+		return InternalIP1, InternalIP2
+	}
+	return InternalIP2, InternalIP1
+}
+
+func getMicroshiftNodeName(oc *exutil.CLI) string {
+	nodeName, err := oc.AsAdmin().Run("get").Args("nodes", "-o=jsonpath={.items[0].metadata.name}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return nodeName
 }

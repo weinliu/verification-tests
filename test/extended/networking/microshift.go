@@ -22,8 +22,15 @@ import (
 
 var _ = g.Describe("[sig-networking] SDN microshift", func() {
 	defer g.GinkgoRecover()
+	var (
+		oc          = exutil.NewCLIWithoutNamespace("SDN-microshift")
+		ipStackType string
+	)
 
-	var oc = exutil.NewCLIWithoutNamespace("SDN-microshift")
+	g.BeforeEach(func() {
+		ipStackType = checkMicroshiftIPStackType(oc)
+		e2e.Logf("This cluster is %s microshift", ipStackType)
+	})
 
 	// author: anusaxen@redhat.com
 	g.It("MicroShiftOnly-Author:anusaxen-Critical-60331-mixed ingress and egress policies can work well", func() {
@@ -37,39 +44,49 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			egressTypeFile      = filepath.Join(buildPruningBaseDir, "networkpolicy/egress_49696.yaml")
 			ingressTypeFile     = filepath.Join(buildPruningBaseDir, "networkpolicy/ingress_49696.yaml")
 		)
-		g.By("Create 1st namespace for the scenario")
+		exutil.By("Create 1st namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace1)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace1)
 
-		g.By("create test pods")
+		exutil.By("create test pods")
 		createResourceFromFile(oc, e2eTestNamespace1, testPodFile)
 		createResourceFromFile(oc, e2eTestNamespace1, helloSdnFile)
 		exutil.AssertWaitPollNoErr(waitForPodWithLabelReady(oc, e2eTestNamespace1, "name=test-pods"), fmt.Sprintf("this pod with label name=test-pods in ns/%s not ready", e2eTestNamespace1))
 		exutil.AssertWaitPollNoErr(waitForPodWithLabelReady(oc, e2eTestNamespace1, "name=hellosdn"), fmt.Sprintf("this pod with label name=hellosdn in ns/%s not ready", e2eTestNamespace1))
 		hellosdnPodNameNs1 := getPodName(oc, e2eTestNamespace1, "name=hellosdn")
 
-		g.By("create egress type networkpolicy in ns1")
+		exutil.By("create egress type networkpolicy in ns1")
 		createResourceFromFile(oc, e2eTestNamespace1, egressTypeFile)
 
-		g.By("create ingress type networkpolicy in ns1")
+		exutil.By("create ingress type networkpolicy in ns1")
 		createResourceFromFile(oc, e2eTestNamespace1, ingressTypeFile)
 
-		g.By("#. Create 2nd namespace for the scenario")
+		exutil.By("#. Create 2nd namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace2)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace2)
 
-		g.By("create test pods in second namespace")
+		exutil.By("create test pods in second namespace")
 		createResourceFromFile(oc, e2eTestNamespace2, helloSdnFile)
 		exutil.AssertWaitPollNoErr(waitForPodWithLabelReady(oc, e2eTestNamespace2, "name=hellosdn"), fmt.Sprintf("this pod with label name=hellosdn in ns/%s not ready", e2eTestNamespace2))
 
-		g.By("Get IP of the test pods in second namespace.")
+		exutil.By("Get IP of the test pods in second namespace.")
 		hellosdnPodNameNs2 := getPodName(oc, e2eTestNamespace2, "name=hellosdn")
-		hellosdnPodIP1Ns2 := getPodIPv4(oc, e2eTestNamespace2, hellosdnPodNameNs2[0])
+		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
+			hellosdnPodIP1Ns2 := getPodIPv4(oc, e2eTestNamespace2, hellosdnPodNameNs2[0])
 
-		g.By("curl from ns1 hellosdn pod to ns2 pod")
-		_, err := e2eoutput.RunHostCmd(e2eTestNamespace1, hellosdnPodNameNs1[0], "curl --connect-timeout 5  -s "+net.JoinHostPort(hellosdnPodIP1Ns2, "8080"))
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
+			exutil.By("curl from ns1 hellosdn pod to ns2 pod")
+			_, err := e2eoutput.RunHostCmd(e2eTestNamespace1, hellosdnPodNameNs1[0], "curl --connect-timeout 5  -s "+net.JoinHostPort(hellosdnPodIP1Ns2, "8080"))
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
+		}
+		if ipStackType == "ipv6single" || ipStackType == "dualstack" {
+
+			hellosdnPodIP1Ns2_v6 := getPodIPv6(oc, e2eTestNamespace2, hellosdnPodNameNs2[0], ipStackType)
+			exutil.By("curl from ns1 hellosdn pod to ns2 pod")
+			_, err := e2eoutput.RunHostCmd(e2eTestNamespace1, hellosdnPodNameNs1[0], "curl --connect-timeout 5  -s "+net.JoinHostPort(hellosdnPodIP1Ns2_v6, "8080"))
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(err.Error()).Should(o.ContainSubstring("exit status 28"))
+		}
 
 	})
 
@@ -80,9 +97,10 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			baseDir          = exutil.FixturePath("testdata", "networking")
 			e2eTestNamespace = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
 			allowfromsameNS  = filepath.Join(baseDir, "networkpolicy/allow-from-same-namespace.yaml")
+			svcIP            string
 		)
 
-		g.By("Create a namespace for the scenario")
+		exutil.By("Create a namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
@@ -92,7 +110,7 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			"$label":     "hello-pod",
 		}
 
-		g.By("create 1st hello pod in namespace")
+		exutil.By("create 1st hello pod in namespace")
 		createPingPodforUshift(oc, pod_pmtrs)
 		waitPodReady(oc, e2eTestNamespace, "hello-pod1")
 
@@ -101,54 +119,91 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			"$namespace": e2eTestNamespace,
 			"$label":     "hello-pod",
 		}
-		g.By("create 2nd hello pod in same namespace")
+		exutil.By("create 2nd hello pod in same namespace")
 		createPingPodforUshift(oc, pod_pmtrs)
 		waitPodReady(oc, e2eTestNamespace, "hello-pod2")
 
-		//ipFamilyPolicy and externalTrafficPolicy are left blank which would get default values
 		svc_pmtrs := map[string]string{
 			"$servicename":           "test-service",
 			"$namespace":             e2eTestNamespace,
 			"$label":                 "test-service",
 			"$internalTrafficPolicy": "Cluster",
 			"$externalTrafficPolicy": "",
-			"$ipFamilyPolicy":        "",
+			"$ipFamilyPolicy":        "PreferDualStack",
 			"$selector":              "hello-pod",
 			"$serviceType":           "ClusterIP",
 		}
 		createServiceforUshift(oc, svc_pmtrs)
 
-		g.By("create allow-from-same-namespace ingress networkpolicy in ns")
+		exutil.By("create allow-from-same-namespace ingress networkpolicy in ns")
 		createResourceFromFile(oc, e2eTestNamespace, allowfromsameNS)
 
-		g.By("Get Pod IPs")
-		helloPod1IP := getPodIPv4(oc, e2eTestNamespace, "hello-pod1")
-		helloPod2IP := getPodIPv4(oc, e2eTestNamespace, "hello-pod2")
+		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
+			exutil.By("Get Pod IPs")
+			helloPod1IP := getPodIPv4(oc, e2eTestNamespace, "hello-pod1")
+			helloPod2IP := getPodIPv4(oc, e2eTestNamespace, "hello-pod2")
 
-		g.By("Get svc IP")
-		svcIP := getSvcIPv4(oc, e2eTestNamespace, "test-service")
+			exutil.By("Get svc IP")
+			svcIP = getSvcIPv4(oc, e2eTestNamespace, "test-service")
 
-		g.By("curl hello-pod1 to hello-pod2")
-		output, err := e2eoutput.RunHostCmd(e2eTestNamespace, "hello-pod1", "curl --connect-timeout 5 -s "+net.JoinHostPort(helloPod1IP, "8080"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
-
-		g.By("curl hello-pod2 to hello-pod1")
-		output, err = e2eoutput.RunHostCmd(e2eTestNamespace, "hello-pod2", "curl --connect-timeout 5 -s "+net.JoinHostPort(helloPod2IP, "8080"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
-
-		for i := 0; i < 5; i++ {
-
-			g.By("curl hello-pod1 to service:port")
-			output, err = e2eoutput.RunHostCmd(e2eTestNamespace, "hello-pod1", "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP, "27017"))
+			exutil.By("curl hello-pod1 to hello-pod2")
+			output, err := e2eoutput.RunHostCmd(e2eTestNamespace, "hello-pod1", "curl --connect-timeout 5 -s "+net.JoinHostPort(helloPod1IP, "8080"))
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
 
-			g.By("curl hello-pod2 to service:port")
-			output, err = e2eoutput.RunHostCmd(e2eTestNamespace, "hello-pod2", "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP, "27017"))
+			exutil.By("curl hello-pod2 to hello-pod1")
+			output, err = e2eoutput.RunHostCmd(e2eTestNamespace, "hello-pod2", "curl --connect-timeout 5 -s "+net.JoinHostPort(helloPod2IP, "8080"))
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+
+			for i := 0; i < 5; i++ {
+
+				exutil.By("curl hello-pod1 to service:port")
+				output, err = e2eoutput.RunHostCmd(e2eTestNamespace, "hello-pod1", "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP, "27017"))
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+
+				exutil.By("curl hello-pod2 to service:port")
+				output, err = e2eoutput.RunHostCmd(e2eTestNamespace, "hello-pod2", "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP, "27017"))
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+			}
+		}
+		if ipStackType == "ipv6single" || ipStackType == "dualstack" {
+			exutil.By("Get Pod IPs")
+			helloPod1IP := getPodIPv6(oc, e2eTestNamespace, "hello-pod1", ipStackType)
+			helloPod2IP := getPodIPv6(oc, e2eTestNamespace, "hello-pod2", ipStackType)
+
+			exutil.By("Get svc IP")
+			if ipStackType == "ipv6single" {
+				svcIP = getSvcIPv6SingleStack(oc, e2eTestNamespace, "test-service")
+			} else {
+				svcIP = getSvcIPv6(oc, e2eTestNamespace, "test-service")
+			}
+
+			exutil.By("curl hello-pod1 to hello-pod2")
+			output, err := e2eoutput.RunHostCmd(e2eTestNamespace, "hello-pod1", "curl --connect-timeout 5 -s "+net.JoinHostPort(helloPod1IP, "8080"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+
+			exutil.By("curl hello-pod2 to hello-pod1")
+			output, err = e2eoutput.RunHostCmd(e2eTestNamespace, "hello-pod2", "curl --connect-timeout 5 -s "+net.JoinHostPort(helloPod2IP, "8080"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+
+			for i := 0; i < 5; i++ {
+
+				exutil.By("curl hello-pod1 to service:port")
+				output, err = e2eoutput.RunHostCmd(e2eTestNamespace, "hello-pod1", "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP, "27017"))
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+
+				exutil.By("curl hello-pod2 to service:port")
+				output, err = e2eoutput.RunHostCmd(e2eTestNamespace, "hello-pod2", "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP, "27017"))
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+			}
+
 		}
 	})
 
@@ -164,11 +219,11 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			allowtoBlue       = filepath.Join(baseDir, "microshift/np-allow-to-blue.yaml")
 		)
 
-		g.By("Create a namespace for the scenario")
+		exutil.By("Create a namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace1)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace1)
 
-		g.By("create 4 test pods in e2enamespace1")
+		exutil.By("create 4 test pods in e2enamespace1")
 		for i := 0; i < 4; i++ {
 			pod_pmtrs := map[string]string{
 				"$podname":   "test-pod" + strconv.Itoa(i),
@@ -181,10 +236,16 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 
 		var testPodNS1 [4]string
 		var testPodIPNS1 [4]string
-		g.By("Get IP of the test pods in e2eTestNamespace1 namespace.")
+		var testPodIPNS1_v6 [4]string
+		exutil.By("Get IP of the test pods in e2eTestNamespace1 namespace.")
 		for i := 0; i < 4; i++ {
 			testPodNS1[i] = strings.Join(getPodName(oc, e2eTestNamespace1, "name=test-pod"+strconv.Itoa(i)), "")
-			testPodIPNS1[i] = getPodIPv4(oc, e2eTestNamespace1, testPodNS1[i])
+			if ipStackType == "ipv4single" || ipStackType == "dualstack" {
+				testPodIPNS1[i] = getPodIPv4(oc, e2eTestNamespace1, testPodNS1[i])
+			}
+			if ipStackType == "ipv6single" || ipStackType == "dualstack" {
+				testPodIPNS1_v6[i] = getPodIPv6(oc, e2eTestNamespace1, testPodNS1[i], ipStackType)
+			}
 		}
 
 		// label pod0 and pod1 with type=red and type=blue respectively in e2eTestNamespace1
@@ -193,11 +254,11 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		err = exutil.LabelPod(oc, e2eTestNamespace1, testPodNS1[1], "type=blue")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Create 2nd namespace for the scenario")
+		exutil.By("Create 2nd namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace2)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace2)
 
-		g.By("create 2 test pods in e2enamespace1")
+		exutil.By("create 2 test pods in e2enamespace1")
 		for i := 0; i < 2; i++ {
 			pod_pmtrs := map[string]string{
 				"$podname":   "test-pod" + strconv.Itoa(i),
@@ -209,54 +270,94 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		}
 		var testPodNS2 [2]string
 		var testPodIPNS2 [2]string
-		g.By("Get IP of the test pods in e2eTestNamespace2 namespace.")
+		var testPodIPNS2_v6 [2]string
+		exutil.By("Get IP of the test pods in e2eTestNamespace2 namespace.")
 		for i := 0; i < 2; i++ {
 			testPodNS2[i] = strings.Join(getPodName(oc, e2eTestNamespace2, "name=test-pod"+strconv.Itoa(i)), "")
-			testPodIPNS2[i] = getPodIPv4(oc, e2eTestNamespace2, testPodNS2[i])
+			if ipStackType == "ipv4single" || ipStackType == "dualstack" {
+				testPodIPNS2[i] = getPodIPv4(oc, e2eTestNamespace2, testPodNS2[i])
+			}
+			if ipStackType == "ipv6single" || ipStackType == "dualstack" {
+				testPodIPNS2_v6[i] = getPodIPv6(oc, e2eTestNamespace2, testPodNS2[i], ipStackType)
+			}
 		}
 
 		// label pod0 with type=red in e2eTestNamespace2
 		err = exutil.LabelPod(oc, e2eTestNamespace2, testPodNS2[0], "type=red")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("create default deny ingress type networkpolicy in 1st namespace")
+		exutil.By("create default deny ingress type networkpolicy in 1st namespace")
 		createResourceFromFile(oc, e2eTestNamespace1, ingressTypeFile)
 
-		g.By("create allow-from-red and allow-from-blue type networkpolicy in 1st namespace")
+		exutil.By("create allow-from-red and allow-from-blue type networkpolicy in 1st namespace")
 		createResourceFromFile(oc, e2eTestNamespace1, allowfromRed)
 		createResourceFromFile(oc, e2eTestNamespace1, allowtoBlue)
 
-		g.By("Try to access the pod in e2eTestNamespace1 from each pod")
-		g.By("curl testPodNS10 to testPodNS13")
-		output, err := e2eoutput.RunHostCmd(e2eTestNamespace1, testPodNS1[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1[3], "8080"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+		exutil.By("Try to access the pod in e2eTestNamespace1 from each pod")
+		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
+			exutil.By("curl testPodNS10 to testPodNS13")
+			output, err := e2eoutput.RunHostCmd(e2eTestNamespace1, testPodNS1[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1[3], "8080"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
 
-		g.By("curl testPodNS12 to testPodNS11")
-		output, err = e2eoutput.RunHostCmd(e2eTestNamespace1, testPodNS1[2], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1[1], "8080"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+			exutil.By("curl testPodNS12 to testPodNS11")
+			output, err = e2eoutput.RunHostCmd(e2eTestNamespace1, testPodNS1[2], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1[1], "8080"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
 
-		g.By("curl testPodNS12 to testPodNS13")
-		output, err = e2eoutput.RunHostCmd(e2eTestNamespace1, testPodNS1[2], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1[3], "8080"))
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(output).ShouldNot(o.ContainSubstring("Hello OpenShift"))
+			exutil.By("curl testPodNS12 to testPodNS13")
+			output, err = e2eoutput.RunHostCmd(e2eTestNamespace1, testPodNS1[2], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1[3], "8080"))
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(output).ShouldNot(o.ContainSubstring("Hello OpenShift"))
 
-		g.By("Try to access the pod from e2eTestNamespace2 now")
-		g.By("curl testPodNS20 to testPodNS13")
-		output, err = e2eoutput.RunHostCmd(e2eTestNamespace2, testPodNS2[1], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1[3], "8080"))
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(output).ShouldNot(o.ContainSubstring("Hello OpenShift"))
+			exutil.By("Try to access the pod from e2eTestNamespace2 now")
+			exutil.By("curl testPodNS20 to testPodNS13")
+			output, err = e2eoutput.RunHostCmd(e2eTestNamespace2, testPodNS2[1], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1[3], "8080"))
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(output).ShouldNot(o.ContainSubstring("Hello OpenShift"))
 
-		g.By("curl testPodNS21 to testPodNS11")
-		output, err = e2eoutput.RunHostCmd(e2eTestNamespace2, testPodNS2[1], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1[1], "8080"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+			exutil.By("curl testPodNS21 to testPodNS11")
+			output, err = e2eoutput.RunHostCmd(e2eTestNamespace2, testPodNS2[1], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1[1], "8080"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
 
-		g.By("curl testPodNS21 to testPodNS13")
-		output, err = e2eoutput.RunHostCmd(e2eTestNamespace2, testPodNS2[1], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1[3], "8080"))
-		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(output).ShouldNot(o.ContainSubstring("Hello OpenShift"))
+			exutil.By("curl testPodNS21 to testPodNS13")
+			output, err = e2eoutput.RunHostCmd(e2eTestNamespace2, testPodNS2[1], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1[3], "8080"))
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(output).ShouldNot(o.ContainSubstring("Hello OpenShift"))
+		}
+		if ipStackType == "ipv6single" || ipStackType == "dualstack" {
+			exutil.By("curl testPodNS10 to testPodNS13")
+			output, err := e2eoutput.RunHostCmd(e2eTestNamespace1, testPodNS1[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1_v6[3], "8080"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+
+			exutil.By("curl testPodNS12 to testPodNS11")
+			output, err = e2eoutput.RunHostCmd(e2eTestNamespace1, testPodNS1[2], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1_v6[1], "8080"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+
+			exutil.By("curl testPodNS12 to testPodNS13")
+			output, err = e2eoutput.RunHostCmd(e2eTestNamespace1, testPodNS1[2], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1_v6[3], "8080"))
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(output).ShouldNot(o.ContainSubstring("Hello OpenShift"))
+
+			exutil.By("Try to access the pod from e2eTestNamespace2 now")
+			exutil.By("curl testPodNS20 to testPodNS13")
+			output, err = e2eoutput.RunHostCmd(e2eTestNamespace2, testPodNS2[1], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1_v6[3], "8080"))
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(output).ShouldNot(o.ContainSubstring("Hello OpenShift"))
+
+			exutil.By("curl testPodNS21 to testPodNS11")
+			output, err = e2eoutput.RunHostCmd(e2eTestNamespace2, testPodNS2[1], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1_v6[1], "8080"))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+
+			exutil.By("curl testPodNS21 to testPodNS13")
+			output, err = e2eoutput.RunHostCmd(e2eTestNamespace2, testPodNS2[1], "curl --connect-timeout 5 -s "+net.JoinHostPort(testPodIPNS1_v6[3], "8080"))
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(output).ShouldNot(o.ContainSubstring("Hello OpenShift"))
+		}
 
 	})
 
@@ -268,11 +369,11 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			namespace           = "test-60290"
 		)
 
-		g.By("create namespace")
+		exutil.By("create namespace")
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(namespace)
 		oc.CreateSpecifiedNamespaceAsAdmin(namespace)
 
-		g.By("create test pods with rc and service")
+		exutil.By("create test pods with rc and service")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", testSvcFile, "-n", namespace).Execute()
 		createResourceFromFile(oc, namespace, testSvcFile)
 		waitForPodWithLabelReady(oc, namespace, "name=test-pods")
@@ -280,12 +381,12 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		o.Expect(svcErr).NotTo(o.HaveOccurred())
 		o.Expect(svcOutput).To(o.ContainSubstring("test-service"))
 
-		g.By("idle test-service")
+		exutil.By("idle test-service")
 		idleOutput, idleErr := oc.AsAdmin().WithoutNamespace().Run("idle").Args("-n", namespace, "test-service").Output()
 		o.Expect(idleErr).NotTo(o.HaveOccurred())
 		o.Expect(idleOutput).To(o.ContainSubstring("The service \"%v/test-service\" has been marked as idled", namespace))
 
-		g.By("check test pods are terminated")
+		exutil.By("check test pods are terminated")
 		getPodOutput := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 			output, getPodErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace).Output()
 			o.Expect(getPodErr).NotTo(o.HaveOccurred())
@@ -300,7 +401,7 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 
 		// for micorshift: unidling is not supported now, and manual re-scaling the replicas is required
 		// https://issues.redhat.com/browse/USHIFT-503
-		g.By("re-scaling the replicas")
+		exutil.By("re-scaling the replicas")
 		_, rescaleErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("replicationcontroller/test-rc", "-n", namespace, "-p", "{\"spec\":{\"replicas\":2}}", "--type=merge").Output()
 		o.Expect(rescaleErr).NotTo(o.HaveOccurred())
 		waitForPodWithLabelReady(oc, namespace, "name=test-pods")
@@ -314,29 +415,43 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			ns                  = "test-ocp-60550"
 		)
 
-		g.By("create a test namespace")
+		exutil.By("create a test namespace")
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(ns)
 		oc.CreateSpecifiedNamespaceAsAdmin(ns)
 		defer exutil.RecoverNamespaceRestricted(oc, ns)
 		exutil.SetNamespacePrivileged(oc, ns)
 
-		g.By("create a test pod")
+		exutil.By("create a test pod")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", testPodFile, "-n", ns).Execute()
 		createResourceFromFile(oc, ns, testPodFile)
 		waitForPodWithLabelReady(oc, ns, "name=hostport-pod")
 
-		g.By("Get the ready-schedulable worker nodes")
+		exutil.By("Get the ready-schedulable worker nodes")
 		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
 
-		g.By("Get the IP address from the worker node")
-		nodeIP := getNodeIPv4(oc, ns, nodeList.Items[0].Name)
+		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
 
-		g.By("Verify the pod should be accessible via nodeIP:hostport")
-		ipv4URL := net.JoinHostPort(nodeIP, "9500")
-		curlOutput, err := exutil.DebugNode(oc, nodeList.Items[0].Name, "curl", ipv4URL, "--connect-timeout", "5")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(curlOutput).To(o.ContainSubstring("Hello Hostport Pod"))
+			exutil.By("Get the IP address from the worker node")
+			nodeIPv4 := getNodeIPv4(oc, ns, nodeList.Items[0].Name)
+
+			exutil.By("Verify the pod should be accessible via nodeIP:hostport")
+			ipv4URL := net.JoinHostPort(nodeIPv4, "9500")
+			curlOutput, err := exutil.DebugNode(oc, nodeList.Items[0].Name, "curl", ipv4URL, "--connect-timeout", "5")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(curlOutput).To(o.ContainSubstring("Hello Hostport Pod"))
+		}
+		if ipStackType == "ipv6single" || ipStackType == "dualstack" {
+			exutil.By("Get the IP address from the worker node")
+			nodeIPv6 := getMicroshiftNodeIPV6(oc)
+
+			exutil.By("Verify the pod should be accessible via nodeIP:hostport")
+			ipv6URL := net.JoinHostPort(nodeIPv6, "9500")
+			curlOutput, err := exutil.DebugNode(oc, nodeList.Items[0].Name, "curl", ipv6URL, "--connect-timeout", "5")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(curlOutput).To(o.ContainSubstring("Hello Hostport Pod"))
+		}
+
 	})
 
 	// author: anusaxen@redhat.com
@@ -351,6 +466,10 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			serviceName      string
 			output           string
 		)
+		if ipStackType == "ipv6single" {
+			// can not run on ipv6 as secondary nic doesn't have available ipv6 address.
+			g.Skip("this case can only run on ipv4")
+		}
 
 		exutil.By("Create a namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
@@ -460,9 +579,11 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			etp              string
 			itp              string
 			nodeName         string
-			nodeIP           string
 			serviceName      string
 			output           string
+			nodeIPlist       []string
+			nodeIP           string
+			svcURL           string
 		)
 
 		exutil.By("Create a namespace for the scenario")
@@ -492,7 +613,14 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 
 		nodeName, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", e2eTestNamespace, "pod", "hello-pod-0", "-o=jsonpath={.spec.nodeName}").Output()
 		o.Expect(podErr).NotTo(o.HaveOccurred())
-		nodeIP = getNodeIPv4(oc, e2eTestNamespace, nodeName)
+
+		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
+			nodeIP = getNodeIPv4(oc, e2eTestNamespace, nodeName)
+		} else {
+			nodeIP = getMicroshiftNodeIPV6(oc)
+		}
+
+		e2e.Logf("nodeip list is %v", nodeIPlist)
 
 		policy := [2]string{"Cluster", "Local"}
 
@@ -526,8 +654,9 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			svcPort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, serviceName, "-o=jsonpath={.spec.ports[*].port}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			svcURL := net.JoinHostPort(nodeIP, svcPort)
 			if serviceName == "lbtest-etp-itp-cluster" {
+
+				svcURL = net.JoinHostPort(nodeIP, svcPort)
 				//Access service from host networked pod
 				exutil.By(fmt.Sprintf("Curl LoadBalance service %s", serviceName))
 				output, err = exutil.DebugNode(oc, nodeName, "curl", svcURL, "-s", "--connect-timeout", "5")
@@ -537,6 +666,8 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 				exutil.By(fmt.Sprintf("Delete lb service %s", serviceName))
 				err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", serviceName, "-n", e2eTestNamespace).Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
+
+				svcURL = net.JoinHostPort(nodeIP, svcPort)
 				//firewalld entries are removed when service is deleted
 				exutil.By(fmt.Sprintf("Curl LoadBalance service %s again", serviceName))
 				output, err = exutil.DebugNode(oc, nodeName, "curl", svcURL, "-s", "--connect-timeout", "5")
@@ -544,6 +675,8 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 				o.Expect(output).ShouldNot(o.ContainSubstring("Hello OpenShift"))
 
 			} else {
+
+				svcURL = net.JoinHostPort(nodeIP, svcPort)
 				// Access service from within cluster from pod on cluster network
 				exutil.By(fmt.Sprintf("Curl loadbalance Service %s from within cluster", serviceName))
 				output, err = e2eoutput.RunHostCmd(e2eTestNamespace, "test-pod", "curl --connect-timeout 5 -s "+svcURL)
@@ -554,12 +687,14 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 				err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", serviceName, "-n", e2eTestNamespace).Execute()
 				o.Expect(err).NotTo(o.HaveOccurred())
 
+				svcURL = net.JoinHostPort(nodeIP, svcPort)
 				exutil.By(fmt.Sprintf("Curl loadbalance Service %s again from within cluster", serviceName))
 				output, err = e2eoutput.RunHostCmd(e2eTestNamespace, "test-pod", "curl --connect-timeout 5 -s "+svcURL)
 				o.Expect(err).To(o.HaveOccurred())
 				o.Expect(output).ShouldNot(o.ContainSubstring("Hello OpenShift"))
 
 			}
+
 		}
 
 	})
@@ -568,9 +703,10 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		var (
 			caseID           = "61218"
 			e2eTestNamespace = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
+			nodeIP           string
 		)
 
-		g.By("Create a namespace for the scenario")
+		exutil.By("Create a namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
@@ -580,11 +716,11 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			"$label":     "hello-pod",
 		}
 
-		g.By("creating hello pod in namespace")
+		exutil.By("creating hello pod in namespace")
 		createPingPodforUshift(oc, pod_pmtrs)
 		waitPodReady(oc, e2eTestNamespace, "hello-pod")
 
-		g.By("Create one loadbalance service")
+		exutil.By("Create one loadbalance service")
 		svc_pmtrs := map[string]string{
 			"$servicename":           "lbtest",
 			"$namespace":             e2eTestNamespace,
@@ -597,7 +733,7 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		}
 		createServiceforUshift(oc, svc_pmtrs)
 
-		g.By("Create second loadbalance service")
+		exutil.By("Create second loadbalance service")
 		svc_pmtrs2 := map[string]string{
 			"$servicename":           "lbtest2",
 			"$namespace":             e2eTestNamespace,
@@ -610,32 +746,36 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		}
 		createServiceforUshift(oc, svc_pmtrs2)
 
-		g.By("Get service port and NodeIP value")
+		exutil.By("Get service port and NodeIP value")
 
 		svcPort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, "lbtest", "-o=jsonpath={.spec.ports[*].port}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		nodeName, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", e2eTestNamespace, "pod", "hello-pod", "-o=jsonpath={.spec.nodeName}").Output()
 		o.Expect(podErr).NotTo(o.HaveOccurred())
-		nodeIP := getNodeIPv4(oc, e2eTestNamespace, nodeName)
+		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
+			nodeIP = getNodeIPv4(oc, e2eTestNamespace, nodeName)
+		} else {
+			nodeIP = getMicroshiftNodeIPV6(oc)
+		}
 
-		g.By("Check first lb service get node ip")
+		exutil.By("Check first lb service get node ip")
 		lbIngressip, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, "lbtest", "-o=jsonpath={.status.loadBalancer.ingress[*].ip}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(lbIngressip).Should(o.ContainSubstring(nodeIP))
 
-		g.By("Check second lb service should't get node ip")
+		exutil.By("Check second lb service should't get node ip")
 		lbIngressip2, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, "lbtest2", "-o=jsonpath={.status.loadBalancer.ingress[*].ip}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(lbIngressip2).ShouldNot(o.ContainSubstring(nodeIP))
 
 		svcURL := net.JoinHostPort(nodeIP, svcPort)
-		g.By("curl loadbalance Service")
+		exutil.By("curl loadbalance Service")
 		output, err := exutil.DebugNode(oc, nodeName, "curl", svcURL, "-s", "--connect-timeout", "5")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
 
-		g.By("Delete lb service")
+		exutil.By("Delete lb service")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "lbtest", "-n", e2eTestNamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -650,7 +790,7 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		})
 		exutil.AssertWaitPollNoErr(output1, fmt.Sprintf("lbtest2 cannot get the nodeip:%s", output1))
 
-		g.By("check lbtest2 ingressip can be accessed")
+		exutil.By("check lbtest2 ingressip can be accessed")
 		output, err = exutil.DebugNode(oc, nodeName, "curl", svcURL, "-s", "--connect-timeout", "5")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
@@ -663,8 +803,12 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			caseID           = "61168"
 			e2eTestNamespace = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
 		)
+		if ipStackType == "ipv6single" {
+			// svc api is ipv4 address
+			g.Skip("this case can only run on ipv4")
+		}
 
-		g.By("Create a namespace for the scenario")
+		exutil.By("Create a namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
@@ -674,15 +818,15 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			"$label":     "hello-pod",
 		}
 
-		g.By("creating hello pod in namespace")
+		exutil.By("creating hello pod in namespace")
 		createPingPodforUshift(oc, pod_pmtrs)
 		waitPodReady(oc, e2eTestNamespace, "hello-pod")
 		hellosdnPodName := getPodName(oc, e2eTestNamespace, "name=hello-pod")
 
-		g.By("using dns resolve as hostnetwork pods for checking")
+		exutil.By("using dns resolve as hostnetwork pods for checking")
 		dnsPodName := getPodName(oc, "openshift-dns", "dns.operator.openshift.io/daemonset-node-resolver=")
 
-		g.By("Check container pod and hostnetwork can access kubernete api")
+		exutil.By("Check container pod and hostnetwork can access kubernete api")
 		output, err := e2eoutput.RunHostCmd(e2eTestNamespace, hellosdnPodName[0], "curl -I --connect-timeout 5 https://10.43.0.1:443 -k")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring("HTTP/2 403"))
@@ -690,12 +834,12 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output1).Should(o.ContainSubstring("HTTP/2 403"))
 
-		g.By("reboot node")
+		exutil.By("reboot node")
 		nodeName, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", e2eTestNamespace, "pod", "hello-pod", "-o=jsonpath={.spec.nodeName}").Output()
 		o.Expect(podErr).NotTo(o.HaveOccurred())
 		rebootUshiftNode(oc, nodeName)
 
-		g.By("Check container pod can access kubernete api")
+		exutil.By("Check container pod can access kubernete api")
 		curlOutput := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
 			output, err = e2eoutput.RunHostCmd(e2eTestNamespace, hellosdnPodName[0], "curl -I --connect-timeout 5 https://10.43.0.1:443 -k")
 			if strings.Contains(output, "HTTP/2 403") {
@@ -706,7 +850,7 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		})
 		exutil.AssertWaitPollNoErr(curlOutput, fmt.Sprintf("Fail to terminate pods:%s", curlOutput))
 
-		g.By("Check hostnetwork can access kubernete api")
+		exutil.By("Check hostnetwork can access kubernete api")
 		curlHostnetworkOutput := wait.Poll(5*time.Second, 2*time.Minute, func() (bool, error) {
 			output, err = e2eoutput.RunHostCmd("openshift-dns", dnsPodName[0], "curl -I --connect-timeout 5 https://10.43.0.1:443 -k")
 			if strings.Contains(output, "HTTP/2 403") {
@@ -727,7 +871,7 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			mtu              = "1400"
 		)
 
-		g.By("Create a namespace for the scenario")
+		exutil.By("Create a namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
@@ -737,18 +881,18 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			"$label":     "hello-pod",
 		}
 
-		g.By("creating hello pod in namespace")
+		exutil.By("creating hello pod in namespace")
 		createPingPodforUshift(oc, pod_pmtrs)
 		waitPodReady(oc, e2eTestNamespace, "hello-pod")
 		hellosdnPodName := getPodName(oc, e2eTestNamespace, "name=hello-pod")
 
-		g.By("Update the cluster MTU to 1400")
+		exutil.By("Update the cluster MTU to 1400")
 		nodeName, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", e2eTestNamespace, "pod", "hello-pod", "-o=jsonpath={.spec.nodeName}").Output()
 		o.Expect(podErr).NotTo(o.HaveOccurred())
 		setMTU(oc, nodeName, mtu)
 		defer rollbackMTU(oc, nodeName)
 
-		g.By("Create one new pods to check the mtu")
+		exutil.By("Create one new pods to check the mtu")
 		pod_pmtrs1 := map[string]string{
 			"$podname":   "hello-pod2",
 			"$namespace": e2eTestNamespace,
@@ -759,12 +903,12 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		waitPodReady(oc, e2eTestNamespace, "hello-pod2")
 		hellosdnPodName2 := getPodName(oc, e2eTestNamespace, "name=hello-pod2")
 
-		g.By("Check new created pod mtu changed")
+		exutil.By("Check new created pod mtu changed")
 		output, err := e2eoutput.RunHostCmd(e2eTestNamespace, hellosdnPodName2[0], "cat /sys/class/net/eth0/mtu")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.ContainSubstring(mtu))
 
-		g.By("check existing pod mtu changed")
+		exutil.By("check existing pod mtu changed")
 		output2, err := e2eoutput.RunHostCmd(e2eTestNamespace, hellosdnPodName[0], "cat /sys/class/net/eth0/mtu")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output2).Should(o.ContainSubstring(mtu))
@@ -772,8 +916,9 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 	})
 	// author: zzhao@redhat.com
 	g.It("MicroShiftOnly-Author:zzhao-Medium-61161-Expose coredns forward as configurable option[Disruptive][Flaky]", func() {
-
-		g.By("Check the default coredns config file")
+		// need confirm support or not
+		g.Skip("skip this case")
+		exutil.By("Check the default coredns config file")
 		dnsConfigMap, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "cm", "dns-default", "-o=jsonpath={.data.Corefile}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(dnsConfigMap).Should(o.ContainSubstring("forward . /etc/resolv.conf"))
@@ -782,7 +927,7 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeName := nodeList.Items[0].Name
 
-		g.By("cp the default dns config file to a new path")
+		exutil.By("cp the default dns config file to a new path")
 		cpNewConfig := "mkdir /run/systemd/resolve && cp /etc/resolv.conf /run/systemd/resolve/resolv.conf && systemctl restart microshift"
 		rmDnsConfig := "rm -fr /run/systemd/resolve && systemctl restart microshift"
 		defer func() {
@@ -799,7 +944,7 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		}()
 		exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", cpNewConfig)
 
-		g.By("Check the coredns is consuming the new config file")
+		exutil.By("Check the coredns is consuming the new config file")
 		output := wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
 			dnsConfigMap, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-dns", "cm", "dns-default", "-o=jsonpath={.data.Corefile}").Output()
 			if strings.Contains(dnsConfigMap, "/run/systemd/resolve/resolv.conf") {
@@ -817,9 +962,15 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		var (
 			caseID           = "60969"
 			e2eTestNamespace = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
+			nodeIP           string
+			svcURL           string
+			ipDropCmd        string
 		)
-
-		g.By("Create a namespace for the scenario")
+		//only run on ipv4, as no route to cluster ipv6 from external
+		if ipStackType == "ipv6single" {
+			g.Skip("this case can only run on ipv4")
+		}
+		exutil.By("Create a namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
@@ -829,7 +980,7 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			"$label":     "hello-pod",
 		}
 
-		g.By("creating hello pod in namespace")
+		exutil.By("creating hello pod in namespace")
 		createPingPodforUshift(oc, pod_pmtrs)
 		waitPodReady(oc, e2eTestNamespace, "hello-pod")
 
@@ -839,7 +990,7 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			"$label":                 "test-service",
 			"$internalTrafficPolicy": "",
 			"$externalTrafficPolicy": "",
-			"$ipFamilyPolicy":        "",
+			"$ipFamilyPolicy":        "PreferDualStack",
 			"$selector":              "hello-pod",
 			"$serviceType":           "NodePort",
 		}
@@ -848,34 +999,37 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(svc).Should(o.ContainSubstring("test-service-etp-cluster"))
 
-		g.By("Get service NodePort and NodeIP value")
+		exutil.By("Get service NodePort and NodeIP value")
 		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, "test-service-etp-cluster", "-o=jsonpath={.spec.ports[*].nodePort}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeName, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", e2eTestNamespace, "pod", "hello-pod", "-o=jsonpath={.spec.nodeName}").Output()
 		o.Expect(podErr).NotTo(o.HaveOccurred())
-		nodeIP := getNodeIPv4(oc, e2eTestNamespace, nodeName)
-		svcURL := net.JoinHostPort(nodeIP, nodePort)
-		g.By("curl NodePort Service")
+
+		nodeIP = getNodeIPv4(oc, e2eTestNamespace, nodeName)
+		svcURL = net.JoinHostPort(nodeIP, nodePort)
+		exutil.By("curl NodePort Service")
 		curlNodeCmd := fmt.Sprintf("curl %s -s --connect-timeout 5", svcURL)
 		_, err = exec.Command("bash", "-c", curlNodeCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Insert a new rule in the nat table PREROUTING chain to drop all packets that match the destination port and IP address")
+		exutil.By("Insert a new rule in the nat table PREROUTING chain to drop all packets that match the destination port and IP address")
 		defer removeIPRules(oc, nodePort, nodeIP, nodeName)
-		ipDropCmd := fmt.Sprintf("nft -a insert rule ip nat PREROUTING tcp dport %v ip daddr %s drop", nodePort, nodeIP)
+
+		ipDropCmd = fmt.Sprintf("nft -a insert rule ip nat PREROUTING tcp dport %v ip daddr %s drop", nodePort, nodeIP)
 		_, err = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", ipDropCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Verify NodePort Service is blocked")
+		exutil.By("Verify NodePort Service is blocked")
 		_, err = exec.Command("bash", "-c", curlNodeCmd).Output()
 		o.Expect(err).To(o.HaveOccurred())
 
-		g.By("Remove the added new rule")
+		exutil.By("Remove the added new rule")
 		removeIPRules(oc, nodePort, nodeIP, nodeName)
 
-		g.By("Verify the NodePort service can be accessed again.")
+		exutil.By("Verify the NodePort service can be accessed again.")
 		_, err = exec.Command("bash", "-c", curlNodeCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+
 	})
 
 	// author: asood@redhat.com
@@ -885,8 +1039,12 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			e2eTestNamespace = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
 			serviceName      = "test-service-" + caseID
 		)
+		//only run on ipv4
+		if ipStackType == "ipv6single" {
+			g.Skip("this case can only run on ipv4")
+		}
 
-		g.By("Create a namespace for the scenario")
+		exutil.By("Create a namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
@@ -896,7 +1054,7 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			"$label":     "hello-pod",
 		}
 
-		g.By("creating hello pod in namespace")
+		exutil.By("creating hello pod in namespace")
 		createPingPodforUshift(oc, pod_pmtrs)
 		waitPodReady(oc, e2eTestNamespace, "hello-pod")
 
@@ -915,7 +1073,7 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(svc).Should(o.ContainSubstring(serviceName))
 
-		g.By("Get service NodePort and NodeIP value")
+		exutil.By("Get service NodePort and NodeIP value")
 		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, serviceName, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		nodeName, podErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", e2eTestNamespace, "pod", "hello-pod", "-o=jsonpath={.spec.nodeName}").Output()
@@ -924,12 +1082,12 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		svcURL := net.JoinHostPort(nodeIP, nodePort)
 		e2e.Logf("Service URL %s", svcURL)
 
-		g.By("Curl NodePort Service")
+		exutil.By("Curl NodePort Service")
 		curlNodeCmd := fmt.Sprintf("curl %s -s --connect-timeout 5", svcURL)
 		_, err = exec.Command("bash", "-c", curlNodeCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Disable IPv4 forwarding")
+		exutil.By("Disable IPv4 forwarding")
 		enableIPv4ForwardingCmd := fmt.Sprintf("sysctl -w net.ipv4.ip_forward=1")
 		disableIPv4ForwardingCmd := fmt.Sprintf("sysctl -w net.ipv4.ip_forward=0")
 		defer func() {
@@ -939,15 +1097,15 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		_, err = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", disableIPv4ForwardingCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Verify NodePort Service is no longer accessible")
+		exutil.By("Verify NodePort Service is no longer accessible")
 		_, err = exec.Command("bash", "-c", curlNodeCmd).Output()
 		o.Expect(err).To(o.HaveOccurred())
 
-		g.By("Enable IPv4 forwarding")
+		exutil.By("Enable IPv4 forwarding")
 		_, err = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", enableIPv4ForwardingCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("Verify the NodePort service can be accessed again.")
+		exutil.By("Verify the NodePort service can be accessed again.")
 		_, err = exec.Command("bash", "-c", curlNodeCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
@@ -958,6 +1116,7 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			caseID           = "61162"
 			e2eTestNamespace = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
 		)
+		g.Skip("skip this case")
 
 		exutil.By("Create a namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
@@ -1032,9 +1191,11 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			e2eTestNamespace    = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
 			udpListenerPod      = filepath.Join(buildPruningBaseDir, "udp-listener.yaml")
+			udpListenerPodIP    string
+			nodeIP              string
 		)
 
-		g.By("Create a namespace for the scenario")
+		exutil.By("Create a namespace for the scenario")
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
@@ -1044,11 +1205,11 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			"$label":     "hello-pod",
 		}
 
-		g.By("creating hello pod client in namespace")
+		exutil.By("creating hello pod client in namespace")
 		createPingPodforUshift(oc, pod_pmtrs)
 		waitPodReady(oc, e2eTestNamespace, "hello-pod")
 
-		g.By("create UDP Listener Pod")
+		exutil.By("create UDP Listener Pod")
 		createResourceFromFile(oc, e2eTestNamespace, udpListenerPod)
 		err := waitForPodWithLabelReady(oc, e2eTestNamespace, "name=udp-pod")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=udp-pod not ready")
@@ -1057,18 +1218,24 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("pod", "udp-pod", "-n", e2eTestNamespace, "--type=NodePort", "--port=8080", "--protocol=UDP").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		udpListenerPodIP := getPodIPv4(oc, e2eTestNamespace, "udp-pod")
-
-		g.By("Get the ready-schedulable worker nodes")
+		exutil.By("Get the ready-schedulable worker nodes")
 		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
 
-		g.By("Get service NodePort and NodeIP value")
+		exutil.By("Get service NodePort and NodeIP value")
 		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, "udp-pod", "-o=jsonpath={.spec.ports[*].nodePort}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//send a test packet to udp endpoint which will create an udp conntrack entry on the node
-		nodeIP := getNodeIPv4(oc, e2eTestNamespace, nodeList.Items[0].Name)
+
+		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
+
+			udpListenerPodIP = getPodIPv4(oc, e2eTestNamespace, "udp-pod")
+			nodeIP = getNodeIPv4(oc, e2eTestNamespace, nodeList.Items[0].Name)
+		} else {
+			udpListenerPodIP = getPodIPv6(oc, e2eTestNamespace, "udp-pod", ipStackType)
+			nodeIP = getMicroshiftNodeIPV6(oc)
+		}
 		cmd_traffic := " for n in {1..3}; do echo $n; sleep 1; done > /dev/udp/" + nodeIP + "/" + nodePort
 
 		_, err = exutil.RemoteShPodWithBash(oc, e2eTestNamespace, "hello-pod", cmd_traffic)
@@ -1091,10 +1258,16 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 
 	// author: asood@redhat.com
 	g.It("MicroShiftOnly-Author:asood-Medium-63770-Ensure LoadBalancer service serving pods on hostnetwork or cluster network accessible only from primary node IP address and continues to serve after firewalld reload[Disruptive]", func() {
+
 		var (
 			caseID           = "63770"
 			e2eTestNamespace = "e2e-ushift-sdn-" + caseID + "-" + getRandomString()
 		)
+
+		if ipStackType == "ipv6single" {
+			// can not run on ipv6 as secondary nic doesn't have available ipv6 address.
+			g.Skip("this case can only run on ipv4")
+		}
 
 		exutil.By("Create a namespace for the scenario")
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
@@ -1137,7 +1310,7 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 				"$label":                 "test-service",
 				"$internalTrafficPolicy": "",
 				"$externalTrafficPolicy": "",
-				"$ipFamilyPolicy":        "",
+				"$ipFamilyPolicy":        "PreferDualStack",
 				"$selector":              "hello-pod-" + svcSuffix,
 				"$serviceType":           "LoadBalancer",
 			}
@@ -1146,6 +1319,7 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			exutil.By(fmt.Sprintf("Construct the URLs for the  %s service", serviceName))
 			nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", e2eTestNamespace, "pod", "hello-pod-"+svcSuffix, "-o=jsonpath={.spec.nodeName}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
+
 			nodeIP := getNodeIPv4(oc, e2eTestNamespace, nodeName)
 
 			svcPort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", e2eTestNamespace, serviceName, "-o=jsonpath={.spec.ports[*].port}").Output()
@@ -1258,12 +1432,12 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 			"$plugintype":   "bridge",
 			"$mode":         " ",
 			"$ipamtype":     "host-local",
-			"$ipv4range":    "192.168.10.0/24",
-			"$ipv6range":    "fd00:dead:beef:10::/64",
-			"$v4rangestart": "192.168.10.1",
-			"$v4rangeend":   "192.168.10.9",
-			"$v6rangestart": "fd00:dead:beef:10::1",
-			"$v6rangeend":   "fd00:dead:beef:10::9",
+			"$ipv4range":    "192.168.20.0/24",
+			"$ipv6range":    "fd00:dead:beef:20::/64",
+			"$v4rangestart": "192.168.20.1",
+			"$v4rangeend":   "192.168.20.9",
+			"$v6rangestart": "fd00:dead:beef:20::1",
+			"$v6rangeend":   "fd00:dead:beef:20::9",
 		}
 		defer removeResource(oc, true, true, "net-attach-def", nadName, "-n", e2eTestNamespace)
 		createMultusNADforUshift(oc, NAD_pmtrs, MultusNADGenericYaml)
@@ -1303,15 +1477,15 @@ var _ = g.Describe("[sig-networking] SDN microshift", func() {
 		pod1Net1IPv4, pod1Net1IPv6 := getPodMultiNetworks(oc, e2eTestNamespace, pod1Name, interfaceName)
 		e2e.Logf("The v4 address of pod1's net1 is: %v", pod1Net1IPv4)
 		e2e.Logf("The v6 address of pod1's net1 is: %v", pod1Net1IPv6)
-		o.Expect(strings.HasPrefix(pod1Net1IPv4, "192.168.10.")).Should(o.BeTrue())
-		o.Expect(strings.HasPrefix(pod1Net1IPv6, "fd00:dead:beef:10::")).Should(o.BeTrue())
+		o.Expect(strings.HasPrefix(pod1Net1IPv4, "192.168.20.")).Should(o.BeTrue())
+		o.Expect(strings.HasPrefix(pod1Net1IPv6, "fd00:dead:beef:20::")).Should(o.BeTrue())
 
 		exutil.By("Get IPs from pod2's secondary interface")
 		pod2Net1IPv4, pod2Net1IPv6 := getPodMultiNetworks(oc, e2eTestNamespace, pod2Name, interfaceName)
 		e2e.Logf("The v4 address of pod2's net1 is: %v", pod2Net1IPv4)
 		e2e.Logf("The v6 address of pod2's net1 is: %v", pod2Net1IPv6)
-		o.Expect(strings.HasPrefix(pod2Net1IPv4, "192.168.10.")).Should(o.BeTrue())
-		o.Expect(strings.HasPrefix(pod2Net1IPv6, "fd00:dead:beef:10::")).Should(o.BeTrue())
+		o.Expect(strings.HasPrefix(pod2Net1IPv4, "192.168.20.")).Should(o.BeTrue())
+		o.Expect(strings.HasPrefix(pod2Net1IPv6, "fd00:dead:beef:20::")).Should(o.BeTrue())
 
 		exutil.By("Checking the connectivity from pod 1 to pod 2 over secondary interface - net1")
 		CurlMultusPod2PodPass(oc, e2eTestNamespace, pod1Name, pod2Net1IPv4, interfaceName, pod2Name)

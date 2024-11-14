@@ -964,6 +964,13 @@ func getSvcIPv6(oc *exutil.CLI, namespace string, svcName string) string {
 	return svcIPv6
 }
 
+func getSvcIPv6SingleStack(oc *exutil.CLI, namespace string, svcName string) string {
+	svcIPv6, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.clusterIPs[0]}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The service %s IPv6 in namespace %s is %q", svcName, namespace, svcIPv6)
+	return svcIPv6
+}
+
 func getSvcIPdualstack(oc *exutil.CLI, namespace string, svcName string) (string, string) {
 	svcIPv4, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.spec.clusterIPs[0]}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
