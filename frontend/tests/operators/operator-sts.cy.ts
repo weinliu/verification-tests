@@ -15,6 +15,7 @@ describe('Operators related features on sts cluster mode', () => {
     cy.adminCLI(`oc new-project ${params.ns}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     cy.adminCLI(`oc create -f ./fixtures/operators/custom-catalog-source.json`);
+    cy.checkCommandResult(`oc get catalogsource custom-catalogsource -n openshift-marketplace -o jsonpath='{.status.connectionState.lastObservedState}'`, 'READY');
     Pages.gotoCatalogSourcePage();
   });
 
@@ -95,5 +96,27 @@ describe('Operators related features on sts cluster mode', () => {
       expect(output.stdout).contains('testgcpproviderid');
       expect(output.stdout).contains('testgcpemail');
     });
+  });
+
+  it('(OCP-71516,xiyuzhao,UserInterface) Add TLSProfiles and tokenAuthGCP annotation to Infrastructures features filter section',{tags:['@userinterface','@e2e','admin']}, function () {
+    cy.checkClusterType('isGCPWIFICluster').then(value => {
+      if (value === false) {
+        cy.log('Skip case OCP-71516, cluster is not GCP WIFI enabled!!');
+        this.skip();
+      }
+    })
+    // Check the new annotation is listed on the Infrastructure filter list
+    Pages.gotoOperatorHubPage();
+    operatorHubPage.checkInfraFeaturesCheckbox("configurable-tls-ciphers");
+    operatorHubPage.checkInfraFeaturesCheckbox("auth-token-gcp");
+    // Check the annotation is added for the Operator
+    operatorHubPage.filter(params.operatorName);
+    operatorHubPage.clickOperatorTile(params.operatorName);
+    cy.contains('h5', 'Infrastructure features')
+      .parent()
+      .within(() => {
+        cy.contains('div', 'Auth Token GCP').should('exist');
+        cy.contains('div', 'Configurable TLS ciphers').should('exist');
+      });
   });
 })

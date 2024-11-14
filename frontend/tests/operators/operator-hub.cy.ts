@@ -27,6 +27,8 @@ describe('Operator Hub tests', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.adminCLI('oc delete sub kiali -n openshift-operators');
     cy.adminCLI(`oc delete csv kiali-operator.v1.83.0 -n openshift-operators`);
+    cy.adminCLI(`oc delete project test-42671`,{ failOnNonZeroExit: false });
+    cy.adminCLI(`oc delete project ${testParams.suggestedNamespace}`,{ failOnNonZeroExit: false });
   });
 
   it('(OCP-45874,yapei,UserInterface) Check source labels on the operator hub page tiles',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
@@ -150,7 +152,6 @@ describe('Operator Hub tests', () => {
       .its('stdout')
       .should('contain',`${testParams.suggestedNamespaceLabels}`)
       .and('contain',`${testParams.suggestedNamespaceannotations}`)
-    cy.adminCLI(`oc delete project ${testParams.suggestedNamespace}`);
   });
 
   it('(OCP-42671,xiyuzhao,UserInterface) OperatorHub shows correct operator installation states',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']},  () => {
@@ -182,7 +183,6 @@ describe('Operator Hub tests', () => {
         cy.visit(href);
         cy.byLegacyTestID('horizontal-link-Details').should('exist')
       });
-    cy.adminCLI(`oc delete project ${params.ns}`);
   });
 
   it('(OCP-54037,yapei,UserInterface) Affinity definition support',{tags:['@userinterface','@e2e','admin','@osd-ccs']}, ()=> {
@@ -262,26 +262,5 @@ describe('Operator Hub tests', () => {
       .then((output) => {
         expect(output.stdout).to.include(nodeOS);
     })
-  });
-
-  it('(OCP-71516,xiyuzhao,UserInterface) Add TLSProfiles and tokenAuthGCP annotation to Infrastructures features filter section',{tags:['@userinterface','@e2e','admin']}, function () {
-    cy.checkClusterType('isGCPCluster').then(value => {
-      if (value === false) {
-        cy.log('This is not a GCP Platform, Skip the case!!');
-        this.skip();
-      }
-    })
-    // Check the new annotation is listed on the Infrastructure filter list
-    Pages.gotoOperatorHubPage();
-    operatorHubPage.checkInfraFeaturesCheckbox("configurable-tls-ciphers");
-    operatorHubPage.checkInfraFeaturesCheckbox("auth-token-gcp");
-    // Check the annotation is added for the Operator
-    cy.visit('/operatorhub/all-namespaces?details-item=kiali-operator-custom-catalogsource-openshift-marketplace')
-    cy.contains('h5', 'Infrastructure features')
-      .parent()
-      .within(() => {
-        cy.contains('div', 'Auth Token GCP').should('exist');
-        cy.contains('div', 'Configurable TLS ciphers').should('exist');
-      });
   });
 })

@@ -7,12 +7,16 @@ registerCypressGrep()
 
 // remove this when NETOBSERV-1450 is resolved
 Cypress.on('uncaught:exception', (err, runnable) => {
-    // we expect a different versions of MobX active error with 4.15 
+    // we expect a different versions of MobX active error with 4.15
     // and don't want to fail the test so we return false
     if (err.message.includes('different versions of MobX active')) {
         return false
     }
     if (err.message.includes('minified error nr: 35')) {
+        return false
+    }
+    // workaround OCPBUGS-44447 temp
+    if(err.message.includes('Cannot set properties of undefined')) {
         return false
     }
     // we still want to ensure there are no other unexpected

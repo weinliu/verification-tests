@@ -38,7 +38,7 @@ export const operatorHubPage = {
         if (hasMoreButton) {
           cy.wrap($btn).find('button').contains('more').click();
         }
-        cy.wrap($btn).find(`[data-test="infraFeatures-${name}"] [type="checkbox"]`).check();
+        cy.wrap($btn).find(`[data-test="infraFeatures-${name}"] input[type="checkbox"]`).check();
       })
   },
   clickOperatorTile: (operator_name) => {
