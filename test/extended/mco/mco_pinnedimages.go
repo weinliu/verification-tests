@@ -126,7 +126,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-High-73623-[P2][OnCLayer] Pin images [Disruptive]", func() {
 		var (
-			waitForPinned      = time.Minute * 5
+			waitForPinned      = time.Minute * 15
 			pinnedImageSetName = "tc-73623-pin-images"
 			node               = mcp.GetNodesOrFail()[0]
 			firstPinnedImage   = NewRemoteImage(node, BusyBoxImage)
@@ -183,7 +183,9 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-73653-[OnCLayer] Pinned images with a ImageDigestMirrorSet mirroring a single repository [Disruptive]", func() {
+	// Disconnected clusters use an imagecontentsourcepolicy to mirror the images in openshittest. In this test cases we create an ImageDigestMirrorSet to mirror the same images and it is not supported
+	// Hence we skip this test case in disconnected clusters
+	g.It("Author:sregidor-ConnectedOnly-NonHyperShiftHOST-NonPreRelease-Longduration-High-73653-[OnCLayer] Pinned images with a ImageDigestMirrorSet mirroring a single repository [Disruptive]", func() {
 		var (
 			idmsName    = "tc-73653-mirror-single-repository"
 			idmsMirrors = `[{"mirrors":["quay.io/openshifttest/busybox"], "source": "example-repo.io/digest-example/mybusy", "mirrorSourcePolicy":"NeverContactSource"}]`
@@ -195,7 +197,9 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		DigestMirrorTest(oc, mcp, idmsName, idmsMirrors, pinnedImage, pinnedImageSetName)
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-High-73657-[P1][OnCLayer] Pinned images with a ImageDigestMirrorSet mirroring a domain [Disruptive]", func() {
+	// Disconnected clusters use an imagecontentsourcepolicy to mirror the images in openshittest. In this test cases we create an ImageDigestMirrorSet to mirror the same images and it is not supported
+	// Hence we skip this test case in disconnected clusters
+	g.It("Author:sregidor-ConnectedOnly-NonHyperShiftHOST-NonPreRelease-Longduration-High-73657-[P1][OnCLayer] Pinned images with a ImageDigestMirrorSet mirroring a domain [Disruptive]", func() {
 		var (
 			idmsName    = "tc-73657-mirror-domain"
 			idmsMirrors = `[{"mirrors":["quay.io:443"], "source": "example-domain.io:443", "mirrorSourcePolicy":"NeverContactSource"}]`
@@ -526,7 +530,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 
 		// delete the pinnedImageSet
 		exutil.By("Delete the pinnedimageset")
-		o.Expect(pis.DeleteAndWait(waitForPinned)).NotTo(o.HaveOccurred(), "Error deleting pinnedimageset %s", pis)
+		o.Eventually(pis.Delete, "13m", "20s").ShouldNot(o.HaveOccurred(), "Error deleting pinnedimageset %s", pis)
 		logger.Infof("OK!\n")
 
 		// wait for the rebooted node
@@ -534,6 +538,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		o.Eventually(mccMaster.GetUptime, "15m", "30s").Should(o.BeTemporally(">", startTime),
 			"%s was not properly rebooted", mccMaster)
 		mMcp.waitForComplete()
+		o.Expect(mMcp.waitForPinComplete(waitForPinned)).To(o.Succeed(), "Pinned image operation is not completed in %s", mMcp)
 		logger.Infof("OK!\n")
 
 		// check pinned imageset is deleted in all nodes in the pool
@@ -541,7 +546,7 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		for _, node := range allMasters {
 			ri := NewRemoteImage(node, pinnedImage)
 			logger.Infof("Checking %s", ri)
-			o.Expect(ri.IsPinned()).To(o.BeFalse(),
+			o.Eventually(ri.IsPinned, "5m", "20s").Should(o.BeFalse(),
 				"%s is pinned, but it should not", ri)
 		}
 		logger.Infof("OK!\n")

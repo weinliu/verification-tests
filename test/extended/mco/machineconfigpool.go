@@ -843,6 +843,8 @@ func (mcp *MachineConfigPool) IsPinnedImagesComplete() (bool, error) {
 		return false, err
 	}
 
+	logger.Infof("Pinned status: %s", pinnedStatus)
+
 	mcpMachineCount, err := mcp.Get(`{.status.machineCount}`)
 	if err != nil {
 		return false, err
@@ -904,7 +906,7 @@ func (mcp *MachineConfigPool) waitForPinComplete(timeToWait time.Duration) error
 		pinnedComplete, err := mcp.IsPinnedImagesComplete()
 		if err != nil {
 
-			logger.Infof("Error getting pinned complete")
+			logger.Infof("Error getting pinned complete: %s", err)
 			return false, err
 		}
 
@@ -946,7 +948,7 @@ func (mcp *MachineConfigPool) waitForPinApplied(timeToWait time.Duration) error 
 	err := wait.PollUntilContextTimeout(context.TODO(), 1*time.Minute, timeToWait, immediate, func(_ context.Context) (bool, error) {
 		pinnedComplete, err := mcp.IsPinnedImagesComplete()
 		if err != nil {
-			logger.Infof("Error getting pinned complete")
+			logger.Infof("Error getting pinned complete: %s", err)
 			return false, err
 		}
 		if !pinnedStarted && !pinnedComplete {
