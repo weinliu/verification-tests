@@ -639,25 +639,34 @@ func setUpExternalFRRRouter(oc *exutil.CLI, bgpRouterNamespace string, cmdArgs .
 	return true
 }
 
-func checkBGPSessions(oc *exutil.CLI, bgpRouterNamespace string) (status bool) {
-
+func checkBGPSessions(oc *exutil.CLI, bgpRouterNamespace string, bgpSessionCheckTime ...time.Duration) (status bool) {
+	timeout := 120 * time.Second
+	if len(bgpSessionCheckTime) > 0 {
+		timeout = bgpSessionCheckTime[0]
+	}
+	var result bool
 	cmd := []string{"-n", bgpRouterNamespace, bgpRouterPodName, "--", "vtysh", "-c", "show bgp summary"}
-	errCheck := wait.Poll(60*time.Second, 120*time.Second, func() (bool, error) {
+	errCheck := wait.Poll(60*time.Second, timeout, func() (bool, error) {
 		e2e.Logf("Checking status of BGP session")
 		bgpSummaryOutput, err := oc.WithoutNamespace().AsAdmin().Run("exec").Args(cmd...).Output()
 		o.Expect(bgpSummaryOutput).NotTo(o.BeEmpty())
 		if err != nil {
-			return false, nil
+			result = false
+			return result, nil
 		}
-		if strings.Contains(bgpSummaryOutput, "Active") {
-			e2e.Logf("Failed to establish BGP session between router and speakers, Trying again")
-			return false, nil
+		if strings.Contains(bgpSummaryOutput, "Active") || strings.Contains(bgpSummaryOutput, "Connect") {
+			e2e.Logf("Failed to establish BGP session between router and speakers, Trying again..")
+			result = false
+			return result, nil
 		}
-		return true, nil
+		e2e.Logf("BGP session established")
+		result = true
+		return result, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, "Establishing BGP session between router and speakers timed out")
-	e2e.Logf("BGP session established")
-	return true
+	if errCheck != nil {
+		e2e.Logf("Failed to establish BGP session between router and speakers - Timed out")
+	}
+	return result
 
 }
 
