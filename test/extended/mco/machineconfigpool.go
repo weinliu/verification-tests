@@ -258,21 +258,23 @@ func (mcp *MachineConfigPool) pollUpdatedStatus() func() string {
 func (mcp *MachineConfigPool) estimateWaitDuration() time.Duration {
 	var (
 		totalNodes           int
+		guessedNodes         = 3 // the number of nodes that we will use if we cannot get the actual number of nodes in the cluster
 		masterAdjust         = 1.0
 		snoModifier          = 0.0
 		emptyMCPWaitDuration = 2.0
 		minutesDuration      = 1 * time.Minute
 	)
 
-	o.Eventually(func() int {
+	err := Retry(5, 3*time.Second, func() error {
 		var err error
 		totalNodes, err = mcp.getMachineCount()
-		if err != nil {
-			return -1
-		}
-		return totalNodes
-	},
-		"5m", "5s").Should(o.BeNumerically(">=", 0), fmt.Sprintf("machineCount field has no value in MCP %s", mcp.name))
+		return err
+	})
+
+	if err != nil {
+		logger.Errorf("Not able to get the number of nodes in the %s MCP. Making a guess of %d nodes. Err: %s", mcp.GetName(), guessedNodes, err)
+		totalNodes = guessedNodes
+	}
 
 	logger.Infof("Num nodes: %d, wait time per node %d minutes", totalNodes, mcp.MinutesWaitingPerNode)
 
@@ -291,11 +293,21 @@ func (mcp *MachineConfigPool) estimateWaitDuration() time.Duration {
 	}
 
 	// Because of https://issues.redhat.com/browse/OCPBUGS-37501 in SNO MCPs can take up to 3 minutes more to be updated because the MCC is not taking the lease properly
-	if IsSNO(mcp.GetOC().AsAdmin()) {
-		logger.Infof("Increase waiting time because it is SNO")
-		snoModifier = 3
+	if totalNodes == 1 {
+		var isSNO bool
+		err = Retry(5, 3*time.Second, func() error {
+			var snoErr error
+			isSNO, snoErr = IsSNOSafe(mcp.GetOC())
+			return snoErr
+		})
+		if err != nil {
+			logger.Errorf("Not able to know if the cluster is SNO. We guess it is SNO. Err: %s", err)
+		}
+		if isSNO || err != nil {
+			logger.Infof("Increase waiting time because it is SNO")
+			snoModifier = 3
+		}
 	}
-
 	return time.Duration(((float64(totalNodes*mcp.MinutesWaitingPerNode) * masterAdjust) + snoModifier) * float64(minutesDuration))
 }
 

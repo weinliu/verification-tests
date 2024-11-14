@@ -1349,6 +1349,15 @@ func IsSNO(oc *exutil.CLI) bool {
 	return len(exutil.OrFail[[]Node](NewNodeList(oc.AsAdmin()).GetAll())) == 1
 }
 
+// IsSNOSafe returns true if the cluster is a SNO cluster. Instead of failing, it returns an error if we can't know if the cluster is SNO or not
+func IsSNOSafe(oc *exutil.CLI) (bool, error) {
+	allNodes, err := NewNodeList(oc.AsAdmin()).GetAll()
+	if err != nil {
+		return false, err
+	}
+	return len(allNodes) == 1, nil
+}
+
 // SkipIfSNO skips the test case if the cluster is a SNO cluster
 func SkipIfSNO(oc *exutil.CLI) {
 	if IsSNO(oc) {
