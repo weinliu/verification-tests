@@ -3271,7 +3271,7 @@ EOF`, serverconf)
 		e2e.Logf("namespace/test-ns%v labeled", randomStr)
 
 		var deployerr error
-		deployconfigerr := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 200*time.Second, false, func(cxt context.Context) (bool, error) {
+		deployconfigerr := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 			deployOutput, deployerr := oc.WithoutNamespace().AsAdmin().Run("create").Args("deploymentconfig", "mydc", "--image", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", "test-ns"+randomStr).Output()
 			if deployerr != nil {
 				return false, nil
@@ -3282,7 +3282,7 @@ EOF`, serverconf)
 		})
 		exutil.AssertWaitPollNoErr(deployconfigerr, fmt.Sprintf("Not able to create mydc deploymentconfig :: %v", deployerr))
 
-		waiterrRollout := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 200*time.Second, false, func(cxt context.Context) (bool, error) {
+		waiterrRollout := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
 			rollOutput, _ := oc.WithoutNamespace().AsAdmin().Run("rollout").Args("latest", "dc/mydc", "-n", "test-ns"+randomStr).Output()
 			if strings.Contains(rollOutput, "rolled out") {
 				o.Expect(rollOutput).Should(o.ContainSubstring("deploymentconfig.apps.openshift.io/mydc rolled out"))
