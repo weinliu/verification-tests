@@ -1712,6 +1712,19 @@ func checkDnsRecordsInIngressOperator(oc *exutil.CLI, recordName, privateZoneId,
 	}
 }
 
+// retrieve the IPV6 or IPV4 public client address of a cluster
+func getClientIP(oc *exutil.CLI, clusterType string) string {
+	if strings.Contains(clusterType, "ipv6single") || strings.Contains(clusterType, "dualstack") {
+		res, _ := http.Get("https://api64.ipify.org")
+		result, _ := ioutil.ReadAll(res.Body)
+		return string(result)
+	} else {
+		res, _ := http.Get("https://api.ipify.org")
+		result, _ := ioutil.ReadAll(res.Body)
+		return string(result)
+	}
+}
+
 func checkIPStackType(oc *exutil.CLI) string {
 	svcNetwork, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("network.operator", "cluster", "-o=jsonpath={.spec.serviceNetwork}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -1918,17 +1931,4 @@ func getPublicSubnetList(oc *exutil.CLI) []string {
 	}
 	e2e.Logf("The public subnet list generated from private is: %v", publicSubnetList)
 	return publicSubnetList
-}
-
-// retrieve the IPV6 or IPV4 public client address of a cluster
-func getClientIP(oc *exutil.CLI, clusterType string) string {
-	if strings.Contains(clusterType, "ipv6single") || strings.Contains(clusterType, "dualstack") {
-		res, _ := http.Get("https://api64.ipify.org")
-		result, _ := ioutil.ReadAll(res.Body)
-		return string(result)
-	} else {
-		res, _ := http.Get("https://api.ipify.org")
-		result, _ := ioutil.ReadAll(res.Body)
-		return string(result)
-	}
 }
