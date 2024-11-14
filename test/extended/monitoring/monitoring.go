@@ -2935,6 +2935,74 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		}
 	})
 
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-72776-Enable audit logging to Metrics Server - invalid value [Serial]", func() {
+		var (
+			invalid_value_audit_profile = filepath.Join(monitoringBaseDir, "invalid_value_audit_profile.yaml")
+		)
+		exutil.By("delete uwm-config/cm-config at the end of the case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		exutil.By("check default audit level is Metadata")
+		//% oc -n openshift-monitoring get deploy metrics-server -ojsonpath='{.spec.template.spec.containers[?(@.name=="metrics-server")].args}' | jq
+		cmd := `-ojsonpath={.spec.template.spec.containers[?(@.name=="metrics-server")].args}`
+		checkYamlconfig(oc, "openshift-monitoring", "deploy", "metrics-server", cmd, `"--audit-policy-file=/etc/audit/metadata-profile.yaml"`, true)
+
+		exutil.By("set invalid value for audit profile")
+		createResourceFromYaml(oc, "openshift-monitoring", invalid_value_audit_profile)
+
+		exutil.By("check failed log in CMO")
+		checkLogWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=cluster-monitoring-operator", "cluster-monitoring-operator", `adapter audit profile: metadata`, true)
+	})
+
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Medium-72707-Enable audit logging to Metrics Server [Serial]", func() {
+		var (
+			valid_value_audit_profile = filepath.Join(monitoringBaseDir, "valid_value_audit_profile.yaml")
+		)
+		exutil.By("delete uwm-config/cm-config at the end of the case")
+		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
+		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
+
+		exutil.By("check audit file path")
+		//% oc -n openshift-monitoring get deploy metrics-server -ojsonpath='{.spec.template.spec.containers[?(@.name=="metrics-server")].args}' | jq
+		cmd := `-ojsonpath={.spec.template.spec.containers[?(@.name=="metrics-server")].args}`
+		checkYamlconfig(oc, "openshift-monitoring", "deploy", "metrics-server", cmd, `"--audit-policy-file=/etc/audit/metadata-profile.yaml"`, true)
+
+		exutil.By("check the audit log")
+		//% oc -n openshift-monitoring exec -c metrics-server metrics-server-777f5464ff-5fdvh -- cat /var/log/metrics-server/audit.log
+		getReadyPodsWithLabels(oc, "openshift-monitoring", "app.kubernetes.io/component=metrics-server")
+		podNames, err := getAllRunningPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/component=metrics-server")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, pod := range podNames {
+			cmd := "cat /var/log/metrics-server/audit.log"
+			checkConfigInsidePod(oc, "openshift-monitoring", "metrics-server", pod, cmd, `"level":"Metadata"`, true)
+		}
+
+		exutil.By("set audit profile as Request")
+		createResourceFromYaml(oc, "openshift-monitoring", valid_value_audit_profile)
+
+		exutil.By("check the deploy config applied")
+		//oc -n openshift-monitoring get deploy metrics-server -ojsonpath='{.spec.template.spec.containers[?(@.name=="metrics-server")].args}' | jq
+		cmd = `-ojsonpath={.spec.template.spec.containers[?(@.name=="metrics-server")].args}`
+		checkYamlconfig(oc, "openshift-monitoring", "deploy", "metrics-server", cmd, `"--audit-policy-file=/etc/audit/request-profile.yaml"`, true)
+
+		exutil.By("check the policy reflect into pod")
+		getReadyPodsWithLabels(oc, "openshift-monitoring", "app.kubernetes.io/component=metrics-server")
+		podNames, err = getAllRunningPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/component=metrics-server")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, pod := range podNames {
+			//oc -n openshift-monitoring exec -c metrics-server metrics-server-85db9c79c8-sljdb -- cat /etc/audit/request-profile.yaml
+			cmd := "cat /etc/audit/request-profile.yaml"
+			checkConfigInsidePod(oc, "openshift-monitoring", "metrics-server", pod, cmd, `"name": "Request"`, true)
+			checkConfigInsidePod(oc, "openshift-monitoring", "metrics-server", pod, cmd, `"level": "Request"`, true)
+			//oc -n openshift-monitoring exec -c metrics-server metrics-server-85db9c79c8-sljdb -- cat /var/log/metrics-server/audit.log
+			cmd = "cat /var/log/metrics-server/audit.log"
+			checkConfigInsidePod(oc, "openshift-monitoring", "metrics-server", pod, cmd, `level":"Request"`, true)
+		}
+	})
+
 	// author: hongyli@redhat.com
 	g.It("Author:hongyli-Critical-44032-Restore cluster monitoring stack default configuration [Serial]", func() {
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
