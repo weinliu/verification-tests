@@ -206,7 +206,12 @@ var _ = g.Describe("[sig-cli] Workloads mustgather works well", func() {
 		if err != nil {
 			e2e.Logf("Error is %s", err.Error())
 		}
-		o.Expect(headContent).To(o.ContainSubstring(versionInfo.ClientInfo.GitVersion))
+		e2e.Logf("ReleaseClientInfo is %s", versionInfo.ReleaseClientVersion)
+		if versionInfo.ReleaseClientVersion != "" {
+			o.Expect(headContent).To(o.ContainSubstring(versionInfo.ReleaseClientVersion))
+		} else {
+			o.Expect(headContent).To(o.ContainSubstring(versionInfo.ClientInfo.GitVersion))
+		}
 	})
 
 	// author: knarra@redhat.com

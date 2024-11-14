@@ -2733,7 +2733,8 @@ type ServerVersion struct {
 
 // VersionInfo ...
 type VersionInfo struct {
-	ClientInfo       ClientVersion `json:"ClientVersion"`
-	OpenshiftVersion string        `json:"openshiftVersion"`
-	ServerInfo       ServerVersion `json:"ServerVersion"`
+	ClientInfo           ClientVersion `json:"ClientVersion"`
+	OpenshiftVersion     string        `json:"openshiftVersion"`
+	ServerInfo           ServerVersion `json:"ServerVersion"`
+	ReleaseClientVersion string        `json:"releaseClientVersion"`
 }
