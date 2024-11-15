@@ -197,7 +197,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	})
 
 	// author: sgao@redhat.com
-	g.It("Author:sgao-Low-32554-wmco run in a pod with HostNetwork", func() {
+	g.It("Author:sgao-Smokerun-Low-32554-wmco run in a pod with HostNetwork", func() {
 		winInternalIP := getWindowsInternalIPs(oc)[0]
 		curlDest := winInternalIP + ":22"
 		command := []string{"exec", "-n", wmcoNamespace, "deployment.apps/windows-machine-config-operator", "--", "curl", "--http0.9", curlDest}
