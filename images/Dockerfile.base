@@ -8,7 +8,7 @@ RUN sh -c 'echo -e "[google-cloud-sdk]\nname=Google Cloud SDK\nbaseurl=https://p
     git config --system user.email test-private@test.com && \
     chmod g+w /etc/passwd && \
     rm -rf /root/.config/gcloud
-RUN pip3 uninstall PyYAML -y && pip3 install --upgrade setuptools pip && pip3 install dotmap minio pyyaml requests python-openstackclient && \
+RUN yum remove python3-requests -y && pip3 uninstall PyYAML -y && pip3 install --upgrade setuptools pip && pip3 install dotmap minio pyyaml requests python-openstackclient && \
     sh -c 'echo -e "[rhel9.2-baseos]\nname=rhel9.2-baseos\nbaseurl=http://download.eng.pek2.redhat.com/rhel-9/rel-eng/RHEL-9/latest-RHEL-9.2/compose/BaseOS/x86_64/os/\nenabled=0\ngpgcheck=1" >/etc/yum.repos.d/rhel9.2-baseos.repo' && \
     yum -y --enablerepo=rhel9.2-baseos install sos
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
@@ -21,4 +21,4 @@ RUN set -x && cd "$(mktemp -d)" && \
     KREW="krew-${OS}_${ARCH}" && \
     curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/latest/download/${KREW}.tar.gz" && \
     tar zxvf "${KREW}.tar.gz" && \
-    ./"${KREW}" install krew && export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH" && which kubectl-krew
+    ./"${KREW}" install krew && cd / && export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH" && which kubectl-krew && set +x
