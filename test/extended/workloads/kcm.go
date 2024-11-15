@@ -14,6 +14,7 @@ import (
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	errors2 "k8s.io/apimachinery/pkg/util/errors"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
@@ -918,6 +919,38 @@ var _ = g.Describe("[sig-apps] Workloads test kcm works well", func() {
 		o.Expect(token).NotTo(o.BeEmpty())
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="KubeJobFailed"}'`, token, "fail-job", 600)
 	})
+
+	g.It("Author:yinzhou-NonHyperShiftHOST-ROSA-OSD_CCS-ARO-High-73874-validate for alert KubeControllerManagerDown [Disruptive]", func() {
+		masterNodes, getAllMasterNodesErr := exutil.GetClusterNodesBy(oc, "master")
+		o.Expect(getAllMasterNodesErr).NotTo(o.HaveOccurred())
+		o.Expect(masterNodes).NotTo(o.BeEmpty())
+		var errList []error
+
+		defer func() {
+			o.Expect(errors2.NewAggregate(errList)).NotTo(o.HaveOccurred())
+		}()
+
+		exutil.By("Remove the manifest for kcm on master node one by one")
+		defer func() {
+			e2e.Logf("Restoring the kcm")
+			for _, nodeName := range masterNodes {
+				err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "-n", "openshift-kube-controller-manager", "--", "chroot", "/host", "mv", "/etc/kubernetes/kube-controller-manager-pod.yaml", "/etc/kubernetes/manifests/").Execute()
+				errList = append(errList, err)
+			}
+		}()
+
+		for _, nodeName := range masterNodes {
+			err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeName, "-n", "openshift-kube-controller-manager", "--", "chroot", "/host", "mv", "/etc/kubernetes/manifests/kube-controller-manager-pod.yaml", "/etc/kubernetes/").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("Check alert KubeControllerManagerDown")
+		token, err := exutil.GetSAToken(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(token).NotTo(o.BeEmpty())
+		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="KubeControllerManagerDown"}'`, token, "openshift-kube-controller-manager", 600)
+	})
+
 })
 
 var _ = g.Describe("[sig-cli] Workloads kube-controller-manager on Microshift", func() {
