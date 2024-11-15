@@ -341,6 +341,74 @@ spec:
 			e2e.Logf("overrides have been validated!")
 		})
 
+		g.It("Author:qitang-CPaasrunOnly-ConnectedOnly-High-76729-LokiStack 1x.pico Support[Serial]", func() {
+			if !validateInfraAndResourcesForLoki(oc, "18Gi", "8") {
+				g.Skip("Skip this case for the cluster does't have enough resources")
+			}
+			objectStorage := getStorageType(oc)
+			if len(objectStorage) == 0 {
+				g.Skip("Current cluster doesn't have a proper object storage for this test!")
+			}
+			sc, err := getStorageClassName(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("Deploying LokiStack CR for 1x.pico tshirt size")
+			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+			ls := lokiStack{
+				name:          "loki-76729",
+				namespace:     cloNS,
+				tSize:         "1x.pico",
+				storageType:   objectStorage,
+				storageSecret: "storage-secret-76729",
+				storageClass:  sc,
+				bucketName:    "logging-loki-76729-" + getInfrastructureName(oc),
+				template:      lokiStackTemplate,
+			}
+			defer ls.removeObjectStorage(oc)
+			err = ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+			e2e.Logf("LokiStack deployed")
+
+			exutil.By("Validate component replicas for 1x.pico bucket size")
+			lokiComponents := []string{"distributor", "gateway", "index-gateway", "query-frontend", "querier", "ruler"}
+			for _, component := range lokiComponents {
+				if component == "gateway" {
+					component = "lokistack-gateway"
+				}
+				replicaCount, err := getPodNames(oc, ls.namespace, "app.kubernetes.io/component="+component)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(len(replicaCount) == 2).Should(o.BeTrue())
+			}
+			replicacount, err := getPodNames(oc, ls.namespace, "app.kubernetes.io/component=compactor")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(replicacount) == 1).Should(o.BeTrue())
+			ingesterReplicaCount, err := getPodNames(oc, ls.namespace, "app.kubernetes.io/component=ingester")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(len(ingesterReplicaCount) == 3).Should(o.BeTrue())
+
+			exutil.By("Check PodDisruptionBudgets set for 1x.pico bucket size")
+			for _, component := range lokiComponents {
+				minAvailable, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("PodDisruptionBudget", ls.name+"-"+component, "-n", cloNS, "-o=jsonpath={.spec.minAvailable}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(minAvailable == "1").Should(o.BeTrue())
+				disruptionsAllowed, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("PodDisruptionBudget", ls.name+"-"+component, "-n", cloNS, "-o=jsonpath={.status.disruptionsAllowed}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(disruptionsAllowed == "1").Should(o.BeTrue())
+			}
+
+			minAvailable, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("PodDisruptionBudget", ls.name+"-ingester", "-n", cloNS, "-o=jsonpath={.spec.minAvailable}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(minAvailable == "1").Should(o.BeTrue())
+			disruptionsAllowed, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("PodDisruptionBudget", ls.name+"-ingester", "-n", cloNS, "-o=jsonpath={.status.disruptionsAllowed}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(disruptionsAllowed == "2").Should(o.BeTrue())
+
+		})
+
 	})
 
 })
