@@ -189,6 +189,27 @@ type serviceDescription struct {
 	template    string
 }
 
+type counts struct {
+	pods                int
+	varibles            int
+	services            int
+	sa                  int
+	scansettings        int
+	rules               int
+	routes              int
+	roles               int
+	rolebindings        int
+	pvc                 int
+	pv                  int
+	profiles            int
+	profilebundles      int
+	leases              int
+	events              int
+	clusterroles        int
+	clusterrolebindings int
+	configmaps          int
+}
+
 func (service *serviceDescription) create(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", service.template, "-p", "NAME="+service.name,
 		"NAMESPACE="+service.namespace, "PROFILEKIND="+service.profilekind)
@@ -1348,4 +1369,269 @@ func getWorkloadLimitNamespacesExempt(oc *exutil.CLI, workloadKind string) strin
 		}
 	}
 	return varNs
+}
+
+func verifyFilesUnderMustgather(mustgatherDir string, fails int) int {
+	mustgatherChecks := counts{
+		pods:                0,
+		varibles:            0,
+		services:            0,
+		sa:                  0,
+		scansettings:        0,
+		rules:               0,
+		routes:              0,
+		roles:               0,
+		rolebindings:        0,
+		pvc:                 0,
+		pv:                  0,
+		profiles:            0,
+		profilebundles:      0,
+		leases:              0,
+		events:              0,
+		clusterroles:        0,
+		clusterrolebindings: 0,
+		configmaps:          0,
+	}
+	mustgatherExpected := counts{
+		pods:                2,
+		varibles:            2,
+		services:            2,
+		sa:                  2,
+		scansettings:        2,
+		rules:               2,
+		routes:              2,
+		roles:               2,
+		rolebindings:        2,
+		pvc:                 2,
+		pv:                  2,
+		profiles:            2,
+		profilebundles:      2,
+		leases:              2,
+		events:              2,
+		clusterroles:        114,
+		clusterrolebindings: 6,
+		configmaps:          2,
+	}
+
+	err := filepath.Walk(mustgatherDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			e2e.Logf("Error on %v: %v", path, err)
+			return err
+		}
+
+		if !info.IsDir() {
+			if strings.Contains(path, "openshift-compliance-must-gather") {
+				if strings.Contains(path, "/openshift-compliance/") {
+					if strings.Contains(path, "/openshift-compliance/pods/") {
+						if strings.Contains(path, "/openshift-compliance/pods/describe.log") || strings.Contains(path, "/openshift-compliance/pods/get.yaml") {
+							mustgatherChecks.pods++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/variables.compliance.openshift.io/") {
+						if strings.Contains(path, "/openshift-compliance/variables.compliance.openshift.io/describe.log") ||
+							strings.Contains(path, "/openshift-compliance/variables.compliance.openshift.io/get.yaml") {
+							mustgatherChecks.varibles++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/services/") {
+						if strings.Contains(path, "/openshift-compliance/services/describe.log") || strings.Contains(path, "/openshift-compliance/services/get.yaml") {
+							mustgatherChecks.services++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/serviceaccounts/") {
+						if strings.Contains(path, "/openshift-compliance/serviceaccounts/describe.log") || strings.Contains(path, "/openshift-compliance/serviceaccounts/get.yaml") {
+							mustgatherChecks.sa++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/scansettings.compliance.openshift.io/") {
+						if strings.Contains(path, "/openshift-compliance/scansettings.compliance.openshift.io/describe.log") ||
+							strings.Contains(path, "/openshift-compliance/scansettings.compliance.openshift.io/get.yaml") {
+							mustgatherChecks.scansettings++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/rules.compliance.openshift.io/") {
+						if strings.Contains(path, "/openshift-compliance/rules.compliance.openshift.io/describe.log") || strings.Contains(path, "/openshift-compliance/rules.compliance.openshift.io/get.yaml") {
+							mustgatherChecks.rules++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/routes/") {
+						if strings.Contains(path, "/openshift-compliance/routes/describe.log") || strings.Contains(path, "/openshift-compliance/routes/get.yaml") {
+							mustgatherChecks.routes++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/roles/") {
+						if strings.Contains(path, "/openshift-compliance/roles/describe.log") || strings.Contains(path, "/openshift-compliance/roles/get.yaml") {
+							mustgatherChecks.roles++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/rolebindings/") {
+						if strings.Contains(path, "/openshift-compliance/rolebindings/describe.log") || strings.Contains(path, "/openshift-compliance/rolebindings/get.yaml") {
+							mustgatherChecks.rolebindings++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/pvc/") {
+						if strings.Contains(path, "/openshift-compliance/pvc/describe.log") || strings.Contains(path, "/openshift-compliance/pvc/get.yaml") {
+							mustgatherChecks.pvc++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/pv/") {
+						if strings.Contains(path, "/openshift-compliance/pv/describe.log") || strings.Contains(path, "/openshift-compliance/pv/get.yaml") {
+							mustgatherChecks.pv++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/profiles.compliance.openshift.io/") {
+						if strings.Contains(path, "/openshift-compliance/profiles.compliance.openshift.io/describe.log") ||
+							strings.Contains(path, "/openshift-compliance/profiles.compliance.openshift.io/get.yaml") {
+							mustgatherChecks.profiles++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/profilebundles.compliance.openshift.io/") {
+						if strings.Contains(path, "/openshift-compliance/profilebundles.compliance.openshift.io/describe.log") ||
+							strings.Contains(path, "/openshift-compliance/profilebundles.compliance.openshift.io/get.yaml") {
+							mustgatherChecks.profilebundles++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/leases/") {
+						if strings.Contains(path, "/openshift-compliance/leases/describe.log") || strings.Contains(path, "/openshift-compliance/leases/get.yaml") {
+							mustgatherChecks.leases++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/events/") {
+						if strings.Contains(path, "/openshift-compliance/events/describe.log") || strings.Contains(path, "/openshift-compliance/events/get.yaml") {
+							mustgatherChecks.events++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/configmaps/") {
+						if strings.Contains(path, "/openshift-compliance/configmaps/describe.log") || strings.Contains(path, "/openshift-compliance/configmaps/get.yaml") {
+							mustgatherChecks.configmaps++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/clusterroles/") {
+						describeLog, _ := regexp.MatchString(".*describe.log", path)
+						yamlFile, _ := regexp.MatchString(".*.yaml", path)
+						if describeLog || yamlFile {
+							mustgatherChecks.clusterroles++
+						}
+					}
+					if strings.Contains(path, "/openshift-compliance/clusterrolebindings/") {
+						describeLog, _ := regexp.MatchString(".*describe.log", path)
+						yamlFile, _ := regexp.MatchString(".*.yaml", path)
+						if describeLog || yamlFile {
+							mustgatherChecks.clusterrolebindings++
+						}
+					}
+				}
+			}
+
+		}
+		return nil
+	})
+	e2e.Logf("Error: %s", err)
+	e2e.Logf("mustgatherChecks.pods : %v", mustgatherChecks.pods)
+	if mustgatherChecks.pods < mustgatherExpected.pods {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/pods directory. Expected number of logs (%v)", mustgatherChecks.pods, mustgatherExpected.pods)
+		fails++
+	}
+
+	e2e.Logf("mustgatherChecks.varibles : %v", mustgatherChecks.varibles)
+	if mustgatherChecks.varibles < mustgatherExpected.varibles {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/varibles directory. Expected number of logs (%v)", mustgatherChecks.varibles, mustgatherExpected.varibles)
+		fails++
+	}
+
+	e2e.Logf("mustgatherChecks.services : %v", mustgatherChecks.services)
+	if mustgatherChecks.services < mustgatherExpected.services {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/services directory. Expected number of logs (%v)", mustgatherChecks.services, mustgatherExpected.services)
+		fails++
+	}
+
+	e2e.Logf("mustgatherChecks.sa : %v", mustgatherChecks.sa)
+	if mustgatherChecks.sa < mustgatherExpected.sa {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/sa directory. Expected number of logs (%v)", mustgatherChecks.sa, mustgatherExpected.sa)
+		fails++
+	}
+
+	e2e.Logf("mustgatherChecks.scansettings : %v", mustgatherChecks.scansettings)
+	if mustgatherChecks.scansettings < mustgatherExpected.scansettings {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/scansettings directory. Expected number of logs (%v)", mustgatherChecks.scansettings, mustgatherExpected.scansettings)
+		fails++
+	}
+
+	e2e.Logf("mustgatherChecks.rules : %v", mustgatherChecks.rules)
+	if mustgatherChecks.rules < mustgatherExpected.rules {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/rules directory. Expected number of logs (%v)", mustgatherChecks.rules, mustgatherExpected.rules)
+		fails++
+	}
+
+	e2e.Logf("mustgatherChecks.routes : %v", mustgatherChecks.routes)
+	if mustgatherChecks.routes < mustgatherExpected.routes {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/routes directory. Expected number of logs (%v)", mustgatherChecks.routes, mustgatherExpected.routes)
+		fails++
+	}
+	e2e.Logf("mustgatherChecks.roles : %v", mustgatherChecks.roles)
+	if mustgatherChecks.roles < mustgatherExpected.roles {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/roles directory. Expected number of logs (%v)", mustgatherChecks.roles, mustgatherExpected.roles)
+		fails++
+	}
+
+	e2e.Logf("mustgatherChecks.rolebindings : %v", mustgatherChecks.rolebindings)
+	if mustgatherChecks.rolebindings < mustgatherExpected.rolebindings {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/rolebindings directory. Expected number of logs (%v)", mustgatherChecks.rolebindings, mustgatherExpected.rolebindings)
+		fails++
+	}
+
+	e2e.Logf("mustgatherChecks.pvc : %v", mustgatherChecks.pvc)
+	if mustgatherChecks.pvc < mustgatherExpected.pvc {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/pvc directory. Expected number of logs (%v)", mustgatherChecks.pvc, mustgatherExpected.pvc)
+		fails++
+	}
+
+	e2e.Logf("mustgatherChecks.pv : %v", mustgatherChecks.pv)
+	if mustgatherChecks.pv < mustgatherExpected.pv {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/pv directory. Expected number of logs (%v)", mustgatherChecks.pv, mustgatherExpected.pv)
+		fails++
+	}
+
+	e2e.Logf("mustgatherChecks.profiles : %v", mustgatherChecks.profiles)
+	if mustgatherChecks.profiles < mustgatherExpected.profiles {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/profiles directory. Expected number of logs (%v)", mustgatherChecks.profiles, mustgatherExpected.profiles)
+		fails++
+	}
+
+	e2e.Logf("mustgatherChecks.profilebundles : %v", mustgatherChecks.profilebundles)
+	if mustgatherChecks.profilebundles < mustgatherExpected.profilebundles {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/profilebundles directory. Expected number of logs (%v)", mustgatherChecks.profilebundles, mustgatherExpected.profilebundles)
+		fails++
+	}
+
+	e2e.Logf("mustgatherChecks.leases : %v", mustgatherChecks.leases)
+	if mustgatherChecks.leases < mustgatherExpected.leases {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/leases directory. Expected number of logs (%v)", mustgatherChecks.leases, mustgatherExpected.leases)
+		fails++
+	}
+
+	e2e.Logf("mustgatherChecks.events : %v", mustgatherChecks.events)
+	if mustgatherChecks.events < mustgatherExpected.events {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/events directory. Expected number of logs (%v)", mustgatherChecks.events, mustgatherExpected.events)
+		fails++
+	}
+
+	e2e.Logf("mustgatherChecks.clusterroles : %v %v", mustgatherChecks.clusterroles, mustgatherExpected.clusterroles)
+	if mustgatherChecks.clusterroles < mustgatherExpected.clusterroles {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/clusterroles directory. Expected number of logs (%v)", mustgatherChecks.clusterroles, mustgatherExpected.clusterroles)
+		fails++
+	}
+
+	e2e.Logf("mustgatherChecks.clusterrolebindings : %v", mustgatherChecks.clusterrolebindings)
+	if mustgatherChecks.clusterrolebindings < mustgatherExpected.clusterrolebindings {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/clusterrolebindings directory. Expected number of logs (%v)", mustgatherChecks.clusterrolebindings, mustgatherExpected.clusterrolebindings)
+		fails++
+	}
+
+	e2e.Logf("mustgatherChecks.configmaps : %v", mustgatherChecks.configmaps)
+	if mustgatherChecks.configmaps < mustgatherExpected.configmaps {
+		e2e.Logf("(%v) Logs not found in /openshift-compliance/configmaps directory. Expected number of logs (%v)", mustgatherChecks.configmaps, mustgatherExpected.configmaps)
+		fails++
+	}
+	return fails
 }

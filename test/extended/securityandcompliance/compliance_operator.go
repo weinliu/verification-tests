@@ -2,6 +2,7 @@ package securityandcompliance
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -6895,6 +6896,50 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		g.By("Check the scan result pods.. !!!\n")
 		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbCustomNodeselector.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
 		subD.complianceSuiteResult(oc, ssbCustomNodeselector.name, "NON-COMPLIANT INCONSISTENT")
+	})
+
+	// auther: bgudi@redhat.com
+	g.It("Author:bgudi-NonHyperShiftHOST-NonPreRelease-High-75670-Verify must-gather image works as expected [Serial]", func() {
+		var (
+			ssb = scanSettingBindingDescription{
+				name:            "test-cis" + getRandomString(),
+				namespace:       subD.namespace,
+				profilekind1:    "Profile",
+				profilename1:    "ocp4-cis",
+				profilename2:    "ocp4-cis-node",
+				scansettingname: "default",
+				template:        scansettingbindingTemplate,
+			}
+			mustgatherDir = "/tmp/must-gather-7567" + getRandomString()
+			fails         = 0
+		)
+
+		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name})
+		g.By("Create scansettingbinding !!!\n")
+		ssb.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check complianceSuite name and result.. !!!\n")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
+
+		g.By("Execute must-gather command")
+		defer os.RemoveAll(mustgatherDir)
+		csvName, err := getResource(oc, asAdmin, withoutNamespace, "csv", "-n", subD.namespace, "-l", "operators.coreos.com/compliance-operator.openshift-compliance=", "-o=jsonpath={.items[0].metadata.name}")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		mustgatherImage, err := getResource(oc, asAdmin, withoutNamespace, "csv", csvName, "-n", subD.namespace, "-o=jsonpath='{.spec.relatedImages[?(@.name==\"must-gather\")].image}'")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		logFile, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("-n", subD.namespace, "must-gather", "--image="+strings.Trim(mustgatherImage, "'"), "--dest-dir="+mustgatherDir).Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: mustgather has an error %v %v", logFile, err))
+
+		g.By("Check must-gather logs")
+		files, err := os.ReadDir(mustgatherDir)
+		msgIfErr := fmt.Sprintf("ERROR %v contents %v\n%v", err, mustgatherDir, files)
+		o.Expect(err).NotTo(o.HaveOccurred(), msgIfErr)
+		o.Expect(files).NotTo(o.BeEmpty(), msgIfErr)
+		fails = verifyFilesUnderMustgather(mustgatherDir, fails)
+		o.Expect(fails).To(o.Equal(0), fmt.Sprintf("%v logs did not match expectd results\n", fails))
 	})
 
 	// author: xiyuan@redhat.com
