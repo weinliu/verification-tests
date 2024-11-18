@@ -118,6 +118,10 @@ func (mo *Monitor) InstantQuery(queryParams MonitorInstantQueryParams) (string, 
 
 	queryArgs = append(queryArgs, mo.url+monitorInstantQuery)
 
+	// We don't want to print the token
+	mo.ocClient.NotShowInfo()
+	defer mo.ocClient.SetShowInfo()
+
 	return RemoteShPod(mo.ocClient, monitorNamespace, "statefulsets/"+prometheusK8s, queryArgs...)
 }
 
@@ -145,6 +149,10 @@ func (mo *Monitor) RangeQuery(queryParams MonitorRangeQueryParams) (string, erro
 
 	queryArgs = append(queryArgs, mo.url+monitorRangeQuery)
 
+	// We don't want to print the token
+	mo.ocClient.NotShowInfo()
+	defer mo.ocClient.SetShowInfo()
+
 	return RemoteShPod(mo.ocClient, monitorNamespace, "statefulsets/"+prometheusK8s, queryArgs...)
 }
 
@@ -156,6 +164,10 @@ func (mo *Monitor) queryRules(query string) (string, error) {
 	}
 
 	queryArgs = append(queryArgs, mo.url+monitorRules+queryString)
+
+	// We don't want to print the token
+	mo.ocClient.NotShowInfo()
+	defer mo.ocClient.SetShowInfo()
 
 	return RemoteShPod(mo.ocClient, monitorNamespace, "statefulsets/"+prometheusK8s, queryArgs...)
 }
@@ -177,6 +189,11 @@ func (mo *Monitor) GetRecordRules() (string, error) {
 
 // GetAlerts returns all alerts. It doesn't use the alermanager, and it returns alerts in 'pending' state too
 func (pmo *PrometheusMonitor) GetAlerts() (string, error) {
+
+	// We don't want to print the token
+	pmo.ocClient.NotShowInfo()
+	defer pmo.ocClient.SetShowInfo()
+
 	getCmd := "curl -k -s -H \"" + fmt.Sprintf("Authorization: Bearer %v", pmo.Token) + "\" " + pmo.url + monitorAlerts
 	return RemoteShPod(pmo.ocClient, monitorNamespace, "statefulsets/"+prometheusK8s, "sh", "-c", getCmd)
 }

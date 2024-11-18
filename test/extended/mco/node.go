@@ -3,6 +3,7 @@ package mco
 import (
 	"context"
 	"fmt"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -1231,6 +1232,49 @@ func (n Node) GetMachine() (*Machine, error) {
 	return NewMachine(n.GetOC(), "openshift-machine-api", machineName), nil
 }
 
+// CanUseDnfDownload returns true if dnf can use the download subcommand
+func (n Node) CanUseDnfDownload() (bool, error) {
+	out, err := n.DebugNodeWithChroot("dnf", "download", "--help")
+	if err != nil {
+		if strings.Contains(out, "No such command:") || strings.Contains(out, "No such file or directory") {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
+}
+
+// DnfDownload uses the "dnf download" command to download a rpm package. Returns the full name of the downloaded package
+func (n Node) DnfDownload(pkg, dir string) (string, error) {
+	out, err := n.DebugNodeWithChroot("dnf", "download", pkg, "--destdir", dir)
+	if err != nil {
+		return "", err
+	}
+
+	expr := `(?P<package>` + pkg + `.*rpm)`
+	r := regexp.MustCompile(expr)
+	match := r.FindStringSubmatch(out)
+	if len(match) == 0 {
+		msg := fmt.Sprintf("Wrong download output. Cannot extract the name of the downloaded package using expresion %s:\n%s", expr, out)
+		logger.Errorf(msg)
+		return "", fmt.Errorf(msg)
+	}
+	pkgNameIndex := r.SubexpIndex("package")
+	pkgName := match[pkgNameIndex]
+
+	fullPkgName := path.Join(dir, pkgName)
+	logger.Infof("Downloaded package: %s", fullPkgName)
+	return fullPkgName, nil
+}
+
+// Reset returns the node's OS to its original state, removing any modification applied to it
+func (n Node) OSReset() error {
+	logger.Infof("Resetting the OS in node %s", n)
+	_, err := n.DebugNodeWithChroot("rpm-ostree", "reset")
+	return err
+}
+
 // GetAll returns a []Node list with all existing nodes
 func (nl *NodeList) GetAll() ([]Node, error) {
 	allNodeResources, err := nl.ResourceList.GetAll()
@@ -1433,4 +1477,54 @@ func GetOperatorNode(oc *exutil.CLI) (*Node, error) {
 	}
 
 	return NewNode(oc, nodeName), nil
+}
+
+// ConfigureStreamCentosRepo configures a centos repo in the node using the provided stream
+func ConfigureStreamCentosRepo(n Node, stream string) error {
+	var (
+		centosStreamTemplate = generateTemplateAbsolutePath("centos_stream.repo")
+		centosStreamRepoFile = "/etc/yum.repos.d/mco-test-centos.repo"
+		dnfVarDir            = "/etc/dnf/vars/"
+		streamVarRemoteFile  = NewRemoteFile(n, path.Join(dnfVarDir, "stream"))
+		proxy                = NewResource(n.GetOC().AsAdmin(), "proxy", "cluster")
+	)
+	logger.Infof("Creating necessary repo files")
+	err := n.CopyFromLocal(centosStreamTemplate, centosStreamRepoFile)
+	if err != nil {
+		return err
+	}
+
+	_, err = n.DebugNodeWithChroot("mkdir", "-p", dnfVarDir)
+	if err != nil {
+		logger.Errorf("Error creating the dnf var directory %s: %s", dnfVarDir, err)
+		return err
+	}
+
+	err = streamVarRemoteFile.Create([]byte(stream), 0o600)
+	if err != nil {
+		logger.Errorf("Error writing the content <%s> in the dnf var file %s: %s", stream, streamVarRemoteFile, err)
+		return err
+	}
+
+	logger.Infof("Configuring proxy settings")
+	httpProxy, err := proxy.Get(`{.status.httpProxy}`)
+	if err != nil {
+		logger.Errorf("Error getting the httpProxy value")
+		return err
+	}
+
+	_, err = n.DebugNodeWithChroot("sed", "-i", "s#proxy=#proxy="+httpProxy+"#g", centosStreamRepoFile)
+	if err != nil {
+		logger.Errorf("Error configuring proxy in the centos repo file")
+		return err
+	}
+
+	return err
+}
+
+// RemoveConfiguredStreamCentosRepo removes the configuration added by ConfigureStreamCentosRepo restoring the original status
+func RemoveConfiguredStreamCentosRepo(n Node) error {
+	logger.Infof("Remoing the stream centos repo configuration")
+	_, err := n.DebugNodeWithChroot("rm", "/etc/yum.repos.d/mco-test-centos.repo", "/etc/dnf/vars/stream")
+	return err
 }

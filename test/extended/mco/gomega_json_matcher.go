@@ -25,15 +25,15 @@ func (matcher *gjsonStringMatcher) Match(actual interface{}) (success bool, err 
 	strJSON, ok := actual.(string)
 	logger.Debugf("Matched JSON: %s", strJSON)
 	if !ok {
-		return false, fmt.Errorf(`Wrong type. Matcher expects a type "string"`)
+		return false, fmt.Errorf(`Wrong type. Matcher expects a type "string": %s`, actual)
 	}
 
 	if !gjson.Valid(strJSON) {
-		return false, fmt.Errorf(`Wrong format. The string is not a valid JSON`)
+		return false, fmt.Errorf(`Wrong format. The string is not a valid JSON: %s`, strJSON)
 	}
 	data := gjson.Get(strJSON, matcher.path)
 	if !data.Exists() {
-		return false, fmt.Errorf(`The matched path %s does not exist in the provided JSON`, matcher.path)
+		return false, fmt.Errorf(`The matched path %s does not exist in the provided JSON: %s`, matcher.path, strJSON)
 	}
 	matcher.strData = data.String()
 
