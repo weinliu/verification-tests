@@ -73,6 +73,14 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		// Due to bug OCPBUGS-31443 adding code to skip the case if namespace exists
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", kubeNamespace).Execute()
+		if nsErr == nil {
+			g.Skip("Skipping the case as the kube-descheduler-operator namespace already exists")
+		} else {
+			e2e.Logf("Kube-descheduler-operator namespace does not exist, proceeding further")
+		}
+
 		g.By("Create the descheduler namespace")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -422,6 +430,14 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			dName:     "d4005522",
 			namespace: oc.Namespace(),
 			template:  deploydT,
+		}
+
+		// Due to bug OCPBUGS-31443 adding code to skip the case if namespace exists
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", kubeNamespace).Execute()
+		if nsErr == nil {
+			g.Skip("Skipping the case as the kube-descheduler-operator namespace already exists")
+		} else {
+			e2e.Logf("Kube-descheduler-operator namespace does not exist, proceeding further")
 		}
 
 		g.By("Create the descheduler namespace")
@@ -854,6 +870,14 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			template:         deschedulerT,
 		}
 
+		// Due to bug OCPBUGS-31443 adding code to skip the case if namespace exists
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", kubeNamespace).Execute()
+		if nsErr == nil {
+			g.Skip("Skipping the case as the kube-descheduler-operator namespace already exists")
+		} else {
+			e2e.Logf("Kube-descheduler-operator namespace does not exist, proceeding further")
+		}
+
 		g.By("Create the descheduler namespace")
 		defer getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
 		err := getOCPerKubeConf(oc, guestClusterKubeconfig).AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
@@ -1154,6 +1178,14 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			template:         deschedulerpT,
 		}
 
+		// Due to bug OCPBUGS-31443 adding code to skip the case if namespace exists
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", kubeNamespace).Execute()
+		if nsErr == nil {
+			g.Skip("Skipping the case as the kube-descheduler-operator namespace already exists")
+		} else {
+			e2e.Logf("Kube-descheduler-operator namespace does not exist, proceeding further")
+		}
+
 		g.By("Create the descheduler namespace")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
@@ -1229,9 +1261,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Check all the pods should running")
-		if ok := waitForAvailableRsRunning(oc, "deployment", "ocp43277", oc.Namespace(), "10"); ok {
-			e2e.Logf("All pods are runnnig now\n")
-		}
+		waitForDeploymentPodsToBeReady(oc, oc.Namespace(), "ocp43277")
 
 		g.By("Check the descheduler deploy logs, should see config error logs")
 		checkLogsFromRs(oc, kubeNamespace, "pod", podName, regexp.QuoteMeta(`"Evicted pod in dry run mode"`)+".*"+regexp.QuoteMeta(oc.Namespace())+".*"+regexp.QuoteMeta(`reason=""`)+".*"+regexp.QuoteMeta(`strategy="PodLifeTime"`))
@@ -1368,6 +1398,14 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		defer priorityclassh.deletePriorityClass(oc)
 		priorityclassh.createPriorityClass(oc)
+
+		// Due to bug OCPBUGS-31443 adding code to skip the case if namespace exists
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", kubeNamespace).Execute()
+		if nsErr == nil {
+			g.Skip("Skipping the case as the kube-descheduler-operator namespace already exists")
+		} else {
+			e2e.Logf("Kube-descheduler-operator namespace does not exist, proceeding further")
+		}
 
 		g.By("Create the descheduler namespace")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
@@ -1527,6 +1565,14 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			profile2:         "SoftTopologyAndDuplicates",
 			profile3:         "LifecycleAndUtilization",
 			template:         deschedulereinsT,
+		}
+
+		// Due to bug OCPBUGS-31443 adding code to skip the case if namespace exists
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", kubeNamespace).Execute()
+		if nsErr == nil {
+			g.Skip("Skipping the case as the kube-descheduler-operator namespace already exists")
+		} else {
+			e2e.Logf("Kube-descheduler-operator namespace does not exist, proceeding further")
 		}
 
 		g.By("Create the descheduler namespace")
@@ -1704,6 +1750,14 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			profile2:         "SoftTopologyAndDuplicates",
 			profile3:         "LifecycleAndUtilization",
 			template:         deschedulerinsT,
+		}
+
+		// Due to bug OCPBUGS-31443 adding code to skip the case if namespace exists
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", kubeNamespace).Execute()
+		if nsErr == nil {
+			g.Skip("Skipping the case as the kube-descheduler-operator namespace already exists")
+		} else {
+			e2e.Logf("Kube-descheduler-operator namespace does not exist, proceeding further")
 		}
 
 		g.By("Create the descheduler namespace")
@@ -1900,6 +1954,14 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Skip the test if no qe-app-registry catalog is present
 		skipMissingCatalogsource(oc)
+
+		// Due to bug OCPBUGS-31443 adding code to skip the case if namespace exists
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", kubeNamespace).Execute()
+		if nsErr == nil {
+			g.Skip("Skipping the case as the kube-descheduler-operator namespace already exists")
+		} else {
+			e2e.Logf("Kube-descheduler-operator namespace does not exist, proceeding further")
+		}
 
 		deschedulertpN := filepath.Join(buildPruningBaseDir, "kubedescheduler_thresholdPriority.yaml")
 		deploypmT := filepath.Join(buildPruningBaseDir, "deploy_podWithPriorityClassName.yaml")
@@ -2105,6 +2167,14 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		// Skip the test if no qe-app-registry catalog is present
 		skipMissingCatalogsource(oc)
 
+		// Due to bug OCPBUGS-31443 adding code to skip the case if namespace exists
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", kubeNamespace).Execute()
+		if nsErr == nil {
+			g.Skip("Skipping the case as the kube-descheduler-operator namespace already exists")
+		} else {
+			e2e.Logf("Kube-descheduler-operator namespace does not exist, proceeding further")
+		}
+
 		g.By("Create the descheduler namespace")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
@@ -2172,6 +2242,14 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		// Skip the test if no qe-app-registry catalog is present
 		skipMissingCatalogsource(oc)
+
+		// Due to bug OCPBUGS-31443 adding code to skip the case if namespace exists
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", kubeNamespace).Execute()
+		if nsErr == nil {
+			g.Skip("Skipping the case as the kube-descheduler-operator namespace already exists")
+		} else {
+			e2e.Logf("Kube-descheduler-operator namespace does not exist, proceeding further")
+		}
 
 		g.By("Create the descheduler namespace")
 		defer func() {
@@ -2336,6 +2414,14 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 			profile2:         "EvictPodsWithLocalStorage",
 			profile3:         "LongLifecycle",
 			template:         deschedulerpT,
+		}
+
+		// Due to bug OCPBUGS-31443 adding code to skip the case if namespace exists
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", kubeNamespace).Execute()
+		if nsErr == nil {
+			g.Skip("Skipping the case as the kube-descheduler-operator namespace already exists")
+		} else {
+			e2e.Logf("Kube-descheduler-operator namespace does not exist, proceeding further")
 		}
 
 		g.By("Create the descheduler namespace")
