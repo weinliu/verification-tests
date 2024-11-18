@@ -2,13 +2,16 @@ package baremetal
 
 import (
 	"fmt"
-	g "github.com/onsi/ginkgo/v2"
-	o "github.com/onsi/gomega"
-	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	e2e "k8s.io/kubernetes/test/e2e/framework"
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
+
+	g "github.com/onsi/ginkgo/v2"
+	o "github.com/onsi/gomega"
+	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"k8s.io/apimachinery/pkg/util/wait"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on BareMetal", func() {
@@ -150,6 +153,82 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 		currentVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("HostFirmwareComponents", "-n", machineAPINamespace, host, "-o=jsonpath={.status.components[1].currentVersion}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(currentVersion).ShouldNot(o.Equal(initialVersion))
+
+	})
+
+	// author: jhajyahy@redhat.com
+	g.It("Author:jhajyahy-Longduration-NonPreRelease-Medium-77676-DAY2 Update HFS via HostUpdatePolicy CRD [Disruptive]", func() {
+		dirname = "OCP-75430.log"
+		host, getBmhErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, "-o=jsonpath={.items[4].metadata.name}").Output()
+		o.Expect(getBmhErr).NotTo(o.HaveOccurred(), "Failed to get bmh name")
+		workerNode, err := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create host update policy")
+		BaseDir := exutil.FixturePath("testdata", "installer")
+		hostUpdatePolicy := filepath.Join(BaseDir, "baremetal", "host-update-policy.yaml")
+		exutil.ModifyYamlFileContent(hostUpdatePolicy, []exutil.YamlReplace{
+			{
+				Path:  "metadata.name",
+				Value: host,
+			},
+		})
+
+		dcErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", hostUpdatePolicy, "-n", machineAPINamespace).Execute()
+		o.Expect(dcErr).NotTo(o.HaveOccurred())
+		defer func() {
+			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", hostUpdatePolicy, "-n", machineAPINamespace).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			nodeHealthErr := clusterNodesHealthcheck(oc, 1500)
+			exutil.AssertWaitPollNoErr(nodeHealthErr, "Cluster did not recover in time!")
+			clusterOperatorHealthcheckErr := clusterOperatorHealthcheck(oc, 1500, dirname)
+			exutil.AssertWaitPollNoErr(clusterOperatorHealthcheckErr, "Cluster operators did not recover in time!")
+		}()
+
+		exutil.By("Update LogicalProc HFS setting")
+		patchConfig := `[{"op": "replace", "path": "/spec/settings/LogicalProc", "value": "Enabled"}]`
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hfs", "-n", machineAPINamespace, host, "--type=json", "-p", patchConfig).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+		defer func() {
+			patchConfig := `[{"op": "replace", "path": "/spec/settings", "value": {}}]`
+			patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hfs", "-n", machineAPINamespace, host, "--type=json", "-p", patchConfig).Execute()
+			o.Expect(patchErr).NotTo(o.HaveOccurred())
+		}()
+
+		specModified, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hfs", "-n", machineAPINamespace, host, "-o=jsonpath={.spec.settings.LogicalProc}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(specModified).Should(o.Equal("Enabled"))
+
+		exutil.By("Reboot baremtalhost worker-01")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("baremetalhosts", host, "reboot.metal3.io=", "-n", machineAPINamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(out).To(o.ContainSubstring("annotated"))
+
+		exutil.By("Waiting for the node to return to 'Ready' state")
+		// poll for node status to change to NotReady
+		err = wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", workerNode[1], "-o=jsonpath={.status.conditions[3].status}").Output()
+			if err != nil || string(output) == "True" {
+				e2e.Logf("Node is available, status: %s. Trying again", output)
+				return false, nil
+			}
+			if string(output) == "Unknown" {
+				e2e.Logf("Node is Ready, status: %s", output)
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Node did not change state as expected")
+
+		nodeHealthErr := clusterNodesHealthcheck(oc, 1500)
+		exutil.AssertWaitPollNoErr(nodeHealthErr, "Cluster did not recover in time!")
+		clusterOperatorHealthcheckErr := clusterOperatorHealthcheck(oc, 1500, dirname)
+		exutil.AssertWaitPollNoErr(clusterOperatorHealthcheckErr, "Cluster operators did not recover in time!")
+
+		exutil.By("Verify LogicalProc hfs setting was actually changed")
+		statusModified, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hfs", "-n", machineAPINamespace, host, "-o=jsonpath={.status.settings.LogicalProc}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(statusModified).Should(o.Equal(specModified))
 
 	})
 })
