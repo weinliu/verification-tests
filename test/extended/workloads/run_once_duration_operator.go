@@ -82,6 +82,14 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 		podWithRestartPolicy := filepath.Join(buildPruningBaseDir, "pod_with_restart_policy.yaml")
 		podWithOnFailurePolicy := filepath.Join(buildPruningBaseDir, "pod_with_on_failure_policy.yaml")
 
+		// Due to bug OCPBUGS-31443 adding code to skip the case if namespace exists
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", kubeNamespace).Execute()
+		if nsErr == nil {
+			g.Skip("Skipping the case as the run-once-duration-override-operator namespace already exists")
+		} else {
+			e2e.Logf("run-once-duration-override-operator namespace does not exist, proceeding further")
+		}
+
 		g.By("Create the run once duration override  namespace")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
@@ -243,6 +251,14 @@ var _ = g.Describe("[sig-scheduling] Workloads Set activeDeadLineseconds using t
 	g.It("Author:knarra-NonHyperShiftHOST-ROSA-OSD_CCS-ARO-WRS-High-62690-V-ACS.02-Verify that activeDeadLineSeconds value is set as the min value of pod.spec.ActiveDeadlineSeconds and RODOO activeDeadlineSeconds [Serial]", func() {
 		podWithActiveDeadLineSeconds := filepath.Join(buildPruningBaseDir, "pod_with_active_dead_line_seconds.yaml")
 		podWithAdsGreaterThanOperator := filepath.Join(buildPruningBaseDir, "pod_with_ads_greater_than_operator.yaml")
+
+		// Due to bug OCPBUGS-31443 adding code to skip the case if namespace exists
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", kubeNamespace).Execute()
+		if nsErr == nil {
+			g.Skip("Skipping the case as the run-once-duration-override-operator namespace already exists")
+		} else {
+			e2e.Logf("run-once-duration-override-operator namespace does not exist, proceeding further")
+		}
 
 		g.By("Create the run once duration override  namespace")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()

@@ -2265,9 +2265,9 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		assertPodOutput(oc, "olm.catalogSource=cs-redhat-operator-index-v4-16", "openshift-marketplace", "Running")
 
 		exutil.By("Installing operators from 4.16 catalog")
-		rhrodoSub, rhrodoOG := getOperatorInfo(oc, "run-once-duration-override-operator", "openshift-run-once-duration-override-operator", "registry.redhat.io/redhat/redhat-operator-index:v4.16", "cs-redhat-operator-index-v4-16")
-		defer removeOperatorFromCustomCS(oc, rhrodoSub, rhrodoOG, "openshift-run-once-duration-override-operator")
-		installOperatorFromCustomCS(oc, rhrodoSub, rhrodoOG, "openshift-run-once-duration-override-operator", "run-once-duration-override-operator")
+		rhkdoSub, rhkdoOG := getOperatorInfo(oc, "cluster-kube-descheduler-operator", "openshift-kube-descheduler-operator", "registry.redhat.io/redhat/redhat-operator-index:v4.16", "cs-redhat-operator-index-v4-16")
+		defer removeOperatorFromCustomCS(oc, rhkdoSub, rhkdoOG, "openshift-kube-descheduler-operator")
+		installOperatorFromCustomCS(oc, rhkdoSub, rhkdoOG, "openshift-kube-descheduler-operator", "cluster-kube-descheduler-operator")
 
 		exutil.By("Installing operators from redhat-operator-index 4.14 catalog")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")

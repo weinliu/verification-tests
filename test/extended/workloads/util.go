@@ -1197,9 +1197,9 @@ func getTimeFromTimezone(oc *exutil.CLI) (string, string) {
 	hour, minu, _ := currentTime.Clock()
 
 	// Adjust the hour and minute components
-	if minu == 59 {
+	if minu >= 58 {
 		hour = (hour + 1) % 24
-		minu = 01
+		minu = (minu + 2) % 60
 	} else {
 		minu += 02
 	}

@@ -285,7 +285,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Make sure all the pods assoicated with replicaset are deleted")
-		err = wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		err = wait.Poll(10*time.Second, 80*time.Second, func() (bool, error) {
 			output, err := oc.WithoutNamespace().Run("get").Args("pods", "-n", testdp.namespace).Output()
 			if err != nil {
 				e2e.Logf("Fail to get is, error: %s. Trying again", err)

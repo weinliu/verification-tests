@@ -9,7 +9,6 @@ mirror:
       - name: aws-load-balancer-operator.v1.1.1
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.16
     packages:
-    - name: run-once-duration-override-operator
+    - name: cluster-kube-descheduler-operator
       bundles:
-      - name: runoncedurationoverrideoperator.v1.1.0
-      - name: runoncedurationoverrideoperator.v1.1.1
+      - name: clusterkubedescheduleroperator.v5.0.1
