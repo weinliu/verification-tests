@@ -120,11 +120,22 @@ func SkipBaselineCaps(oc *CLI, sets string) {
 
 // SkipNoCapabilities skip the test if the cluster has no one capability
 func SkipNoCapabilities(oc *CLI, capability string) {
-	knownCapabilities, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.knownCapabilities}").Output()
+	clusterVersion, err := oc.AdminConfigClient().ConfigV1().ClusterVersions().Get(context.Background(), "version", metav1.GetOptions{})
 	o.Expect(err).NotTo(o.HaveOccurred())
-	enabledCapabilities, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.enabledCapabilities}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Contains(knownCapabilities, capability) && !strings.Contains(enabledCapabilities, capability) {
+
+	hasCapability := func(capabilities []configv1.ClusterVersionCapability, checked string) bool {
+		cap := configv1.ClusterVersionCapability(checked)
+		for _, capability := range capabilities {
+			if capability == cap {
+				return true
+			}
+		}
+		return false
+	}
+	if clusterVersion.Status.Capabilities.KnownCapabilities != nil &&
+		hasCapability(clusterVersion.Status.Capabilities.KnownCapabilities, capability) &&
+		(clusterVersion.Status.Capabilities.EnabledCapabilities == nil ||
+			!hasCapability(clusterVersion.Status.Capabilities.EnabledCapabilities, capability)) {
 		g.Skip(fmt.Sprintf("the cluster has no %v and skip it", capability))
 	}
 }
@@ -159,6 +170,10 @@ func SkipIfCapEnabled(oc *CLI, capability string) {
 // so, the OLM case and optioinal operator case can not run on such cluster.
 func SkipNoOLMCore(oc *CLI) {
 	SkipNoCapabilities(oc, "OperatorLifecycleManager")
+}
+
+func SkipNoOLMv1Core(oc *CLI) {
+	SkipNoCapabilities(oc, "OperatorLifecycleManagerV1")
 }
 
 // SkipNoBuild skip the test if the cluster has no Build component
