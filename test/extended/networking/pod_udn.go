@@ -12,6 +12,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
@@ -43,10 +44,10 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		)
 
 		ipStackType := checkIPStackType(oc)
-		g.By("1. Create first namespace")
+		exutil.By("1. Create first namespace")
 		ns1 := oc.Namespace()
 
-		g.By("2. Create 2nd namespace")
+		exutil.By("2. Create 2nd namespace")
 		oc.SetupProject()
 		ns2 := oc.Namespace()
 
@@ -80,7 +81,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 			nad[i].createUdnNad(oc)
 		}
 
-		g.By("create a udn hello pod in ns1")
+		exutil.By("create a udn hello pod in ns1")
 		pod1 := udnPodResource{
 			name:      "hello-pod-ns1",
 			namespace: ns1,
@@ -90,7 +91,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		pod1.createUdnPod(oc)
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
-		g.By("create a udn hello pod in ns2")
+		exutil.By("create a udn hello pod in ns2")
 		pod2 := udnPodResource{
 			name:      "hello-pod-ns2",
 			namespace: ns2,
@@ -116,10 +117,10 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		)
 
 		ipStackType := checkIPStackType(oc)
-		g.By("1. Create first namespace")
+		exutil.By("1. Create first namespace")
 		ns1 := oc.Namespace()
 
-		g.By("2. Create 2nd namespace")
+		exutil.By("2. Create 2nd namespace")
 		oc.SetupProject()
 		ns2 := oc.Namespace()
 
@@ -153,7 +154,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 			nad[i].createUdnNad(oc)
 		}
 
-		g.By("create a udn hello pod in ns1")
+		exutil.By("create a udn hello pod in ns1")
 		pod1 := udnPodResource{
 			name:      "hello-pod-ns1",
 			namespace: ns1,
@@ -163,7 +164,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		pod1.createUdnPod(oc)
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
-		g.By("create a udn hello pod in ns2")
+		exutil.By("create a udn hello pod in ns2")
 		pod2 := udnPodResource{
 			name:      "hello-pod-ns2",
 			namespace: ns2,
@@ -769,10 +770,10 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		)
 
 		ipStackType := checkIPStackType(oc)
-		g.By("1. Create first namespace")
+		exutil.By("1. Create first namespace")
 		ns1 := oc.Namespace()
 
-		g.By("2. Create 2nd namespace")
+		exutil.By("2. Create 2nd namespace")
 		oc.SetupProject()
 		ns2 := oc.Namespace()
 
@@ -806,7 +807,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 			nad[i].createUdnNad(oc)
 		}
 
-		g.By("create a udn hello pod in ns1")
+		exutil.By("create a udn hello pod in ns1")
 		pod1 := udnPodResource{
 			name:      "hello-pod-ns1",
 			namespace: ns1,
@@ -816,7 +817,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		pod1.createUdnPod(oc)
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
-		g.By("create a udn hello pod in ns2")
+		exutil.By("create a udn hello pod in ns2")
 		pod2 := udnPodResource{
 			name:      "hello-pod-ns2",
 			namespace: ns2,
@@ -841,10 +842,10 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		)
 
 		ipStackType := checkIPStackType(oc)
-		g.By("1. Create first namespace")
+		exutil.By("1. Create first namespace")
 		ns1 := oc.Namespace()
 
-		g.By("2. Create 2nd namespace")
+		exutil.By("2. Create 2nd namespace")
 		oc.SetupProject()
 		ns2 := oc.Namespace()
 
@@ -877,7 +878,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 			}
 			nad[i].createUdnNad(oc)
 		}
-		g.By("create a udn hello pod in ns1")
+		exutil.By("create a udn hello pod in ns1")
 		pod1 := udnPodResource{
 			name:      "hello-pod-ns1",
 			namespace: ns1,
@@ -887,7 +888,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		pod1.createUdnPod(oc)
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
-		g.By("create a udn hello pod in ns2")
+		exutil.By("create a udn hello pod in ns2")
 		pod2 := udnPodResource{
 			name:      "hello-pod-ns2",
 			namespace: ns2,
@@ -1595,17 +1596,17 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 
 		ipStackType := checkIPStackType(oc)
 
-		g.By("1. Create first namespace")
+		exutil.By("1. Create first namespace")
 		ns1 := oc.Namespace()
 
-		g.By("2. Create 2nd namespace")
+		exutil.By("2. Create 2nd namespace")
 		oc.SetupProject()
 		ns2 := oc.Namespace()
-		g.By("3. Create 3rd namespace")
+		exutil.By("3. Create 3rd namespace")
 		oc.SetupProject()
 		ns3 := oc.Namespace()
 
-		g.By("4. Create 4th namespace")
+		exutil.By("4. Create 4th namespace")
 		oc.SetupProject()
 		ns4 := oc.Namespace()
 
@@ -1643,7 +1644,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 
 		pod := make([]udnPodResource, 4)
 		for i := 0; i < 4; i++ {
-			g.By("create a udn hello pods in ns1 ns2 ns3 and ns4")
+			exutil.By("create a udn hello pods in ns1 ns2 ns3 and ns4")
 			pod[i] = udnPodResource{
 				name:      "hello-pod",
 				namespace: nadNS[i],
@@ -1654,7 +1655,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 			waitPodReady(oc, pod[i].namespace, pod[i].name)
 		}
 
-		g.By("create another udn hello pod in ns1 to ensure layer3 conectivity post migration among'em")
+		exutil.By("create another udn hello pod in ns1 to ensure layer3 conectivity post migration among'em")
 		pod_ns1 := udnPodResource{
 			name:      "hello-pod-ns1",
 			namespace: nadNS[0],
@@ -1664,7 +1665,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		pod_ns1.createUdnPod(oc)
 		waitPodReady(oc, pod_ns1.namespace, pod_ns1.name)
 
-		g.By("create another udn hello pod in ns3 to ensure layer2 conectivity post migration among'em")
+		exutil.By("create another udn hello pod in ns3 to ensure layer2 conectivity post migration among'em")
 		pod_ns3 := udnPodResource{
 			name:      "hello-pod-ns3",
 			namespace: nadNS[2],
@@ -1704,4 +1705,96 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		CurlPod2PodPassUDN(oc, ns3, pod[2].name, ns3, pod_ns3.name)
 	})
 
+	g.It("Author:anusaxen-NonPreRelease-Longduration-Critical-76939-Check udn pods isolation on a scaled node [Disruptive]", func() {
+		var (
+			udnPodTemplate           = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
+			udnPodTemplateNode       = filepath.Join(testDataDirUDN, "udn_test_pod_template_node.yaml")
+			udnCRDSingleStack        = filepath.Join(testDataDirUDN, "udn_crd_singlestack_template.yaml")
+			mtu                int32 = 1300
+		)
+
+		ipStackType := checkIPStackType(oc)
+		o.Expect(ipStackType).NotTo(o.BeEmpty())
+		if ipStackType != "ipv4single" {
+			g.Skip("This case requires IPv4 single stack cluster")
+		}
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.VSphere, clusterinfra.IBMCloud, clusterinfra.OpenStack)
+
+		exutil.By("1. Create first namespace")
+		ns1 := oc.Namespace()
+
+		exutil.By("2. Create 2nd namespace")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		udnResourcename := []string{"l3-network-" + ns1, "l3-network-" + ns2}
+		udnNS := []string{ns1, ns2}
+		var cidr []string
+		var prefix int32
+
+		cidr = []string{"10.150.0.0/16", "10.151.0.0/16"}
+		prefix = 24
+
+		udncrd := make([]udnCRDResource, 2)
+		for i := 0; i < 2; i++ {
+			udncrd[i] = udnCRDResource{
+				crdname:   udnResourcename[i],
+				namespace: udnNS[i],
+				role:      "Primary",
+				mtu:       mtu,
+				cidr:      cidr[i],
+				prefix:    prefix,
+				template:  udnCRDSingleStack,
+			}
+			udncrd[i].createUdnCRDSingleStack(oc)
+			err := waitUDNCRDApplied(oc, udnNS[i], udncrd[i].crdname)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("create a udn hello pod in ns1")
+		pod1 := udnPodResource{
+			name:      "hello-pod-ns1",
+			namespace: ns1,
+			label:     "hello-pod",
+			template:  udnPodTemplate,
+		}
+		pod1.createUdnPod(oc)
+		waitPodReady(oc, pod1.namespace, pod1.name)
+
+		//following code block to scale up a node on cluster
+		exutil.By("1. Create a new machineset, get the new node created\n")
+		clusterinfra.SkipConditionally(oc)
+		infrastructureName := clusterinfra.GetInfrastructureName(oc)
+		machinesetName := infrastructureName + "-76939"
+		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 1}
+		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
+		defer ms.DeleteMachineSet(oc)
+		ms.CreateMachineSet(oc)
+
+		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
+		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)
+		o.Expect(len(machineName)).ShouldNot(o.Equal(0))
+		nodeName := clusterinfra.GetNodeNameFromMachine(oc, machineName[0])
+		e2e.Logf("Get nodeName: %v", nodeName)
+
+		checkNodeStatus(oc, nodeName, "Ready")
+
+		exutil.By("create a udn hello pod in ns2")
+		pod2 := udnPodResourceNode{
+			name:      "hello-pod-ns2",
+			namespace: ns2,
+			label:     "hello-pod",
+			nodename:  nodeName,
+			template:  udnPodTemplateNode,
+		}
+
+		pod2.createUdnPodNode(oc)
+		waitPodReady(oc, pod2.namespace, pod2.name)
+
+		//udn network connectivity should be isolated
+		CurlPod2PodFailUDN(oc, ns1, pod1.name, ns2, pod2.name)
+		//default network connectivity should also be isolated
+		CurlPod2PodFail(oc, ns1, pod1.name, ns2, pod2.name)
+	})
 })
