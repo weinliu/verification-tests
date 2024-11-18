@@ -290,6 +290,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			extraClusterRoleBinding = "driver-operator-clusterrole-48875-clusterrolebinding"
 		)
 
+		// Check CSO status before test
+		isCSOHealthy, err := checkCSOhealthy(oc)
+		if !isCSOHealthy || err != nil {
+			g.Skip("Skipped: Could not get the CSO status or CSO is not healthy!")
+		}
+
 		exutil.By("# Get the origin credential of vSphere CSI driver")
 		// Make sure the CSO is healthy
 		waitCSOhealthy(oc)
@@ -331,6 +337,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// https://bugzilla.redhat.com/show_bug.cgi?id=2040880
 		// On 4.15+ clusters the cluster storage operator become "Upgradeable:False"
 		// Double check with developer, since cso degrade is always True so the Upgradeable status could be any
+		waitCSOspecifiedStatusMessageAsExpected(oc, "Degraded", "error logging into vcenter: ServerFaultCode: Cannot complete login due to an incorrect user name or password.")
 		waitCSOspecifiedStatusValueAsExpected(oc, "Degraded", "True")
 		checkCSOspecifiedStatusValueAsExpectedConsistently(oc, "Degraded", "True")
 
@@ -341,7 +348,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding", extraClusterRoleBinding).Execute()
 
 		o.Eventually(func() bool {
-			allMetrics, _, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", driverOperatorNs, "deployment/vmware-vsphere-csi-driver-operator", "--", "curl", "-k", "-s", "-H", fmt.Sprintf("Authorization: Bearer %v", csoSaToken), "https://vmware-vsphere-csi-driver-operator-metrics:8445/metrics").Outputs()
+			allMetrics, _, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args(
+				"-n", driverOperatorNs,
+				"deployment/vmware-vsphere-csi-driver-operator", "--",
+				"sh", "-c", fmt.Sprintf(
+					"curl -k --noproxy '*' -s -H \"Authorization: Bearer %v\" https://vmware-vsphere-csi-driver-operator-metrics:8445/metrics",
+					csoSaToken,
+				),
+			).Outputs()
 			return strings.Contains(allMetrics, `vsphere_csi_driver_error{condition="degraded",failure_reason="vsphere_connection_failed"} 1`)
 		}).WithTimeout(defaultMaxWaitingTime).WithPolling(defaultIterationTimes).Should(o.BeTrue(), "Waiting for vsphere_connection_failed metrics reported timeout")
 

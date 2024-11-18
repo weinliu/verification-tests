@@ -671,6 +671,13 @@ func getCSOspecifiedStatusValue(oc *exutil.CLI, specifiedStatus string) (string,
 	return status, err
 }
 
+// Get Cluster Storage Operator specified status message
+func getCSOspecifiedStatusMessage(oc *exutil.CLI, specifiedStatus string) (string, error) {
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("co/storage", "-o=jsonpath={.status.conditions[?(.type=='"+specifiedStatus+"')].message}").Output()
+	debugLogf("CSO %q status message is %q", specifiedStatus, msg)
+	return msg, err
+}
+
 // Wait for Cluster Storage Operator specified status value as expected
 func waitCSOspecifiedStatusValueAsExpected(oc *exutil.CLI, specifiedStatus string, expectedValue string) {
 	pollErr := wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime, func() (bool, error) {
@@ -685,7 +692,36 @@ func waitCSOspecifiedStatusValueAsExpected(oc *exutil.CLI, specifiedStatus strin
 		}
 		return false, nil
 	})
+	if pollErr != nil {
+		getOcDescribeInfo(oc.AsAdmin(), "", "co", "storage")
+		ClusterStorageOperatorLogs, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-cluster-storage-operator", "-l", "name=cluster-storage-operator", "--tail=100").Output()
+		e2e.Logf("***$ oc logs -n openshift-cluster-storage-operator -l name=cluster-storage-operator --tail=100***\n%s", ClusterStorageOperatorLogs)
+		e2e.Logf("**************************************************************************")
+	}
 	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Waiting for CSO \"%s\" status value become expected \"%s\" timeout", specifiedStatus, expectedValue))
+}
+
+// Wait for Cluster Storage Operator specified status message as expected
+func waitCSOspecifiedStatusMessageAsExpected(oc *exutil.CLI, specifiedStatus string, expectedMsg string) {
+	pollErr := wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, defaultMaxWaitingTime*2, func() (bool, error) {
+		realValue, err := getCSOspecifiedStatusMessage(oc, specifiedStatus)
+		if err != nil {
+			e2e.Logf("Get CSO %q status message failed of: \"%v\"", specifiedStatus, err)
+			return false, nil
+		}
+		if strings.Contains(realValue, expectedMsg) {
+			e2e.Logf("CSO %q status message contains expected %q", specifiedStatus, expectedMsg)
+			return true, nil
+		}
+		return false, nil
+	})
+	if pollErr != nil {
+		getOcDescribeInfo(oc.AsAdmin(), "", "co", "storage")
+		ClusterStorageOperatorLogs, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-cluster-storage-operator", "-l", "name=cluster-storage-operator", "--tail=100").Output()
+		e2e.Logf("***$ oc logs -n openshift-cluster-storage-operator -l name=cluster-storage-operator --tail=100***\n%s", ClusterStorageOperatorLogs)
+		e2e.Logf("**************************************************************************")
+	}
+	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Waiting for CSO %q status message contains expected %q timeout", specifiedStatus, expectedMsg))
 }
 
 // checkCSOspecifiedStatusValueAsExpectedConsistently checks Cluster Storage Operator specified status value as expected consistently
