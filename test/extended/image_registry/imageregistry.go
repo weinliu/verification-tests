@@ -1010,73 +1010,46 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	// author: tbuskey@redhat.com
 	g.It("Author:xiuwang-ROSA-OSD_CCS-ARO-High-22056-Registry operator configure prometheus metric gathering [Serial]", func() {
 		var (
-			authHeader         string
-			after              = make(map[string]int)
-			before             = make(map[string]int)
-			data               prometheusImageregistryQueryHTTP
-			err                error
-			fails              = 0
-			failItems          = ""
-			l                  int
-			msg                string
-			prometheusURL      = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1"
-			prometheusURLQuery string
-			query              string
-			token              string
-			metrics            = []string{
+			fails         = 0
+			failItems     = ""
+			prometheusURL = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1"
+			metricsOnce   = []string{
+				"imageregistry_digest_cache_requests_total",
+				"imageregistry_digest_cache_scoped_requests_total",
+				"imageregistry_http_requests_total",
+				"imageregistry_http_request_duration_seconds_count",
+				"imageregistry_pullthrough_blobstore_cache_requests_total",
+				"imageregistry_pullthrough_repository_duration_seconds_sum"}
+			metricsTwice = []string{
 				"imageregistry_http_request_size_bytes_count",
 				"imageregistry_http_request_size_bytes_sum",
 				"imageregistry_http_response_size_bytes_count",
-				"imageregistry_http_requests_total",
 				"imageregistry_http_response_size_bytes_sum"}
 		)
 
 		g.By("Get Prometheus token")
-		token, err = getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		token, err := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(token).NotTo(o.BeEmpty())
-		authHeader = fmt.Sprintf("Authorization: Bearer %v", token)
 		checkRegistryFunctionFine(oc, "test-22056", oc.Namespace())
 
-		g.By("Collect metrics at start")
-		for _, query = range metrics {
-			prometheusURLQuery = fmt.Sprintf("%v/query?query=%v", prometheusURL, query)
-			err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-				msg, _, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--", "curl", "-k", "-H", authHeader, prometheusURLQuery).Outputs()
-				if err != nil || msg == "" {
-					return false, nil
-				}
-				return true, nil
-			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("[Before] the query %v is getting failed", query))
-			json.Unmarshal([]byte(msg), &data)
-			l = len(data.Data.Result) - 1
-			before[query], _ = strconv.Atoi(data.Data.Result[l].Value[1].(string))
-			e2e.Logf("[before] query %v ==  %v", query, before[query])
-
+		g.By("Collect metrics for once query ")
+		onceGather := gatherMetricsResult(oc, token, prometheusURL, metricsOnce)
+		for _, query := range metricsOnce {
+			o.Expect(string(onceGather[query])).NotTo(o.BeEmpty())
 		}
+
+		g.By("Collect metrics at start")
+		before := gatherMetricsResult(oc, token, prometheusURL, metricsTwice)
+
 		g.By("pause to get next metrics")
 		time.Sleep(60 * time.Second)
 
 		g.By("Collect metrics again")
-		for _, query = range metrics {
-			prometheusURLQuery = fmt.Sprintf("%v/query?query=%v", prometheusURL, query)
-			err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-				msg, _, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--", "curl", "-k", "-H", authHeader, prometheusURLQuery).Outputs()
-				if err != nil || msg == "" {
-					return false, nil
-				}
-				return true, nil
-			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("[After] the query %v is getting failed", query))
-			json.Unmarshal([]byte(msg), &data)
-			l = len(data.Data.Result) - 1
-			after[query], _ = strconv.Atoi(data.Data.Result[l].Value[1].(string))
-			e2e.Logf("[after] query %v ==  %v", query, after[query])
-		}
+		after := gatherMetricsResult(oc, token, prometheusURL, metricsTwice)
 
 		g.By("results")
-		for _, query = range metrics {
+		for _, query := range metricsTwice {
 			if before[query] > after[query] {
 				fails++
 				failItems = fmt.Sprintf("%v%v ", failItems, query)

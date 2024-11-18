@@ -74,6 +74,32 @@ type prometheusImageregistryQueryHTTP struct {
 	Status string `json:"status"`
 }
 
+func gatherMetricsResult(oc *exutil.CLI, token, prometheusURL string, metrics []string) map[string]int {
+	var (
+		data   prometheusImageregistryQueryHTTP
+		err    error
+		l      int
+		msg    string
+		result = make(map[string]int)
+	)
+	for _, query := range metrics {
+		prometheusURLQuery := fmt.Sprintf("%v/query?query=%v", prometheusURL, query)
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			msg, _, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", token), prometheusURLQuery).Outputs()
+			if err != nil || msg == "" {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the query %v is getting failed", query))
+		json.Unmarshal([]byte(msg), &data)
+		l = len(data.Data.Result) - 1
+		result[query], _ = strconv.Atoi(data.Data.Result[l].Value[1].(string))
+		e2e.Logf("The query %v result ==  %v", query, result[query])
+	}
+	return result
+}
+
 func listPodStartingWith(prefix string, oc *exutil.CLI, namespace string) (pod []corev1.Pod) {
 	podsToAll := []corev1.Pod{}
 	podList, err := oc.AdminKubeClient().CoreV1().Pods(namespace).List(context.Background(), metav1.ListOptions{})
