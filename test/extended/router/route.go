@@ -3,6 +3,7 @@ package router
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -358,20 +359,18 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, project1, "route/route-reen", "{.status.ingress[0].conditions[0].status}", "True")
 
 		exutil.By("3.0: Annotate unsecure, edge, reencrypt and passthrough route")
-		clusterType := checkIPStackType(oc)
-		result := getClientIP(oc, clusterType)
-		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_whitelist=`+result)
+		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_whitelist=0.0.0.0/0`)
 		findAnnotation := getAnnotation(oc, project1, "route", unsecureRoute)
-		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"` + result + `"`))
-		setAnnotation(oc, project1, "route/"+edgeRoute, `haproxy.router.openshift.io/ip_whitelist=`+result)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"0.0.0.0/0`))
+		setAnnotation(oc, project1, "route/"+edgeRoute, `haproxy.router.openshift.io/ip_whitelist=0.0.0.0/0`)
 		findAnnotation = getAnnotation(oc, project1, "route", edgeRoute)
-		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"` + result + `"`))
-		setAnnotation(oc, project1, "route/"+passthroughRoute, `haproxy.router.openshift.io/ip_whitelist=`+result)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"0.0.0.0/0`))
+		setAnnotation(oc, project1, "route/"+passthroughRoute, `haproxy.router.openshift.io/ip_whitelist=0.0.0.0/0`)
 		findAnnotation = getAnnotation(oc, project1, "route", passthroughRoute)
-		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"` + result + `"`))
-		setAnnotation(oc, project1, "route/"+reenRoute, `haproxy.router.openshift.io/ip_whitelist=`+result)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"0.0.0.0/0`))
+		setAnnotation(oc, project1, "route/"+reenRoute, `haproxy.router.openshift.io/ip_whitelist=0.0.0.0/0`)
 		findAnnotation = getAnnotation(oc, project1, "route", reenRoute)
-		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"` + result + `"`))
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"0.0.0.0/0`))
 
 		exutil.By("4.0: access the routes using the IP from the whitelist")
 		waitForOutsideCurlContains("http://"+unsecureHost, "", `Hello-OpenShift web-server-rc`)
@@ -394,7 +393,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"5.6.7.8`))
 
 		exutil.By("6.0: attempt to access the routes without an IP in the whitelist")
-		waitForOutsideCurlContains("http://"+unsecureHost, "", `exit status`)
+		cmd := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-I", "http://"+unsecureHost)
+		result, _ := exec.Command("bash", "-c", cmd).Output()
+		// use -I for 2 different scenarios, squid result has failure bad gateway, otherwise uses exit status
+		if strings.Contains(string(result), `squid`) {
+			waitForOutsideCurlContains("http://"+unsecureHost, "-I", `Bad Gateway`)
+		} else {
+			waitForOutsideCurlContains("http://"+unsecureHost, "", `exit status`)
+		}
 		waitForOutsideCurlContains("https://"+edgeHost, "-k", `exit status`)
 		waitForOutsideCurlContains("https://"+passthroughHost, "-k", `exit status`)
 		waitForOutsideCurlContains("https://"+reenHost, "-k", `exit status`)
@@ -1122,20 +1128,18 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, project1, "route/route-reen", "{.status.ingress[0].conditions[0].status}", "True")
 
 		exutil.By("3.0: Annotate unsecure, edge, reencrypt and passthrough route")
-		clusterType := checkIPStackType(oc)
-		pubIP := getClientIP(oc, clusterType)
-		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_allowlist=`+pubIP)
+		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_allowlist=0.0.0.0/0`)
 		findAnnotation := getAnnotation(oc, project1, "route", unsecureRoute)
-		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"` + pubIP + `"`))
-		setAnnotation(oc, project1, "route/"+edgeRoute, `haproxy.router.openshift.io/ip_allowlist=`+pubIP)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"0.0.0.0/0`))
+		setAnnotation(oc, project1, "route/"+edgeRoute, `haproxy.router.openshift.io/ip_allowlist=0.0.0.0/0`)
 		findAnnotation = getAnnotation(oc, project1, "route", edgeRoute)
-		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"` + pubIP + `"`))
-		setAnnotation(oc, project1, "route/"+passthroughRoute, `haproxy.router.openshift.io/ip_allowlist=`+pubIP)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"0.0.0.0/0`))
+		setAnnotation(oc, project1, "route/"+passthroughRoute, `haproxy.router.openshift.io/ip_allowlist=0.0.0.0/0`)
 		findAnnotation = getAnnotation(oc, project1, "route", passthroughRoute)
-		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"` + pubIP + `"`))
-		setAnnotation(oc, project1, "route/"+reenRoute, `haproxy.router.openshift.io/ip_allowlist=`+pubIP)
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"0.0.0.0/0`))
+		setAnnotation(oc, project1, "route/"+reenRoute, `haproxy.router.openshift.io/ip_allowlist=0.0.0.0/0`)
 		findAnnotation = getAnnotation(oc, project1, "route", reenRoute)
-		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"` + pubIP + `"`))
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"0.0.0.0/0`))
 
 		exutil.By("4.0: access the routes using the IP from the allowlist")
 		waitForOutsideCurlContains("http://"+unsecureHost, "", `Hello-OpenShift `+srvPodList[0]+` http-8080`)
@@ -1158,7 +1162,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"8.8.4.4`))
 
 		exutil.By("6.0: attempt to access the routes without an IP in the allowlist")
-		waitForOutsideCurlContains("http://"+unsecureHost, "-k", `exit status`)
+		cmd := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-I", "http://"+unsecureHost)
+		result, _ := exec.Command("bash", "-c", cmd).Output()
+		// use -I for 2 different scenarios, squid result has failure bad gateway, otherwise uses exit status
+		if strings.Contains(string(result), `squid`) {
+			waitForOutsideCurlContains("http://"+unsecureHost, "-I", `Bad Gateway`)
+		} else {
+			waitForOutsideCurlContains("http://"+unsecureHost, "", `exit status`)
+		}
 		waitForOutsideCurlContains("https://"+edgeHost, "-k", `exit status`)
 		waitForOutsideCurlContains("https://"+passthroughHost, "-k", `exit status`)
 		waitForOutsideCurlContains("https://"+reenHost, "-k", `exit status`)
@@ -1197,11 +1208,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, project1, "route/route-unsecure", "{.status.ingress[0].conditions[0].status}", "True")
 
 		exutil.By("3.0: Annotate unsecure route")
-		clusterType := checkIPStackType(oc)
-		pubIP := getClientIP(oc, clusterType)
-		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_whitelist=`+pubIP)
+		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_whitelist=0.0.0.0/0`)
 		findAnnotation := getAnnotation(oc, project1, "route", unsecureRoute)
-		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"` + pubIP + `"`))
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"0.0.0.0/0`))
 
 		exutil.By("4.0: access the route using the IP from the whitelist")
 		waitForOutsideCurlContains("http://"+unsecureHost, "", `Hello-OpenShift `+srvPodList[0]+` http-8080`)
@@ -1212,12 +1221,19 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"1.2.3.4`))
 
 		exutil.By("6.0: attempt to access the routes without an IP in the allowlist")
-		waitForOutsideCurlContains("http://"+unsecureHost, "-k", `exit status`)
+		cmd := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-I", "http://"+unsecureHost)
+		result, _ := exec.Command("bash", "-c", cmd).Output()
+		// use -I for 2 different scenarios, squid result has failure bad gateway, otherwise uses exit status
+		if strings.Contains(string(result), `squid`) {
+			waitForOutsideCurlContains("http://"+unsecureHost, "-I", `Bad Gateway`)
+		} else {
+			waitForOutsideCurlContains("http://"+unsecureHost, "", `exit status`)
+		}
 
 		exutil.By("7.0: annotate route with a valid public client IP in the allowlist and an invalid host IP in the whitelist")
-		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_allowlist=`+pubIP)
+		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_allowlist=0.0.0.0/0`)
 		findAnnotation = getAnnotation(oc, project1, "route", unsecureRoute)
-		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"` + pubIP + `"`))
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_allowlist":"0.0.0.0/0`))
 
 		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_whitelist=1.2.3.4`)
 		findAnnotation1 := getAnnotation(oc, project1, "route", unsecureRoute)
