@@ -417,10 +417,10 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Reboot nodes")
-		for _, node := range mcp.GetNodesOrFail() {
+		for _, node := range allNodes {
 			o.Expect(node.Reboot()).To(o.Succeed(), "Error rebooting node %s", node)
 		}
-		for _, node := range mcp.GetNodesOrFail() {
+		for _, node := range allNodes {
 			_, err := node.DebugNodeWithChroot("hostname")
 			o.Expect(err).NotTo(o.HaveOccurred(), "Node %s was not recovered after rebot", node)
 		}
