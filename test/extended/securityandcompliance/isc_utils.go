@@ -2,6 +2,7 @@ package securityandcompliance
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -28,6 +29,20 @@ type operatorGroupDescription struct {
 	namespace    string
 	multinslabel string
 	template     string
+}
+
+// PackageManifest gets the status filed of a packagemanifest
+type PackageManifest struct {
+	metav1.ObjectMeta `json:"metadata"`
+	Status            struct {
+		CatalogSource          string `json:"catalogSource"`
+		CatalogSourceNamespace string `json:"catalogSourceNamespace"`
+		Channels               []struct {
+			CurrentCSV string `json:"currentCSV"`
+			Name       string `json:"name"`
+		} `json:"channels"`
+		DefaultChannel string `json:"defaultChannel"`
+	} `json:"status"`
 }
 
 type resourceDescription struct {
@@ -565,7 +580,6 @@ func createOperator(oc *exutil.CLI, subD subscriptionDescription, ogD operatorGr
 
 	g.By("Create subscription for above catalogsource !!!")
 	createSubscription(oc, subD)
-
 	msg, err = subscriptionIsFinished(oc, subD)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("err %v, msg %v", err, msg)
@@ -806,4 +820,60 @@ func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, 
 		return false, fmt.Errorf("High risk alert, please check the scan result report")
 	}
 	return true, nil
+}
+
+func checkUpgradable(oc *exutil.CLI, source string, channel string, packagemanifest string, oldVersion string, csvPrefix string) (bool, error) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", "openshift-marketplace", "-l", "catalog="+source, "-ojsonpath={.items}").Output()
+	if err != nil {
+		e2e.Logf("Failed to get packagemanifest for catalogsource %v", source)
+		return false, err
+	}
+	packMS := []PackageManifest{}
+	json.Unmarshal([]byte(output), &packMS)
+	for _, pm := range packMS {
+		if pm.Name == packagemanifest {
+			for _, channels := range pm.Status.Channels {
+				currentCSV := channels.CurrentCSV
+				currentVersion := strings.ReplaceAll(currentCSV, csvPrefix, "")
+				if channels.Name == channel && compareVersion(currentVersion, oldVersion) == 1 {
+					return true, nil
+				}
+			}
+		}
+	}
+	return false, nil
+}
+
+func compareVersion(version1 string, version2 string) int {
+	slicev1 := strings.Split(version1, ".")
+	slicev2 := strings.Split(version2, ".")
+	l1, l2 := len(slicev1), len(slicev2)
+
+	i := 0
+	for ; i < l1 && i < l2; i++ {
+		num1, _ := strconv.Atoi(slicev1[i])
+		num2, _ := strconv.Atoi(slicev2[i])
+		if num1 > num2 {
+			return 1
+		} else if num1 < num2 {
+			return -1
+		}
+	}
+
+	if i == l1 {
+		for k := i; k < l2; k++ {
+			if n, _ := strconv.Atoi(slicev2[k]); n > 0 {
+				return -1
+			}
+		}
+	}
+
+	if i == l2 {
+		for k := i; k < l1; k++ {
+			if n, _ := strconv.Atoi(slicev1[k]); n > 0 {
+				return 1
+			}
+		}
+	}
+	return 0
 }

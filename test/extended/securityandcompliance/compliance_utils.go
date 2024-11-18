@@ -1635,3 +1635,12 @@ func verifyFilesUnderMustgather(mustgatherDir string, fails int) int {
 	}
 	return fails
 }
+
+func uninstallComplianceOperator(oc *exutil.CLI, namespace string) {
+	g.By("Delete compliance operator !!!")
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("ssb", "--all", "-n", namespace, "--ignore-not-found").Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("suite", "--all", "-n", namespace, "--ignore-not-found").Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("scan", "--all", "-n", namespace, "--ignore-not-found").Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("pb", "--all", "-n", namespace, "--ignore-not-found").Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", namespace, "-n", namespace, "--ignore-not-found").Execute()
+}

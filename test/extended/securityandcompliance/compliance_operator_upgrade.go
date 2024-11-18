@@ -1,8 +1,10 @@
 package securityandcompliance
 
 import (
-	"path/filepath"
+	"fmt"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -10,158 +12,263 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 
+	"path/filepath"
+
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
-var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator Pre-check and post-check for compliance operator upgrade", func() {
+var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator Intra-release upgrade", func() {
 	defer g.GinkgoRecover()
-	const (
-		coNamspace = "openshift-compliance"
-	)
+
 	var (
-		oc = exutil.NewCLI("compliance-"+getRandomString(), exutil.KubeConfigPath())
+		oc                               = exutil.NewCLI("compliance-"+getRandomString(), exutil.KubeConfigPath())
+		buildPruningBaseDir              string
+		ogCoTemplate                     string
+		ogD                              operatorGroupDescription
+		confmap                          resourceConfigMapDescription
+		scansettingbindingSingleTemplate string
+		scansettingTemplate              string
+		ss                               scanSettingDescription
+		subCoTemplate                    string
+		subD                             subscriptionDescription
+		ssb                              scanSettingBindingDescription
+		upResourceConfMapTemplate        string
 	)
 
-	g.Context("When the compliance-operator is installed", func() {
-		var (
-			buildPruningBaseDir        = exutil.FixturePath("testdata", "securityandcompliance")
-			scansettingbindingTemplate = filepath.Join(buildPruningBaseDir, "scansettingbinding.yaml")
-			upResourceConfMapTemplate  = filepath.Join(buildPruningBaseDir, "upgrade_rsconfigmap.yaml")
+	g.BeforeEach(func() {
+		buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")
+		ogCoTemplate = filepath.Join(buildPruningBaseDir, "operator-group.yaml")
+		subCoTemplate = filepath.Join(buildPruningBaseDir, "subscription.yaml")
+		scansettingbindingSingleTemplate = filepath.Join(buildPruningBaseDir, "oc-compliance-scansettingbinding.yaml")
+		scansettingTemplate = filepath.Join(buildPruningBaseDir, "scansetting.yaml")
+		upResourceConfMapTemplate = filepath.Join(buildPruningBaseDir, "upgrade_rsconfigmap.yaml")
 
-			ssb = scanSettingBindingDescription{
-				name:            "cossb",
-				namespace:       "",
-				profilekind1:    "Profile",
-				profilename1:    "ocp4-cis-node",
-				profilename2:    "ocp4-cis",
-				scansettingname: "default",
-				template:        scansettingbindingTemplate,
-			}
-			confmap = resourceConfigMapDescription{
-				name:      "resource-config",
-				namespace: "",
-				rule:      0,
-				variable:  0,
-				profile:   0,
-				template:  upResourceConfMapTemplate,
-			}
-		)
+		ogD = operatorGroupDescription{
+			name:      "openshift-compliance",
+			namespace: "openshift-compliance",
+			template:  ogCoTemplate,
+		}
+		subD = subscriptionDescription{
+			subName:                "compliance-operator",
+			namespace:              "openshift-compliance",
+			channel:                "stable",
+			ipApproval:             "Automatic",
+			operatorPackage:        "compliance-operator",
+			catalogSourceName:      "redhat-operators",
+			catalogSourceNamespace: "openshift-marketplace",
+			startingCSV:            "",
+			currentCSV:             "",
+			installedCSV:           "",
+			template:               subCoTemplate,
+			singleNamespace:        true,
+		}
+		ss = scanSettingDescription{
+			autoapplyremediations:  false,
+			autoupdateremediations: false,
+			name:                   "test-upg-" + getRandomString(),
+			namespace:              subD.namespace,
+			roles1:                 "master",
+			roles2:                 "worker",
+			rotation:               3,
+			schedule:               "*/3 * * * *",
+			size:                   "2Gi",
+			priorityclassname:      "",
+			debug:                  false,
+			suspend:                false,
+			template:               scansettingTemplate,
+		}
+		ssb = scanSettingBindingDescription{
+			name:            "ssb-upg-" + getRandomString(),
+			namespace:       subD.namespace,
+			profilekind1:    "Profile",
+			profilename1:    "ocp4-cis",
+			scansettingname: ss.name,
+			template:        scansettingbindingSingleTemplate,
+		}
+		confmap = resourceConfigMapDescription{
+			name:      "resource-config",
+			namespace: "",
+			rule:      0,
+			variable:  0,
+			profile:   0,
+			template:  upResourceConfMapTemplate,
+		}
 
-		g.BeforeEach(func() {
-			g.By("Skip test when precondition not meet !!!")
-			exutil.SkipNoOLMCore(oc)
-			SkipMissingCatalogsource(oc)
-			architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
-			SkipMissingDefaultSC(oc)
-			SkipMissingRhcosWorkers(oc)
+		g.By("Skip test when precondition not meet !!!")
+		exutil.SkipNoOLMCore(oc)
+		subD.skipMissingCatalogsources(oc)
+		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
+		SkipMissingDefaultSC(oc)
+		SkipMissingRhcosWorkers(oc)
+		SkipClustersWithRhelNodes(oc)
 
-			g.By("Check csv and Compliance Operator pod is in running state !!!")
-			newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "-n", coNamspace, "-l",
-				"operators.coreos.com/compliance-operator.openshift-compliance", "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", "--selector=name=compliance-operator", "-n",
-				coNamspace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
+		g.By("Install Compliance Operator and check it is sucessfully installed !!! ")
+		uninstallComplianceOperator(oc, subD.namespace)
+		createComplianceOperator(oc, subD, ogD)
+	})
 
-			g.By("Check metrics service !!!")
-			newCheck("expect", asAdmin, withoutNamespace, contain, "metrics", ok, []string{"service", "-n", coNamspace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+	// author: xiyuan@redhat.com
+	g.It("Author:xiyuan-NonHyperShiftHOST-CPaasrunOnly-NonPreRelease-High-45014-High-45956-precheck and postcheck for compliance operator resources count and MachineConfigPool status[Slow][Serial]", func() {
+		defer uninstallComplianceOperator(oc, subD.namespace)
 
-			g.By("Check profilebundle status !!!")
-			arch := architecture.ClusterArchitecture(oc)
-			switch arch {
-			case architecture.PPC64LE, architecture.S390X:
-				newCheck("expect", asAdmin, withoutNamespace, compare, "VALID", ok, []string{"profilebundle", "ocp4", "-n", coNamspace,
-					"-ojsonpath={.status.dataStreamStatus}"}).check(oc)
+		g.By("Get installed version and check whether upgradable !!!\n")
+		csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", subD.namespace, "-l", "operators.coreos.com/compliance-operator.openshift-compliance=",
+			"-o=jsonpath='{.items[0].metadata.name}'").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		oldVersion := strings.ReplaceAll(csvName, "compliance-operator.v", "")
+		oldVersion = strings.Trim(oldVersion, "'")
+		upgradable, err := checkUpgradable(oc, "qe-app-registry", "stable", "compliance-operator", oldVersion, "compliance-operator.v")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The result of upgradable is: %v", upgradable)
+		if !upgradable {
+			g.Skip("Skip as no new version detected!")
+		}
 
-			case architecture.AMD64:
-				newCheck("expect", asAdmin, withoutNamespace, compare, "VALID", ok, []string{"profilebundle", "ocp4", "-n", coNamspace,
-					"-ojsonpath={.status.dataStreamStatus}"}).check(oc)
-				newCheck("expect", asAdmin, withoutNamespace, compare, "VALID", ok, []string{"profilebundle", "rhcos4", "-n", coNamspace,
-					"-ojsonpath={.status.dataStreamStatus}"}).check(oc)
+		g.By("Check the MachineConfigPool status after upgrade.. !!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"machineconfigpool", "master", "-n", subD.namespace,
+			"-ojsonpath={.spec.paused}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"machineconfigpool", "worker", "-n", subD.namespace,
+			"-ojsonpath={.spec.paused}"}).check(oc)
 
-			default:
-				e2e.Logf("Architecture %s is not supported", arch.String())
-			}
-		})
+		g.By("Get the compliance operator resources before upgrade..!!!\n")
+		ruleCnt := getOperatorResources(oc, "rules", subD.namespace)
+		variableCnt := getOperatorResources(oc, "variables", subD.namespace)
+		profileCnt := getOperatorResources(oc, "profiles.compliance", subD.namespace)
+		confmap.namespace = subD.namespace
+		confmap.rule = ruleCnt
+		confmap.variable = variableCnt
+		confmap.profile = profileCnt
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", confmap.template, "-p", "NAME="+confmap.name, "NAMESPACE="+confmap.namespace,
+			"RULE="+strconv.Itoa(confmap.rule), "VARIABLE="+strconv.Itoa(confmap.variable), "PROFILE="+strconv.Itoa(confmap.profile))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, confmap.name, ok, []string{"configmap", "-n", confmap.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
-		// author: xiyuan@redhat.com
-		g.It("NonHyperShiftHOST-Author:xiyuan-CPaasrunOnly-NonPreRelease-High-37721-High-37824-High-45014-precheck for compliance operator", func() {
-			g.By("Create scansettingbinding !!!\n")
-			ssb.namespace = coNamspace
+		g.By("Operator upgrade..!!!\n")
+		patchSub := fmt.Sprintf("{\"spec\":{\"source\":\"qe-app-registry\"}}")
+		patchResource(oc, asAdmin, withoutNamespace, "sub", subD.subName, "--type", "merge", "-p", patchSub, "-n", subD.namespace)
+		// Sleep 10 sesonds so that the operator upgrade will be triggered
+		time.Sleep(10 * time.Second)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Succeeded", ok, []string{"csv", "-n", subD.namespace,
+			"-ojsonpath={.items[0].status.phase}"}).check(oc)
+		newCsvName, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", subD.namespace, "-l", "operators.coreos.com/compliance-operator.openshift-compliance=",
+			"-o=jsonpath='{.items[0].metadata.name}'").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		newVersion := strings.ReplaceAll(newCsvName, "compliance-operator.v", "")
+		o.Expect(newVersion).ShouldNot(o.Equal(oldVersion))
 
-			err3 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ssb.template, "-p", "NAME="+ssb.name, "NAMESPACE="+ssb.namespace,
-				"PROFILENAME1="+ssb.profilename1, "PROFILEKIND1="+ssb.profilekind1, "PROFILENAME2="+ssb.profilename2, "SCANSETTINGNAME="+ssb.scansettingname)
-			o.Expect(err3).NotTo(o.HaveOccurred())
-			newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
-				"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		g.By("Check the MachineConfigPool status after upgrade.. !!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"machineconfigpool", "master", "-n", subD.namespace,
+			"-ojsonpath={.spec.paused}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"machineconfigpool", "worker", "-n", subD.namespace,
+			"-ojsonpath={.spec.paused}"}).check(oc)
 
-			g.By("Check ComplianceSuite status, name and result.. !!!\n")
-			newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", ssb.name, "-n", coNamspace,
-				"-o=jsonpath={.status.phase}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", coNamspace,
-				"-o=jsonpath={.status.phase}"}).check(oc)
-			checkComplianceSuiteResult(oc, coNamspace, ssb.name, "NON-COMPLIANT INCONSISTENT")
-		})
+		g.By("Get the compliance operator resources after upgrade..!!!\n")
+		ruleCnt = getOperatorResources(oc, "rules", subD.namespace)
+		variableCnt = getOperatorResources(oc, "variables", subD.namespace)
+		profileCnt = getOperatorResources(oc, "profiles.compliance", subD.namespace)
 
-		// author: pdhamdhe@redhat.com
-		g.It("NonHyperShiftHOST-Author:pdhamdhe-CPaasrunOnly-NonPreRelease-High-45014-High-45956-precheck for compliance operator resources count and MachineConfigPool status", func() {
-			g.By("Check the MachineConfigPool status after upgrade.. !!\n")
-			newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"machineconfigpool", "master", "-n", coNamspace,
-				"-ojsonpath={.spec.paused}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"machineconfigpool", "worker", "-n", coNamspace,
-				"-ojsonpath={.spec.paused}"}).check(oc)
+		g.By("Compare the compliance operator resource count before and after upgrade.. !!\n")
+		readFileLinesToCompare(oc, confmap.name, ruleCnt, subD.namespace, "rule")
+		readFileLinesToCompare(oc, confmap.name, variableCnt, subD.namespace, "variable")
+		readFileLinesToCompare(oc, confmap.name, profileCnt, subD.namespace, "profile")
+	})
 
-			g.By("Get the compliance operator resources before upgrade..!!!\n")
-			ruleCnt := getOperatorResources(oc, "rules", coNamspace)
-			variableCnt := getOperatorResources(oc, "variables", coNamspace)
-			profileCnt := getOperatorResources(oc, "profiles.compliance", coNamspace)
+	// author: xiyuan@redhat.com
+	g.It("Author:xiyuan-NonHyperShiftHOST-CPaasrunOnly-NonPreRelease-High-37721-High-56351-precheck and postchck for compliance operator upgrade [Slow][Serial]", func() {
+		defer uninstallComplianceOperator(oc, subD.namespace)
 
-			g.By("Create confimap to store data before upgrade.. !!\n")
-			confmap.namespace = coNamspace
-			confmap.rule = ruleCnt
-			confmap.variable = variableCnt
-			confmap.profile = profileCnt
-			err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", confmap.template, "-p", "NAME="+confmap.name, "NAMESPACE="+confmap.namespace,
-				"RULE="+strconv.Itoa(confmap.rule), "VARIABLE="+strconv.Itoa(confmap.variable), "PROFILE="+strconv.Itoa(confmap.profile))
-			o.Expect(err).NotTo(o.HaveOccurred())
-			newCheck("expect", asAdmin, withoutNamespace, contain, confmap.name, ok, []string{"configmap", "-n", confmap.namespace,
-				"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-		})
+		g.By("Get installed version and check whether upgradable !!!\n")
+		csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", subD.namespace, "-l", "operators.coreos.com/compliance-operator.openshift-compliance=",
+			"-o=jsonpath='{.items[0].metadata.name}'").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		oldVersion := strings.ReplaceAll(csvName, "compliance-operator.v", "")
+		oldVersion = strings.Trim(oldVersion, "'")
+		upgradable, err := checkUpgradable(oc, "qe-app-registry", "stable", "compliance-operator", oldVersion, "compliance-operator.v")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The result of upgradable is: %v", upgradable)
+		if !upgradable {
+			g.Skip("Skip as no new version detected!")
+		}
 
-		// author: xiyuan@redhat.com
-		g.It("NonHyperShiftHOST-Author:xiyuan-CPaasrunOnly-NonPreRelease-High-37721-High-37824-postcheck for compliance operator", func() {
-			defer cleanupObjects(oc,
-				objectTableRef{"scansettingbinding", coNamspace, ssb.name})
+		g.By("Create scansetting !!!\n")
+		ss.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ss.name, ok, []string{"scansetting", "-n", ss.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
-			g.By("Trigger rescan using oc-compliance plugin.. !!")
-			_, err := OcComplianceCLI().Run("rerun-now").Args("scansettingbinding", ssb.name, "-n", coNamspace).Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
+		g.By("Create scansettingbinding !!!\n")
+		err3 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", ssb.template, "-p", "NAME="+ssb.name, "NAMESPACE="+ssb.namespace,
+			"PROFILENAME1="+ssb.profilename1, "PROFILEKIND1="+ssb.profilekind1, "PROFILENAME2="+ssb.profilename2, "SCANSETTINGNAME="+ssb.scansettingname)
+		o.Expect(err3).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", ssb.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
-			g.By("Check ComplianceSuite status, name and result after first rescan.. !!!\n")
-			newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", ssb.name, "-n", coNamspace,
-				"-o=jsonpath={.status.phase}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", coNamspace,
-				"-o=jsonpath={.status.phase}"}).check(oc)
-			checkComplianceSuiteResult(oc, coNamspace, ssb.name, "NON-COMPLIANT INCONSISTENT")
-		})
+		g.By("Check ComplianceSuite status, name and result.. !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		checkComplianceSuiteResult(oc, subD.namespace, ssb.name, "NON-COMPLIANT")
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name+"-rerunner", ok, []string{"cronjob", "-n",
+			subD.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ss.schedule, ok, []string{"cronjob", ssb.name + "-rerunner",
+			"-n", subD.namespace, "-o=jsonpath={.spec.schedule}"}).check(oc)
 
-		// author: pdhamdhe@redhat.com
-		g.It("NonHyperShiftHOST-Author:pdhamdhe-CPaasrunOnly-NonPreRelease-High-45014-High-45956-postcheck for compliance operator resources count and MachineConfigPool status", func() {
-			confmap.namespace = coNamspace
-			defer cleanupObjects(oc, objectTableRef{"configmap", confmap.namespace, confmap.name})
-			g.By("Check the MachineConfigPool status after upgrade.. !!\n")
-			newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"machineconfigpool", "master", "-n", coNamspace,
-				"-ojsonpath={.spec.paused}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"machineconfigpool", "worker", "-n", coNamspace,
-				"-ojsonpath={.spec.paused}"}).check(oc)
+		g.By("Operator upgrade..!!!\n")
+		patchSub := fmt.Sprintf("{\"spec\":{\"source\":\"qe-app-registry\"}}")
+		patchResource(oc, asAdmin, withoutNamespace, "sub", subD.subName, "--type", "merge", "-p", patchSub, "-n", subD.namespace)
+		// Sleep 10 sesonds so that the operator upgrade will be triggered
+		time.Sleep(10 * time.Second)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Succeeded", ok, []string{"csv", "-n", subD.namespace,
+			"-ojsonpath={.items[0].status.phase}"}).check(oc)
+		newCsvName, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", subD.namespace, "-l", "operators.coreos.com/compliance-operator.openshift-compliance=",
+			"-o=jsonpath='{.items[0].metadata.name}'").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		newVersion := strings.ReplaceAll(newCsvName, "compliance-operator.v", "")
+		o.Expect(newVersion).ShouldNot(o.Equal(oldVersion))
 
-			g.By("Get the compliance operator resources after upgrade..!!!\n")
-			ruleCnt := getOperatorResources(oc, "rules", coNamspace)
-			variableCnt := getOperatorResources(oc, "variables", coNamspace)
-			profileCnt := getOperatorResources(oc, "profiles.compliance", coNamspace)
+		g.By("Check ComplianceSuite status, name and result after first rescan.. !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		checkComplianceSuiteResult(oc, subD.namespace, ssb.name, "NON-COMPLIANT")
+		lastSuccessfulTime, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cronjob", "-n", subD.namespace, ssb.name+"-rerunner",
+			"-o=jsonpath={.status.lastSuccessfulTime}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("Compare the compliance operator resource count before and after upgrade.. !!\n")
-			readFileLinesToCompare(oc, confmap.name, ruleCnt, coNamspace, "rule")
-			readFileLinesToCompare(oc, confmap.name, variableCnt, coNamspace, "variable")
-			readFileLinesToCompare(oc, confmap.name, profileCnt, coNamspace, "profile")
-		})
+		g.By("Patch the ss scansettingbinding to suspend the scan and check ssb status !!!\n")
+		patchSuspendTrue := fmt.Sprintf("{\"suspend\":true}")
+		patchResource(oc, asAdmin, withoutNamespace, "ss", ss.name, "--type", "merge", "-p", patchSuspendTrue, "-n", subD.namespace)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "true", ok, []string{"scansetting", ss.name, "-n", ss.namespace,
+			"-o=jsonpath={.suspend}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "SUSPENDED", ok, []string{"ssb", ssb.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name+"-rerunner", ok, []string{"cronjob", "-n",
+			subD.namespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "true", ok, []string{"cronjob", ssb.name + "-rerunner",
+			"-n", subD.namespace, "-o=jsonpath={.spec.suspend}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, notPresent, "", ok, []string{"job", "-l", "compliance.openshift.io/suite=" + ssb.name, "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+		lastSuccessfulTimeSuspended, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cronjob", "-n", subD.namespace, ssb.name+"-rerunner",
+			"-o=jsonpath={.status.lastSuccessfulTime}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(lastSuccessfulTimeSuspended).Should(o.Equal(lastSuccessfulTime))
+
+		g.By("Patch the ss scansettingbinding to resume the scan and check ssb status !!!\n")
+		patchSuspendFalse := fmt.Sprintf("{\"suspend\":false}")
+		patchResource(oc, asAdmin, withoutNamespace, "ss", ss.name, "--type", "merge", "-p", patchSuspendFalse, "-n", subD.namespace)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"ssb", ssb.name, "-n",
+			subD.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "false", ok, []string{"cronjob", ssb.name + "-rerunner",
+			"-n", subD.namespace, "-o=jsonpath={.spec.suspend}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
+		lastSuccessfulTimeResumed, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cronjob", "-n", subD.namespace, ssb.name+"-rerunner",
+			"-o=jsonpath={.status.lastSuccessfulTime}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(lastSuccessfulTimeResumed).ShouldNot(o.Equal(lastSuccessfulTime))
 	})
 })
