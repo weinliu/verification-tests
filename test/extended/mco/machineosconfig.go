@@ -233,6 +233,20 @@ func (mosc MachineOSConfig) GetMachineOSBuildList() ([]MachineOSBuild, error) {
 	return mosbList.GetAll()
 }
 
+// GetCurrentMachineOSBuild returns the MOSB resource that is currently used by this MOSC
+func (mosc MachineOSConfig) GetCurrentMachineOSBuild() (*MachineOSBuild, error) {
+	mosbName, err := mosc.GetAnnotation("machineconfiguration.openshift.io/current-machine-os-build")
+	if err != nil {
+		return nil, err
+	}
+
+	if mosbName == "" {
+		return nil, fmt.Errorf("Cannot find the current MOSB for %s. Annotation empty.", mosc)
+	}
+
+	return NewMachineOSBuild(mosc.GetOC(), mosbName), nil
+}
+
 // GetAll returns a []MachineOSConfig list with all existing pinnedimageset sorted by creation timestamp
 func (moscl *MachineOSConfigList) GetAll() ([]MachineOSConfig, error) {
 	moscl.ResourceList.SortByTimestamp()

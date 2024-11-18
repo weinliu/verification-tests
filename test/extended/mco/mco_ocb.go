@@ -149,9 +149,10 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that a new build has been triggered")
-		o.Eventually(infraMcp.GetLatestMachineOSBuildOrFail(), "5m", "20s").Should(Exist(),
+		o.Eventually(mosc.GetCurrentMachineOSBuild, "5m", "20s").Should(Exist(),
 			"No build was created when OCB was enabled")
-		mosb := infraMcp.GetLatestMachineOSBuildOrFail()
+		mosb, err := mosc.GetCurrentMachineOSBuild()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting MOSB from MOSC")
 		o.Eventually(mosb.GetPod).Should(Exist(),
 			"No build pod was created when OCB was enabled")
 		o.Eventually(mosb, "5m", "20s").Should(HaveConditionField("Building", "status", TrueString),
@@ -471,10 +472,8 @@ func ValidateMOSCIsGarbageCollected(mosc *MachineOSConfig, mcp *MachineConfigPoo
 
 	logger.Infof("Validating that MOSB resources were garbage collected")
 	NewMachineOSBuildList(mosc.GetOC()).PrintDebugCommand() // for debugging purposes
-	mosbs, err := mosc.GetMachineOSBuildList()
-	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting MOSBs linked to %s", mosc)
 
-	o.Eventually(mosbs, "2m", "20s").Should(o.HaveLen(0), "MachineSOBuilds were not cleaned when %s was removed", mosc)
+	o.Eventually(mosc.GetMachineOSBuildList, "2m", "20s").Should(o.HaveLen(0), "MachineSOBuilds were not cleaned when %s was removed", mosc)
 
 	logger.Infof("Validating that machine-os-builder pod was garbage collected")
 	mOSBuilder := NewNamespacedResource(mosc.GetOC().AsAdmin(), "deployment", MachineConfigNamespace, "machine-os-builder")
@@ -520,9 +519,10 @@ func ValidateSuccessfulMOSC(mosc *MachineOSConfig, checkers []Checker) {
 	logger.Infof("OK!\n")
 
 	exutil.By("Check that a new build has been triggered")
-	o.Eventually(mcp.GetLatestMachineOSBuildOrFail(), "5m", "20s").Should(Exist(),
+	o.Eventually(mosc.GetCurrentMachineOSBuild, "5m", "20s").Should(Exist(),
 		"No build was created when OCB was enabled")
-	mosb := mcp.GetLatestMachineOSBuildOrFail()
+	mosb, err := mosc.GetCurrentMachineOSBuild()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting MOSB from MOSC")
 	o.Eventually(mosb.GetPod).Should(Exist(),
 		"No build pod was created when OCB was enabled")
 	o.Eventually(mosb, "5m", "20s").Should(HaveConditionField("Building", "status", TrueString),

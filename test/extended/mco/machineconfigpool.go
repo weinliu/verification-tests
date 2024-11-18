@@ -1269,11 +1269,6 @@ func (mcp *MachineConfigPool) WaitForRebooted() error {
 	return mcp.oc.WithoutNamespace().Run("adm").Args("wait-for-node-reboot", "nodes", "-l", "node-role.kubernetes.io/"+mcp.GetName()).Execute()
 }
 
-// GetLatestMachineOSBuild returns the latest MachineOSBuild created for this MCP
-func (mcp *MachineConfigPool) GetLatestMachineOSBuildOrFail() *MachineOSBuild {
-	return NewMachineOSBuild(mcp.oc, fmt.Sprintf("%s-%s-builder", mcp.GetName(), mcp.getConfigNameOfSpecOrFail()))
-}
-
 // GetAll returns a []MachineConfigPool list with all existing machine config pools sorted by creation time
 func (mcpl *MachineConfigPoolList) GetAll() ([]MachineConfigPool, error) {
 	mcpl.ResourceList.SortByTimestamp()
