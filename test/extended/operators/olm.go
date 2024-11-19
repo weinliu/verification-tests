@@ -35,7 +35,7 @@ var _ = g.Describe("[sig-operators] OLM optional", func() {
 
 	var oc = exutil.NewCLI("olm-optional-"+getRandomString(), exutil.KubeConfigPath())
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-High-70162-Leverage Composable OpenShift feature to make OLM optional", func() {
+	g.It("Author:jiazha-ROSA-OSD-ARO-High-70162-Leverage Composable OpenShift feature to make OperatorLifecycleManager optional", func() {
 		capability := "OperatorLifecycleManager"
 		knownCapabilities, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.capabilities.knownCapabilities}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -182,7 +182,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("No new pod generated after 600s, old pod(%s) status(%s)", podName, podStatus))
 	})
 
-	g.It("Author:jiazha-NonHyperShiftHOST-LEVEL0-Critical-72192-is not correctly refreshing operator catalogs due to IfNotPresent imagePullPolicy", func() {
+	g.It("Author:jiazha-ROSA-OSD-ARO-NonHyperShiftHOST-LEVEL0-Critical-72192-is not correctly refreshing operator catalogs due to IfNotPresent imagePullPolicy", func() {
 		exutil.By("1) get marketplace and OLM pods' image/imagePullPolicy")
 		allImageMap := make(map[string]string)
 		podMap := make(map[string]string)
@@ -258,7 +258,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The olm-operator pod didn't recover after 180s: %s", status))
 	})
 
-	g.It("Author:jiazha-LEVEL0-High-72013-Creating an OperatorGroup with 'name: cluster' breaks the whole cluster", func() {
+	g.It("Author:jiazha-LEVEL0-ROSA-OSD-ARO-High-72013-Creating an OperatorGroup with 'name: cluster' breaks the whole cluster", func() {
 		exutil.By("1) install a custom OG with the name cluster in the default project")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		ogTemplate := filepath.Join(buildPruningBaseDir, "og-allns.yaml")
@@ -289,7 +289,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-NonHyperShiftHOST-High-71996-package-server-manager forbidden securityContext.seLinuxOptions [Serial]", func() {
+	g.It("Author:jiazha-ROSA-OSD-ARO-NonHyperShiftHOST-High-71996-package-server-manager forbidden securityContext.seLinuxOptions [Serial]", func() {
 		exutil.By("1) Install a custom SCC which the priority is high")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		sccYAML := filepath.Join(buildPruningBaseDir, "scc.yaml")
@@ -547,7 +547,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("NonHyperShiftHOST-Author:jiazha-High-59422-package-server-manager does not stomp on changes made to packgeserver CSV", func() {
+	g.It("Author:jiazha-ROSA-OSD-ARO-NonHyperShiftHOST-High-59422-package-server-manager does not stomp on changes made to packgeserver CSV", func() {
 		exutil.By("1) change the packageser CSV's securityContext")
 		packageserverCSVYaml, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "packageserver", "-n", "openshift-operator-lifecycle-manager", "-o", "yaml").OutputToFile("ocp59422-csv.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -898,7 +898,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("ConnectedOnly-Author:jiazha-High-53758-OLM failed to recreate SA for the CatalogSource that without poll Interval", func() {
+	g.It("Author:jiazha-ROSA-OSD-ARO-ConnectedOnly-High-53758-failed to recreate SA for the CatalogSource that without poll Interval", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
@@ -1171,7 +1171,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("ConnectedOnly-Author:jiazha-High-46964-Disable Copied CSVs Toggle [Serial]", func() {
+	g.It("Author:jiazha-ROSA-OSD-ARO-ConnectedOnly-High-46964-Disable Copied CSVs Toggle [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
@@ -1659,7 +1659,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("NonHyperShiftHOST-Author:jiazha-High-45411-packageserver isn't following the OpenShift HA conventions", func() {
+	g.It("Author:jiazha-ROSA-OSD-ARO-NonHyperShiftHOST-High-45411-packageserver isn't following the OpenShift HA conventions", func() {
 		exutil.By("1) get the cluster infrastructure")
 		infra, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
 		if err != nil {
@@ -1856,7 +1856,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: chuo@redhat.com
-	g.It("NonHyperShiftHOST-Author:jiazha-High-24028-need to set priorityClassName as system-cluster-critical", func() {
+	g.It("Author:jiazha-ROSA-OSD-ARO-NonHyperShiftHOST-High-24028-need to set priorityClassName as system-cluster-critical", func() {
 		var deploymentResource = [3]string{"catalog-operator", "olm-operator", "packageserver"}
 		for _, v := range deploymentResource {
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-operator-lifecycle-manager", "deployment", v, "-o=jsonpath={.spec.template.spec.priorityClassName}").Output()
@@ -1870,7 +1870,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-High-21548-aggregates CR roles to standard admin/view/edit", func() {
+	g.It("Author:jiazha-ROSA-OSD-ARO-High-21548-aggregates CR roles to standard admin/view/edit", func() {
 		oc.SetupProject()
 		msg, err := oc.Run("whoami").Args("").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -3643,7 +3643,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("NonHyperShiftHOST-Author:jiazha-High-32559-catalog operator crashed", func() {
+	g.It("Author:jiazha-ROSA-OSD-ARO-NonHyperShiftHOST-High-32559-catalog operator crashed", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-without-image.yaml")
 		oc.SetupProject()
@@ -8899,7 +8899,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// author: tbuskey@redhat.com, test case OCP-21080
-	g.It("NonHyperShiftHOST-Author:jiazha-High-21080-OLM Check OLM metrics [Serial]", func() {
+	g.It("Author:jiazha-ROSA-OSD-ARO-NonHyperShiftHOST-High-21080-Check metrics [Serial]", func() {
 		type metrics struct {
 			csvCount              int
 			csvUpgradeCount       int
@@ -14349,7 +14349,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 	})
 
 	// author: tbuskey@redhat.com
-	g.It("NonHyperShiftHOST-Author:jiazha-High-21953-Ensure that operator deployment is in the master node", func() {
+	g.It("Author:jiazha-ROSA-OSD-ARO-NonHyperShiftHOST-High-21953-Ensure that operator deployment is in the master node", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		var (
 			err            error
@@ -14503,7 +14503,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("ROSA-OSD_CCS-HyperShiftMGMT-Author:jiazha-High-45348-High-45543-Enable hypershift to deploy OLM resources", func() {
+	g.It("Author:jiazha-ROSA-OSD-ARO-OSD_CCS-HyperShiftMGMT-High-45348-High-45543-Enable hypershift to deploy OperatorLifecycleManager resources", func() {
 
 		exutil.By("1, check if any resource running in the guest cluster")
 		projects := []string{"openshift-operator-lifecycle-manager", "openshift-marketplace"}
