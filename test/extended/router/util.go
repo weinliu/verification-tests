@@ -294,6 +294,18 @@ func waitForPodWithLabelReady(oc *exutil.CLI, ns, label string) error {
 	})
 }
 
+func ensurePodWithLabelReady(oc *exutil.CLI, ns, label string) {
+	err := waitForPodWithLabelReady(oc, ns, label)
+	// print pod status and logs for debugging purpose if err
+	if err != nil {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Output()
+		e2e.Logf("All pods with label %v are:\n%v", label, output)
+		logs, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ns, "-l", label, "--tail=10").Output()
+		e2e.Logf("The logs of all labeled pods are:\n%v", logs)
+	}
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("max time reached but the pods with label %v are not ready", label))
+}
+
 func waitForPodWithLabelAppear(oc *exutil.CLI, ns, label string) error {
 	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
 		podList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Output()
