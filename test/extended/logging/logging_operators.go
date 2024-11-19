@@ -55,8 +55,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 
 	// author qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53407-Cluster Logging upgrade with Vector as collector - minor version.[Serial][Slow]", func() {
-		g.Skip("Skip for logging 6.0 is not released!")
-		var targetchannel = "stable-6.0"
+		g.Skip("Skip for logging 6.1 is not released!")
+		var targetchannel = "stable-6.1"
 		var oh OperatorHub
 		g.By("check source/redhat-operators status in operatorhub")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhub/cluster", "-ojson").Output()
@@ -134,8 +134,23 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 			waitForPodReady:           true,
 			enableMonitoring:          true,
 		}
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 		defer clf.delete(oc)
 		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
+
+		exutil.By("deploy logfilesmetricexporter")
+		lfme := logFileMetricExporter{
+			name:          "instance",
+			namespace:     loggingNS,
+			template:      filepath.Join(loggingBaseDir, "logfilemetricexporter", "lfme.yaml"),
+			waitPodsReady: true,
+		}
+		defer lfme.delete(oc)
+		lfme.create(oc)
 
 		//get current csv version
 		preCloCSV := preCLO.getInstalledCSV(oc)
@@ -167,6 +182,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 			g.By("waiting for the Loki and Vector pods to be ready after upgrade")
 			ls.waitForLokiStackToBeReady(oc)
 			clf.waitForCollectorPodsReady(oc)
+			WaitForDaemonsetPodsToBeReady(oc, lfme.namespace, "logfilesmetricexporter")
 			// In upgrade testing, sometimes a pod may not be ready but the deployment/statefulset might be ready
 			// here add a step to check the pods' status
 			waitForPodReadyWithLabel(oc, ls.namespace, "app.kubernetes.io/instance="+ls.name)
@@ -204,7 +220,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 
 	// author: qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53404-Cluster Logging upgrade with Vector as collector - major version.[Serial][Slow]", func() {
-		// to add logging 5.9, create a new catalog source with image: quay.io/openshift-qe-optional-operators/aosqe-index
+		// to add logging 6.0, create a new catalog source with image: quay.io/openshift-qe-optional-operators/aosqe-index
 		catsrcTemplate := exutil.FixturePath("testdata", "logging", "subscription", "catsrc.yaml")
 		catsrc := resource{"catsrc", "logging-upgrade-" + getRandomString(), "openshift-marketplace"}
 		tag, err := getIndexImageTag(oc)
@@ -213,8 +229,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		catsrc.applyFromTemplate(oc, "-f", catsrcTemplate, "-n", catsrc.namespace, "-p", "NAME="+catsrc.name, "-p", "IMAGE=quay.io/openshift-qe-optional-operators/aosqe-index:v"+tag)
 		waitForPodReadyWithLabel(oc, catsrc.namespace, "olm.catalogSource="+catsrc.name)
 
-		// for 6.0, test upgrade from 5.9 to 6.0
-		preSource := CatalogSourceObjects{"stable-5.9", catsrc.name, catsrc.namespace}
+		// for 6.1, test upgrade from 6.0 to 6.1
+		preSource := CatalogSourceObjects{"stable-6.0", catsrc.name, catsrc.namespace}
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", preSource.Channel))
 		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
 		preCLO := SubscriptionObjects{
@@ -222,7 +238,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 			Namespace:     cloNS,
 			PackageName:   "cluster-logging",
 			Subscription:  subTemplate,
-			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
 			CatalogSource: preSource,
 		}
 		preLO := SubscriptionObjects{
@@ -259,22 +275,39 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ls.waitForLokiStackToBeReady(oc)
 
-		g.By("Deploy clusterlogging")
-		cl := clusterlogging{
+		exutil.By("deploy logfilesmetricexporter")
+		lfme := logFileMetricExporter{
 			name:          "instance",
 			namespace:     loggingNS,
-			collectorType: "vector",
-			logStoreType:  "lokistack",
-			lokistackName: ls.name,
-			templateFile:  filepath.Join(loggingBaseDir, "clusterlogging", "cl-default-loki.yaml"),
+			template:      filepath.Join(loggingBaseDir, "logfilemetricexporter", "lfme.yaml"),
+			waitPodsReady: true,
 		}
-		defer cl.delete(oc)
-		cl.create(oc)
-		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
-		WaitForDeploymentPodsToBeReady(oc, cl.namespace, "logging-view-plugin")
+		defer lfme.delete(oc)
+		lfme.create(oc)
+
+		exutil.By("create a CLF to test forward to lokistack")
+		clf := clusterlogforwarder{
+			name:                      "instance",
+			namespace:                 loggingNS,
+			serviceAccountName:        "logcollector",
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
+			secretName:                "lokistack-secret",
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			waitForPodReady:           true,
+			enableMonitoring:          true,
+		}
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
+		defer clf.delete(oc)
+		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
 
 		//change channel, and wait for the new operators to be ready
-		var source = CatalogSourceObjects{"stable-6.0", "qe-app-registry", "openshift-marketplace"}
+		var source = CatalogSourceObjects{"stable-6.1", "qe-app-registry", "openshift-marketplace"}
 		//change channel, and wait for the new operators to be ready
 		version := strings.Split(source.Channel, "-")[1]
 		g.By(fmt.Sprintf("upgrade CLO&LO to %s", source.Channel))
@@ -296,7 +329,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		WaitForDeploymentPodsToBeReady(oc, preLO.Namespace, preLO.OperatorName)
 
 		ls.waitForLokiStackToBeReady(oc)
-		cl.waitForLoggingReady(oc)
+		clf.waitForCollectorPodsReady(oc)
+		WaitForDaemonsetPodsToBeReady(oc, lfme.namespace, "logfilesmetricexporter")
 		// In upgrade testing, sometimes a pod may not be ready but the deployment/statefulset might be ready
 		// here add a step to check the pods' status
 		waitForPodReadyWithLabel(oc, ls.namespace, "app.kubernetes.io/instance="+ls.name)
@@ -327,7 +361,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		exutil.AssertWaitPollNoErr(err, "application logs are not found")
 
 		g.By("checking if regular user can view his logs after upgrading")
-		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-role-to-user", "cluster-logging-application-view", oc.Username(), "-n", appProj).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-logging-application-view", oc.Username(), "-n", appProj).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		userToken, err := oc.Run("whoami").Args("-t").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -390,7 +424,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operator deplo
 
 		g.By("Delete cluster-logging operator if exist")
 		sourceQE := CatalogSourceObjects{
-			Channel:         "stable-6.0",
+			Channel:         "stable-6.1",
 			SourceName:      "qe-app-registry",
 			SourceNamespace: "openshift-marketplace",
 		}

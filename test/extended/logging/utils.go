@@ -188,7 +188,7 @@ func (so *SubscriptionObjects) waitForPackagemanifestAppear(oc *exutil.CLI, chSo
 func (so *SubscriptionObjects) setCatalogSourceObjects(oc *exutil.CLI) {
 	// set channel
 	if so.CatalogSource.Channel == "" {
-		so.CatalogSource.Channel = "stable-6.0"
+		so.CatalogSource.Channel = "stable-6.1"
 	}
 
 	// set source namespace
@@ -614,92 +614,6 @@ func (r resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error 
 	}
 	r.WaitForResourceToAppear(oc)
 	return nil
-}
-
-// Depracted, will be removed from logging 6.1 and later
-// Reserve it for upgrade testing.
-type clusterlogging struct {
-	name          string // default: instance
-	namespace     string // default: openshift-logging
-	collectorType string // default: vector
-	logStoreType  string // `elasticsearch` or `lokistack`, no default value
-	lokistackName string // required value when logStoreType is lokistack
-	templateFile  string // the template used to create clusterlogging, no default value
-	waitForReady  bool   // if true, will wait for all the logging pods to be ready after creating the CR
-}
-
-// create a clusterlogging CR from a template
-func (cl *clusterlogging) create(oc *exutil.CLI, optionalParameters ...string) {
-	if cl.name == "" {
-		cl.name = "instance"
-	}
-	if cl.namespace == "" {
-		cl.namespace = loggingNS
-	}
-
-	if cl.collectorType == "" {
-		cl.collectorType = "vector"
-	}
-
-	parameters := []string{"-p", "NAME=" + cl.name, "NAMESPACE=" + cl.namespace, "COLLECTOR=" + cl.collectorType}
-	if cl.logStoreType == "lokistack" {
-		if cl.lokistackName == "" {
-			e2e.Failf("lokistack name is not provided")
-		}
-		parameters = append(parameters, "LOKISTACKNAME="+cl.lokistackName)
-	}
-	if len(optionalParameters) > 0 {
-		parameters = append(parameters, optionalParameters...)
-	}
-	// parameters = append(parameters, "-f", cl.templateFile, "--ignore-unknown-parameters=true")
-	parameters = append(parameters, "-f", cl.templateFile)
-	file, processErr := processTemplate(oc, parameters...)
-	defer os.Remove(file)
-	if processErr != nil {
-		e2e.Failf("error processing file: %v", processErr)
-	}
-	err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", cl.namespace).Execute()
-	if err != nil {
-		e2e.Failf("error creating clusterlogging: %v", err)
-	}
-	resource{"clusterlogging", cl.name, cl.namespace}.WaitForResourceToAppear(oc)
-
-	if cl.waitForReady {
-		cl.waitForLoggingReady(oc)
-	}
-}
-
-// delete clusterlogging CR
-func (cl *clusterlogging) delete(oc *exutil.CLI) {
-	err := resource{"clusterlogging", cl.name, cl.namespace}.clear(oc)
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("could not delete clusterlogging/%s in %s project", cl.name, cl.namespace))
-	var resources []resource
-	if cl.name == "instance" && cl.namespace == loggingNS {
-		resources = append(resources, resource{"daemonset", "collector", cl.namespace})
-	}
-	if cl.logStoreType == "lokistack" {
-		resources = append(resources, resource{"deployment", "logging-view-plugin", cl.namespace})
-	}
-	for i := 0; i < len(resources); i++ {
-		err = resources[i].WaitUntilResourceIsGone(oc)
-		if err != nil {
-			e2e.Logf("%s/%s is not deleted", resources[i].kind, resources[i].name)
-		}
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("%s/%s is not deleted", resources[i].kind, resources[i].name))
-	}
-}
-
-// wait for the logging pods to be ready
-func (cl *clusterlogging) waitForLoggingReady(oc *exutil.CLI) {
-	if cl.logStoreType == "lokistack" {
-		WaitForDeploymentPodsToBeReady(oc, cl.namespace, "logging-view-plugin")
-	}
-	// wait for collector
-	if cl.name == "instance" && cl.namespace == cloNS {
-		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, "collector")
-	} else {
-		WaitForDaemonsetPodsToBeReady(oc, cl.namespace, cl.name)
-	}
 }
 
 type clusterlogforwarder struct {

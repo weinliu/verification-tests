@@ -396,7 +396,7 @@ func (cw *cloudwatchSpec) createIAMCloudwatchRole(oc *exutil.CLI) {
 		cw.awsRoleArn = os.Getenv("AWS_CLOUDWATCH_ROLE_ARN")
 		return
 	}
-	cw.awsRoleName = "logcw-" + getInfrastructureName(oc) + cw.secretName + "-" + getRandomString()
+	cw.awsRoleName = cw.secretName + "-" + getInfrastructureName(oc)
 	cw.awsPolicyName = cw.awsRoleName
 	cw.newIamClient()
 	e2e.Logf("Created aws iam role: %v", cw.awsRoleName)
