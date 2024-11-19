@@ -27,11 +27,10 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 	g.JustBeforeEach(func() {
 		// Skip if no machineset
 		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
-		// Bootimages Update functionality is only available in GCP(GA) and AWS(Techpreview)
+		// Bootimages Update functionality is only available in GCP(GA) and AWS(GA)
 		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform, AWSPlatform)
-		if exutil.CheckPlatform(oc) == AWSPlatform {
-			skipIfNoTechPreview(oc)
-		}
+		IsFeaturegateEnabled(oc, "ManagedBootImages")
+		IsFeaturegateEnabled(oc, "ManagedBootImagesAWS")
 
 		wMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		machineConfiguration = GetMachineConfiguration(oc.AsAdmin())

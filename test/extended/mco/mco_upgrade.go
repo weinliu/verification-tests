@@ -246,13 +246,11 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 	})
 
 	g.It("Author:sregidor-NonHyperShiftHOST-PreChkUpgrade-NonPreRelease-High-70813-[P1] ManagedBootImages update boot image of machineset [Serial]", func() {
-		// Bootimages Update functionality is only available in GCP(GA) and AWS(Techpreview)
+		// Bootimages Update functionality is only available in GCP(GA) and AWS(GA)
 		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform, AWSPlatform)
-		if exutil.CheckPlatform(oc) == AWSPlatform {
-			skipIfNoTechPreview(oc)
-		}
 		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
 		SkipIfNoFeatureGate(oc.AsAdmin(), "ManagedBootImages")
+		SkipIfNoFeatureGate(oc.AsAdmin(), "ManagedBootImagesAWS")
 
 		var (
 			tmpNamespace         = NewResource(oc.AsAdmin(), "ns", "tc-70813-tmp-namespace")
@@ -305,12 +303,11 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 	g.It("Author:sregidor-NonHyperShiftHOST-PstChkUpgrade-NonPreRelease-High-70813-[P2] ManagedBootImages update boot image of machineset [Serial]", func() {
 		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
-		// Bootimages Update functionality is only available in GCP(GA) and AWS(Techpreview)
+		// Bootimages Update functionality is only available in GCP(GA) and AWS(GA)
 		skipTestIfSupportedPlatformNotMatched(oc, GCPPlatform, AWSPlatform)
-		if exutil.CheckPlatform(oc) == AWSPlatform {
-			skipIfNoTechPreview(oc)
-		}
+
 		SkipIfNoFeatureGate(oc.AsAdmin(), "ManagedBootImages")
+		SkipIfNoFeatureGate(oc.AsAdmin(), "ManagedBootImagesAWS")
 
 		var (
 			tmpNamespace       = NewResource(oc.AsAdmin(), "ns", "tc-70813-tmp-namespace")
