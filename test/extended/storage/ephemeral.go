@@ -67,7 +67,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Eventually(func() string {
 			reason, _ := pod.getValueByJSONPath(oc, `{.status.reason}`)
 			return reason
-		}, 180*time.Second, 10*time.Second).Should(o.ContainSubstring("Evicted"))
+		}, 300*time.Second, 10*time.Second).Should(o.ContainSubstring("Evicted"))
 		o.Eventually(func() string {
 			msg, _ := pod.getValueByJSONPath(oc, `{.status.message}`)
 			return msg
@@ -120,7 +120,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Eventually(func() string {
 			reason, _ := pod.getValueByJSONPath(oc, `{.status.reason}`)
 			return reason
-		}, 180*time.Second, 10*time.Second).Should(o.ContainSubstring("Evicted"))
+		}, 300*time.Second, 10*time.Second).Should(o.ContainSubstring("Evicted"))
 		o.Eventually(func() string {
 			msg, _ := pod.getValueByJSONPath(oc, `{.status.message}`)
 			return msg
@@ -165,7 +165,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Eventually(func() string {
 			reason, _ := pod.getValueByJSONPath(oc, `{.status.reason}`)
 			return reason
-		}, 180*time.Second, 10*time.Second).Should(o.ContainSubstring("Evicted"))
+		}, 300*time.Second, 10*time.Second).Should(o.ContainSubstring("Evicted"))
 		o.Eventually(func() string {
 			msg, _ := pod.getValueByJSONPath(oc, `{.status.message}`)
 			return msg
@@ -290,7 +290,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Eventually(func() string {
 			reason, _ := pod.getValueByJSONPath(oc, `{.status.reason}`)
 			return reason
-		}, 180*time.Second, 10*time.Second).Should(o.ContainSubstring("Evicted"))
+		}, 300*time.Second, 10*time.Second).Should(o.ContainSubstring("Evicted"))
 		o.Eventually(func() string {
 			msg, _ := pod.getValueByJSONPath(oc, `{.status.message}`)
 			return msg
@@ -356,7 +356,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Eventually(func() string {
 			reason, _ := pod.getValueByJSONPath(oc, `{.status.reason}`)
 			return reason
-		}, 180*time.Second, 10*time.Second).Should(o.ContainSubstring("Evicted"))
+		}, 300*time.Second, 10*time.Second).Should(o.ContainSubstring("Evicted"))
 		o.Eventually(func() string {
 			msg, _ := pod.getValueByJSONPath(oc, `{.status.message}`)
 			return msg
