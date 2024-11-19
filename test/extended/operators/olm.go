@@ -2349,6 +2349,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		defer sub.deleteCSV(itName, dr)
 		defer sub.update(oc, itName, dr)
 		sub.create(oc, itName, dr)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", oc.Namespace(), "-o=jsonpath={.status.phase}"}).check(oc)
 
 		exutil.By("3) create a ConfigMap")
 		cmTemplate := filepath.Join(buildPruningBaseDir, "cm-template.yaml")
