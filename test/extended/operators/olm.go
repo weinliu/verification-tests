@@ -5684,8 +5684,27 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-20979, author: kuiwang@redhat.com
-	g.It("Author:kuiwang-ConnectedOnly-Medium-20979-only one IP is generated", func() {
+	g.It("Author:kuiwang-NonHyperShiftHOST-ConnectedOnly-Medium-20979-only one IP is generated", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		if isAks, _ := exutil.IsAKSCluster(context.TODO(), oc); isAks {
+			g.Skip("skip for ask cluster")
+		}
+		exutil.SkipNoCapabilities(oc, "marketplace")
+		node, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		errGet = exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		efips, errGet := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+		if errGet != nil || strings.Contains(efips, "FIPS mode is enabled") {
+			g.Skip("skip it without impacting function")
+		}
+		platform := exutil.CheckPlatform(oc)
+		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
+		o.Expect(errProxy).NotTo(o.HaveOccurred())
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "none") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || exutil.Is3MasterNoDedicatedWorkerNode(oc) ||
+			os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5703,15 +5722,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne",
+				address:     "quay.io/olmqe/nginx-ok-index:vokv20979",
 				template:    catsrcImageTemplate,
 			}
 			subD = subscriptionDescription{
-				subName:                "oadp-operator",
+				subName:                "nginx-ok-v20979",
 				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "oadp-operator",
+				operatorPackage:        "nginx-ok-v20979",
 				catalogSourceName:      catsrc.name,
 				catalogSourceNamespace: "",
 				startingCSV:            "",
@@ -5730,7 +5749,21 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.catalogSourceNamespace = catsrc.namespace
 
 		exutil.By("create catalog source")
-		catsrc.createWithCheck(oc, itName, dr)
+		catsrc.create(oc, itName, dr)
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+			status, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.status..lastObservedState}").Output()
+			if strings.Compare(status, "READY") != 0 {
+				e2e.Logf("catsrc %s lastObservedState is %s, not READY", catsrc.name, status)
+				return false, nil
+			}
+			return true, nil
+		})
+		if err != nil {
+			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.status}").Output()
+			e2e.Logf(output)
+			logDebugInfo(oc, catsrc.namespace, "pod", "events")
+			g.Skip("catsrc is not ready, so skip")
+		}
 
 		exutil.By("Create og")
 		og.create(oc, itName, dr)
@@ -5750,8 +5783,32 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-25757 and 22656, author: kuiwang@redhat.com
-	g.It("Author:kuiwang-ConnectedOnly-Medium-25757-High-22656-manual approval strategy apply to subsequent releases", func() {
+	g.It("Author:kuiwang-NonHyperShiftHOST-ConnectedOnly-Medium-25757-High-22656-manual approval strategy apply to subsequent releases", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		if isAks, _ := exutil.IsAKSCluster(context.TODO(), oc); isAks {
+			g.Skip("skip for ask cluster")
+		}
+		exutil.SkipNoCapabilities(oc, "marketplace")
+		node, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		errGet = exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		efips, errGet := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+		if errGet != nil || strings.Contains(efips, "FIPS mode is enabled") {
+			g.Skip("skip it without impacting function")
+		}
+		infra, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		if infra == "SingleReplica" {
+			g.Skip("it is not supported")
+		}
+		platform := exutil.CheckPlatform(oc)
+		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
+		o.Expect(errProxy).NotTo(o.HaveOccurred())
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "none") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || exutil.Is3MasterNoDedicatedWorkerNode(oc) ||
+			os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -5818,7 +5875,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.approve(oc, itName, dr)
 
 		exutil.By("the target CSV is created with upgrade")
-		o.Expect(strings.Compare(sub.installedCSV, sub.startingCSV) != 0).To(o.BeTrue())
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			currentCSV := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.currentCSV}")
+			if strings.Compare(currentCSV, sub.startingCSV) != 0 {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("the installedCSV %v is not expected", sub.installedCSV))
 	})
 
 	// author: bandrade@redhat.com
@@ -6175,102 +6239,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.By("Recovery sa of csv")
 		sa.reapply(oc)
 		newCheck("expect", asUser, withNamespace, compare, "Succeeded+2+Installing", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.phase}"}).check(oc)
-	})
-
-	// It will cover part of test case: OCP-21404, author: kuiwang@redhat.com
-	g.It("Author:kuiwang-ConnectedOnly-Medium-21404-csv will be RequirementsNotMet after role rule is delete[Serial]", func() {
-		if isAks, _ := exutil.IsAKSCluster(context.TODO(), oc); isAks {
-			g.Skip("skip for ask cluster")
-		}
-		architecture.SkipNonAmd64SingleArch(oc)
-		exutil.SkipBaselineCaps(oc, "None")
-		exutil.SkipForSNOCluster(oc)
-		platform := exutil.CheckPlatform(oc)
-		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
-		o.Expect(errProxy).NotTo(o.HaveOccurred())
-		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "none") || exutil.Is3MasterNoDedicatedWorkerNode(oc) ||
-			exutil.IsSpecifiedAnnotationKeyExist(oc, "ingress.config/cluster", "", `ingress.operator.openshift.io/default-enable-http2`) ||
-			os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" ||
-			exutil.IsTechPreviewNoUpgrade(oc) {
-			g.Skip("it is not supported")
-		}
-		var (
-			itName              = g.CurrentSpecReport().FullText()
-			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
-			ogSingleTemplate    = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
-			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-			ogD                 = operatorGroupDescription{
-				name:      "og-singlenamespace",
-				namespace: "",
-				template:  ogSingleTemplate,
-			}
-			catsrc = catalogSourceDescription{
-				name:        "catsrc-operator",
-				namespace:   "",
-				displayName: "Test Catsrc Operators",
-				publisher:   "Red Hat",
-				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne-withCache",
-				template:    catsrcImageTemplate,
-			}
-			subD = subscriptionDescription{
-				subName:                "oadp-operator",
-				namespace:              "",
-				channel:                "alpha",
-				ipApproval:             "Automatic",
-				operatorPackage:        "oadp-operator",
-				catalogSourceName:      catsrc.name,
-				catalogSourceNamespace: "",
-				startingCSV:            "",
-				currentCSV:             "",
-				installedCSV:           "",
-				template:               subTemplate,
-				singleNamespace:        true,
-			}
-			og  = ogD
-			sub = subD
-		)
-		node, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].metadata.name}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = exutil.SetNamespacePrivileged(oc, oc.Namespace())
-		o.Expect(err).NotTo(o.HaveOccurred())
-		efips, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
-		if err != nil || strings.Contains(efips, "FIPS mode is enabled") {
-			g.Skip("skip it without impacting function")
-		}
-		oc.SetupProject() // project and its resource are deleted automatically when out of It, so no need derfer or AfterEach
-		og.namespace = oc.Namespace()
-		sub.namespace = oc.Namespace()
-		catsrc.namespace = oc.Namespace()
-		sub.catalogSourceNamespace = catsrc.namespace
-
-		exutil.By("create catalog source")
-		catsrc.createWithCheck(oc, itName, dr)
-
-		exutil.By("Create og")
-		og.create(oc, itName, dr)
-
-		exutil.By("Create operator")
-		sub.create(oc, itName, dr)
-		newCheck("expect", asUser, withNamespace, compare, "Succeeded"+"InstallSucceeded", ok, []string{"csv", sub.installedCSV, "-o=jsonpath={.status.phase}{.status.reason}"}).check(oc)
-
-		exutil.By("Get SA of csv")
-		sa := newSa(strings.Fields(getResource(oc, asUser, withNamespace, "csv", sub.installedCSV, "-o=jsonpath={.status.requirementStatus[?(@.kind==\"ServiceAccount\")].name}"))[0], sub.namespace)
-		sa.checkAuth(oc, "yes", "leases")
-
-		exutil.By("Get Role of csv")
-		role := newRole(getResource(oc, asUser, withNamespace, "role", "-n", sub.namespace, fmt.Sprintf("--selector=olm.owner=%s", sub.installedCSV), "-o=jsonpath={.items[0].metadata.name}"), sub.namespace)
-		origRules := role.getRules(oc)
-		modifiedRules := role.getRulesWithDelete(oc, "coordination.k8s.io")
-
-		exutil.By("Remove rules")
-		role.patch(oc, fmt.Sprintf("{\"rules\": %s}", modifiedRules))
-		sa.checkAuth(oc, "no", "leases")
-
-		exutil.By("Recovery rules")
-		role.patch(oc, fmt.Sprintf("{\"rules\": %s}", origRules))
-		sa.checkAuth(oc, "yes", "leases")
 	})
 
 	// It will cover test case: OCP-29723, author: kuiwang@redhat.com
@@ -7136,8 +7104,32 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-33176, author: kuiwang@redhat.com
-	g.It("Author:kuiwang-ConnectedOnly-Medium-33176-Enable generated operator component adoption for operators with single ns mode [Slow]", func() {
+	g.It("Author:kuiwang-NonHyperShiftHOST-ConnectedOnly-Medium-33176-Enable generated operator component adoption for operators with single ns mode [Slow]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		if isAks, _ := exutil.IsAKSCluster(context.TODO(), oc); isAks {
+			g.Skip("skip for ask cluster")
+		}
+		exutil.SkipNoCapabilities(oc, "marketplace")
+		node, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		errGet = exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		efips, errGet := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+		if errGet != nil || strings.Contains(efips, "FIPS mode is enabled") {
+			g.Skip("skip it without impacting function")
+		}
+		infra, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		if infra == "SingleReplica" {
+			g.Skip("it is not supported")
+		}
+		platform := exutil.CheckPlatform(oc)
+		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
+		o.Expect(errProxy).NotTo(o.HaveOccurred())
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "none") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || exutil.Is3MasterNoDedicatedWorkerNode(oc) ||
+			os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName                  = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir     = exutil.FixturePath("testdata", "olm")
@@ -7158,7 +7150,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 33176 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-api:v5",
+				address:     "quay.io/olmqe/olm-api:v5", // quay.io/olmqe/nginx-ok-index:vokv33176 as backup
 				template:    catsrcImageTemplate,
 			}
 			subEtcd = subscriptionDescription{
@@ -7231,34 +7223,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		subEtcd.create(oc, itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
 
-		exutil.By("delete etcd and the Operator")
-		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "sub", subEtcd.subName, "-n", subEtcd.namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "csv", subEtcd.installedCSV, "-n", subEtcd.namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "operator.operators.coreos.com", subEtcd.operatorPackage+"."+subEtcd.namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		exutil.By("install etcd manually")
-		subEtcd.ipApproval = "Manual"
-		subEtcd.startingCSV = "etcdoperator.v0.9.4"
-		subEtcd.installedCSV = ""
-		subEtcd.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallPlan", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-
-		exutil.By("approve etcd")
-		subEtcd.approve(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "ClusterServiceVersion", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, subEtcd.namespace, ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].namespace}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallSucceeded", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='ClusterServiceVersion')].conditions[*].reason}"}).check(oc)
-
-		exutil.By("unlabel resource and it is relabeled automatically")
-		roleName := getResource(oc, asAdmin, withoutNamespace, "operator.operators.coreos.com", subEtcd.operatorPackage+"."+subEtcd.namespace, "-o=jsonpath={.status.components.refs[?(.kind=='Role')].name}")
-		o.Expect(roleName).NotTo(o.BeEmpty())
-		_, err = doAction(oc, "label", asAdmin, withoutNamespace, "Role", roleName, "operators.coreos.com/"+subEtcd.operatorPackage+"."+subEtcd.namespace+"-", "-n", subEtcd.namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		newCheck("expect", asAdmin, withoutNamespace, contain, "Role", ok, []string{"operator.operators.coreos.com", subEtcd.operatorPackage + "." + subEtcd.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
-
 		exutil.By("delete etcd and the Operator again and Operator should recreated because of crd")
 		_, err = doAction(oc, "delete", asAdmin, withoutNamespace, "sub", subEtcd.subName, "-n", subEtcd.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -7304,7 +7268,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.By("create ns test-33176 and label it")
 		_, err = doAction(oc, "create", asAdmin, withoutNamespace, "ns", "test-33176")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer doAction(oc, "delete", asAdmin, withoutNamespace, "ns", "test-33176")
+		defer doAction(oc, "delete", asAdmin, withoutNamespace, "ns", "test-33176", "--force", "--grace-period=0", "--wait=false")
 		_, err = doAction(oc, "label", asAdmin, withoutNamespace, "ns", "test-33176", "operators.coreos.com/"+subCockroachdb.operatorPackage+"."+subCockroachdb.namespace+"=")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, contain, "Namespace", ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
@@ -7313,7 +7277,20 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", apiserviceImageTemplate, "-p", "NAME="+apiserviceName, "VERSION="+apiserviceVersion)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer doAction(oc, "delete", asAdmin, withoutNamespace, "apiservice", apiserviceName)
-		_, err = doAction(oc, "label", asAdmin, withoutNamespace, "apiservice", apiserviceName, "operators.coreos.com/"+subCockroachdb.operatorPackage+"."+subCockroachdb.namespace+"=")
+		_, err = doAction(oc, "label", asAdmin, withoutNamespace, "apiservice", apiserviceName,
+			"operators.coreos.com/"+subCockroachdb.operatorPackage+"."+subCockroachdb.namespace+"=")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = doAction(oc, "label", asAdmin, withoutNamespace, "apiservice", apiserviceName,
+			"olm.managed="+`true`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = doAction(oc, "label", asAdmin, withoutNamespace, "apiservice", apiserviceName,
+			"olm.owner"+"="+subCockroachdb.installedCSV)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = doAction(oc, "label", asAdmin, withoutNamespace, "apiservice", apiserviceName,
+			"olm.owner.kind"+"="+"ClusterServiceVersion")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = doAction(oc, "label", asAdmin, withoutNamespace, "apiservice", apiserviceName,
+			"olm.owner.namespace"+"="+subCockroachdb.namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		newCheck("expect", asAdmin, withoutNamespace, contain, "APIService", ok, []string{"operator.operators.coreos.com", subCockroachdb.operatorPackage + "." + subCockroachdb.namespace, "-o=jsonpath={.status.components.refs[*].kind}"}).check(oc)
 
@@ -9937,8 +9914,32 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-40958, author: kuiwang@redhat.com
-	g.It("Author:kuiwang-ConnectedOnly-Medium-40958-Indicate invalid OperatorGroup on InstallPlan status", func() {
+	g.It("Author:kuiwang-NonHyperShiftHOST-ConnectedOnly-Medium-40958-Indicate invalid OperatorGroup on InstallPlan status", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		if isAks, _ := exutil.IsAKSCluster(context.TODO(), oc); isAks {
+			g.Skip("skip for ask cluster")
+		}
+		exutil.SkipNoCapabilities(oc, "marketplace")
+		node, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		errGet = exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		efips, errGet := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+		if errGet != nil || strings.Contains(efips, "FIPS mode is enabled") {
+			g.Skip("skip it without impacting function")
+		}
+		infra, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		if infra == "SingleReplica" {
+			g.Skip("it is not supported")
+		}
+		platform := exutil.CheckPlatform(oc)
+		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
+		o.Expect(errProxy).NotTo(o.HaveOccurred())
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "none") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || exutil.Is3MasterNoDedicatedWorkerNode(oc) ||
+			os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -10003,11 +10004,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.By("install operator without og")
 		sub.createWithoutCheck(oc, itName, dr)
 
-		exutil.By("The install plan is Failed, without og")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallPlanPending", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
-		installPlan := sub.getIP(oc)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Installing", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "no operator group found", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
+		exutil.By("no Installplan is generated, without og")
+		// by https://issues.redhat.com/browse/OCPBUGS-9259
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
+			var err error
+			installPlan, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installPlanRef.name}").Output()
+			if strings.Compare(installPlan, "") == 0 || err != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollWithErr(waitErr, fmt.Sprintf("sub %s has installplan", sub.subName))
 
 		exutil.By("delete operator")
 		sub.delete(itName, dr)
@@ -10021,11 +10028,16 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.By("install operator with multiple og")
 		sub.createWithoutCheck(oc, itName, dr)
 
-		exutil.By("The install plan is Failed, multiple og")
-		installPlan = sub.getIP(oc)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Installing", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "more than one operator group", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallPlanPending", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
+		exutil.By("no Installplan is generated, multiple og")
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
+			var err error
+			installPlan, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installPlanRef.name}").Output()
+			if strings.Compare(installPlan, "") == 0 || err != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollWithErr(waitErr, fmt.Sprintf("sub %s has installplan", sub.subName))
 
 		exutil.By("delete resource for next step")
 		sub.delete(itName, dr)
@@ -10047,11 +10059,16 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		exutil.By("install operator without sa for og")
 		sub.createWithoutCheck(oc, itName, dr)
 
-		exutil.By("The install plan is Failed, without sa for og")
-		installPlan = sub.getIP(oc)
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Installing", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "not found+2+please make sure the service account exists", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallComponentFailed+2+InstallPlanPending", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
+		exutil.By("no Installplan is generated, without sa for og")
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
+			var err error
+			installPlan, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installPlanRef.name}").Output()
+			if strings.Compare(installPlan, "") == 0 || err != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollWithErr(waitErr, fmt.Sprintf("sub %s has installplan", sub.subName))
 	})
 
 	// author: xzha@redhat.com
@@ -11843,8 +11860,32 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 	})
 
 	// It will cover test case: OCP-22200, author: kuiwang@redhat.com
-	g.It("Author:kuiwang-ConnectedOnly-Medium-22200-add minimum kube version to CSV [Slow]", func() {
-		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
+	g.It("Author:kuiwang-NonHyperShiftHOST-ConnectedOnly-Medium-22200-add minimum kube version to CSV [Slow]", func() {
+		architecture.SkipNonAmd64SingleArch(oc)
+		if isAks, _ := exutil.IsAKSCluster(context.TODO(), oc); isAks {
+			g.Skip("skip for ask cluster")
+		}
+		exutil.SkipNoCapabilities(oc, "marketplace")
+		node, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		errGet = exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		efips, errGet := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+		if errGet != nil || strings.Contains(efips, "FIPS mode is enabled") {
+			g.Skip("skip it without impacting function")
+		}
+		infra, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.infrastructureTopology}").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		if infra == "SingleReplica" {
+			g.Skip("it is not supported")
+		}
+		platform := exutil.CheckPlatform(oc)
+		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
+		o.Expect(errProxy).NotTo(o.HaveOccurred())
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "none") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || exutil.Is3MasterNoDedicatedWorkerNode(oc) ||
+			os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -11920,7 +11961,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 
 		exutil.By("Create sub with greater KubeVersion")
 		sub.create(oc, itName, dr)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "CSV version requirement not met", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.requirementStatus[?(@.kind==\"ClusterServiceVersion\")].message}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "not met+2+less than", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.requirementStatus[?(@.kind==\"ClusterServiceVersion\")].message}"}).check(oc)
 
 		exutil.By("Remove sub and csv and update the minKubeVersion to orignl")
 		sub.delete(itName, dr)
