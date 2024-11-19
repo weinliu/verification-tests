@@ -5,131 +5,168 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
-
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
-var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator Pre-check and post-check for file integrity operator upgrade", func() {
+var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator intra release upgrade", func() {
 	defer g.GinkgoRecover()
-	const (
-		ns1 = "openshift-file-integrity"
-	)
+
 	var (
-		oc = exutil.NewCLI("file-integrity-"+getRandomString(), exutil.KubeConfigPath())
+		oc                      = exutil.NewCLI("fio-"+getRandomString(), exutil.KubeConfigPath())
+		buildPruningBaseDir     string
+		configFile              string
+		fioInitialdelayTemplate string
+		ogSingleTemplate        string
+		subTemplate             string
+		og                      operatorGroupDescription
+		sub                     subscriptionDescription
+		fileIntegritry          fileintegrity
 	)
 
-	g.Context("When the file-integrity-operator is installed", func() {
+	g.BeforeEach(func() {
+		g.By("Skip the test if the cluster has no OLM component")
+		exutil.SkipNoOLMCore(oc)
 
-		var (
-			buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")
-			fioTemplate         = filepath.Join(buildPruningBaseDir, "fileintegrity.yaml")
-			fi1                 = fileintegrity{
-				name:              "example-fileintegrity",
-				namespace:         "",
-				configname:        "",
-				configkey:         "",
-				graceperiod:       30,
-				debug:             false,
-				nodeselectorkey:   "node.openshift.io/os_id",
-				nodeselectorvalue: "rhcos",
-				template:          fioTemplate,
-			}
-		)
+		g.By("Skip test when missingcatalogsource, ARM64, or SkipHetegenous !!!")
+		SkipClustersWithRhelNodes(oc)
+		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
 
-		g.BeforeEach(func() {
-			g.By("Skip the test if the cluster has no OLM component")
-			exutil.SkipNoOLMCore(oc)
+		buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")
+		fioInitialdelayTemplate = filepath.Join(buildPruningBaseDir, "fileintegrity_initialdelay.yaml")
+		ogSingleTemplate = filepath.Join(buildPruningBaseDir, "operator-group.yaml")
+		subTemplate = filepath.Join(buildPruningBaseDir, "subscription.yaml")
+		configFile = filepath.Join(buildPruningBaseDir, "aide.conf.rhel8")
 
-			g.By("Skip test when missingcatalogsource, ARM64, or SkipHetegenous !!!")
-			SkipMissingCatalogsource(oc)
-			architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
+		og = operatorGroupDescription{
+			name:      "openshift-file-integrity-qbcd",
+			namespace: "openshift-file-integrity",
+			template:  ogSingleTemplate,
+		}
+		sub = subscriptionDescription{
+			subName:                "file-integrity-operator",
+			namespace:              "openshift-file-integrity",
+			channel:                "stable",
+			ipApproval:             "Automatic",
+			operatorPackage:        "file-integrity-operator",
+			catalogSourceName:      "redhat-operators",
+			catalogSourceNamespace: "openshift-marketplace",
+			startingCSV:            "",
+			currentCSV:             "",
+			installedCSV:           "",
+			template:               subTemplate,
+			singleNamespace:        true,
+		}
+		fileIntegritry = fileintegrity{
+			name:              "example-fileintegrity-" + getRandomString(),
+			namespace:         "openshift-file-integrity",
+			configname:        "cm-upgrade-" + getRandomString(),
+			configkey:         "aide-conf",
+			graceperiod:       30,
+			debug:             false,
+			nodeselectorkey:   "node.openshift.io/os_id",
+			nodeselectorvalue: "rhcos",
+			template:          fioInitialdelayTemplate,
+		}
 
-			g.By("Check csv and pods for ns1 !!!")
-			rsCsvName := getResourceNameWithKeywordForNamespace(oc, "csv", "file-integrity-operator", ns1)
-			newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", rsCsvName, "-n", ns1, "-o=jsonpath={.status.phase}"}).check(oc)
-			newCheck("expect", asAdmin, withoutNamespace, contain, "file-integrity-operator", ok, []string{"pod", "--selector=name=file-integrity-operator", "-n",
-				ns1, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
-			g.By("Check file-integrity Operator pod is in running state !!!")
-			newCheck("expect", asAdmin, withoutNamespace, compare, "Running", ok, []string{"pod", "--selector=name=file-integrity-operator", "-n",
-				ns1, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
-		})
+		sub.skipMissingCatalogsources(oc)
+		g.By("Install File Integrity Operator and check it is sucessfully installed !!! ")
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("fileintegrity", "--all", "-n", sub.namespace, "--ignore-not-found").Execute()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", sub.namespace, "-n", sub.namespace, "--ignore-not-found").Execute()
+		createFileIntegrityOperator(oc, sub, og)
+	})
 
-		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-NonPreRelease-CPaasrunOnly-Critical-42663-Critical-45366-precheck for file integrity operator", func() {
-			g.By("Create file integrity object  !!!\n")
-			fi1.namespace = ns1
-			err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace, "GRACEPERIOD="+strconv.Itoa(fi1.graceperiod),
-				"DEBUG="+strconv.FormatBool(fi1.debug), "NODESELECTORKEY="+fi1.nodeselectorkey, "NODESELECTORVALUE="+fi1.nodeselectorvalue)
+	// author: xiyuan@redhat.com
+	g.It("Author:xiyuan-NonHyperShiftHOST-ConnectedOnly-ARO-OSD_CCS-Critical-42663-Critical-45366-precheck and postcheck for file integrity operator [Serial][Slow]", func() {
+		var nodes []string
+
+		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fileIntegritry.name},
+			objectTableRef{"ns", sub.namespace, sub.namespace})
+
+		g.By("Get installed version and check whether upgradable !!!\n")
+		csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", sub.namespace, "-l", "operators.coreos.com/file-integrity-operator.openshift-file-integrity=",
+			"-o=jsonpath='{.items[0].metadata.name}'").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		oldVersion := strings.ReplaceAll(csvName, "file-integrity-operator.v", "")
+		oldVersion = strings.Trim(oldVersion, "'")
+		upgradable, err := checkUpgradable(oc, "qe-app-registry", "stable", "file-integrity-operator", oldVersion, "file-integrity-operator.v")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The result of upgradable is: %v", upgradable)
+		if !upgradable {
+			g.Skip("Skip as no new version detected!")
+		}
+
+		g.By("Create file integrity object  !!!\n")
+		var initialdelay = 60
+		fileIntegritry.createConfigmapFromFile(oc, fileIntegritry.configname, fileIntegritry.configkey, configFile, "created")
+		errApply := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", fileIntegritry.namespace, "-f", fileIntegritry.template, "-p", "NAME="+fileIntegritry.name,
+			"NAMESPACE="+fileIntegritry.namespace, "GRACEPERIOD="+strconv.Itoa(fileIntegritry.graceperiod), "DEBUG="+strconv.FormatBool(fileIntegritry.debug), "CONFNAME="+fileIntegritry.configname,
+			"CONFKEY="+fileIntegritry.configkey, "NODESELECTORKEY="+fileIntegritry.nodeselectorkey, "NODESELECTORVALUE="+fileIntegritry.nodeselectorvalue, "INITIALDELAY="+strconv.Itoa(initialdelay))
+		o.Expect(errApply).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, fileIntegritry.name, ok, []string{"fileintegrity", "-n", fileIntegritry.namespace,
+			"-o=jsonpath={.items[0].metadata.name}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fileIntegritry.name, "-n", fileIntegritry.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
+		g.By("Check aid pod and file integrity object status.. !!!\n")
+		fileIntegritry.assertNodesConditionNotEmpty(oc)
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fileIntegritry.namespace, "-o=jsonpath={.items[*].lastResult.condition}").Output()
+		if strings.Contains(output, "Failed") {
+			fileIntegritry.reinitFileintegrity(oc, "fileintegrity.fileintegrity.openshift.io/"+fileIntegritry.name+" annotate")
+			fileIntegritry.checkFileintegrityStatus(oc, "running")
+			newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fileIntegritry.name, "-n", fileIntegritry.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", fileIntegritry.namespace, "-l app=aide-"+fileIntegritry.name, "-o=jsonpath={.items[*].spec.nodeName}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			newCheck("expect", asAdmin, withoutNamespace, contain, fi1.name, ok, []string{"fileintegrity", "-n", fi1.namespace,
-				"-o=jsonpath={.items[0].metadata.name}"}).check(oc)
+			nodes = strings.Fields(output)
+			for _, node := range nodes {
+				fileIntegritry.checkFileintegritynodestatus(oc, node, "Succeeded")
+			}
+		}
 
-			g.By("Check aid pod and file integrity object status.. !!!\n")
-			aidpodNames, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l app=aide-example-fileintegrity", "-n", fi1.namespace,
-				"-o=jsonpath={.items[*].metadata.name}").Output()
-			o.Expect(err1).NotTo(o.HaveOccurred())
-			aidpodName := strings.Fields(aidpodNames)
-			for _, v := range aidpodName {
-				newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pods", v, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-			}
-			newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", ns1, "-o=jsonpath={.status.phase}"}).check(oc)
-			fionodeNames, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-n", fi1.namespace,
-				"-o=jsonpath={.items[*].metadata.name}").Output()
-			o.Expect(err2).NotTo(o.HaveOccurred())
-			fionodeName := strings.Fields(fionodeNames)
-			for _, v := range fionodeName {
-				fi1.checkFileintegritynodestatus(oc, v, "Succeeded")
-			}
-		})
+		g.By("Operator upgrade..!!!\n")
+		patchSub := fmt.Sprintf("{\"spec\":{\"source\":\"qe-app-registry\"}}")
+		patchResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "--type", "merge", "-p", patchSub, "-n", sub.namespace)
+		// Sleep 10 sesonds so that the operator upgrade will be triggered
+		time.Sleep(10 * time.Second)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Succeeded", ok, []string{"csv", "-n", sub.namespace,
+			"-ojsonpath={.items[0].status.phase}"}).check(oc)
+		newCsvName, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", sub.namespace, "-l", "operators.coreos.com/file-integrity-operator.openshift-file-integrity=",
+			"-o=jsonpath='{.items[0].metadata.name}'").Output()
+		o.Expect(errGet).NotTo(o.HaveOccurred())
+		newVersion := strings.ReplaceAll(newCsvName, "file-integrity-operator.v", "")
+		o.Expect(newVersion).ShouldNot(o.Equal(oldVersion))
 
-		// author: pdhamdhe@redhat.com
-		g.It("Author:pdhamdhe-NonPreRelease-CPaasrunOnly-Critical-42663-Critical-45366-postcheck for file integrity operator", func() {
-			fi1.namespace = ns1
-			defer cleanupObjects(oc,
-				objectTableRef{"project", ns1, ns1})
+		g.By("Check aid pod and file integrity object status after upgrade.. !!!\n")
+		aidpodNames, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l app=aide-example-fileintegrity", "-n", fileIntegritry.namespace,
+			"-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+		aidpodName := strings.Fields(aidpodNames)
+		for _, podName := range aidpodName {
+			newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pods", podName, "-n", fileIntegritry.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		}
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fileIntegritry.name, "-n", fileIntegritry.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fileIntegritry.assertNodesConditionNotEmpty(oc)
+		for _, node := range nodes {
+			fileIntegritry.checkFileintegritynodestatus(oc, node, "Succeeded")
+		}
 
-			g.By("Check aid pod and file integrity object status after upgrade.. !!!\n")
-			aidpodNames, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l app=aide-example-fileintegrity", "-n", fi1.namespace,
-				"-o=jsonpath={.items[*].metadata.name}").Output()
-			o.Expect(err1).NotTo(o.HaveOccurred())
-			aidpodName := strings.Fields(aidpodNames)
-			for _, v := range aidpodName {
-				newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pods", v, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-			}
-			newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", ns1, "-o=jsonpath={.status.phase}"}).check(oc)
-			fionodeNames, err2 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-n", fi1.namespace,
-				"-o=jsonpath={.items[*].metadata.name}").Output()
-			o.Expect(err2).NotTo(o.HaveOccurred())
-			fionodeName := strings.Fields(fionodeNames)
-			for _, v := range fionodeName {
-				fi1.checkFileintegritynodestatus(oc, v, "Succeeded")
-			}
-
-			g.By("trigger reinit")
-			fi1.reinitFileintegrity(oc, "annotated")
-			fi1.checkFileintegrityStatus(oc, "running")
-			newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", ns1, "-o=jsonpath={.status.phase}"}).check(oc)
-			aidpodNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l app=aide-example-fileintegrity", "-n", fi1.namespace,
-				"-o=jsonpath={.items[*].metadata.name}").Output()
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("aidepodNames is %s ", aidpodNames))
-			aidpodName = strings.Fields(aidpodNames)
-			for _, v := range aidpodName {
-				newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pods", v, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-			}
-			fionodeNames, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-n", fi1.namespace, "-l node.openshift.io/os_id=rhcos",
-				"-o=jsonpath={.items[*].metadata.name}").Output()
-			exutil.AssertWaitPollNoErr(err3, fmt.Sprintf("fionodeNames is %s ", fionodeNames))
-			fionodeName = strings.Fields(fionodeNames)
-			for _, node := range fionodeName {
-				fi1.checkFileintegritynodestatus(oc, node, "Succeeded")
-				fi1.checkDBBackupResult(oc, node)
-			}
-
-		})
+		g.By("trigger fileintegrity failure on node")
+		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", fileIntegritry.namespace, "-l app=aide-"+fileIntegritry.name, "-o=jsonpath={.items[0].spec.nodeName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		var filePath = "/root/test" + getRandomString()
+		defer exutil.DebugNodeWithChroot(oc, nodeName, "rm", "-rf", filePath)
+		debugNodeStdout, debugNodeErr := exutil.DebugNodeWithChroot(oc, nodeName, "mkdir", filePath)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+		e2e.Logf("The output of creating folder %s is: %s", filePath, debugNodeStdout)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Failed", ok, []string{"fileintegritynodestatus", fileIntegritry.name + "-" + nodeName, "-n", fileIntegritry.namespace, "-o=jsonpath={.lastResult.condition}"}).check(oc)
+		cmName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatus", fileIntegritry.name+"-"+nodeName, "-n", sub.namespace,
+			`-o=jsonpath={.results[?(@.condition=="Failed")].resultConfigMapName}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		fileIntegritry.getDataFromConfigmap(oc, cmName, filePath)
 	})
 })

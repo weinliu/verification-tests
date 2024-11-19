@@ -16,7 +16,7 @@ objects:
       initialDelay: ${{INITIALDELAY}}
     debug: ${{DEBUG}}
     nodeSelector:
-      "${NODESELECTORKEY}": ""
+      "${NODESELECTORKEY}": "${NODESELECTORVALUE}"
 parameters:
 - name: NAME
 - name: NAMESPACE
@@ -25,5 +25,6 @@ parameters:
 - name: DEBUG
 - name: GRACEPERIOD
 - name: NODESELECTORKEY
+- name: NODESELECTORVALUE
 - name: INITIALDELAY
 
