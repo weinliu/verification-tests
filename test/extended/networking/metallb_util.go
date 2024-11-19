@@ -376,11 +376,11 @@ func checkLoadBalancerSvcStatus(oc *exutil.CLI, namespace string, svcName string
 		e2e.Logf("Checking status of service %s", svcName)
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", namespace, svcName, "-o=jsonpath={.status.loadBalancer.ingress[0].ip}").Output()
 		if err != nil {
-			e2e.Logf("Failed to get service status, error:%s. Trying again", err)
+			e2e.Logf("Failed to get service status, error:%v. Trying again", err)
 			return false, nil
 		}
 		if strings.Contains(output, "<pending>") || output == "" {
-			e2e.Logf("Failed to assign address to service, error:%s. Trying again", err)
+			e2e.Logf("Failed to assign address to service, error:%v. Trying again", err)
 			return false, nil
 		}
 		return true, nil
@@ -649,12 +649,7 @@ func checkBGPSessions(oc *exutil.CLI, bgpRouterNamespace string, bgpSessionCheck
 	errCheck := wait.Poll(60*time.Second, timeout, func() (bool, error) {
 		e2e.Logf("Checking status of BGP session")
 		bgpSummaryOutput, err := oc.WithoutNamespace().AsAdmin().Run("exec").Args(cmd...).Output()
-		o.Expect(bgpSummaryOutput).NotTo(o.BeEmpty())
-		if err != nil {
-			result = false
-			return result, nil
-		}
-		if strings.Contains(bgpSummaryOutput, "Active") || strings.Contains(bgpSummaryOutput, "Connect") {
+		if err != nil || bgpSummaryOutput == "" || strings.Contains(bgpSummaryOutput, "Active") || strings.Contains(bgpSummaryOutput, "Connect") {
 			e2e.Logf("Failed to establish BGP session between router and speakers, Trying again..")
 			result = false
 			return result, nil
