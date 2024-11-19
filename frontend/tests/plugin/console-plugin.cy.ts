@@ -14,11 +14,11 @@ describe('Console plugins features', () => {
      { name: 'v1alpha1', served: 'true', storage: 'false' },
      { name: 'v1', served: 'true', storage: 'true' },
     ];
-    versionData.forEach((version,index) => {
+    versionData.forEach((version) => {
     cy.get(`td:contains("${version.name}")`)
-       .eq(index)
-       .siblings('td[data-label="Served"]').should('have.text', version.served)
-       .siblings('td[data-label="Storage"]').should('have.text', version.storage);
+       .eq(0)
+       .next().should('have.text', version.served)
+       .next().should('have.text', version.storage);
     });
   })
 });
