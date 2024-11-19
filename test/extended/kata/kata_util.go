@@ -61,6 +61,7 @@ type TestRunDescription struct {
 	installKataRPM           bool
 	workloadToTest           string
 	trusteeCatalogSourcename string
+	trusteeUrl               string
 }
 
 // If you changes this please make changes to func createPeerPodSecrets
@@ -1967,16 +1968,21 @@ func getTestRunConfigmap(oc *exutil.CLI, testrun *TestRunDescription, testrunCon
 	// only if testing coco workloads
 	// not required yet, so set defaults
 	if testrun.workloadToTest == "coco" {
-		trusteeTestrunDataExists := false
+		trusteeErrorMessage := ""
 		if gjson.Get(configmapData, "trusteeCatalogSourcename").Exists() {
 			testrun.trusteeCatalogSourcename = gjson.Get(configmapData, "trusteeCatalogSourcename").String()
-			trusteeTestrunDataExists = true
 		} else {
 			testrun.trusteeCatalogSourcename = "redhat-operator"
-			// errorMessage = fmt.Sprintf("Testing coco workload and trusteeCatalogSourcename is missing from data\n%v", errorMessage)
+			trusteeErrorMessage = fmt.Sprintf("workload is coco and trusteeCatalogSourcename is missing from data\n%v", trusteeErrorMessage)
 		}
-		if !trusteeTestrunDataExists {
-			e2e.Logf("Some of the trustee data was not in osc.config. Using defaults in those cases")
+		if gjson.Get(configmapData, "trusteeUrl").Exists() {
+			testrun.trusteeUrl = gjson.Get(configmapData, "trusteeUrl").String()
+		} else {
+			testrun.trusteeUrl = "https://kbs-service-trustee-operator-system.apps.ik01914t.eastus.aroapp.io"
+			trusteeErrorMessage = fmt.Sprintf("workload is coco and trusteeUrl is missing from data\n%v", trusteeErrorMessage)
+		}
+		if trusteeErrorMessage != "" {
+			e2e.Logf("Some of the trustee data was not in osc-config. Using defaults in those cases:\n%v", trusteeErrorMessage)
 		}
 	}
 

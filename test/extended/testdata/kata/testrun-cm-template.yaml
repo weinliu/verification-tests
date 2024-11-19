@@ -26,6 +26,7 @@ objects:
       installKataRPM: "${INSTALLKATARPM}"
       workloadToTest: "${WORKLOADTOTEST}"
       trusteeCatalogSourcename: "${TRUSTEECATSOURCENAME}"
+      trusteeUrl: "${TRUSTEEURL}"
 
 # oc process --ignore-unknown-parameters=true -f configmap-input-template.yaml -p [name]=[value] [name]=[value] > osc-config.yaml...
 # oc apply -f osc-config.yaml
@@ -45,7 +46,7 @@ parameters:
   - name: OSCCHANNEL
     value: "stable"
   - name: OPERATORVER
-    value: "1.5.0"
+    value: "1.7.0"
     description: "Compare the OSC operator CSV version to this string"
   - name: MUSTGATHERIMAGE
     value: "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel9:1.5.0"
@@ -80,3 +81,6 @@ parameters:
   - name: TRUSTEECATSOURCENAME
     value: "redhat-operators"
     description: "name of the catalog Trustee subscripton comes from"
+  - name: TRUSTEEURL
+    value: "https://kbs-service-trustee-operator-system.apps.ik01914t.eastus.aroapp.io"
+    description: "The full url to trustee to use in peer-pods-cm AA_KBC_PARAMS"

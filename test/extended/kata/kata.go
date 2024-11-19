@@ -82,22 +82,24 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	}
 
 	testrun := TestRunDescription{
-		checked:            false,
-		operatorVer:        "1.6.0",
-		catalogSourceName:  subscription.catalogSourceName,
-		channel:            subscription.channel,
-		redirectNeeded:     false,
-		mustgatherImage:    "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel9:latest",
-		eligibility:        kataconfig.eligibility,
-		labelSingleNode:    false,
-		eligibleSingleNode: false,
-		runtimeClassName:   kataconfig.runtimeClassName,
-		enablePeerPods:     kataconfig.enablePeerPods,
-		enableGPU:          false,
-		podvmImageUrl:      "https://raw.githubusercontent.com/openshift/sandboxed-containers-operator/devel/config/peerpods/podvm/",
-		workloadImage:      "quay.io/openshift/origin-hello-openshift",
-		installKataRPM:     false,
-		workloadToTest:     "kata",
+		checked:                  false,
+		operatorVer:              "1.7.0",
+		catalogSourceName:        subscription.catalogSourceName,
+		channel:                  subscription.channel,
+		redirectNeeded:           false,
+		mustgatherImage:          "registry.redhat.io/openshift-sandboxed-containers/osc-must-gather-rhel9:latest",
+		eligibility:              kataconfig.eligibility,
+		labelSingleNode:          false,
+		eligibleSingleNode:       false,
+		runtimeClassName:         kataconfig.runtimeClassName,
+		enablePeerPods:           kataconfig.enablePeerPods,
+		enableGPU:                false,
+		podvmImageUrl:            "https://raw.githubusercontent.com/openshift/sandboxed-containers-operator/devel/config/peerpods/podvm/",
+		workloadImage:            "quay.io/openshift/origin-hello-openshift",
+		installKataRPM:           false,
+		workloadToTest:           "kata",
+		trusteeCatalogSourcename: "redhat-operators",
+		trusteeUrl:               "https://kbs-service-trustee-operator-system.apps.ik01914t.eastus.aroapp.io",
 	}
 
 	g.BeforeEach(func() {
@@ -283,8 +285,9 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			o.Expect(trusteeRouteHost).NotTo(o.BeEmpty())
 			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", trusteeRouteHost))
 
-			trusteeURLType := "https"
-			patch := fmt.Sprintf("{\"data\":{\"AA_KBC_PARAMS\": \"cc_kbs::%v://%v\"}}", trusteeURLType, trusteeRouteHost)
+			e2e.Logf("INFO in-cluster TRUSTEE_HOST is %v.  Using %v instead", trusteeRouteHost, testrun.trusteeUrl)
+			patch := fmt.Sprintf("{\"data\":{\"AA_KBC_PARAMS\": \"cc_kbc::%v\"}}", testrun.trusteeUrl)
+
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "peer-pods-cm", "--type", "merge", "-p", patch, "-n", subscription.namespace).Output()
 			if err != nil {
 				e2e.Logf("warning patching peer-pods-cm: %v %v", msg, err)
