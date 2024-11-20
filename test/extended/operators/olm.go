@@ -5228,7 +5228,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 	})
 
 	// It will cover test case: OCP-24076, author: kuiwang@redhat.com
-	g.It("NonHyperShiftHOST-ProdrunBoth-Author:kuiwang-Medium-24076-check the version of olm operator is appropriate in ClusterOperator", func() {
+	g.It("Author:kuiwang-NonHyperShiftHOST-ROSA-OSD_CCS-ARO-ProdrunBoth-Medium-24076-check the version of olm operator is appropriate in ClusterOperator", func() {
 		var (
 			olmClusterOperatorName = "operator-lifecycle-manager"
 		)
@@ -5349,7 +5349,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle common object", f
 	})
 
 	// It will cover test case: OCP-21825, author: kuiwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-Medium-21825-Certs for packageserver can be rotated successfully", func() {
+	g.It("Author:kuiwang-NonHyperShiftHOST-ROSA-OSD_CCS-ARO-ConnectedOnly-Medium-21825-Certs for packageserver can be rotated successfully", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		var (
@@ -5559,7 +5559,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-29231 and OCP-29277, author: kuiwang@redhat.com
-	g.It("Author:kuiwang-Medium-29231-Medium-29277-label to target namespace of group", func() {
+	g.It("Author:kuiwang-ROSA-OSD_CCS-ARO-Medium-29231-Medium-29277-label to target namespace of group", func() {
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -6242,7 +6242,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-29723, author: kuiwang@redhat.com
-	g.It("ConnectedOnly-Author:kuiwang-Medium-29723-As cluster admin find abnormal status condition via components of operator resource", func() {
+	g.It("Author:kuiwang-ConnectedOnly-ROSA-OSD_CCS-ARO-Medium-29723-As cluster admin find abnormal status condition via components of operator resource", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
@@ -6887,7 +6887,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-34472, author: kuiwang@redhat.com
-	g.It("ConnectedOnly-Author:kuiwang-Medium-34472-OLM label dependency", func() {
+	g.It("Author:kuiwang-ConnectedOnly-ROSA-OSD_CCS-ARO-Medium-34472-olm label dependency", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		platform := exutil.CheckPlatform(oc)
 		if strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "none") || exutil.Is3MasterNoDedicatedWorkerNode(oc) {
@@ -7397,7 +7397,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-50135, author: kuiwang@redhat.com
-	g.It("ConnectedOnly-Author:kuiwang-Medium-50135-automatic upgrade for failed operator installation og created correctly", func() {
+	g.It("Author:kuiwang-ConnectedOnly-ROSA-OSD_CCS-ARO-Medium-50135-automatic upgrade for failed operator installation og created correctly", func() {
 		var (
 			itName                    = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir       = exutil.FixturePath("testdata", "olm")
@@ -11312,7 +11312,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-60114, author: kuiwang@redhat.com
-	g.It("ConnectedOnly-Author:kuiwang-Medium-60114-olm serves an api to discover all versions of an operator", func() {
+	g.It("Author:kuiwang-ConnectedOnly-ROSA-OSD_CCS-ARO-Medium-60114-olm serves an api to discover all versions of an operator", func() {
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
@@ -11469,7 +11469,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-62974, author: kuiwang@redhat.com
-	g.It("NonHyperShiftHOST-Author:kuiwang-Medium-62974-olm sets invalid scc label on its namespaces", func() {
+	g.It("Author:kuiwang-NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Medium-62974-olm sets invalid scc label on its namespaces", func() {
 		exutil.By("https://issues.redhat.com/browse/OCPBUGS-948 automated")
 		labelKey := "openshift\\.io\\/scc"
 
@@ -11798,7 +11798,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 	})
 
 	// It will cover part of test case: OCP-29275, author: kuiwang@redhat.com
-	g.It("NonHyperShiftHOST-ConnectedOnly-Author:kuiwang-Medium-29275-label to target namespace of operator group with multi namespace", func() {
+	g.It("Author:kuiwang-NonHyperShiftHOST-ROSA-OSD_CCS-ARO-ConnectedOnly-Medium-29275-label to target namespace of operator group with multi namespace", func() {
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
