@@ -12,6 +12,9 @@ objects:
     namespace: ${NAMESPACE}
   spec:
     managementState: ${MANAGEMENT_STATE}
+    filters:
+      - name: detect-multiline-exception
+        type: detectMultilineException
     outputs:
     - name: apps
       type: otlp
@@ -50,6 +53,8 @@ objects:
     - inputRefs:
       - application
       name: apps
+      filterRefs:
+      - detect-multiline-exception
       outputRefs:
       - apps
     - inputRefs:
@@ -59,6 +64,8 @@ objects:
       - audit
     - inputRefs:
       - infrastructure
+      filterRefs:
+      - detect-multiline-exception
       name: infra
       outputRefs:
       - infra

@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
@@ -14,13 +15,12 @@ import (
 var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease otlp output testing", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc                          = exutil.NewCLI("vector-otlp", exutil.KubeConfigPath())
-		loggingBaseDir, jsonLogFile string
+		oc             = exutil.NewCLI("vector-otlp", exutil.KubeConfigPath())
+		loggingBaseDir string
 	)
 
 	g.BeforeEach(func() {
 		loggingBaseDir = exutil.FixturePath("testdata", "logging")
-		jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 		CLO := SubscriptionObjects{
 			OperatorName:  "cluster-logging-operator",
 			Namespace:     cloNS,
@@ -128,7 +128,7 @@ retry_max_duration_secs = 20`,
 	})
 
 	//author: qitang@redhat.com
-	g.It("Author:qitang-CPaasrunOnly-ConnectedOnly-Medium-75245-Forward logs to lokistack in otlp output.", func() {
+	g.It("Author:qitang-CPaasrunOnly-ConnectedOnly-High-76728-Add stream info to data model OTEL[Serial][Slow]", func() {
 		s := getStorageType(oc)
 		if len(s) == 0 {
 			g.Skip("Current cluster doesn't have a proper object storage for this test!")
@@ -147,24 +147,50 @@ retry_max_duration_secs = 20`,
 		exutil.By("deploy Loki Operator")
 		LO.SubscribeOperator(oc)
 
-		appProj := oc.Namespace()
-		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		multilineLogs := []string{
+			javaExc, complexJavaExc, nestedJavaExc,
+			goExc, goOnGaeExc, goSignalExc, goHTTP,
+			rubyExc, railsExc,
+			clientJsExc, nodeJsExc, v8JsExc,
+			csharpAsyncExc, csharpNestedExc, csharpExc,
+			pythonExc,
+			phpOnGaeExc, phpExc,
+			dartAbstractClassErr,
+			dartArgumentErr,
+			dartAssertionErr,
+			dartAsyncErr,
+			dartConcurrentModificationErr,
+			dartDivideByZeroErr,
+			dartErr,
+			dartTypeErr,
+			dartExc,
+			dartUnsupportedErr,
+			dartUnimplementedErr,
+			dartOOMErr,
+			dartRangeErr,
+			dartReadStaticErr,
+			dartStackOverflowErr,
+			dartFallthroughErr,
+			dartFormatErr,
+			dartFormatWithCodeErr,
+			dartNoMethodErr,
+			dartNoMethodGlobalErr,
+		}
 
 		exutil.By("Deploying LokiStack")
 		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 		ls := lokiStack{
-			name:          "loki-75245",
+			name:          "loki-76727",
 			namespace:     loggingNS,
 			tSize:         "1x.demo",
 			storageType:   s,
-			storageSecret: "storage-secret-75245",
+			storageSecret: "storage-secret-76727",
 			storageClass:  sc,
-			bucketName:    "logging-loki-75245-" + getInfrastructureName(oc),
+			bucketName:    "logging-loki-76727-" + getInfrastructureName(oc),
 			template:      lokiStackTemplate,
 		}
 		defer ls.removeObjectStorage(oc)
-		err = ls.prepareResourcesForLokiStack(oc)
+		err := ls.prepareResourcesForLokiStack(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer ls.removeLokiStack(oc)
 		err = ls.deployLokiStack(oc)
@@ -175,11 +201,11 @@ retry_max_duration_secs = 20`,
 
 		exutil.By("create a CLF to test forward to lokistack")
 		clf := clusterlogforwarder{
-			name:                      "otlp-75245",
+			name:                      "otlp-76727",
 			namespace:                 loggingNS,
-			serviceAccountName:        "logcollector-75245",
+			serviceAccountName:        "logcollector-76727",
 			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "otlp-lokistack.yaml"),
-			secretName:                "lokistack-secret-75245",
+			secretName:                "lokistack-secret-76727",
 			collectApplicationLogs:    true,
 			collectAuditLogs:          true,
 			collectInfrastructureLogs: true,
@@ -194,6 +220,19 @@ retry_max_duration_secs = 20`,
 		defer clf.delete(oc)
 		clf.create(oc, "URL="+lokiGatewaySVC)
 
+		exutil.By("create some pods to generate multiline errors")
+		multilineLogFile := filepath.Join(loggingBaseDir, "generatelog", "multiline-error-log.yaml")
+		ioStreams := []string{"stdout", "stderr"}
+		for _, ioStream := range ioStreams {
+			ns := "multiline-log-" + ioStream + "-76727"
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--wait=false").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "deploy/multiline-log", "cm/multiline-log").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-n", ns, "-f", multilineLogFile, "-p", "OUT_STREAM="+ioStream, "-p", "RATE=60.00").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
 		exutil.By("checking app, infra and audit logs in loki")
 		defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
 		err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
@@ -203,6 +242,19 @@ retry_max_duration_secs = 20`,
 		lc := newLokiClient(route).withToken(bearerToken).retry(5)
 		for _, logType := range []string{"application", "infrastructure", "audit"} {
 			lc.waitForLogsAppearByKey(logType, "log_type", logType)
+		}
+
+		for _, ioStream := range ioStreams {
+			lc.waitForLogsAppearByProject("application", "multiline-log-"+ioStream+"-76727")
+			dataInLoki, _ := lc.searchByNamespace("application", "multiline-log-"+ioStream+"-76727")
+			for _, log := range dataInLoki.Data.Result {
+				o.Expect(log.Stream.LogIOStream == ioStream).Should(o.BeTrue(), `iostream is wrong, expected: `+ioStream+`, got: `+log.Stream.LogIOStream)
+				for _, value := range log.Values {
+					message := convertInterfaceToArray(value)
+					o.Expect(containSubstring(multilineLogs, message[1])).Should(o.BeTrue(), fmt.Sprintf("Parse multiline error failed, iostream: %s, message: \n%s", ioStream, message[1]))
+				}
+			}
+
 		}
 	})
 

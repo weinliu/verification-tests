@@ -182,22 +182,23 @@ AggregationResult example
 // LogEntity the entity of log data
 type LogEntity struct {
 	Kubernetes struct {
-		Annotations      map[string]string `json:"annotations,omitempty"`
-		ContainerID      string            `json:"container_id,omitempty"`
-		ContainerImage   string            `json:"container_image"`
-		ContainerImageID string            `json:"container_image_id,omitempty"`
-		ContainerName    string            `json:"container_name"`
-		FlatLabels       []string          `json:"flat_labels"`
-		Host             string            `json:"host"`
-		Lables           map[string]string `json:"labels,omitempty"`
-		MasterURL        string            `json:"master_url,omitempty"`
-		NamespaceID      string            `json:"namespace_id"`
-		NamespaceLabels  map[string]string `json:"namespace_labels,omitempty"`
-		NamespaceName    string            `json:"namespace_name"`
-		PodID            string            `json:"pod_id"`
-		PodIP            string            `json:"pod_ip,omitempty"`
-		PodName          string            `json:"pod_name"`
-		PodOwner         string            `json:"pod_owner"`
+		Annotations       map[string]string `json:"annotations,omitempty"`
+		ContainerID       string            `json:"container_id,omitempty"`
+		ContainerImage    string            `json:"container_image"`
+		ContainerImageID  string            `json:"container_image_id,omitempty"`
+		ContainerIOStream string            `json:"container_iostream,omitempty"`
+		ContainerName     string            `json:"container_name"`
+		FlatLabels        []string          `json:"flat_labels"`
+		Host              string            `json:"host"`
+		Lables            map[string]string `json:"labels,omitempty"`
+		MasterURL         string            `json:"master_url,omitempty"`
+		NamespaceID       string            `json:"namespace_id"`
+		NamespaceLabels   map[string]string `json:"namespace_labels,omitempty"`
+		NamespaceName     string            `json:"namespace_name"`
+		PodID             string            `json:"pod_id"`
+		PodIP             string            `json:"pod_ip,omitempty"`
+		PodName           string            `json:"pod_name"`
+		PodOwner          string            `json:"pod_owner"`
 	} `json:"kubernetes,omitempty"`
 	Systemd struct {
 		SystemdT struct {
@@ -225,6 +226,7 @@ type LogEntity struct {
 	} `json:"systemd,omitempty"`
 	ViaqMsgID string `json:"viaq_msg_id,omitempty"`
 	Level     string `json:"level"`
+	LogSource string `json:"log_source"`
 	LogType   string `json:"log_type,omitempty"`
 	Message   string `json:"message"`
 	Docker    struct {
@@ -407,19 +409,76 @@ type OperatorHub struct {
 	}
 }
 */
+
+// OTEL data module
+/*
+{
+  "status": "success",
+  "data": {
+    "resultType": "streams",
+    "result": [
+      {
+        "stream": {
+          "detected_level": "debug",
+          "k8s_container_name": "logging-centos-logtest",
+          "k8s_namespace_name": "e2e-test-vector-otlp-pzpdm",
+          "k8s_node_name": "ip-10-0-70-97.us-east-2.compute.internal",
+          "k8s_pod_label_run": "centos-logtest",
+          "k8s_pod_label_test": "centos-logtest",
+          "k8s_pod_name": "logging-centos-logtest-9bbn2",
+          "k8s_pod_uid": "de4948fe-07bb-42c2-986b-227a24f38a8b",
+          "kubernetes_container_name": "logging-centos-logtest",
+          "kubernetes_host": "ip-10-0-70-97.us-east-2.compute.internal",
+          "kubernetes_namespace_name": "e2e-test-vector-otlp-pzpdm",
+          "kubernetes_pod_name": "logging-centos-logtest-9bbn2",
+          "log_iostream": "stdout",
+          "log_source": "container",
+          "log_type": "application",
+          "observed_timestamp": "1730165206237598776",
+          "openshift_cluster_id": "de026959-72d3-4924-ada8-d6f935c0cdf7",
+          "openshift_cluster_uid": "de026959-72d3-4924-ada8-d6f935c0cdf7",
+          "openshift_log_source": "container",
+          "openshift_log_type": "application",
+          "severity_text": "default"
+        },
+        "values": [
+          [
+            "1730165205734904307",
+            "{\"message\": \"MERGE_JSON_LOG=true\", \"level\": \"debug\",\"Layer1\": \"layer1 0\", \"layer2\": {\"name\":\"Layer2 1\", \"tips\":\"Decide by PRESERVE_JSON_LOG\"}, \"StringNumber\":\"10\", \"Number\": 10,\"foo.bar\":\"Dot Item\",\"{foobar}\":\"Brace Item\",\"[foobar]\":\"Bracket Item\", \"foo:bar\":\"Colon Item\",\"foo bar\":\"Space Item\" }"
+          ]
+        ]
+      }
+	]
+  }
+}
+*/
 type lokiQueryResponse struct {
 	Status string `json:"status"`
 	Data   struct {
 		ResultType string `json:"resultType"`
 		Result     []struct {
 			Stream *struct {
-				LogType                 string `json:"log_type"`
-				Tag                     string `json:"tag"`
+				DetectedLevel           string `json:"detected_level,omitempty"`
+				K8sContainerName        string `json:"k8s_container_name,omitempty"`
+				K8sNamespaceName        string `json:"k8s_namespace_name,omitempty"`
+				K8sNodeName             string `json:"k8s_node_name,omitempty"`
+				K8sPodName              string `json:"k8s_pod_name,omitempty"`
+				K8sPodUID               string `json:"k8s_pod_uid,omitempty"`
+				LogType                 string `json:"log_type,omitempty"`
+				Tag                     string `json:"tag,omitempty"`
 				FluentdThread           string `json:"fluentd_thread,omitempty"`
 				KubernetesContainerName string `json:"kubernetes_container_name,omitempty"`
 				KubernetesHost          string `json:"kubernetes_host,omitempty"`
 				KubernetesNamespaceName string `json:"kubernetes_namespace_name,omitempty"`
 				KubernetesPodName       string `json:"kubernetes_pod_name,omitempty"`
+				LogIOStream             string `json:"log_iostream,omitempty"`
+				LogSource               string `json:"log_source,omitempty"`
+				ObservedTimestamp       string `json:"observed_timestamp,omitempty"`
+				OpenshiftClusterID      string `json:"openshift_cluster_id,omitempty"`
+				OpenshiftClusterUID     string `json:"openshift_cluster_uid,omitempty"`
+				OpenshiftLogSource      string `json:"openshift_log_source,omitempty"`
+				OpenshiftLogType        string `json:"openshift_log_type,omitempty"`
+				SeverityText            string `json:"severity_text,omitempty"`
 			} `json:"stream,omitempty"`
 			Metric *struct {
 				LogType                 string `json:"log_type,omitempty"`

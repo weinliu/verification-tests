@@ -757,13 +757,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				})
 				exutil.AssertWaitPollNoErr(err, "can't find "+k+" logs")
 				for _, log := range v {
-					var messages []string
 					err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 120*time.Second, true, func(context.Context) (done bool, err error) {
 						dataInLoki, _ := lc.queryRange("application", "{kubernetes_namespace_name=\"multiline-log-"+k+"-74945\"}", len(v)*2, time.Now().Add(time.Duration(-2)*time.Hour), time.Now(), false)
-						lokiLog := extractLogEntities(dataInLoki)
+						lokiLogs := extractLogEntities(dataInLoki)
 						var messages []string
-						for _, log := range lokiLog {
-							messages = append(messages, log.Message)
+						for _, lokiLog := range lokiLogs {
+							messages = append(messages, lokiLog.Message)
 						}
 						if len(messages) == 0 {
 							return false, nil
@@ -775,10 +774,6 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 						return true, nil
 					})
 					if err != nil {
-						e2e.Logf("\n\nlogs in Loki:\n\n")
-						for _, m := range messages {
-							e2e.Logf(m)
-						}
 						e2e.Failf("%s logs are not parsed", k)
 					}
 				}
@@ -835,8 +830,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			bearerToken := getSAToken(oc, "default", oc.Namespace())
 			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 			lc := newLokiClient(route).withToken(bearerToken).retry(5)
-			lc.waitForLogsAppearByQuery("infrastructure", `{log_type="infrastructure",kubernetes_namespace_name=~".+"}`)
-			lc.waitForLogsAppearByQuery("infrastructure", `{log_type="infrastructure",kubernetes_namespace_name!~".+"}`)
+			err = lc.waitForLogsAppearByQuery("infrastructure", `{log_type="infrastructure",kubernetes_namespace_name=~".+"}`)
+			exutil.AssertWaitPollNoErr(err, "can't find infra container logs")
+			err = lc.waitForLogsAppearByQuery("infrastructure", `{log_type="infrastructure",kubernetes_namespace_name!~".+"}`)
+			exutil.AssertWaitPollNoErr(err, "can't find journal logs")
 
 			exutil.By("update CLF to only collect journal logs")
 			patch := `[{"op": "add", "path": "/spec/inputs", "value": [{"name": "selected-infra", "type": "infrastructure", "infrastructure": {"sources":["node"]}}]},{"op": "replace", "path": "/spec/pipelines/0/inputRefs", "value": ["selected-infra"]}]`
@@ -1037,6 +1034,111 @@ exclude_paths_glob_patterns = ["/var/log/pods/*/*/*.gz", "/var/log/pods/*/*/*.lo
 			o.Expect(err).NotTo(o.HaveOccurred())
 			sysLogs := extractLogEntities(sysLog)
 			o.Expect(len(sysLogs) > 0).Should(o.BeTrue(), "can't find logs from syslog in lokistack")
+		})
+
+		g.It("Author:qitang-CPaasrunOnly-High-76727-Add stream info to data model viaq[Serial][Slow]", func() {
+			multilineLogs := []string{
+				javaExc, complexJavaExc, nestedJavaExc,
+				goExc, goOnGaeExc, goSignalExc, goHTTP,
+				rubyExc, railsExc,
+				clientJsExc, nodeJsExc, v8JsExc,
+				csharpAsyncExc, csharpNestedExc, csharpExc,
+				pythonExc,
+				phpOnGaeExc, phpExc,
+				dartAbstractClassErr,
+				dartArgumentErr,
+				dartAssertionErr,
+				dartAsyncErr,
+				dartConcurrentModificationErr,
+				dartDivideByZeroErr,
+				dartErr,
+				dartTypeErr,
+				dartExc,
+				dartUnsupportedErr,
+				dartUnimplementedErr,
+				dartOOMErr,
+				dartRangeErr,
+				dartReadStaticErr,
+				dartStackOverflowErr,
+				dartFallthroughErr,
+				dartFormatErr,
+				dartFormatWithCodeErr,
+				dartNoMethodErr,
+				dartNoMethodGlobalErr,
+			}
+
+			exutil.By("Deploying LokiStack CR for 1x.demo tshirt size")
+			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+			ls := lokiStack{
+				name:          "loki-76727",
+				namespace:     loggingNS,
+				tSize:         "1x.demo",
+				storageType:   s,
+				storageSecret: "storage-secret-76727",
+				storageClass:  sc,
+				bucketName:    "logging-loki-76727-" + getInfrastructureName(oc),
+				template:      lokiStackTemplate,
+			}
+			defer ls.removeObjectStorage(oc)
+			err := ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+
+			exutil.By("create a CLF to forward logs to lokistack")
+			clf := clusterlogforwarder{
+				name:                      "instance-76727",
+				namespace:                 loggingNS,
+				serviceAccountName:        "logcollector-76727",
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
+				secretName:                "lokistack-secret-76727",
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+			}
+			clf.createServiceAccount(oc)
+			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
+			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
+			defer clf.delete(oc)
+			clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
+			patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "detectmultiline", "type": "detectMultilineException"}]}, {"op": "add", "path": "/spec/pipelines/0/filterRefs", "value":["detectmultiline"]}]`
+			clf.update(oc, "", patch, "--type=json")
+			clf.waitForCollectorPodsReady(oc)
+
+			exutil.By("create some pods to generate multiline errors")
+			multilineLogFile := filepath.Join(loggingBaseDir, "generatelog", "multiline-error-log.yaml")
+			ioStreams := []string{"stdout", "stderr"}
+			for _, ioStream := range ioStreams {
+				ns := "multiline-log-" + ioStream + "-76727"
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--wait=false").Execute()
+				err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ns, "deploy/multiline-log", "cm/multiline-log").Execute()
+				err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("-n", ns, "-f", multilineLogFile, "-p", "OUT_STREAM="+ioStream, "-p", "RATE=60.00").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+
+			exutil.By("check data in Loki")
+			defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+			err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			bearerToken := getSAToken(oc, "default", oc.Namespace())
+			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+			lc := newLokiClient(route).withToken(bearerToken).retry(5)
+			for _, ioStream := range ioStreams {
+				lc.waitForLogsAppearByProject("application", "multiline-log-"+ioStream+"-76727")
+				dataInLoki, _ := lc.searchByNamespace("application", "multiline-log-"+ioStream+"-76727")
+				lokiLog := extractLogEntities(dataInLoki)
+				for _, log := range lokiLog {
+					o.Expect(log.Kubernetes.ContainerIOStream == ioStream).Should(o.BeTrue(), `iostream is wrong, expected: `+ioStream+`, got: `+log.Kubernetes.ContainerIOStream)
+					o.Expect(containSubstring(multilineLogs, log.Message)).Should(o.BeTrue(), fmt.Sprintf("Parse multiline error failed, iostream: %s, message: \n%s", ioStream, log.Message))
+				}
+			}
 		})
 
 	})
