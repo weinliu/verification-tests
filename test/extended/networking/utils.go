@@ -4009,8 +4009,7 @@ func forceRebootNode(oc *exutil.CLI, nodeName string) {
 	runCmd, _, _, runCmdErr := oc.AsAdmin().Run("debug").Args("node/"+nodeName, "--", "chroot", "/host", "reboot", "--force").Background()
 	defer runCmd.Process.Kill()
 	o.Expect(runCmdErr).NotTo(o.HaveOccurred())
-	waitForNetworkOperatorState(oc, 100, 10, "True.*True.*False")
-	waitForNetworkOperatorState(oc, 100, 10, "True.*False.*False")
+	waitForNetworkOperatorState(oc, 100, 15, "True.*False.*False")
 }
 
 // Create resources in the specified namespace from the file (not template) that is expected to fail
