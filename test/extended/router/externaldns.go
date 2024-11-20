@@ -296,10 +296,17 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS on STS shou
 
 		exutil.By("1. Ensure the case is runnable on the cluster")
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		// Skip in Gov cluster
+		region, err := exutil.GetAWSClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(region, "us-gov") {
+			g.Skip("Skipping for the aws cluster in us-gov region")
+		}
+		// Skip in non STS cluster
 		if !exutil.IsSTSCluster(oc) {
 			g.Skip("Skip for non-STS cluster")
 		}
-		// this case cannot be executed on a shared vpc cluster
+		// Skip in Shared VPC cluster
 		privateZoneIAMRole, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns.config", "cluster", "-o=jsonpath={.spec.platform.aws}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(privateZoneIAMRole, "privateZoneIAMRole") {
