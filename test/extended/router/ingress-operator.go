@@ -1827,4 +1827,94 @@ spec:
 		o.Expect(consoleOutput).NotTo(o.ContainSubstring(oauthOutput))
 		o.Expect(oauthOutput).To(o.ContainSubstring(defaultOutput))
 	})
+
+	// author: shudili@redhat.com
+	// [OCPBUGS-42480](https://issues.redhat.com/browse/OCPBUGS-42480)
+	// [OCPBUGS-43063](https://issues.redhat.com/browse/OCPBUGS-43063)
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-Critical-77283-Router should support SHA1 CA certificates in the default certificate chain", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			baseTemp            = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			ingctrl             = ingressControllerDescription{
+				name:      "77283",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  "",
+			}
+
+			dirname        = "/tmp/OCP-77283-ca/"
+			validity       = 30
+			caSubj         = "/C=US/ST=SC/L=Default City/O=Default Company Ltd/OU=Test CA/CN=www.exampleca.com/emailAddress=example@example.com"
+			caCrt          = dirname + "77283-ca.crt"
+			caKey          = dirname + "77283-ca.key"
+			usrSubj        = "/CN=www.example.com/ST=SC/C=US/emailAddress=example@example.com/O=Example/OU=Example"
+			usrCrt         = dirname + "77283-usr.crt"
+			usrKey         = dirname + "77283-usr.key"
+			usrCsr         = dirname + "77283-usr.csr"
+			ext            = dirname + "77283-extfile"
+			combinationCrt = dirname + "77283-combo.crt"
+		)
+
+		exutil.By("1.0: Use openssl to create the certification and key")
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output := getByJsonPath(oc, "default", "ingresses.config/cluster", "{.spec.domain}")
+		wildcard := "*." + output
+
+		exutil.By("1.1: Create a new self-signed sha1 root CA including the ca certification and ca key")
+		opensslCmd := fmt.Sprintf(`openssl req -x509 -sha1 -newkey rsa:2048 -days %d -keyout %s -out %s -addext "keyUsage=cRLSign, digitalSignature, keyCertSign" -addext "extendedKeyUsage=serverAuth,clientAuth" -nodes -subj '%s'`, validity, caKey, caCrt, caSubj)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("1.2: Create the user CSR and the user key")
+		opensslCmd = fmt.Sprintf(`openssl req -newkey rsa:2048 -nodes -keyout %s  -out %s -subj %s`, usrKey, usrCsr, usrSubj)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("1.3: Create the extension file, then create the user certification")
+		cmd := fmt.Sprintf(`echo $'[ext]\nbasicConstraints = CA:FALSE\nsubjectKeyIdentifier = none\nauthorityKeyIdentifier = none\nextendedKeyUsage=serverAuth,clientAuth\nkeyUsage=nonRepudiation, digitalSignature, keyEncipherment\nsubjectAltName = DNS:'%s > %s`, ext, wildcard)
+		_, err = exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		opensslCmd = fmt.Sprintf(`openssl x509 -req -days %d -sha256 -in %s -CA %s -CAcreateserial -CAkey %s -extensions ext -out %s`, validity, usrCsr, caCrt, caKey, usrCrt)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("1.4: create the file including the sha1 certification and user certification")
+		catCmd := fmt.Sprintf(`cat %s %s > %s`, usrCrt, caCrt, combinationCrt)
+		_, err = exec.Command("bash", "-c", catCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2.0: Create the custom secret on the cluster with the created the combination certifications and user key")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-ingress", "secret", "custom-cert77283").Output()
+		output, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-ingress", "secret", "tls", "custom-cert77283", "--cert="+combinationCrt, "--key="+usrKey).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("created"))
+
+		exutil.By("3.0: Create the custom ingresscontroller for the testing")
+		extraParas := fmt.Sprintf(`
+    defaultCertificate:
+      name: custom-cert77283
+`)
+		customTemp := addExtraParametersToYamlFile(baseTemp, "spec:", extraParas)
+		defer os.Remove(customTemp)
+		ingctrl.template = customTemp
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err = waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("4.0: Check the ingress co, it should be upgradable")
+		jsonPath := `{.status.conditions[?(@.type=="Upgradeable")].status}`
+		status := getByJsonPath(oc, "default", "co/ingress", jsonPath)
+		o.Expect(status).To(o.ContainSubstring("True"))
+
+		exutil.By("5.0: The canary route is accessable")
+		jsonPath = "{.status.ingress[0].host}"
+		routehost := getByJsonPath(oc, "openshift-ingress-canary", "route/canary", jsonPath)
+		waitForOutsideCurlContains("https://"+routehost, "-kI", `200`)
+	})
 })
