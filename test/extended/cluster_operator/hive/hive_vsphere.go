@@ -154,9 +154,25 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		defer cleanCD(oc, imageSetName, oc.Namespace(), installConfigSecret.secretName, cd.name)
 		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cd)
 
+		exutil.By("Create worker MachinePool ...")
+		workermachinepoolVSphereTemp := filepath.Join(testDataDir, "machinepool-worker-vsphere.yaml")
+		workermp := machinepool{
+			namespace:   oc.Namespace(),
+			clusterName: cdName,
+			template:    workermachinepoolVSphereTemp,
+		}
+
+		defer cleanupObjects(oc,
+			objectTableRef{"MachinePool", oc.Namespace(), cdName + "-worker"},
+		)
+		workermp.create(oc)
+
 		exutil.By("Waiting for the CD to be installed")
 		// TODO(fxie): fail early in case of ProvisionStopped
 		newCheck("expect", "get", asAdmin, requireNS, compare, "true", ok,
 			ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-o=jsonpath={.spec.installed}"}).check(oc)
+		// Check the worker MP in good conditions
+		newCheck("expect", "get", asAdmin, requireNS, contain, "3", ok,
+			WaitingForClusterOperatorsTimeout, []string{"MachinePool", cdName + "-worker", "-o=jsonpath={.status.replicas}"}).check(oc)
 	})
 })
