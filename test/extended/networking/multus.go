@@ -12,6 +12,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-networking] SDN multus", func() {
@@ -801,5 +802,79 @@ var _ = g.Describe("[sig-networking] SDN multus", func() {
 		e2e.Logf("The v4 address of pod2's net1 is: %v", pod2Net1IPv6)
 		o.Expect(strings.HasPrefix(pod2Net1IPv4, ipaddress1)).Should(o.BeTrue())
 		o.Expect(strings.HasPrefix(pod2Net1IPv6, ipaddress2)).Should(o.BeTrue())
+	})
+
+	// author: weliang@redhat.com
+	g.It("Author:weliang-Medium-76652-Support for Dummy CNI", func() {
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			netAttachDefFile       = filepath.Join(buildPruningBaseDir, "multus/support-dummy-CNI-NAD.yaml")
+			multihomingPodTemplate = filepath.Join(buildPruningBaseDir, "multihoming/multihoming-pod-template.yaml")
+		)
+
+		exutil.By("Getting the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("The cluster has no ready node for the testing")
+		}
+
+		exutil.By("Getting the name of namespace")
+		ns := oc.Namespace()
+
+		nadNames := []string{"dummy-net", "mynet-a", "mynet-b"}
+		exutil.By("Create three network-attach-defintions in the test namespace")
+		defer removeResource(oc, true, true, "net-attach-def", nadNames[0], "-n", ns)
+		defer removeResource(oc, true, true, "net-attach-def", nadNames[1], "-n", ns)
+		defer removeResource(oc, true, true, "net-attach-def", nadNames[2], "-n", ns)
+		netAttachDefErr := oc.AsAdmin().Run("create").Args("-f", netAttachDefFile, "-n", ns).Execute()
+		o.Expect(netAttachDefErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Checking if three network-attach-defintions are created")
+		for _, nadName := range nadNames {
+			if checkNAD(oc, ns, nadName) {
+				e2e.Logf("The correct network-attach-defintion: %v is created!", nadName)
+			} else {
+				e2e.Failf("The correct network-attach-defintion: %v is not created!", nadName)
+			}
+		}
+
+		exutil.By("Creating 1st pod consuming NAD/mynet-b")
+		pod1 := testMultihomingPod{
+			name:       "sampleclient",
+			namespace:  ns,
+			podlabel:   "sampleclient",
+			nadname:    nadNames[2],
+			nodename:   nodeList.Items[0].Name,
+			podenvname: "",
+			template:   multihomingPodTemplate,
+		}
+		pod1.createTestMultihomingPod(oc)
+		o.Expect(waitForPodWithLabelReady(oc, ns, "name=sampleclient")).NotTo(o.HaveOccurred())
+
+		twoNadNames := nadNames[0] + "," + nadNames[1]
+		exutil.By("Creating 2nd pod consuming NAD/dummy-net + mynet-a")
+		pod2 := testMultihomingPod{
+			name:       "sampleserver",
+			namespace:  ns,
+			podlabel:   "sampleserver",
+			nadname:    twoNadNames,
+			nodename:   nodeList.Items[0].Name,
+			podenvname: "",
+			template:   multihomingPodTemplate,
+		}
+		pod2.createTestMultihomingPod(oc)
+		o.Expect(waitForPodWithLabelReady(oc, ns, "name=sampleserver")).NotTo(o.HaveOccurred())
+
+		exutil.By("Getting pods names")
+		clientPod, getPodErr := exutil.GetAllPodsWithLabel(oc, ns, "name=sampleclient")
+		o.Expect(getPodErr).NotTo(o.HaveOccurred())
+		o.Expect(len(clientPod)).NotTo(o.BeEquivalentTo(0))
+
+		exutil.By("5. Checking the service of dummy interface is accessible")
+		o.Eventually(func() error {
+			_, err := e2eoutput.RunHostCmd(ns, clientPod[0], "curl 10.10.10.2:8080 --connect-timeout 5")
+			return err
+		}, "60s", "10s").ShouldNot(o.HaveOccurred(), "The service of dummy interface is NOT accessible")
 	})
 })
