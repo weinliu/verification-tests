@@ -454,14 +454,14 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		fi1.checkPodNumerLessThanNodeNumber(oc, "node-role.kubernetes.io/edge!=,kubernetes.io/os=linux,node-role.kubernetes.io/worker=")
+		fi1.checkPodNumerLessThanNodeNumber(oc, "node-role.kubernetes.io/edge!=,kubernetes.io/os!=windows,kubernetes.io/os=linux,node-role.kubernetes.io/worker=")
 
 		g.By("patch the tolerations and compare again")
 		patch := fmt.Sprintf("{\"spec\":{\"tolerations\":[{\"effect\":\"NoSchedule\",\"key\":\"key1\",\"operator\":\"Equal\",\"value\":\"value1\"}]}}")
 		patchResource(oc, asAdmin, withoutNamespace, "fileintegrity", fi1.name, "-n", fi1.namespace, "--type", "merge", "-p", patch)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		fi1.checkPodNumerEqualNodeNumber(oc, "node-role.kubernetes.io/edge!=,kubernetes.io/os=linux,node-role.kubernetes.io/worker=")
+		fi1.checkPodNumerEqualNodeNumber(oc, "node-role.kubernetes.io/edge!=,kubernetes.io/os!=windows,kubernetes.io/os=linux,node-role.kubernetes.io/worker=")
 
 		taintNode(oc, "taint", "node", nodeName, "key1=value1:NoSchedule-")
 		defer taintNode(oc, "taint", "node", nodeName, "key1=:NoSchedule-")
@@ -472,14 +472,14 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		fi1.checkPodNumerLessThanNodeNumber(oc, "node-role.kubernetes.io/edge!=,kubernetes.io/os=linux,node-role.kubernetes.io/worker=")
+		fi1.checkPodNumerLessThanNodeNumber(oc, "node-role.kubernetes.io/edge!=,kubernetes.io/os!=windows,kubernetes.io/os=linux,node-role.kubernetes.io/worker=")
 
 		g.By("patch the tolerations and compare again")
 		patch = fmt.Sprintf("{\"spec\":{\"tolerations\":[{\"effect\":\"NoSchedule\",\"key\":\"key1\",\"operator\":\"Exists\"}]}}")
 		patchResource(oc, asAdmin, withoutNamespace, "fileintegrity", fi1.name, "-n", fi1.namespace, "--type", "merge", "-p", patch)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		fi1.checkPodNumerEqualNodeNumber(oc, "node-role.kubernetes.io/edge!=,kubernetes.io/os=linux,node-role.kubernetes.io/worker=")
+		fi1.checkPodNumerEqualNodeNumber(oc, "node-role.kubernetes.io/edge!=,kubernetes.io/os!=windows,kubernetes.io/os=linux,node-role.kubernetes.io/worker=")
 	})
 
 	//author: xiyuan@redhat.com
@@ -508,13 +508,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 		fi1.checkConfigmapCreated(oc)
 		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
-		fi1.checkPodNumerLessThanNodeNumber(oc, "node-role.kubernetes.io/edge!=,kubernetes.io/os=linux,node-role.kubernetes.io/worker=")
+		fi1.checkPodNumerLessThanNodeNumber(oc, "node-role.kubernetes.io/edge!=,kubernetes.io/os!=windows,kubernetes.io/os=linux,node-role.kubernetes.io/worker=")
 
 		g.By("patch the tolerations and compare again")
 		patch := fmt.Sprintf("{\"spec\":{\"tolerations\":[{\"effect\":\"NoSchedule\",\"key\":\"key1\",\"operator\":\"Equal\",\"value\":\"value1\"},{\"effect\":\"NoExecute\",\"key\":\"key2\",\"operator\":\"Equal\",\"value\":\"value2\"}]}}")
 		patchResource(oc, asAdmin, withoutNamespace, "fileintegrity", fi1.name, "-n", fi1.namespace, "--type", "merge", "-p", patch)
 		fi1.checkFileintegrityStatus(oc, "running")
-		fi1.checkPodNumerEqualNodeNumber(oc, "node-role.kubernetes.io/edge!=,kubernetes.io/os=linux,node-role.kubernetes.io/worker=")
+		fi1.checkPodNumerEqualNodeNumber(oc, "node-role.kubernetes.io/edge!=,kubernetes.io/os!=windows,kubernetes.io/os=linux,node-role.kubernetes.io/worker=")
 	})
 
 	//author: xiyuan@redhat.com
@@ -530,7 +530,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
-		fi1.checkPodNumerEqualNodeNumber(oc, "node-role.kubernetes.io/edge!=,node.openshift.io/os_id=rhcos")
+		fi1.checkPodNumerEqualNodeNumber(oc, "node-role.kubernetes.io/edge!=,kubernetes.io/os!=windows,node.openshift.io/os_id=rhcos")
 
 		g.By("Patch fileintegrity with a new nodeselector and compare Aide-scan pod number and Node number")
 		patch := fmt.Sprintf("[{\"op\":\"remove\",\"path\":\"/spec/nodeSelector/node.openshift.io~1os_id\"},{\"op\":\"add\",\"path\":\"/spec/nodeSelector/node-role.kubernetes.io~1master\",\"value\":\"\"}]")

@@ -195,7 +195,7 @@ func (fi1 *fileintegrity) getDataFromConfigmap(oc *exutil.CLI, cmName string, ex
 }
 
 func getOneWorkerNodeName(oc *exutil.CLI) string {
-	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l node-role.kubernetes.io/edge!=,node-role.kubernetes.io/worker=",
+	nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l node-role.kubernetes.io/edge!=,kubernetes.io/os!=windows,node-role.kubernetes.io/worker=",
 		"-o=jsonpath={.items[0].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return nodeName
