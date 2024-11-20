@@ -192,7 +192,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 	// author: mjoseph@redhat.com
 	// might conflict with other ipfailover cases so set it as Serial
-	g.It("NonHyperShiftHOST-Author:mjoseph-ConnectedOnly-Medium-41027-pod and service automatically switched over to standby when master fails [Disruptive]", func() {
+	g.It("Author:mjoseph-NonHyperShiftHOST-ConnectedOnly-Medium-41027-pod and service automatically switched over to standby when master fails [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ipfailover.yaml")
 		var (
@@ -204,10 +204,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 				template:    customTemp,
 			}
 		)
-		g.By("get pull spec of ipfailover image from payload")
+		g.By("1. Get pull spec of ipfailover image from payload")
 		ipf.image = getImagePullSpecFromPayload(oc, "keepalived-ipfailover")
 		ipf.namespace = oc.Namespace()
-		g.By("create ipfailover deployment and ensure one of pod enter MASTER state")
+		g.By("2. Create ipfailover deployment and ensure one of pod enter MASTER state")
 		ipf.create(oc, oc.Namespace())
 		unicastIPFailover(oc, oc.Namespace(), ipf.name)
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
@@ -215,12 +215,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		podNames := getPodListByLabel(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		ensureIpfailoverMasterBackup(oc, oc.Namespace(), podNames)
 
-		g.By("set the HA virtual IP for the failover group")
+		g.By("3. Set the HA virtual IP for the failover group")
 		ipv4Address := getPodv4Address(oc, podNames[0], oc.Namespace())
 		virtualIP := replaceIPOctet(ipv4Address, 3, "100")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_VIRTUAL_IPS="+virtualIP)
 
-		g.By("verify the HA virtual ip ENV variable")
+		g.By("4. Verify the HA virtual ip ENV variable")
 		err1 := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		exutil.AssertWaitPollNoErr(err1, "the pod with ipfailover=hello-openshift Ready status not met")
 		newPodName := getPodListByLabel(oc, oc.Namespace(), "ipfailover=hello-openshift")
@@ -228,23 +228,23 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		checkenv := pollReadPodData(oc, oc.Namespace(), newPodName[0], "/usr/bin/env ", "OPENSHIFT_HA_VIRTUAL_IPS")
 		o.Expect(checkenv).To(o.ContainSubstring("OPENSHIFT_HA_VIRTUAL_IPS=" + virtualIP))
 
-		g.By("find the primary and the secondary pod using the virtual IP")
+		g.By("5. Find the primary and the secondary pod using the virtual IP")
 		primaryPod := getVipOwnerPod(oc, oc.Namespace(), newPodName, virtualIP)
 		o.Expect(masterNode).To(o.ContainSubstring(primaryPod))
 
-		g.By("restarting the ipfailover primary pod")
+		g.By("6. Restarting the ipfailover primary pod")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", oc.Namespace(), "pod", primaryPod).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("verify the virtual IP is floated onto the new MASTER node")
+		g.By("7. Verify the virtual IP is floated onto the new MASTER node")
 		newPodName1 := getPodListByLabel(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		newMasterNode, _ := ensureIpfailoverMasterBackup(oc, oc.Namespace(), newPodName1)
-		getVipOwnerPod(oc, oc.Namespace(), []string{newMasterNode}, virtualIP)
+		waitForPrimaryPod(oc, oc.Namespace(), newMasterNode, virtualIP)
 	})
 
 	// author: mjoseph@redhat.com
 	// might conflict with other ipfailover cases so set it as Serial
-	g.It("NonHyperShiftHOST-Author:mjoseph-ConnectedOnly-High-41030-preemption strategy for keepalived ipfailover [Disruptive]", func() {
+	g.It("Author:mjoseph-NonHyperShiftHOST-ConnectedOnly-High-41030-preemption strategy for keepalived ipfailover [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ipfailover.yaml")
 		var (
@@ -256,10 +256,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 				template:    customTemp,
 			}
 		)
-		g.By("get pull spec of ipfailover image from payload")
+		g.By("1. Get pull spec of ipfailover image from payload")
 		ipf.image = getImagePullSpecFromPayload(oc, "keepalived-ipfailover")
 		ipf.namespace = oc.Namespace()
-		g.By("create ipfailover deployment and ensure one of pod enter MASTER state")
+		g.By("2. Create ipfailover deployment and ensure one of pod enter MASTER state")
 		ipf.create(oc, oc.Namespace())
 		unicastIPFailover(oc, oc.Namespace(), ipf.name)
 		err := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
@@ -267,14 +267,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		podName := getPodListByLabel(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		ensureIpfailoverMasterBackup(oc, oc.Namespace(), podName)
 
-		g.By("set the HA virtual IP for the failover group")
+		g.By("3. Set the HA virtual IP for the failover group")
 		podNames := getPodListByLabel(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		ipv4Address := getPodv4Address(oc, podNames[0], oc.Namespace())
 		virtualIP := replaceIPOctet(ipv4Address, 3, "100")
 		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, "OPENSHIFT_HA_VIRTUAL_IPS="+virtualIP)
-		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_PREEMPTION=preempt_delay 120`)
 
-		g.By("verify the HA virtual ip ENV variable")
+		g.By("4. Verify the HA virtual ip ENV variable")
 		err1 := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
 		exutil.AssertWaitPollNoErr(err1, "the pod with ipfailover=hello-openshift Ready status not met")
 		newPodName := getPodListByLabel(oc, oc.Namespace(), "ipfailover=hello-openshift")
@@ -282,25 +281,43 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		checkenv := pollReadPodData(oc, oc.Namespace(), newPodName[0], "/usr/bin/env ", "OPENSHIFT_HA_VIRTUAL_IPS")
 		o.Expect(checkenv).To(o.ContainSubstring("OPENSHIFT_HA_VIRTUAL_IPS=" + virtualIP))
 		checkenv1 := pollReadPodData(oc, oc.Namespace(), newPodName[0], "/usr/bin/env ", "OPENSHIFT_HA_PREEMPTION")
-		o.Expect(checkenv1).To(o.ContainSubstring("preempt_delay 120"))
+		o.Expect(checkenv1).To(o.ContainSubstring("nopreempt"))
 
-		g.By("find the primary and the secondary pod")
+		g.By("5. Find the primary and the secondary pod")
 		primaryPod := getVipOwnerPod(oc, oc.Namespace(), newPodName, virtualIP)
 		secondaryPod := slicingElement(primaryPod, newPodName)
 		o.Expect(master).To(o.ContainSubstring(primaryPod))
 		o.Expect(backup).To(o.ContainSubstring(secondaryPod[0]))
 
-		g.By("restarting the ipfailover primary pod")
+		g.By("6. Restarting the ipfailover primary pod")
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", oc.Namespace(), "pod", primaryPod).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		g.By("verify the new pod preempts the exiting primary after the delay expires")
-		// Waiting till the preempt delay 120 seconds expires
-		time.Sleep(125 * time.Second)
+		g.By("7. Verify whether the other pod becomes primary and it has the VIP")
+		waitForPrimaryPod(oc, oc.Namespace(), secondaryPod[0], virtualIP)
+
+		g.By("8. Now set the preemption delay timer of 120s for the failover group")
+		setEnvVariable(oc, oc.Namespace(), "deploy/"+ipf.name, `OPENSHIFT_HA_PREEMPTION=preempt_delay 120`)
+		err2 := waitForPodWithLabelReady(oc, oc.Namespace(), "ipfailover=hello-openshift")
+		exutil.AssertWaitPollNoErr(err2, "the pod with ipfailover=hello-openshift Ready status not met")
+		newPodName1 := getPodListByLabel(oc, oc.Namespace(), "ipfailover=hello-openshift")
+		new_master, new_backup := ensureIpfailoverMasterBackup(oc, oc.Namespace(), newPodName1)
+		checkenv2 := pollReadPodData(oc, oc.Namespace(), newPodName1[0], "/usr/bin/env ", "OPENSHIFT_HA_PREEMPTION")
+		o.Expect(checkenv2).To(o.ContainSubstring("preempt_delay 120"))
+
+		g.By("9. Again restart the ipfailover primary(master) pod")
+		// the below steps will make the 'new_backup' pod the master
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", oc.Namespace(), "pod", new_master).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("10. Verify the newly created pod preempts the exiting primary after the delay expires")
 		latestpods := getPodListByLabel(oc, oc.Namespace(), "ipfailover=hello-openshift")
-		// Identifying the new pod from the other
-		futurePrimaryPod, _ := ensureIpfailoverMasterBackup(oc, oc.Namespace(), latestpods)
-		getVipOwnerPod(oc, oc.Namespace(), []string{futurePrimaryPod}, virtualIP)
+		// removing the existing master pod from the latest pods
+		futurePrimaryPod := slicingElement(new_backup, latestpods)
+		// waiting till the preempt delay 120 seconds expires
+		time.Sleep(125 * time.Second)
+		// confirming the newer pod is the master by checking the VIP
+		waitForPrimaryPod(oc, oc.Namespace(), futurePrimaryPod[0], virtualIP)
 	})
 
 	// author: mjoseph@redhat.com

@@ -1073,21 +1073,23 @@ func slicingElement(element string, podList []string) []string {
 	return newPodList
 }
 
-// this function checks whether given pod becomes primary
-func waitForPreemptPod(oc *exutil.CLI, ns string, pod string, vip string) {
+// this function checks whether given pod becomes primary or not
+func waitForPrimaryPod(oc *exutil.CLI, ns string, pod string, vip string) {
 	cmd := fmt.Sprintf("ip address |grep %s", vip)
-	waitErr := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, pod, "--", "bash", "-c", cmd).Output()
+	var output string
+	var err error
+	waitErr := wait.Poll(5*time.Second, 10*time.Second, func() (bool, error) {
+		output, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ns, pod, "--", "bash", "-c", cmd).Output()
 		primary := false
 		if o.Expect(output).To(o.ContainSubstring(vip)) {
-			e2e.Logf("The new pod %v preempt to become Primary", pod)
+			e2e.Logf("The new pod %v is the master", pod)
 			primary = true
 		} else {
-			e2e.Logf("pod failed to become Primary yet, retrying...", output)
+			e2e.Logf("pod failed to become master yet, retrying...", output)
 		}
 		return primary, nil
 	})
-	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached, pod failed to become Primary"))
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached, pod failed to become master and the error is ", err))
 }
 
 // this function will search the specific data from the given pod
