@@ -174,6 +174,13 @@ func checkOVNSwitch(oc *exutil.CLI, nad string, leaderPod string) bool {
 	return strings.Contains(listOutput, nad)
 }
 
+func checkOVNRouter(oc *exutil.CLI, nad string, leaderPod string) bool {
+	listSWCmd := "ovn-nbctl show | grep router"
+	listOutput, listErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", leaderPod, listSWCmd)
+	o.Expect(listErr).NotTo(o.HaveOccurred())
+	return strings.Contains(listOutput, nad)
+}
+
 func checkNAD(oc *exutil.CLI, ns string, nad string) bool {
 	nadOutput, nadOutputErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("net-attach-def", "-n", ns).Output()
 	o.Expect(nadOutputErr).NotTo(o.HaveOccurred())

@@ -1797,4 +1797,419 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		//default network connectivity should also be isolated
 		CurlPod2PodFail(oc, ns1, pod1.name, ns2, pod2.name)
 	})
+
+	g.It("Author:meinli-High-77517-Validate pod2pod connection within and across node when creating UDN with Secondary role from same namespace (Layer3)", func() {
+		var (
+			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
+			udnCRDSingleStack         = filepath.Join(buildPruningBaseDir, "udn/udn_crd_singlestack_template.yaml")
+			udnCRDdualStack           = filepath.Join(buildPruningBaseDir, "udn/udn_crd_dualstack2_template.yaml")
+			udnPodTemplate            = filepath.Join(buildPruningBaseDir, "multihoming/multihoming-pod-template.yaml")
+			mtu                 int32 = 9000
+		)
+
+		ipStackType := checkIPStackType(oc)
+		exutil.By("1. Get namespace and worker node")
+		ns := oc.Namespace()
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+
+		exutil.By("2. create CUDN with Secondary role")
+		var cidr, ipv4cidr, ipv6cidr string
+		var prefix, ipv4prefix, ipv6prefix int32
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+			prefix = 24
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/60"
+				prefix = 64
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv4prefix = 24
+				ipv6cidr = "2010:100:200::0/60"
+				ipv6prefix = 64
+			}
+		}
+
+		var udncrd udnCRDResource
+		if ipStackType == "dualstack" {
+			udncrd = udnCRDResource{
+				crdname:    "l3-secondary",
+				namespace:  ns,
+				role:       "Secondary",
+				mtu:        mtu,
+				IPv4cidr:   ipv4cidr,
+				IPv4prefix: ipv4prefix,
+				IPv6cidr:   ipv6cidr,
+				IPv6prefix: ipv6prefix,
+				template:   udnCRDdualStack,
+			}
+			udncrd.createUdnCRDDualStack(oc)
+		} else {
+			udncrd = udnCRDResource{
+				crdname:   "l3-secondary",
+				namespace: ns,
+				role:      "Secondary",
+				mtu:       mtu,
+				cidr:      cidr,
+				prefix:    prefix,
+				template:  udnCRDSingleStack,
+			}
+			udncrd.createUdnCRDSingleStack(oc)
+		}
+		err = waitUDNCRDApplied(oc, udncrd.namespace, udncrd.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3. validate Layer3 router is created in OVN")
+		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
+		o.Expect(ovnMasterPodName).NotTo(o.BeEmpty())
+		o.Eventually(func() bool {
+			return checkOVNRouter(oc, "l3.secondary_ovn_cluster_router", ovnMasterPodName)
+		}, 20*time.Second, 5*time.Second).Should(o.BeTrue(), "The correct OVN router is not created")
+
+		exutil.By("4. Create 2 pods within the same node and 1 pod across with different nodes")
+		pods := make([]testMultihomingPod, 3)
+		var podNames []string
+		for i := 0; i < 2; i++ {
+			pods[i] = testMultihomingPod{
+				name:       "multihoming-pod-" + strconv.Itoa(i),
+				namespace:  ns,
+				podlabel:   "multihoming-pod-" + strconv.Itoa(i),
+				nadname:    udncrd.crdname,
+				nodename:   nodeList.Items[i].Name,
+				podenvname: "Hello multihoming-pod",
+				template:   udnPodTemplate,
+			}
+			pods[i].createTestMultihomingPod(oc)
+			o.Expect(waitForPodWithLabelReady(oc, ns, fmt.Sprintf("name=%s", pods[i].podlabel))).NotTo(o.HaveOccurred())
+			podNames = append(podNames, getPodName(oc, pods[i].namespace, fmt.Sprintf("name=%s", pods[i].podlabel))[0])
+		}
+		pods[2] = testMultihomingPod{
+			name:       "multihoming-pod-2",
+			namespace:  ns,
+			podlabel:   "multihoming-pod-2",
+			nadname:    udncrd.crdname,
+			nodename:   nodeList.Items[1].Name,
+			podenvname: "Hello multihoming-pod",
+			template:   udnPodTemplate,
+		}
+		pods[2].createTestMultihomingPod(oc)
+		o.Expect(waitForPodWithLabelReady(oc, ns, fmt.Sprintf("name=%s", pods[2].podlabel))).NotTo(o.HaveOccurred())
+		podNames = append(podNames, getPodName(oc, pods[2].namespace, fmt.Sprintf("name=%s", pods[2].podlabel))[0])
+
+		exutil.By("5. Check pods subnet overlap within and across nodes")
+		o.Expect(checkPodCIDRsOverlap(oc, ns, ipStackType, []string{podNames[2], podNames[0]}, "net1")).Should(o.BeFalse())
+		o.Expect(checkPodCIDRsOverlap(oc, ns, ipStackType, []string{podNames[2], podNames[1]}, "net1")).Should(o.BeTrue())
+
+		exutil.By("6. Validate pod2pod connection within the same node and across with different nodes")
+		CurlUDNPod2PodPassMultiNetwork(oc, ns, ns, podNames[2], "net1", podNames[0], "net1")
+		CurlUDNPod2PodPassMultiNetwork(oc, ns, ns, podNames[2], "net1", podNames[1], "net1")
+	})
+
+	g.It("Author:meinli-High-77519-Validate pod2pod isolation within and across nodes when creating UDN with Secondary role from different namespaces (Layer3)", func() {
+		var (
+			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
+			udnCRDSingleStack         = filepath.Join(buildPruningBaseDir, "udn/udn_crd_singlestack_template.yaml")
+			udnCRDdualStack           = filepath.Join(buildPruningBaseDir, "udn/udn_crd_dualstack2_template.yaml")
+			udnPodTemplate            = filepath.Join(buildPruningBaseDir, "multihoming/multihoming-pod-template.yaml")
+			mtu                 int32 = 9000
+		)
+
+		ipStackType := checkIPStackType(oc)
+		exutil.By("1. Get namespace and worker node")
+		ns1 := oc.Namespace()
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+
+		exutil.By("2. create CUDN with Secondary role in ns1")
+		var cidr, ipv4cidr, ipv6cidr []string
+		var prefix, ipv4prefix, ipv6prefix int32
+		if ipStackType == "ipv4single" {
+			cidr = []string{"10.150.0.0/16", "10.200.0.0/16"}
+			prefix = 24
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = []string{"2010:100:200::0/60", "2011:100:200::0/60"}
+				prefix = 64
+			} else {
+				ipv4cidr = []string{"10.150.0.0/16", "10.200.0.0/16"}
+				ipv4prefix = 24
+				ipv6cidr = []string{"2010:100:200::0/60", "2011:100:200::0/60"}
+				ipv6prefix = 64
+			}
+		}
+
+		var udncrd udnCRDResource
+		if ipStackType == "dualstack" {
+			udncrd = udnCRDResource{
+				crdname:    "l3-secondary",
+				namespace:  ns1,
+				role:       "Secondary",
+				mtu:        mtu,
+				IPv4cidr:   ipv4cidr[0],
+				IPv4prefix: ipv4prefix,
+				IPv6cidr:   ipv6cidr[0],
+				IPv6prefix: ipv6prefix,
+				template:   udnCRDdualStack,
+			}
+			udncrd.createUdnCRDDualStack(oc)
+		} else {
+			udncrd = udnCRDResource{
+				crdname:   "l3-secondary",
+				namespace: ns1,
+				role:      "Secondary",
+				mtu:       mtu,
+				cidr:      cidr[0],
+				prefix:    prefix,
+				template:  udnCRDSingleStack,
+			}
+			udncrd.createUdnCRDSingleStack(oc)
+		}
+		err = waitUDNCRDApplied(oc, udncrd.namespace, udncrd.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3. create 1 pod with secondary annotation in ns1")
+		var podNames []string
+		// create 1 pod in ns1
+		pod1 := testMultihomingPod{
+			name:       "multihoming-pod-ns1",
+			namespace:  ns1,
+			podlabel:   "multihoming-pod-ns1",
+			nadname:    udncrd.crdname,
+			nodename:   nodeList.Items[0].Name,
+			podenvname: "Hello multihoming-pod",
+			template:   udnPodTemplate,
+		}
+		pod1.createTestMultihomingPod(oc)
+		o.Expect(waitForPodWithLabelReady(oc, ns1, fmt.Sprintf("name=%s", pod1.podlabel))).NotTo(o.HaveOccurred())
+		podNames = append(podNames, getPodName(oc, pod1.namespace, fmt.Sprintf("name=%s", pod1.podlabel))[0])
+
+		exutil.By("4. create CUDN with secondary role in ns2")
+		// create 2nd namespace
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+		udncrd.namespace = ns2
+		if ipStackType == "dualstack" {
+			udncrd.IPv4cidr = ipv4cidr[1]
+			udncrd.IPv6cidr = ipv6cidr[1]
+			udncrd.createUdnCRDDualStack(oc)
+		} else {
+			udncrd.cidr = cidr[1]
+			udncrd.createUdnCRDSingleStack(oc)
+		}
+		err = waitUDNCRDApplied(oc, udncrd.namespace, udncrd.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5. create 2 pods with secondary annotation in ns2")
+		pods := make([]testMultihomingPod, 2)
+		//create 2 pods in ns2
+		for i := 0; i < 2; i++ {
+			pods[i] = testMultihomingPod{
+				name:       "multihoming-pod-" + strconv.Itoa(i),
+				namespace:  ns2,
+				podlabel:   "multihoming-pod-" + strconv.Itoa(i),
+				nadname:    udncrd.crdname,
+				nodename:   nodeList.Items[i].Name,
+				podenvname: "Hello multihoming-pod",
+				template:   udnPodTemplate,
+			}
+			pods[i].createTestMultihomingPod(oc)
+			o.Expect(waitForPodWithLabelReady(oc, ns2, fmt.Sprintf("name=%s", pods[i].podlabel))).NotTo(o.HaveOccurred())
+			podNames = append(podNames, getPodName(oc, pods[i].namespace, fmt.Sprintf("name=%s", pods[i].podlabel))[0])
+		}
+
+		exutil.By("6. Validate pod2pod isolation from secondary network in different namespaces")
+		CurlUDNPod2PodFailMultiNetwork(oc, ns1, ns2, podNames[0], "net1", podNames[1], "net1")
+		CurlUDNPod2PodFailMultiNetwork(oc, ns1, ns2, podNames[0], "net1", podNames[2], "net1")
+		CurlUDNPod2PodPassMultiNetwork(oc, ns2, ns2, podNames[1], "net1", podNames[2], "net1")
+	})
+
+	g.It("Author:meinli-High-77563-Validate pod2pod connection within and across node when creating UDN with Secondary role from same namespace (Layer2)", func() {
+		var (
+			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
+			udnCRDdualStack           = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_dualstack_template.yaml")
+			udnPodTemplate            = filepath.Join(buildPruningBaseDir, "multihoming/multihoming-pod-template.yaml")
+			mtu                 int32 = 9000
+		)
+		exutil.By("1. Get namespace and worker node")
+		ns := oc.Namespace()
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+
+		exutil.By("2. create Layer2 CUDN with Secondary role")
+		ipv4cidr := "10.150.0.0/16"
+		ipv6cidr := "2010:100:200::0/60"
+		udncrd := udnCRDResource{
+			crdname:   "l2-secondary",
+			namespace: ns,
+			role:      "Secondary",
+			mtu:       mtu,
+			IPv4cidr:  ipv4cidr,
+			IPv6cidr:  ipv6cidr,
+			template:  udnCRDdualStack,
+		}
+		udncrd.createLayer2DualStackUDNCRD(oc)
+		err = waitUDNCRDApplied(oc, udncrd.namespace, udncrd.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3. validate Layer2 switch is created in OVN")
+		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
+		o.Expect(ovnMasterPodName).NotTo(o.BeEmpty())
+		o.Eventually(func() bool {
+			return checkOVNSwitch(oc, "l2.secondary_ovn_layer2_switch", ovnMasterPodName)
+		}, 20*time.Second, 5*time.Second).Should(o.BeTrue(), "The correct OVN switch is not created")
+
+		exutil.By("4. create 2 pods within the same node and 1 pod across with different nodes")
+		pods := make([]testMultihomingPod, 3)
+		var podNames []string
+		for i := 0; i < 2; i++ {
+			pods[i] = testMultihomingPod{
+				name:       "multihoming-pod-" + strconv.Itoa(i),
+				namespace:  ns,
+				podlabel:   "multihoming-pod-" + strconv.Itoa(i),
+				nadname:    udncrd.crdname,
+				nodename:   nodeList.Items[i].Name,
+				podenvname: "Hello multihoming-pod",
+				template:   udnPodTemplate,
+			}
+			pods[i].createTestMultihomingPod(oc)
+			o.Expect(waitForPodWithLabelReady(oc, ns, fmt.Sprintf("name=%s", pods[i].podlabel))).NotTo(o.HaveOccurred())
+			podNames = append(podNames, getPodName(oc, pods[i].namespace, fmt.Sprintf("name=%s", pods[i].podlabel))[0])
+		}
+		pods[2] = testMultihomingPod{
+			name:       "multihoming-pod-2",
+			namespace:  ns,
+			podlabel:   "multihoming-pod-2",
+			nadname:    udncrd.crdname,
+			nodename:   nodeList.Items[1].Name,
+			podenvname: "Hello multihoming-pod",
+			template:   udnPodTemplate,
+		}
+		pods[2].createTestMultihomingPod(oc)
+		o.Expect(waitForPodWithLabelReady(oc, ns, fmt.Sprintf("name=%s", pods[2].podlabel))).NotTo(o.HaveOccurred())
+		podNames = append(podNames, getPodName(oc, pods[2].namespace, fmt.Sprintf("name=%s", pods[2].podlabel))[0])
+
+		exutil.By("5. Check pods subnet overlap within and across nodes")
+		o.Expect(checkPodCIDRsOverlap(oc, ns, "dualstack", []string{podNames[2], podNames[0]}, "net1")).Should(o.BeTrue())
+		o.Expect(checkPodCIDRsOverlap(oc, ns, "dualstack", []string{podNames[2], podNames[1]}, "net1")).Should(o.BeTrue())
+
+		exutil.By("6. Validate pod2pod connection (dual stack) within the same node")
+		pod0IPv4, pod0IPv6 := getPodMultiNetwork(oc, ns, podNames[0])
+		e2e.Logf("Pod0 IPv4 address is: %v, IPv6 address is: %v", pod0IPv4, pod0IPv6)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod0IPv4, "net1", pods[0].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod0IPv6, "net1", pods[0].podenvname)
+
+		exutil.By("7. Validate pod2pod connection (dual stack) across with different nodes")
+		pod1IPv4, pod1IPv6 := getPodMultiNetwork(oc, ns, podNames[1])
+		e2e.Logf("Pod1 IPv4 address is: %v, IPv6 address is: %v", pod1IPv4, pod1IPv6)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod1IPv4, "net1", pods[1].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod1IPv6, "net1", pods[1].podenvname)
+	})
+
+	g.It("Author:meinli-High-77564-Validate pod2pod isolation within and across node when creating UDN with Secondary role from different namespaces (Layer2)", func() {
+		var (
+			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
+			udnCRDdualStack           = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_dualstack_template.yaml")
+			udnPodTemplate            = filepath.Join(buildPruningBaseDir, "multihoming/multihoming-pod-template.yaml")
+			mtu                 int32 = 9000
+			podenvname                = "Hello multihoming-pod"
+		)
+		exutil.By("1. Get namespace and worker node")
+		ns1 := oc.Namespace()
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+
+		exutil.By("2. Create Layer2 CUDN with Secondary role in ns1")
+		ipv4cidr := []string{"10.150.0.0/16", "10.200.0.0/16"}
+		ipv6cidr := []string{"2010:100:200::0/60", "2011:100:200::0/60"}
+		udncrd1 := udnCRDResource{
+			crdname:   "l2-secondary-ns1",
+			namespace: ns1,
+			role:      "Secondary",
+			mtu:       mtu,
+			IPv4cidr:  ipv4cidr[0],
+			IPv6cidr:  ipv6cidr[0],
+			template:  udnCRDdualStack,
+		}
+		udncrd1.createLayer2DualStackUDNCRD(oc)
+		err = waitUDNCRDApplied(oc, udncrd1.namespace, udncrd1.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3. create 1 pod with secondary annotation in ns1")
+		var podNames []string
+		// create 1 pod in ns1
+		pod1 := testMultihomingPod{
+			name:       "multihoming-pod-ns1",
+			namespace:  ns1,
+			podlabel:   "multihoming-pod-ns1",
+			nadname:    udncrd1.crdname,
+			nodename:   nodeList.Items[0].Name,
+			podenvname: podenvname,
+			template:   udnPodTemplate,
+		}
+		pod1.createTestMultihomingPod(oc)
+		o.Expect(waitForPodWithLabelReady(oc, ns1, fmt.Sprintf("name=%s", pod1.podlabel))).NotTo(o.HaveOccurred())
+		podNames = append(podNames, getPodName(oc, pod1.namespace, fmt.Sprintf("name=%s", pod1.podlabel))[0])
+
+		exutil.By("4. create Layer2 CUDN with secondary role in ns2")
+		// create 2nd namespace
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+		udncrd2 := udnCRDResource{
+			crdname:   "l2-secondary-ns2",
+			namespace: ns2,
+			role:      "Secondary",
+			mtu:       mtu,
+			IPv4cidr:  ipv4cidr[1],
+			IPv6cidr:  ipv6cidr[1],
+			template:  udnCRDdualStack,
+		}
+		udncrd2.createLayer2DualStackUDNCRD(oc)
+		err = waitUDNCRDApplied(oc, udncrd2.namespace, udncrd2.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5. create pods with secondary annotation in ns2")
+		pods := make([]testMultihomingPod, 2)
+		//create 2 pods in ns2
+		for i := 0; i < 2; i++ {
+			pods[i] = testMultihomingPod{
+				name:       "multihoming-pod-" + strconv.Itoa(i),
+				namespace:  ns2,
+				podlabel:   "multihoming-pod-" + strconv.Itoa(i),
+				nadname:    udncrd2.crdname,
+				nodename:   nodeList.Items[i].Name,
+				podenvname: podenvname,
+				template:   udnPodTemplate,
+			}
+			pods[i].createTestMultihomingPod(oc)
+			o.Expect(waitForPodWithLabelReady(oc, ns2, fmt.Sprintf("name=%s", pods[i].podlabel))).NotTo(o.HaveOccurred())
+			podNames = append(podNames, getPodName(oc, pods[i].namespace, fmt.Sprintf("name=%s", pods[i].podlabel))[0])
+		}
+
+		exutil.By("6. validate pod2pod isolation (dual stack) within the same node")
+		pod0IPv4, pod0IPv6 := getPodMultiNetwork(oc, ns2, podNames[1])
+		e2e.Logf("Pod0 IPv4 address is: %v, IPv6 address is: %v", pod0IPv4, pod0IPv6)
+		CurlMultusPod2PodFail(oc, ns1, podNames[0], pod0IPv4, "net1", podenvname)
+		CurlMultusPod2PodFail(oc, ns1, podNames[0], pod0IPv6, "net1", podenvname)
+
+		exutil.By("7. validate pod2pod isolation (dual stack) across with different node")
+		pod1IPv4, pod1IPv6 := getPodMultiNetwork(oc, ns2, podNames[2])
+		e2e.Logf("Pod1 IPv4 address is: %v, IPv6 address is: %v", pod1IPv4, pod1IPv6)
+		CurlMultusPod2PodFail(oc, ns1, podNames[0], pod1IPv4, "net1", podenvname)
+		CurlMultusPod2PodFail(oc, ns1, podNames[0], pod1IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns2, podNames[1], pod1IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns2, podNames[1], pod1IPv6, "net1", podenvname)
+	})
 })

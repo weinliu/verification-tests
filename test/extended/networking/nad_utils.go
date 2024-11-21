@@ -194,6 +194,32 @@ func CurlPod2PodFailUDN(oc *exutil.CLI, namespaceSrc string, podNameSrc string, 
 	}
 }
 
+func CurlUDNPod2PodPassMultiNetwork(oc *exutil.CLI, namespaceSrc string, namespaceDst string, podNameSrc string, netNameInterface string, podNameDst string, netNameDst string) {
+	podIP1, podIP2 := getPodIPUDN(oc, namespaceDst, podNameDst, netNameDst)
+	if podIP2 != "" {
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --interface "+netNameInterface+" --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --interface "+netNameInterface+" --connect-timeout 5 -s "+net.JoinHostPort(podIP2, "8080"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --interface "+netNameInterface+" --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
+func CurlUDNPod2PodFailMultiNetwork(oc *exutil.CLI, namespaceSrc string, namespaceDst string, podNameSrc string, netNameInterface string, podNameDst string, netNameDst string) {
+	podIP1, podIP2 := getPodIPUDN(oc, namespaceDst, podNameDst, netNameDst)
+	if podIP2 != "" {
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --interface "+netNameInterface+" --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
+		o.Expect(err).To(o.HaveOccurred())
+		_, err = e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --interface "+netNameInterface+" --connect-timeout 5 -s "+net.JoinHostPort(podIP2, "8080"))
+		o.Expect(err).To(o.HaveOccurred())
+	} else {
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --interface "+netNameInterface+" --connect-timeout 5 -s "+net.JoinHostPort(podIP1, "8080"))
+		o.Expect(err).To(o.HaveOccurred())
+	}
+}
+
 func (udncrd *udnCRDResource) createUdnCRDSingleStack(oc *exutil.CLI) {
 	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", udncrd.template, "-p", "CRDNAME="+udncrd.crdname, "NAMESPACE="+udncrd.namespace, "CIDR="+udncrd.cidr, "PREFIX="+strconv.Itoa(int(udncrd.prefix)), "MTU="+strconv.Itoa(int(udncrd.mtu)), "ROLE="+udncrd.role)
@@ -260,4 +286,46 @@ func (udncrd *udnCRDResource) createLayer2SingleStackUDNCRD(oc *exutil.CLI) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create udn CRD %s due to %v", udncrd.crdname, err))
+}
+
+func checkPodCIDRsOverlap(oc *exutil.CLI, namespace string, ipStack string, Pods []string, netName string) bool {
+	var subnetsIPv4 []*net.IPNet
+	var subnetsIPv6 []*net.IPNet
+	var subnets []*net.IPNet
+	cmdIPv4 := "ip a sho " + netName + " | awk 'NR==3{print $2}'"
+	cmdIPv6 := "ip -o -6 addr show dev " + netName + " | awk '$3 == \"inet6\" && $6 == \"global\" {print $4}'"
+	for _, pod := range Pods {
+		if ipStack == "dualstack" {
+			podIPv4, ipv4Err := execCommandInSpecificPod(oc, namespace, pod, cmdIPv4)
+			o.Expect(ipv4Err).NotTo(o.HaveOccurred())
+			podIPv6, ipv6Err := execCommandInSpecificPod(oc, namespace, pod, cmdIPv6)
+			o.Expect(ipv6Err).NotTo(o.HaveOccurred())
+			_, subnetIPv4, err := net.ParseCIDR(strings.TrimSpace(podIPv4))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			subnetsIPv4 = append(subnetsIPv4, subnetIPv4)
+			_, subnetIPv6, err := net.ParseCIDR(strings.TrimSpace(podIPv6))
+			o.Expect(err).NotTo(o.HaveOccurred())
+			subnetsIPv6 = append(subnetsIPv6, subnetIPv6)
+		} else {
+			if ipStack == "ipv6single" {
+				podIPv6, ipv6Err := execCommandInSpecificPod(oc, namespace, pod, cmdIPv6)
+				o.Expect(ipv6Err).NotTo(o.HaveOccurred())
+				_, subnet, err := net.ParseCIDR(strings.TrimSpace(podIPv6))
+				o.Expect(err).NotTo(o.HaveOccurred())
+				subnets = append(subnets, subnet)
+			} else {
+				podIPv4, ipv4Err := execCommandInSpecificPod(oc, namespace, pod, cmdIPv4)
+				o.Expect(ipv4Err).NotTo(o.HaveOccurred())
+				_, subnet, err := net.ParseCIDR(strings.TrimSpace(podIPv4))
+				o.Expect(err).NotTo(o.HaveOccurred())
+				subnets = append(subnets, subnet)
+			}
+		}
+	}
+	if ipStack == "dualstack" {
+		return subnetsIPv4[0].Contains(subnetsIPv4[1].IP) || subnetsIPv4[1].Contains(subnetsIPv4[0].IP) ||
+			subnetsIPv6[0].Contains(subnetsIPv6[1].IP) || subnetsIPv6[1].Contains(subnetsIPv6[0].IP)
+	} else {
+		return subnets[0].Contains(subnets[1].IP) || subnets[1].Contains(subnets[0].IP)
+	}
 }
