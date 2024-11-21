@@ -20,7 +20,7 @@ describe('Monitoring dashboards related features', () => {
 	        cy.log(`master nodes: ${nodes}`);
 
     	        nodes.forEach((node) => {
-        	    cy.get('.pf-c-select__menu').find('button').contains(new RegExp(node)).should('exist');
+        	    cy.get('.pf-v5-c-select__menu').find('button').contains(new RegExp(node)).should('exist');
     	        });
 	    }
 	});
@@ -36,7 +36,7 @@ describe('Monitoring dashboards related features', () => {
 	        cy.log(`worker nodes: ${nodes}`);
 
     	        nodes.forEach((node) => {
-        	    cy.get('.pf-c-select__menu').find('button').contains(new RegExp(node)).should('exist');
+        	    cy.get('.pf-v5-c-select__menu').find('button').contains(new RegExp(node)).should('exist');
     	        });
 	    }
 	});
