@@ -34,7 +34,7 @@ func getCloudProvider(oc *exutil.CLI) string {
 		errMsg error
 		output string
 	)
-	err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+	waitErr := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, errMsg = oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
 		if errMsg != nil {
 			e2e.Logf("Get cloudProvider *failed with* :\"%v\",wait 5 seconds retry.", errMsg)
@@ -43,7 +43,7 @@ func getCloudProvider(oc *exutil.CLI) string {
 		e2e.Logf("The test cluster cloudProvider is :\"%s\".", strings.ToLower(output))
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "Waiting for get cloudProvider timeout")
+	exutil.AssertWaitPollNoErr(waitErr, "Waiting for get cloudProvider timeout")
 	return strings.ToLower(output)
 }
 
@@ -699,7 +699,7 @@ func syncRapidastResultsToArtifactDir(oc *exutil.CLI, ns, pvcName string) {
 // Poll the pods in the given namespace with specific label, and check if all are redeployed from the oldPodList within the duration
 func waitForPodsToBeRedeployed(oc *exutil.CLI, namespace, label string, oldPodList []string, interval, timeout time.Duration) {
 	e2e.Logf("Poll the pods with label '%s' in namespace '%s'", label, namespace)
-	statusErr := wait.Poll(interval, timeout, func() (bool, error) {
+	statusErr := wait.PollUntilContextTimeout(context.Background(), interval, timeout, false, func(context.Context) (bool, error) {
 		newPodList, err := exutil.GetAllPodsWithLabel(oc, namespace, label)
 		if err != nil {
 			e2e.Logf("Error to get pods: %v", err)

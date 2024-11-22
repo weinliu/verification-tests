@@ -152,7 +152,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			patchPath := "{\"spec\":{\"config\":{\"env\":[{\"name\":\"TRUSTED_CA_CONFIGMAP_NAME\",\"value\":\"trusted-ca\"}]}}}"
 			err0 := oc.AsAdmin().Run("patch").Args("-n", "cert-manager-operator", "sub", "openshift-cert-manager-operator", "--type=merge", "-p", patchPath).Execute()
 			o.Expect(err0).NotTo(o.HaveOccurred())
-			err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+			waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", "cert-manager", "cert-manager", "-o=jsonpath={.spec.template.spec.containers[0].volumeMounts}").Output()
 				output1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", "cert-manager", "cert-manager", "-o=jsonpath={.spec.template.spec.volumes}").Output()
 				if !strings.Contains(output, "trusted-ca") || err != nil || !strings.Contains(output1, "trusted-ca") || err1 != nil {
@@ -162,7 +162,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 				e2e.Logf("cert-manager deployment is ready.")
 				return true, nil
 			})
-			exutil.AssertWaitPollNoErr(err, "Waiting for deployment times out.")
+			exutil.AssertWaitPollNoErr(waitErr, "Waiting for deployment times out.")
 		}
 
 		e2e.Logf("Login with normal user and create new ns.")
@@ -293,14 +293,13 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		certTemplate := filepath.Join(buildPruningBaseDir, "cert-hosted-zone-overlapped.yaml")
 		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
-		statusErr := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
+		statusErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err := oc.Run("get").Args("challenge", "-o", "wide").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(output, "returned REFUSED") {
-				e2e.Logf("challenge output return 'REFUSED' as expected. %v ", output)
-				return true, nil
+			if err != nil || !strings.Contains(output, "returned REFUSED") {
+				return false, nil
 			}
-			return false, nil
+			e2e.Logf("challenge output return 'REFUSED' as expected. %v ", output)
+			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(statusErr, "challenge/certificate is wrong.")
 
@@ -406,7 +405,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
 		exutil.By("Check the certificate and its challenge")
-		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err := oc.Run("get").Args("challenge").Output()
 			if !strings.Contains(output, "pending") || err != nil {
 				e2e.Logf("challenge is not become pending.%v", output)
@@ -415,8 +414,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			e2e.Logf("challenge is become pending status.")
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "Fail to wait challenge become pending status.")
-		err = wait.Poll(10*time.Second, 600*time.Second, func() (bool, error) {
+		exutil.AssertWaitPollNoErr(waitErr, "Fail to wait challenge become pending status.")
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 600*time.Second, false, func(ctx context.Context) (bool, error) {
 			challenge, err := oc.Run("get").Args("challenge", "-o", "wide").Output()
 			if !strings.Contains(challenge, "i/o timeout") || err != nil {
 				e2e.Logf("challenge has not output as expected.")
@@ -425,7 +424,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			e2e.Logf("challenge have output as expected.")
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "Failure: challenge has not output as expected.")
+		exutil.AssertWaitPollNoErr(waitErr, "Failure: challenge has not output as expected.")
+
 		exutil.By("Apply dns args by patch.")
 		oldPodList, err := exutil.GetAllPodsWithLabel(oc, "cert-manager", "app=cert-manager")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -474,7 +474,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
 			exutil.By("Check if challenge will be pending and show HTTP 403 error")
-			statusErr := wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
+			statusErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 90*time.Second, false, func(ctx context.Context) (bool, error) {
 				output, err = oc.Run("get").Args("challenge", "-o", "wide").Output()
 				if !strings.Contains(output, "403 Forbidden") || !strings.Contains(output, "pending") || err != nil {
 					e2e.Logf("challenge is still in processing, and status is not as expected: %s\n", output)
@@ -533,7 +533,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		certFile1 := filepath.Join(buildPruningBaseDir, "cert-match-test-1.yaml")
 		err = oc.Run("create").Args("-f", certFile1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err := oc.Run("get").Args("challenge").Output()
 			if !strings.Contains(output, "pending") || err != nil {
 				e2e.Logf("challenge1 is not become pending.%v", output)
@@ -542,7 +542,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			e2e.Logf("challenge1 is become pending status.")
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "Fail to wait challenge1 become pending status.")
+		exutil.AssertWaitPollNoErr(waitErr, "Fail to wait challenge1 become pending status.")
 		challenge1, err := oc.AsAdmin().Run("get").Args("challenge", "-o=jsonpath={.items[*].spec.solver.selector.matchLabels}").Output()
 		if !strings.Contains(challenge1, `"use-http01-solver":"true"`) || err != nil {
 			e2e.Failf("challenge1 has not output as expected.")
@@ -555,7 +555,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		certFile2 := filepath.Join(buildPruningBaseDir, "cert-match-test-2.yaml")
 		err = oc.Run("create").Args("-f", certFile2).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err := oc.Run("get").Args("challenge").Output()
 			if !strings.Contains(output, "pending") || err != nil {
 				e2e.Logf("challenge2 is not become pending.%v", output)
@@ -564,7 +564,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			e2e.Logf("challenge2 is become pending status.")
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "Fail to wait challenge2 become pending status.")
+		exutil.AssertWaitPollNoErr(waitErr, "Fail to wait challenge2 become pending status.")
 		challenge2, err := oc.Run("get").Args("challenge", "-o=jsonpath={.items[*].spec.solver.selector.dnsNames}").Output()
 		if !strings.Contains(challenge2, "xxia-test-2.test-example.com") || err != nil {
 			e2e.Failf("challenge2 has not output as expected.")
@@ -577,7 +577,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		certFile3 := filepath.Join(buildPruningBaseDir, "cert-match-test-3.yaml")
 		err = oc.Run("create").Args("-f", certFile3).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(10*time.Second, 30*time.Second, func() (bool, error) {
+		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err := oc.Run("get").Args("challenge").Output()
 			if !strings.Contains(output, "pending") || err != nil {
 				e2e.Logf("challenge3 is not become pending.%v", output)
@@ -586,7 +586,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			e2e.Logf("challenge3 is become pending status.")
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(err, "Fail to wait challenge3 become pending status.")
+		exutil.AssertWaitPollNoErr(waitErr, "Fail to wait challenge3 become pending status.")
 		challenge3, err := oc.Run("get").Args("challenge", "-o=jsonpath={.items[*].spec.solver.selector.dnsZones}").Output()
 		if !strings.Contains(challenge3, "test-example.com") || err != nil {
 			e2e.Failf("challenge3 has not output as expected.")
@@ -1275,7 +1275,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		queryString := `query={endpoint="tcp-prometheus-servicemonitor"}`
 		cmd := fmt.Sprintf(`curl -s -S -k -H "Authorization: Bearer %s" %s --data-urlencode '%s'`, token, metricsQueryURL, queryString)
 		oc.NotShowInfo()
-		statusErr := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		statusErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err = exutil.RemoteShPod(oc, clusterMonitoringNamespace, "prometheus-k8s-0", "sh", "-c", cmd)
 			if !strings.Contains(output, `"status":"success"`) || !strings.Contains(output, `"namespace":"`+operandNamespace+`"`) || err != nil {
 				return false, nil
