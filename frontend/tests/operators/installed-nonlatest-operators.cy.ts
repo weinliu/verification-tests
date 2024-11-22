@@ -22,11 +22,9 @@ describe('Operators Installed nonlatest operator test', () => {
   it('(OCP-63222,xiyuzhao,UserInterface) Console supports installing non-latest Operator versions	',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
     Pages.gotoOperatorHubPage();
     operatorHubPage.checkSourceCheckBox("red-hat");
-    cy.get('input[type="text"]').clear().type(params.operatorName + "{enter}");
-    cy.get('[role="gridcell"]').within(() => {
-      cy.contains(params.operatorName).should('exist').click();
-    })
-    //Check Channel and Version dropdown is added in subscription page
+    cy.get('input[type="text"]').clear().type(`${params.operatorName}{enter}`);
+    cy.get('[role="gridcell"]').contains(params.operatorName).click();
+    //1.Check Channel and Version dropdown is added in subscription page
     cy.contains('h5', 'Channel')
       .next()
       .find('button')
@@ -35,10 +33,8 @@ describe('Operators Installed nonlatest operator test', () => {
       .next()
       .find('button')
       .click({force: true});
+    //2.1.Check the selected channel and version can be carried over to 'Install Operator' page
     cy.get('[role="option"]').eq(1).click({force:true});
-
-    /*1.Check the selected channel and version can be carried over to 'Install Operator' page
-      2.Check the Waring message for Manual approval'*/
     cy.get('h5:contains("Version")')
       .next()
       .find('*[class*="toggle__text"]')
@@ -61,6 +57,7 @@ describe('Operators Installed nonlatest operator test', () => {
           .and('contain', 'channel=stable');
       });
     });
+    //2.2.Check the Waring message for Manual approval'*/
     cy.get('[data-test="A specific namespace on the cluster-radio-input"]').click();
     cy.get('button#dropdown-selectbox').click();
     cy.contains('span', params.ns).click();
@@ -68,15 +65,13 @@ describe('Operators Installed nonlatest operator test', () => {
       .eq(0)
       .invoke('text')
       .should('match', /^.*Manual update approval.*not installing.*latest version.*selected channel.*$/);
+    //3.For Customer Bug: check operator can be installed successfully after manual approve
     cy.get('[data-test="install-operator"]').click();
-
-    // Customer bug: check operator can be installed successfully after manual approve
     cy.get('[id="operator-install-page"]', { timeout: 120000 }).should('exist');
     cy.contains('Approve', { timeout: 240000 }).click().then(() => {
       cy.contains('View Operator', { timeout: 120000 }).should('be.visible');
     });
-
-    // Check the Upgrade available for the operator in Installed Operator page
+    //4.Check the InstallPlan is available for the Manual installed operator in Installed Operator page
     Pages.gotoInstalledOperatorPage();
     cy.byTestID('name-filter-input')
       .clear()
@@ -90,14 +85,13 @@ describe('Operators Installed nonlatest operator test', () => {
           .invoke('attr', 'href')
           .should('include','InstallPlan');
     })
-    // Check the operator subcription page have a new section 'Installed Operator'
+    //5.1.Check a successful icon is added for the Installed Operator
     Pages.gotoOperatorHubPage(params.ns)
     operatorHubPage.checkSourceCheckBox("red-hat");
     cy.get('input[type="text"]').clear().type(`${params.operatorName}{enter}`);
-    cy.get('[role="gridcell"]').within(() => {
-      cy.get('[data-test="success-icon"]').should('exist');
-      cy.contains(params.operatorName).should('exist').click();
-    });
+    cy.get('[data-test="success-icon"]').should('exist');
+    //5.2.Check the operator subcription page added new section 'Installed Operator', and have 3 new values
+    cy.get('[role="gridcell"]').contains(params.operatorName).click();
     cy.get('[class*="description-list__text"]').each(($el, index) => {
       if (index <3){
         const keywords = ['Installed Channel', 'stable', 'Installed Version'];
