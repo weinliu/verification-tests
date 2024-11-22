@@ -1,8 +1,9 @@
 package monitoring
 
 import (
-	o "github.com/onsi/gomega"
 	"path/filepath"
+
+	o "github.com/onsi/gomega"
 
 	g "github.com/onsi/ginkgo/v2"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -12,7 +13,7 @@ import (
 var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operator ConnectedOnly", func() {
 	defer g.GinkgoRecover()
 	var (
-		oc         = exutil.NewCLI("obo-"+getRandomString(), exutil.KubeConfigPath())
+		oc         = exutil.NewCLIForKubeOpenShift("obo-" + getRandomString())
 		oboBaseDir = exutil.FixturePath("testdata", "monitoring", "observabilityoperator")
 		clID       string
 		region     string
@@ -25,12 +26,12 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 		}
 		architecture.SkipNonAmd64SingleArch(oc)
 		clID, region = getClusterDetails(oc)
-		g.By("Install Observability Operator and check if it is successfully installed") //57234-Observability Operator installation on OCP hypershift management
+		exutil.By("Install Observability Operator and check if it is successfully installed") //57234-Observability Operator installation on OCP hypershift management
 		if !exutil.IsROSA() {
 			createObservabilityOperator(oc, oboBaseDir)
 		}
 	})
-	g.It("HyperShiftMGMT-ROSA-Author:Vibhu-Critical-57236-Critical-57239-create monitoringstack and check config & metrics on hypershift", func() {
+	g.It("Author:Vibhu-HyperShiftMGMT-ROSA-LEVEL0-Critical-57236-Critical-57239-create monitoringstack and check config & metrics on hypershift", func() {
 		msD := monitoringStackDescription{
 			name:       "hypershift-monitoring-stack",
 			clusterID:  clID,
@@ -51,53 +52,53 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 				deleteMonitoringStack(oc, msD, secD, "rosa_mc")
 			}
 		}()
-		g.By("Check observability operator pods liveliness")
+		exutil.By("Check observability operator pods liveliness")
 		checkOperatorPods(oc)
 		if !exutil.IsROSA() {
-			g.By("Create monitoringstack CR")
+			exutil.By("Create monitoringstack CR")
 			createMonitoringStack(oc, msD, secD)
 		}
-		g.By("Check remote write config")
+		exutil.By("Check remote write config")
 		checkRemoteWriteConfig(oc, msD)
-		g.By("Check monitoringStack has correct clusterID region and status")
+		exutil.By("Check monitoringStack has correct clusterID region and status")
 		checkMonitoringStackDetails(oc, msD, "rosa_mc")
 	})
 
-	g.It("Author:Vibhu-Critical-57440-observability operator uninstall [Serial]", func() {
+	g.It("Author:Vibhu-LEVEL0-Critical-57440-observability operator uninstall [Serial]", func() {
 		defer deleteOperator(oc)
-		g.By("Delete ObservabilityOperator")
+		exutil.By("Delete ObservabilityOperator")
 	})
-	g.It("HyperShiftMGMT-ROSA-Author:Vibhu-High-55352-observability operator self monitoring", func() {
-		g.By("Check observability operator monitoring")
+	g.It("Author:Vibhu-HyperShiftMGMT-ROSA-High-55352-observability operator self monitoring", func() {
+		exutil.By("Check observability operator monitoring")
 		checkOperatorMonitoring(oc, oboBaseDir)
 	})
-	g.It("HyperShiftMGMT-ROSA-Author:Vibhu-Critical-55349-verify observability operator", func() {
-		g.By("Check the label in namespace")
+	g.It("Author:Vibhu-HyperShiftMGMT-ROSA-LEVEL0-Critical-55349-verify observability operator", func() {
+		exutil.By("Check the label in namespace")
 		checkLabel(oc)
-		g.By("Check observability operator pods")
+		exutil.By("Check observability operator pods")
 		checkOperatorPods(oc)
-		g.By("Check liveliness/readiness probes implemented in observability operator pod")
+		exutil.By("Check liveliness/readiness probes implemented in observability operator pod")
 		checkPodHealth(oc)
 	})
-	g.It("HyperShiftMGMT-ROSA-Author:Vibhu-High-59383-verify OBO discovered and collected metrics of HCP", func() {
+	g.It("Author:Vibhu-HyperShiftMGMT-ROSA-High-59383-verify OBO discovered and collected metrics of HCP", func() {
 		if exutil.IsROSA() {
-			g.By("Check scrape targets")
+			exutil.By("Check scrape targets")
 			checkHCPTargets(oc)
-			g.By("Check metric along with value")
+			exutil.By("Check metric along with value")
 			checkMetricValue(oc, "rosa_mc")
 		}
 	})
 	g.It("Author:Vibhu-Critical-59384-High-59674-create monitoringstack to discover any target and verify observability operator discovered target and collected metrics of example APP", func() {
 		defer deleteMonitoringStack(oc, monitoringStackDescription{}, monitoringStackSecretDescription{}, "monitor_example_app")
-		g.By("Create monitoring stack")
+		exutil.By("Create monitoring stack")
 		createCustomMonitoringStack(oc, oboBaseDir)
-		g.By("Create example app")
+		exutil.By("Create example app")
 		oc.SetupProject()
 		ns := oc.Namespace()
 		createExampleApp(oc, oboBaseDir, ns)
-		g.By("Check scrape target")
+		exutil.By("Check scrape target")
 		checkExampleAppTarget(oc)
-		g.By("Check metric along with value")
+		exutil.By("Check metric along with value")
 		checkMetricValue(oc, "monitor_example_app")
 	})
 })

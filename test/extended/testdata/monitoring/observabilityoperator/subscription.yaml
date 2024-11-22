@@ -9,6 +9,6 @@ metadata:
 spec:
   channel: development
   name: cluster-observability-operator
-  source: qe-app-registry
+  source: redhat-operators
   sourceNamespace: openshift-marketplace
 
