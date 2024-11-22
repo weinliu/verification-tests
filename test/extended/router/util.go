@@ -605,7 +605,7 @@ func (ipf *ipfailoverDescription) create(oc *exutil.CLI, ns string) {
 
 func ensureLogsContainString(oc *exutil.CLI, ns, label, match string) {
 	waitErr := wait.Poll(3*time.Second, 90*time.Second, func() (bool, error) {
-		log, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ns, "-l", label).Output()
+		log, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ns, "-l", label, "--tail=20").Output()
 		// for debugging only
 		// e2e.Logf("the logs of labeled pods are: %v", log)
 		if err != nil || log == "" {
