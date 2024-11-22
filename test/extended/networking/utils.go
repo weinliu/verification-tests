@@ -295,7 +295,7 @@ func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 
 func (pod *pingPodResourceNode) createPingPodNode(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		err1 := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "NODENAME="+pod.nodename)
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "NODENAME="+pod.nodename)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -4146,4 +4146,35 @@ func cpOVNKubeTraceToLocal(oc *exutil.CLI, dstPath string) {
 	o.Expect(cpErr).NotTo(o.HaveOccurred())
 	chmodErr := exec.Command("bash", "-c", "chmod +x "+dstPath+"/ovnkube-trace").Run()
 	o.Expect(chmodErr).NotTo(o.HaveOccurred())
+}
+
+func getTcpdumpOnNodeCmdFromPod(oc *exutil.CLI, nodeName, tcpdumpCmd, namespace, podname, cmdOnPod string) string {
+	exutil.By("Enable tcpdump on node")
+	cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("-n", "default", "node/"+nodeName, "--", "bash", "-c", tcpdumpCmd).Background()
+	defer cmdTcpdump.Process.Kill()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	//Wait 5 seconds to let the tcpdump ready for capturing traffic
+	time.Sleep(5 * time.Second)
+
+	exutil.By("Curl external host:port from test pods")
+
+	checkErr := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 60*time.Second, false, func(cxt context.Context) (bool, error) {
+		_, curlErr := e2eoutput.RunHostCmd(namespace, podname, cmdOnPod)
+		tcpdumpErr := cmdTcpdump.Wait()
+		e2e.Logf("The captured tcpdump outout is: \n%s\n", cmdOutput.String())
+		if curlErr != nil || tcpdumpErr != nil {
+			e2e.Logf("Getting error at executing curl command: %v or at waiting for tcpdump: %v, try again ...", curlErr, tcpdumpErr)
+			return false, nil
+		}
+		if cmdOutput.String() == "" {
+			e2e.Logf("Did not capture tcpdump packets,try again ...")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("Unable to get tcpdump when curling from pod:%s from namespace: %s", podname, namespace))
+
+	cmdTcpdump.Process.Kill()
+	return cmdOutput.String()
 }
