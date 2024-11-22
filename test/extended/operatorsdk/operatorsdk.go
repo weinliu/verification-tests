@@ -4586,7 +4586,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		metricsMsg, err := exec.Command("bash", "-c", "oc exec deployment/ansiblemetrics-controller-manager -n "+nsOperator+" -- curl -k -H \"Authorization: Bearer "+metricsToken+"\" 'https://["+promeEp+"]:8443/metrics'").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		//Depending on the environment, the IP address may sometimes switch between ipv4 and ipv6.
+		if err != nil {
+			metricsMsg, err = exec.Command("bash", "-c", "oc exec deployment/ansiblemetrics-controller-manager -n "+nsOperator+" -- curl -k -H \"Authorization: Bearer "+metricsToken+"\" 'https://"+promeEp+":8443/metrics'").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 		var strMetricsMsg string
 		strMetricsMsg = string(metricsMsg)
 		if !strings.Contains(strMetricsMsg, "my gague and set it to 2") {
