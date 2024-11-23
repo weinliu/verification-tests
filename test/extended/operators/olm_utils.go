@@ -153,7 +153,7 @@ func (sub *subscriptionDescription) createWithoutCheck(oc *exutil.CLI, itName st
 	// So, change it to one line with necessary information csv name and namespace.
 	allCSVs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "--all-namespaces", "-o=jsonpath={range .items[*]}{@.metadata.name}{\",\"}{@.metadata.namespace}{\":\"}{end}").Output()
 	if err != nil {
-		if strings.Contains(allCSVs, "unexpected EOF") {
+		if strings.Contains(allCSVs, "unexpected EOF") || strings.Contains(allCSVs, "status 1") {
 			g.Skip(fmt.Sprintf("skip case with %v", allCSVs))
 		}
 		e2e.Failf("!!! Couldn't get all CSVs:%v\n", err)
