@@ -49,6 +49,7 @@ type Flowcollector struct {
 	NetworkPolicyEnable               string
 	NetworkPolicyAdditionalNamespaces []string
 	Exporters                         []string
+	SecondayNetworks                  []string
 	Template                          string
 }
 

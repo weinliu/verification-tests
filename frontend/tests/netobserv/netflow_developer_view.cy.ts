@@ -1,7 +1,6 @@
 import { Operator, project } from "../../views/netobserv"
 import { catalogSources } from "../../views/catalog-source"
 import { netflowPage } from "../../views/netflow-page"
-import { guidedTour } from "../..//views/tour";
 
 const [user1, user1Passwd] = Cypress.env('LOGIN_USERS').split(',')[0].split(':');
 const [user2, user2Passwd] = Cypress.env('LOGIN_USERS').split(',')[1].split(':');
@@ -48,17 +47,17 @@ describe('(OCP-75874 Network_Observability) NetObserv developer view', { tags: [
         cy.adminCLI(`oc adm policy add-cluster-role-to-user netobserv-metrics-reader ${user2}`)
         cy.adminCLI(`oc adm policy add-cluster-role-to-user netobserv-metrics-reader ${user3}`)
 
-        // Deploy client server manifests logged in as user1
+        // Deploy client server manifests logged in as user2
         cy.cliLogin(`${user2}`, `${user2Passwd}`)
         cy.exec(`oc create -f ./fixtures/netobserv/testuser-server-client.yaml`)
 
-        // Logout from console as user3 and login as user1
+        // Logout from console as user1 and login as user2
         cy.uiLogout().then(() => {
             cy.visit(Cypress.config('baseUrl'))
         })
         cy.uiLogin(Cypress.env('LOGIN_IDP'), user2, user2Passwd)
 
-        // Verify Netflow traffic tab Developer view as user1
+        // Verify Netflow traffic tab Developer view as user2
         netflowPage.visitDeveloper("test-client")
         cy.checkNetflowTraffic("Disabled")
 

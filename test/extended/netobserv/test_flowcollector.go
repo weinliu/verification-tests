@@ -85,7 +85,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			OperatorNS.DeployOperatorNamespace(oc)
 			NO.SubscribeOperator(oc)
 			// check if NO operator is deployed
-			WaitForPodReadyWithLabel(oc, NO.Namespace, "app="+NO.OperatorName)
+			WaitForPodsReadyWithLabel(oc, NO.Namespace, "app="+NO.OperatorName)
 			NOStatus := CheckOperatorStatus(oc, NO.Namespace, NO.PackageName)
 			o.Expect((NOStatus)).To(o.BeTrue())
 
@@ -110,7 +110,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		//  it will install and uninstall after each spec/test.
 		if !Lokiexisting {
 			LO.SubscribeOperator(oc)
-			WaitForPodReadyWithLabel(oc, LO.Namespace, "name="+LO.OperatorName)
+			WaitForPodsReadyWithLabel(oc, LO.Namespace, "name="+LO.OperatorName)
 		} else {
 			channelName, err := checkOperatorChannel(oc, LO.Namespace, LO.PackageName)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -118,7 +118,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 				e2e.Logf("found %s channel for loki operator, removing and reinstalling with %s channel instead", channelName, lokiSource.Channel)
 				LO.uninstallOperator(oc)
 				LO.SubscribeOperator(oc)
-				WaitForPodReadyWithLabel(oc, LO.Namespace, "name="+LO.OperatorName)
+				WaitForPodsReadyWithLabel(oc, LO.Namespace, "name="+LO.OperatorName)
 				Lokiexisting = false
 			}
 		}
@@ -641,7 +641,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		OperatorNS.DeployOperatorNamespace(oc)
 		NO.SubscribeOperator(oc)
 		// check if NO operator is deployed
-		WaitForPodReadyWithLabel(oc, netobservNS, "app="+NO.OperatorName)
+		WaitForPodsReadyWithLabel(oc, netobservNS, "app="+NO.OperatorName)
 		NOStatus := CheckOperatorStatus(oc, netobservNS, NOPackageName)
 		o.Expect((NOStatus)).To(o.BeTrue())
 
@@ -681,7 +681,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		g.By("Wait for a min for operator upgrade")
 		time.Sleep(60 * time.Second)
 
-		WaitForPodReadyWithLabel(oc, netobservNS, "app=netobserv-operator")
+		WaitForPodsReadyWithLabel(oc, netobservNS, "app=netobserv-operator")
 		NOStatus = CheckOperatorStatus(oc, netobservNS, NOPackageName)
 		o.Expect((NOStatus)).To(o.BeTrue())
 
@@ -747,11 +747,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("create sctpClientPod")
 		createResourceFromFile(oc, SCTPns, sctpClientPodTemplatePath)
-		WaitForPodReadyWithLabel(oc, SCTPns, "name=sctpclient")
+		WaitForPodsReadyWithLabel(oc, SCTPns, "name=sctpclient")
 
 		g.By("create sctpServerPod")
 		createResourceFromFile(oc, SCTPns, sctpServerPodTemplatePath)
-		WaitForPodReadyWithLabel(oc, SCTPns, "name=sctpserver")
+		WaitForPodsReadyWithLabel(oc, SCTPns, "name=sctpserver")
 
 		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
@@ -846,13 +846,13 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(ICMPflows)).Should(o.BeNumerically(">", 0), "expected number of ICMP flows > 0")
 
-		nIcmptype8Flows := 0
+		nICMPFlows := 0
 		for _, r := range ICMPflows {
-			if r.Flowlog.IcmpType == 8 {
-				nIcmptype8Flows++
+			if r.Flowlog.IcmpType == 8 || r.Flowlog.IcmpType == 0 {
+				nICMPFlows++
 			}
 		}
-		o.Expect(nIcmptype8Flows).Should(o.BeNumerically(">", 0), "expected number of ICMP flows of type 8 (echo) > 0")
+		o.Expect(nICMPFlows).Should(o.BeNumerically(">", 0), "expected number of ICMP flows of type 8 or 0 (echo request or reply) > 0")
 	})
 
 	g.It("Author:aramesha-NonPreRelease-LEVEL0-High-68125-Verify DSCP with NetObserv [Serial]", func() {
@@ -1432,6 +1432,23 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		SYNFloodMetricsPath := filePath.Join(baseDir, "SYN_flood_metrics_template.yaml")
 		SYNFloodAlertsPath := filePath.Join(baseDir, "SYN_flood_alert_template.yaml")
 
+		g.By("Get kubeadmin token")
+		kubeAdminPasswd := os.Getenv("QE_KUBEADMIN_PASSWORD")
+		if kubeAdminPasswd == "" {
+			g.Skip("no kubeAdminPasswd is provided in this profile, skip it")
+		}
+		serverUrl, serverUrlErr := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("--show-server").Output()
+		o.Expect(serverUrlErr).NotTo(o.HaveOccurred())
+		currentContext, currentContextErr := oc.WithoutNamespace().Run("config").Args("current-context").Output()
+		o.Expect(currentContextErr).NotTo(o.HaveOccurred())
+		defer func() {
+			rollbackCtxErr := oc.WithoutNamespace().Run("config").Args("set", "current-context", currentContext).Execute()
+			o.Expect(rollbackCtxErr).NotTo(o.HaveOccurred())
+		}()
+
+		kubeadminToken := getKubeAdminToken(oc, kubeAdminPasswd, serverUrl, currentContext)
+		o.Expect(kubeadminToken).NotTo(o.BeEmpty())
+
 		g.By("Deploy FlowCollector")
 		flow := Flowcollector{
 			Namespace:     namespace,
@@ -1452,28 +1469,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		flowPatch, err := oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.agent.ebpf.flowFilter.action}'").Output()
 		o.Expect(err).ToNot(o.HaveOccurred())
 		o.Expect(flowPatch).To(o.Equal(`'Reject'`))
-
-		g.By("Get kubeadmin token")
-		kubeAdminPasswd := os.Getenv("QE_KUBEADMIN_PASSWORD")
-		if kubeAdminPasswd == "" {
-			g.Skip("no kubeAdminPasswd is provided in this profile, skip it")
-		}
-		serverUrl, serverUrlErr := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("--show-server").Output()
-		o.Expect(serverUrlErr).NotTo(o.HaveOccurred())
-		currentContext, currentContextErr := oc.WithoutNamespace().Run("config").Args("current-context").Output()
-		o.Expect(currentContextErr).NotTo(o.HaveOccurred())
-		defer func() {
-			rollbackCtxErr := oc.WithoutNamespace().Run("config").Args("set", "current-context", currentContext).Execute()
-			o.Expect(rollbackCtxErr).NotTo(o.HaveOccurred())
-		}()
-
-		longinErr := oc.WithoutNamespace().Run("login").Args("-u", "kubeadmin", "-p", kubeAdminPasswd, serverUrl).NotShowInfo().Execute()
-		o.Expect(longinErr).NotTo(o.HaveOccurred())
-		kubeadminToken, kubeadminTokenErr := oc.WithoutNamespace().Run("whoami").Args("-t").Output()
-		o.Expect(kubeadminTokenErr).NotTo(o.HaveOccurred())
-
-		rollbackCtxErr := oc.WithoutNamespace().Run("config").Args("set", "current-context", currentContext).Execute()
-		o.Expect(rollbackCtxErr).NotTo(o.HaveOccurred())
 
 		g.By("Deploy custom metrics to detect SYN flooding")
 		customMetrics := CustomMetrics{
@@ -1532,6 +1527,160 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		g.By("Wait for alerts to be active")
 		waitForAlertToBeActive(oc, "NetObserv-SYNFlood-out")
 		waitForAlertToBeActive(oc, "NetObserv-SYNFlood-in")
+	})
+
+	g.It("Author:aramesha-NonPreRelease-Longduration-High-76537-Verify flow enrichment for VM's secondary interfaces [Disruptive]", func() {
+		namespace := oc.Namespace()
+		testNS := "test-76537"
+		virtOperatorNS := "openshift-cnv"
+
+		if !hasMetalWorkerNodes(oc) {
+			g.Skip("Cluster does not have baremetal workers. Skip this test!")
+		}
+
+		g.By("Get kubeadmin token")
+		kubeAdminPasswd := os.Getenv("QE_KUBEADMIN_PASSWORD")
+		if kubeAdminPasswd == "" {
+			g.Skip("no kubeAdminPasswd is provided in this profile, skip it")
+		}
+
+		serverUrl, serverUrlErr := oc.AsAdmin().WithoutNamespace().Run("whoami").Args("--show-server").Output()
+		o.Expect(serverUrlErr).NotTo(o.HaveOccurred())
+		currentContext, currentContextErr := oc.WithoutNamespace().Run("config").Args("current-context").Output()
+		o.Expect(currentContextErr).NotTo(o.HaveOccurred())
+		defer func() {
+			rollbackCtxErr := oc.WithoutNamespace().Run("config").Args("set", "current-context", currentContext).Execute()
+			o.Expect(rollbackCtxErr).NotTo(o.HaveOccurred())
+		}()
+		kubeadminToken := getKubeAdminToken(oc, kubeAdminPasswd, serverUrl, currentContext)
+		o.Expect(kubeadminToken).NotTo(o.BeEmpty())
+
+		virtualizationDir := exutil.FixturePath("testdata", "netobserv", "virtualization")
+		kubevirtHyperconvergedPath := filePath.Join(virtualizationDir, "kubevirt-hyperconverged.yaml")
+		layer2NadPath := filePath.Join(virtualizationDir, "layer2-nad.yaml")
+		testVM1 := filePath.Join(virtualizationDir, "test-vm1.yaml")
+		testVM2 := filePath.Join(virtualizationDir, "test-vm2.yaml")
+
+		g.By("Deploy openshift-cnv namespace")
+		OperatorNS.Name = virtOperatorNS
+		OperatorNS.DeployOperatorNamespace(oc)
+
+		g.By("Deploy Openshift Virtualization operator")
+		virtCatsrc := Resource{"catsrc", "redhat-operators", "openshift-marketplace"}
+		virtPackageName := "kubevirt-hyperconverged"
+		virtSource := CatalogSourceObjects{"stable", virtCatsrc.Name, virtCatsrc.Namespace}
+
+		VO := SubscriptionObjects{
+			OperatorName:  "kubevirt-hyperconverged",
+			Namespace:     virtOperatorNS,
+			PackageName:   virtPackageName,
+			Subscription:  filePath.Join(subscriptionDir, "sub-template.yaml"),
+			OperatorGroup: filePath.Join(subscriptionDir, "singlenamespace-og.yaml"),
+			CatalogSource: &virtSource,
+		}
+
+		defer VO.uninstallOperator(oc)
+		VO.SubscribeOperator(oc)
+		WaitForPodsReadyWithLabel(oc, VO.Namespace, "name=virt-operator")
+
+		g.By("Deploy OpenShift Virtualization Deployment CR")
+		defer deleteResource(oc, "hyperconverged", "kubevirt-hyperconverged", virtOperatorNS)
+		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", kubevirtHyperconvergedPath).Output()
+		o.Expect(err).ToNot(o.HaveOccurred())
+		// Wait a min for hyperconverged pods to come up
+		time.Sleep(60 * time.Second)
+		waitUntilHyperConvergedReady(oc, "kubevirt-hyperconverged", virtOperatorNS)
+		WaitForPodsReadyWithLabel(oc, virtOperatorNS, "app.kubernetes.io/managed-by=virt-operator")
+
+		g.By("Deploy Network Attachment Definition in test-76537 namespace")
+		defer deleteNamespace(oc, testNS)
+		defer deleteResource(oc, "net-attach-def", "l2-network", testNS)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", layer2NadPath).Output()
+		o.Expect(err).ToNot(o.HaveOccurred())
+		// Wait a min for NAD to come up
+		time.Sleep(60 * time.Second)
+		checkNAD(oc, "l2-network", testNS)
+
+		g.By("Deploy test VM1")
+		defer deleteResource(oc, "vm", "test-vm1", testNS)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", testVM1, "-n", testNS).Output()
+		o.Expect(err).ToNot(o.HaveOccurred())
+		waitUntilVMReady(oc, "test-vm1", testNS)
+
+		startTime := time.Now()
+
+		g.By("Deploy test VM2")
+		defer deleteResource(oc, "vm", "test-vm2", testNS)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", testVM2, "-n", testNS).Output()
+		o.Expect(err).ToNot(o.HaveOccurred())
+		waitUntilVMReady(oc, "test-vm2", testNS)
+
+		secondaryNetworkConfig := map[string]interface{}{
+			"index": []interface{}{"MAC"},
+			"name":  "test-76537/l2-network",
+		}
+
+		config, err := json.Marshal(secondaryNetworkConfig)
+		o.Expect(err).ToNot(o.HaveOccurred())
+		secNetConfig := string(config)
+
+		g.By("Deploy FlowCollector with secondary Network config")
+		flow := Flowcollector{
+			Namespace:        namespace,
+			Template:         flowFixturePath,
+			LokiNamespace:    namespace,
+			EBPFPrivileged:   "true",
+			SecondayNetworks: []string{secNetConfig},
+		}
+
+		defer flow.DeleteFlowcollector(oc)
+		flow.CreateFlowcollector(oc)
+
+		g.By("Verify flowcollector is deployed with Secondary Network config")
+		secondaryNetworkName, err := oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.processor.advanced.secondaryNetworks[0].name}'").Output()
+		o.Expect(err).ToNot(o.HaveOccurred())
+		o.Expect(secondaryNetworkName).To(o.Equal(`'test-76537/l2-network'`))
+
+		g.By("Wait for a min before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		lokilabels := Lokilabels{
+			App:              "netobserv-flowcollector",
+			SrcK8S_Namespace: testNS,
+			SrcK8S_OwnerName: "test-vm2",
+			DstK8S_Namespace: testNS,
+			DstK8S_OwnerName: "test-vm1",
+		}
+		parameters := []string{"DstAddr=\"10.10.10.15\"", "SrcAddr=\"10.10.10.14\""}
+
+		g.By("Verify flows are written to loki")
+		flowRecords, err := lokilabels.getLokiFlowLogs(kubeadminToken, ls.Route, startTime, parameters...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows written to loki > 0")
+
+		g.By("Verify flow logs are enriched")
+		// Get VM1 pod name and node
+		vm1podname, err := exutil.GetAllPodsWithLabel(oc, testNS, "vm.kubevirt.io/name=test-vm1")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(vm1podname).NotTo(o.BeEmpty())
+		vm1node, err := exutil.GetPodNodeName(oc, testNS, vm1podname[0])
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(vm1node).NotTo(o.BeEmpty())
+
+		// Get vm2 pod name and node
+		vm2podname, err := exutil.GetAllPodsWithLabel(oc, testNS, "vm.kubevirt.io/name=test-vm2")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(vm2podname).NotTo(o.BeEmpty())
+		vm2node, err := exutil.GetPodNodeName(oc, testNS, vm2podname[0])
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(vm2node).NotTo(o.BeEmpty())
+
+		for _, r := range flowRecords {
+			o.Expect(r.Flowlog.DstK8S_Name).Should(o.ContainSubstring(vm1podname[0]))
+			o.Expect(r.Flowlog.SrcK8S_Name).Should(o.ContainSubstring(vm2podname[0]))
+			o.Expect(r.Flowlog.DstK8S_OwnerType).Should(o.ContainSubstring("VirtualMachineInstance"))
+			o.Expect(r.Flowlog.SrcK8S_OwnerType).Should(o.ContainSubstring("VirtualMachineInstance"))
+		}
 	})
 	//Add future NetObserv + Loki test-cases here
 
@@ -1796,7 +1945,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			err = consumer.applyFromTemplate(oc, "-n", consumer.Namespace, "-f", consumerTemplate, "-p", "NAME="+consumer.Name, "NAMESPACE="+consumer.Namespace, "KAFKA_TOPIC="+kafkaTopic2.TopicName, "CLUSTER_NAME="+kafka.Name, "KAFKA_USER="+kafkaUser.UserName)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			WaitForPodReadyWithLabel(oc, namespace, "job-name="+consumer.Name)
+			WaitForPodsReadyWithLabel(oc, namespace, "job-name="+consumer.Name)
 
 			consumerPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-l", "job-name="+consumer.Name, "-o=jsonpath={.items[0].metadata.name}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -1808,11 +1957,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			g.By("Verify NetObserv can be installed without Loki")
 			flow.DeleteFlowcollector(oc)
-			//Ensure FLP and eBPF pods are deleted
+			// Ensure FLP and eBPF pods are deleted
 			checkPodDeleted(oc, namespace, "app=flowlogs-pipeline", "flowlogs-pipeline")
 			checkPodDeleted(oc, namespace+"-privileged", "app=netobserv-ebpf-agent", "netobserv-ebpf-agent")
 			// Ensure network-policy is deleted
-			checkNetworkPolicyDeleted(oc, "netobserv", flow.Namespace)
+			checkResourceDeleted(oc, "networkPolicy", "netobserv", flow.Namespace)
 
 			flow.DeploymentModel = "Direct"
 			flow.LokiEnable = "false"
@@ -1826,7 +1975,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 			g.By("Verify console plugin pod is not deployed when its disabled in flowcollector")
 			flow.DeleteFlowcollector(oc)
-			//Ensure FLP and eBPF pods are deleted
+			// Ensure FLP and eBPF pods are deleted
 			checkPodDeleted(oc, namespace, "app=flowlogs-pipeline", "flowlogs-pipeline")
 			checkPodDeleted(oc, namespace+"-privileged", "app=netobserv-ebpf-agent", "netobserv-ebpf-agent")
 
@@ -1900,7 +2049,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			err = verifyLokilogsTime(bearerToken, ls.Route, startTime)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		})
-
 		//Add future NetObserv + Loki + Kafka test-cases here
 	})
 })

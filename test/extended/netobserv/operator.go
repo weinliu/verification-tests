@@ -352,7 +352,7 @@ func CheckOperatorStatus(oc *exutil.CLI, operatorNamespace string, operatorName 
 }
 
 func (ns *OperatorNamespace) DeployOperatorNamespace(oc *exutil.CLI) {
-	e2e.Logf("Creating Netobserv operator namespace")
+	e2e.Logf("Creating operator namespace")
 	nsParameters := []string{"--ignore-unknown-parameters=true", "-f", ns.NamespaceTemplate}
 	exutil.ApplyClusterResourceFromTemplate(oc, nsParameters...)
 }

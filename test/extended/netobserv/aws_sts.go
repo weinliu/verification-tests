@@ -340,7 +340,7 @@ func patchLokiOperatorWithAWSRoleArn(oc *exutil.CLI, packageName, lokiNamespace,
 	  }`
 
 	oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("patch").Args("sub", packageName, "-n", lokiNamespace, "-p", fmt.Sprintf(roleArnPatchConfig, roleArn), "--type=merge").Execute()
-	WaitForPodReadyWithLabel(oc, "openshift-operators-redhat", "name=loki-operator-controller-manager")
+	WaitForPodsReadyWithLabel(oc, "openshift-operators-redhat", "name=loki-operator-controller-manager")
 }
 
 // Checks if a specific bucket exists under AWS S3 service

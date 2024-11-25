@@ -1241,7 +1241,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 				OperatorNS.DeployOperatorNamespace(oc)
 				NO.SubscribeOperator(oc)
 				// check if NO operator is deployed
-				netobserv.WaitForPodReadyWithLabel(oc, NO.Namespace, "app="+NO.OperatorName)
+				netobserv.WaitForPodsReadyWithLabel(oc, NO.Namespace, "app="+NO.OperatorName)
 				NOStatus := netobserv.CheckOperatorStatus(oc, NO.Namespace, NO.PackageName)
 				o.Expect((NOStatus)).To(o.BeTrue())
 			}

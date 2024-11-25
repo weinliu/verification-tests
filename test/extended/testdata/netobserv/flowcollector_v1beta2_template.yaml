@@ -42,6 +42,7 @@ objects:
           conversationTerminatingTimeout: 5s
           conversationHeartbeatInterval: 5s
           conversationEndTimeout: 20s
+          secondaryNetworks: "${{SecondayNetworks}}"
       kafka:
         address: "${KafkaAddress}"
         topic: "${KafkaTopic}"
@@ -170,4 +171,6 @@ parameters:
   - name: NetworkPolicyAdditionalNamespaces
     value: '[]'
   - name: Exporters
+    value: '[]'
+  - name: SecondayNetworks
     value: '[]'

@@ -80,7 +80,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			OperatorNS.DeployOperatorNamespace(oc)
 			NO.SubscribeOperator(oc)
 			// check if NO operator is deployed
-			WaitForPodReadyWithLabel(oc, NO.Namespace, "app="+NO.OperatorName)
+			WaitForPodsReadyWithLabel(oc, NO.Namespace, "app="+NO.OperatorName)
 			NOStatus := CheckOperatorStatus(oc, NO.Namespace, NO.PackageName)
 			o.Expect((NOStatus)).To(o.BeTrue())
 
@@ -103,7 +103,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Deploy IPFIX collector")
 		createResourceFromFile(oc, IPFIXns, ipfixCollectorTemplatePath)
-		WaitForPodReadyWithLabel(oc, IPFIXns, "app=flowlogs-pipeline")
+		WaitForPodsReadyWithLabel(oc, IPFIXns, "app=flowlogs-pipeline")
 
 		IPFIXconfig := map[string]interface{}{
 			"ipfix": map[string]interface{}{
@@ -148,7 +148,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		g.By("Subscribe to OTEL Operator")
 		OtelNS.DeployOperatorNamespace(oc)
 		OTEL.SubscribeOperator(oc)
-		WaitForPodReadyWithLabel(oc, OTEL.Namespace, "app.kubernetes.io/name="+OTEL.OperatorName)
+		WaitForPodsReadyWithLabel(oc, OTEL.Namespace, "app.kubernetes.io/name="+OTEL.OperatorName)
 		OTELStatus := CheckOperatorStatus(oc, OTEL.Namespace, OTEL.PackageName)
 		o.Expect((OTELStatus)).To(o.BeTrue())
 
@@ -160,7 +160,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		exutil.ApplyNsResourceFromTemplate(oc, namespace, "-f", otelCollectorTemplatePath, "-p", "NAME="+collectorname, "OTLP_GRPC_ENDPOINT="+strconv.Itoa(otlpEndpoint), "OTLP_PROM_PORT="+promEndpoint)
 		otelPodLabel := "app.kubernetes.io/component=opentelemetry-collector"
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("opentelemetrycollector", collectorname, "-n", namespace).Execute()
-		WaitForPodReadyWithLabel(oc, namespace, otelPodLabel)
+		WaitForPodsReadyWithLabel(oc, namespace, otelPodLabel)
 
 		targetHost := fmt.Sprintf("otel-collector-headless.%s.svc", namespace)
 		otel_config := map[string]interface{}{

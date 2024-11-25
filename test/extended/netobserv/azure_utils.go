@@ -208,7 +208,7 @@ func patchLokiConfigIntoLokiSubscription(oc *exutil.CLI, azureSubscriptionID, id
 
 	err := oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("patch").Args("sub", "loki-operator", "-n", "openshift-operators-redhat", "-p", fmt.Sprintf(patchConfig, identityClientID, os.Getenv("AZURE_TENANT_ID"), azureSubscriptionID, region), "--type=merge").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred(), "Patching Loki Operator failed...")
-	WaitForPodReadyWithLabel(oc, "openshift-operators-redhat", "name=loki-operator-controller-manager")
+	WaitForPodsReadyWithLabel(oc, "openshift-operators-redhat", "name=loki-operator-controller-manager")
 }
 
 // Performs creation of Managed Identity, Associated Federated credentials, Role assignment to the managed identity and object storage creation on Azure

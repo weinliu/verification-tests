@@ -178,7 +178,7 @@ func (r Resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error 
 	return err
 }
 
-func WaitForPodReadyWithLabel(oc *exutil.CLI, ns, label string) {
+func WaitForPodsReadyWithLabel(oc *exutil.CLI, ns, label string) {
 	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
 		pods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
 		if err != nil {
@@ -270,18 +270,6 @@ func checkPodDeleted(oc *exutil.CLI, ns, label, checkValue string) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(podCheck, fmt.Sprintf("found \"%s\" exist or not fully deleted", checkValue))
-}
-
-// check networkPolicy with name that are fully deleted
-func checkNetworkPolicyDeleted(oc *exutil.CLI, name, ns string) {
-	NPCheck := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 240*time.Second, false, func(context.Context) (bool, error) {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("networkPolicy", name, "-n", ns).Output()
-		if !strings.Contains(output, "NotFound") {
-			return false, nil
-		}
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(NPCheck, fmt.Sprintf("found \"%s\" exist or not fully deleted", name))
 }
 
 // For normal user to create resources in the specified namespace from the file (not template)
@@ -465,7 +453,6 @@ func getResourceVersion(oc *exutil.CLI, resource, name, ns string) (int, error) 
 }
 
 func waitForResourceGenerationUpdate(oc *exutil.CLI, resource, name, field string, prev int, ns string) {
-
 	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, false, func(context.Context) (done bool, err error) {
 		var cur int
 		if field == "generation" {
@@ -525,4 +512,113 @@ func getPodLogs(oc *exutil.CLI, namespace, podname string) (string, error) {
 
 	e2e.Logf("pod logs file is %s", podLogs)
 	return filepath.Abs(podLogs)
+}
+
+// check if NetworkAttachDefinition is created
+func checkNAD(oc *exutil.CLI, nad, ns string) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 600*time.Second, false, func(context.Context) (done bool, err error) {
+		nadOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("net-attach-def", nad, "-n", ns).Output()
+		if err != nil {
+			// loop until NAD is found or until timeout
+			if strings.Contains(err.Error(), "not found") {
+				return false, nil
+			}
+			return false, err
+		}
+		if !strings.Contains(nadOutput, nad) {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Network Attach Definition %s did not become Available", nad))
+}
+
+// wait until hyperconverged is ready
+func waitUntilHyperConvergedReady(oc *exutil.CLI, hc, ns string) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 600*time.Second, false, func(context.Context) (done bool, err error) {
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hyperconverged", hc, "-n", ns, "-o", "jsonpath='{.status.conditions[0].status}'").Output()
+
+		if err != nil {
+			// loop until hyperconverged is found or until timeout
+			if strings.Contains(err.Error(), "not found") {
+				return false, nil
+			}
+			return false, err
+		}
+
+		if strings.Trim(status, "'") != "True" {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("HyperConverged %s did not become Available", hc))
+}
+
+// wait until virtual machine is Ready
+func waitUntilVMReady(oc *exutil.CLI, vm, ns string) {
+	err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 1200*time.Second, false, func(context.Context) (done bool, err error) {
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("virtualmachine", vm, "-n", ns, "-o", "jsonpath='{.status.conditions[0].status}'").Output()
+
+		if err != nil {
+			// loop until virtual machine is found or until timeout
+			if strings.Contains(err.Error(), "not found") {
+				return false, nil
+			}
+			return false, err
+		}
+
+		if strings.Trim(status, "'") != "True" {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Virtual machine %s did not become Available", vm))
+}
+
+// check if cluster has baremetal workers
+func hasMetalWorkerNodes(oc *exutil.CLI) bool {
+	workers, err := exutil.GetClusterNodesBy(oc, "worker")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	for _, w := range workers {
+		Output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", w, "-o", "jsonpath='{.metadata.labels.node\\.kubernetes\\.io/instance-type}'").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(Output, "metal") {
+			e2e.Logf("Cluster does not have metal worker nodes")
+			return false
+		}
+	}
+	return true
+}
+
+// check resource is fully deleted
+func checkResourceDeleted(oc *exutil.CLI, resourceType, resourceName, namespace string) {
+	resourceCheck := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 600*time.Second, false, func(context.Context) (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(resourceType, resourceName, "-n", namespace).Output()
+		if !strings.Contains(output, "NotFound") {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(resourceCheck, fmt.Sprintf("found %s \"%s\" exist or not fully deleted", resourceType, resourceName))
+}
+
+// delete a resource
+func deleteResource(oc *exutil.CLI, resourceType, resourceName, namespace string, optionalParameters ...string) {
+	cmdArgs := []string{resourceType, resourceName, "-n", namespace}
+	cmdArgs = append(cmdArgs, optionalParameters...)
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(cmdArgs...).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	checkResourceDeleted(oc, resourceType, resourceName, namespace)
+}
+
+// get kubeadmin token of the cluster
+func getKubeAdminToken(oc *exutil.CLI, kubeAdminPasswd, serverUrl, currentContext string) string {
+	longinErr := oc.WithoutNamespace().Run("login").Args("-u", "kubeadmin", "-p", kubeAdminPasswd, serverUrl).NotShowInfo().Execute()
+	o.Expect(longinErr).NotTo(o.HaveOccurred())
+	kubeadminToken, kubeadminTokenErr := oc.WithoutNamespace().Run("whoami").Args("-t").Output()
+	o.Expect(kubeadminTokenErr).NotTo(o.HaveOccurred())
+
+	rollbackCtxErr := oc.WithoutNamespace().Run("config").Args("set", "current-context", currentContext).Execute()
+	o.Expect(rollbackCtxErr).NotTo(o.HaveOccurred())
+	return kubeadminToken
 }
