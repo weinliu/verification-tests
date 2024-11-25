@@ -11861,7 +11861,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle to support", func
 
 	// It will cover test case: OCP-22200, author: kuiwang@redhat.com
 	g.It("Author:kuiwang-NonHyperShiftHOST-ConnectedOnly-Medium-22200-add minimum kube version to CSV [Slow]", func() {
+		checkArch := architecture.ClusterArchitecture(oc)
+		e2e.Logf("the curent arch is %v", checkArch.String())
 		architecture.SkipNonAmd64SingleArch(oc)
+		e2e.Logf("done for SkipNonAmd64SingleArch and try the following method which is same to SkipNonAmd64SingleArch")
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI, architecture.ARM64, architecture.UNKNOWN)
 		if isAks, _ := exutil.IsAKSCluster(context.TODO(), oc); isAks {
 			g.Skip("skip for ask cluster")
 		}
