@@ -63,7 +63,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		customTunedProfile    string
 		tunedNodeName         string
 		ntoSysctlTemplate     string
-		ntoDeferedUpdate      string
+		ntoDefered            string
 		ntoDeferedUpdatePatch string
 		err                   error
 	)
@@ -81,7 +81,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		ntoTunedPidMax = exutil.FixturePath("testdata", "psap", "nto", "nto-tuned-pidmax.yaml")
 		customTunedProfile = exutil.FixturePath("testdata", "psap", "nto", "custom-tuned-profiles.yaml")
 		ntoSysctlTemplate = exutil.FixturePath("testdata", "psap", "nto", "nto-sysctl-template.yaml")
-		ntoDeferedUpdate = exutil.FixturePath("testdata", "psap", "nto", "deferred-nto-update.yaml")
+		ntoDefered = exutil.FixturePath("testdata", "psap", "nto", "deferred-nto.yaml")
 		ntoDeferedUpdatePatch = exutil.FixturePath("testdata", "psap", "nto", "deferred-nto-update-patch.yaml")
 	})
 
@@ -3767,7 +3767,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		defferedNTORes := ntoResource{
 			name:         "deferred-update-profile",
 			namespace:    ntoNamespace,
-			template:     ntoDeferedUpdate,
+			template:     ntoDefered,
 			sysctlparm:   "kernel.shmmni",
 			sysctlvalue:  "8192",
 			label:        "deferred-update",
@@ -3806,6 +3806,86 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 
 		exutil.By("Compare if the value kernel.shmmni in on labeled node, should be 10240")
 		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "10240")
+
+		exutil.By("Removed deffered tuned custom profile and unlabel node")
+		defferedNTORes.delete(oc)
+
+		exutil.By("Compare if the value kernel.shmmni in on labeled node, it will rollback to 4096")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "4096")
+	})
+	g.It("Author:sahshah-Longduration-NonPreRelease-Medium-75434-NTO deferred feature with annotation deferred -always[Disruptive]", func() {
+
+		isSNO := exutil.IsSNOCluster(oc)
+
+		if !isNTO || isSNO {
+			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
+		}
+
+		machinesetName := getTotalLinuxMachinesetNum(oc)
+		e2e.Logf("len(machinesetName) is %v", machinesetName)
+		if machinesetName > 1 {
+			tunedNodeName = choseOneWorkerNodeToRunCase(oc, 0)
+		} else {
+			tunedNodeName = choseOneWorkerNodeNotByMachineset(oc, 0)
+		}
+
+		labeledNode := exutil.GetNodeListByLabel(oc, "deferred-always")
+
+		if len(labeledNode) == 0 {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "deferred-always-").Execute()
+		}
+
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "deferred-always-profile", "-n", ntoNamespace, "--ignore-not-found").Execute()
+			compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "4096")
+		}()
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		o.Expect(tunedPodName).NotTo(o.BeEmpty())
+
+		exutil.By("Pickup one worker nodes to label node to deferred-always ..")
+
+		if len(labeledNode) == 0 {
+			oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "deferred-always=").Execute()
+		}
+
+		defferedNTORes := ntoResource{
+			name:         "deferred-always-profile",
+			namespace:    ntoNamespace,
+			template:     ntoDefered,
+			sysctlparm:   "kernel.shmmni",
+			sysctlvalue:  "8192",
+			label:        "deferred-always",
+			deferedValue: "always",
+		}
+
+		exutil.By("Create deferred-always profile")
+		defferedNTORes.applyNTOTunedProfileWithDeferredAnnotation(oc)
+
+		exutil.By("Create deferred-always profile and apply it to nodes")
+		defferedNTORes.assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-node", "False")
+
+		exutil.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile.tuned.openshift.io", tunedNodeName, `-ojsonpath='{.status.conditions[0].message}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.BeEmpty())
+		o.Expect(output).To(o.ContainSubstring("The TuneD daemon profile is waiting for the next node restart"))
+
+		exutil.By("Compare if the value kernel.shmmni in on labeled node, should be 4096")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "4096")
+
+		exutil.By("Reboot the node with updated tuned profile")
+		err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ntoNamespace, "-it", tunedPodName, "--", "reboot").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker", 600)
+
+		exutil.By("Compare if the value kernel.shmmni in on labeled node, should be 8192")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "8192")
 
 		exutil.By("Removed deffered tuned custom profile and unlabel node")
 		defferedNTORes.delete(oc)
