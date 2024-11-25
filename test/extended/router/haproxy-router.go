@@ -3477,6 +3477,62 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		}
 	})
 
+	// incorporate OCPBUGS-40850 and OCPBUGS-43095 into one
+	// [OCPBUGS-40850](https://issues.redhat.com/browse/OCPBUGS-40850)
+	// [OCPBUGS-43095](https://issues.redhat.com/browse/OCPBUGS-43095)
+	// author: shudili@redhat.com
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO--High-77284-http request with duplicated headers should not cause disruption to a router pod", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPod             = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
+			unsecsvc            = filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
+			unsecsvcName        = "service-unsecure"
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+			ingctrl             = ingressControllerDescription{
+				name:      "77284",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		exutil.By("1.0 Create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+
+		exutil.By("2.0 Deploy a project with a client pod, a backend pod and its service resources")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, clientPod)
+		err = waitForPodWithLabelReady(oc, project1, cltPodLabel)
+		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		createResourceFromFile(oc, project1, testPod)
+		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
+		createResourceFromFile(oc, project1, unsecsvc)
+
+		exutil.By("3.0 Create a HTTP route inside the project")
+		routehost := "service-unsecure77284" + "." + ingctrl.domain
+		createRoute(oc, project1, "http", unsecsvcName, unsecsvcName, []string{"--hostname=" + routehost})
+		waitForOutput(oc, project1, "route/"+unsecsvcName, "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("4.0: Curl the http route with two same headers in the http request, expect to get a 400 bad request if the backend server does not support such an invalid http request")
+		routerpod := getNewRouterPod(oc, ingctrl.name)
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst := routehost + ":80:" + podIP
+		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "-H", `"transfer-encoding: chunked"`, "-H", `"transfer-encoding: chunked"`, "--resolve", toDst, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, cmdOnPod, "400", 60, 1)
+
+		exutil.By("5.0: Check that the custom router pod is Running, not Terminating")
+		output := getByJsonPath(oc, "openshift-ingress", "pods/"+routerpod, "{.status.phase}")
+		o.Expect(output).To(o.ContainSubstring("Running"))
+	})
+
 	// author: shudili@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:shudili-Critical-67093-Alternate Backends and Weights for a route work well", func() {
 		var (
