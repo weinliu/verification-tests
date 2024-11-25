@@ -1863,7 +1863,7 @@ spec:
 		wildcard := "*." + output
 
 		exutil.By("1.1: Create a new self-signed sha1 root CA including the ca certification and ca key")
-		opensslCmd := fmt.Sprintf(`openssl req -x509 -sha1 -newkey rsa:2048 -days %d -keyout %s -out %s -addext "keyUsage=cRLSign, digitalSignature, keyCertSign" -addext "extendedKeyUsage=serverAuth,clientAuth" -nodes -subj '%s'`, validity, caKey, caCrt, caSubj)
+		opensslCmd := fmt.Sprintf(`openssl req -x509 -sha1 -newkey rsa:2048 -days %d -keyout %s -out %s -nodes -subj '%s'`, validity, caKey, caCrt, caSubj)
 		_, err = exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
