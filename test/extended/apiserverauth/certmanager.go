@@ -2,6 +2,7 @@ package apiserverauth
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1739,5 +1740,96 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
+	})
+
+	// author: yuewu@redhat.com
+	g.It("Author:yuewu-ConnectedOnly-Low-77811-google-cas-issuer should integrate well as an external issuer with cert-manager operator", func() {
+		var (
+			projectID     = "openshift-qe"
+			caPoolID      = "google-cas-issuer-cert-manager-sub"
+			location      = "us-central1"
+			saPrefix      = "test-private-77811-cas-"
+			saSecretName  = "google-cas-sa-key"
+			issuerName    = "google-cas-issuer"
+			certName      = "certificate-from-google-cas"
+			tlsSecretName = certName + "-tls"
+		)
+
+		exutil.SkipIfPlatformTypeNot(oc, "GCP")
+		if id, _ := exutil.GetGcpProjectID(oc); id != projectID {
+			e2e.Logf("current GCP project ID: %s", id)
+			g.Skip("Skip as the CAS testing environment is only pre-setup under 'openshift-qe' project")
+		}
+
+		exutil.By("create the GCP IAM and CloudResourceManager client")
+		// Note that in Prow CI, the credentials source is automatically pre-configured to by the step 'openshift-extended-test'
+		// See https://github.com/openshift/release/blob/69b2b9c4f28adcfcc5b9ff4820ecbd8d2582a3d7/ci-operator/step-registry/openshift-extended/test/openshift-extended-test-commands.sh#L43
+		iamService, err := gcpiam.NewService(context.Background())
+		o.Expect(err).NotTo(o.HaveOccurred())
+		crmService, err := gcpcrm.NewService(context.Background())
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("create a GCP service account")
+		serviceAccountName := saPrefix + getRandomString(4)
+		request := &gcpiam.CreateServiceAccountRequest{
+			AccountId: serviceAccountName,
+			ServiceAccount: &gcpiam.ServiceAccount{
+				DisplayName: "google-cas-issuer service account for cert-manager",
+			},
+		}
+		result, err := iamService.Projects.ServiceAccounts.Create("projects/"+projectID, request).Do()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			e2e.Logf("cleanup the created GCP service account")
+			_, err = iamService.Projects.ServiceAccounts.Delete(result.Name).Do()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		exutil.By("add IAM policy binding with role 'privateca.certificateRequester' to GCP project")
+		projectRole := "roles/privateca.certificateRequester"
+		projectMember := fmt.Sprintf("serviceAccount:%s", result.Email)
+		updateIamPolicyBinding(crmService, projectID, projectRole, projectMember, true)
+		defer func() {
+			e2e.Logf("cleanup the added IAM policy binding from GCP project")
+			updateIamPolicyBinding(crmService, projectID, projectRole, projectMember, false)
+		}()
+
+		exutil.By("create key for the GCP service account and store as a secret")
+		resource := fmt.Sprintf("projects/-/serviceAccounts/%s", result.Email)
+		key, err := iamService.Projects.ServiceAccounts.Keys.Create(resource, &gcpiam.CreateServiceAccountKeyRequest{}).Do()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		value, err := base64.StdEncoding.DecodeString(key.PrivateKeyData)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		oc.NotShowInfo()
+		err = oc.AsAdmin().Run("create").Args("-n", oc.Namespace(), "secret", "generic", saSecretName, "--from-literal=key.json="+string(value)).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		oc.SetShowInfo()
+
+		exutil.By("install the Google Certificate Authority Service Issuer")
+		installGoogleCASIssuer(oc, oc.Namespace())
+
+		exutil.By("create a Google CAS issuer")
+		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+		issuerFile := filepath.Join(buildPruningBaseDir, "issuer-google-cas.yaml")
+		params := []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "PROJECT=" + projectID, "LOCATION=" + location, "CAPOOL_ID=" + caPoolID, "SA_SECRET=" + saSecretName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "googlecasissuer", issuerName, 10*time.Second, 120*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "googlecasissuer", issuerName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
+
+		exutil.By("create a certificate")
+		certFile := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName, "ISSUER_KIND=" + "GoogleCASIssuer", "ISSUER_GROUP=" + "cas-issuer.jetstack.io", "SECRET_NAME=" + tlsSecretName, "COMMON_NAME=" + certName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
+		if err != nil {
+			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
+		}
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
+
+		exutil.By("verify if the issued certificate can be renewed automatically")
+		verifyCertificateRenewal(oc, oc.Namespace(), tlsSecretName, 150*time.Second)
 	})
 })

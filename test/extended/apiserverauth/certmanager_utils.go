@@ -127,19 +127,31 @@ func getRoute53HostedZoneID(awsConfig aws.Config, hostedZoneName string) string 
 
 // Add or remove the IAM Policy Binding from GCP resource. Set the argument 'add' to true to add the binding, or false to remove it.
 func updateIamPolicyBinding(crmService *gcpcrm.Service, resource, role, member string, add bool) {
-	policy, err := crmService.Projects.GetIamPolicy(resource, &gcpcrm.GetIamPolicyRequest{}).Do()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	statusErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, true, func(context.Context) (bool, error) {
+		policy, err := crmService.Projects.GetIamPolicy(resource, &gcpcrm.GetIamPolicyRequest{}).Do()
+		if err != nil {
+			e2e.Logf("got error from 'GetIamPolicy':%v", err.Error())
+			return false, nil
+		}
 
-	if add {
-		policy.Bindings = append(policy.Bindings, &gcpcrm.Binding{
-			Role:    role,
-			Members: []string{member},
-		})
-	} else {
-		removeMember(policy, role, member)
-	}
-	_, err = crmService.Projects.SetIamPolicy(resource, &gcpcrm.SetIamPolicyRequest{Policy: policy}).Do()
-	o.Expect(err).NotTo(o.HaveOccurred())
+		policy, err = crmService.Projects.GetIamPolicy(resource, &gcpcrm.GetIamPolicyRequest{}).Do()
+
+		if add {
+			policy.Bindings = append(policy.Bindings, &gcpcrm.Binding{
+				Role:    role,
+				Members: []string{member},
+			})
+		} else {
+			removeMember(policy, role, member)
+		}
+		_, err = crmService.Projects.SetIamPolicy(resource, &gcpcrm.SetIamPolicyRequest{Policy: policy}).Do()
+		if err != nil {
+			e2e.Logf("got error from 'SetIamPolicy':%v", err.Error())
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(statusErr, "timeout waiting for updating IAM Policy successfully")
 }
 
 // removeMember removes a member from a role binding in a GCP IAM policy
@@ -161,11 +173,11 @@ func removeMember(policy *gcpcrm.Policy, role, member string) {
 		}
 	}
 	if bindingIndex == -1 {
-		e2e.Logf("Role %v not found. Member not removed.", role)
+		e2e.Logf("Role '%v' not found.", role)
 		return
 	}
 	if memberIndex == -1 {
-		e2e.Logf("Role %v found. Member not found.", role)
+		e2e.Logf("Role '%v' found. Member '%v' not found.", role, member)
 		return
 	}
 
@@ -175,7 +187,7 @@ func removeMember(policy *gcpcrm.Policy, role, member string) {
 		bindings = removeIdx(bindings, bindingIndex)
 		policy.Bindings = bindings
 	}
-	e2e.Logf("Role '%v' found. Member '%v' removed.", role, member)
+	e2e.Logf("Role '%v' found. Member '%v' will be removed.", role, member)
 }
 
 // removeIdx removes arr[idx] from an array
@@ -440,6 +452,31 @@ func getCertificateExpireTime(oc *exutil.CLI, namespace string, secretName strin
 
 	expireTime := parsedCert.NotAfter
 	return expireTime, nil
+}
+
+// verifyCertificateRenewal verifies if the TLS secret's certificate got renewed after the specific interval
+// 'interval' should be no less than 1 min, it can be calculated from 'spec.duration - spec.renewBefore' of the certificate object
+func verifyCertificateRenewal(oc *exutil.CLI, namespace, secretName string, interval time.Duration) {
+	// store the initial cert expire time for verifying renewal in the end
+	initialExpireTime, _ := getCertificateExpireTime(oc, namespace, secretName)
+	e2e.Logf("certificate initial expire time: %v ", initialExpireTime)
+
+	// poll the value of the currentExpireTime and returns no error once it's bigger than initialExpireTime
+	statusErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, interval, false, func(ctx context.Context) (bool, error) {
+		currentExpireTime, err := getCertificateExpireTime(oc, namespace, secretName)
+		if err != nil {
+			e2e.Logf("got error in func 'getCertificateExpireTime': %v", err)
+			return false, nil
+		}
+
+		// return Ture if currentExpireTime > initialExpireTime, indicates cert got renewed
+		if currentExpireTime.After(initialExpireTime) {
+			e2e.Logf("certificate renewed successfully, current expire time: %v ", currentExpireTime)
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(statusErr, "timeout waiting for certificate to get renewed")
 }
 
 // Check and verify issued certificate's subject CN (Common Name) content.
@@ -910,4 +947,69 @@ EOF`)
 
 	e2e.Logf("Vault PKI engine configured successfully!")
 	return vaultPodName, vaultRootToken
+}
+
+// installGoogleCASIssuer installs the Google CAS Issuer into cert-manager namespace
+func installGoogleCASIssuer(oc *exutil.CLI, ns string) {
+	var (
+		configMapName        = "dummy-cm"
+		installerSA          = "cas-issuer-installer-sa"
+		installerRolebinding = "cas-issuer-installer-binding"
+		installerPodName     = "cas-issuer-installer"
+		casPodLabel          = "app=cert-manager-google-cas-issuer"
+		casNamespace         = "cert-manager"
+		httpProxy            = ""
+		httpsProxy           = ""
+		noProxy              = ""
+	)
+
+	// set proxy envs for the Issuer installer pod to access the Helm chart repository when running on a proxy-enabled cluster
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(output, "httpProxy") {
+		e2e.Logf("=> retrieve the proxy configurations for Vault installer pod to inject")
+		httpProxy = gjson.Get(output, "httpProxy").String()
+		httpsProxy = gjson.Get(output, "httpsProxy").String()
+		noProxy = gjson.Get(output, "noProxy").String()
+	}
+
+	e2e.Logf("=> create a pod to install Google CAS Issuer through Helm charts")
+	// create a dummy configmap as a placeholder to reuse 'exec-helm-helper.yaml' template
+	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "configmap", configMapName).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	// install the external issuer through Helm charts
+	cmd := fmt.Sprintf(`helm repo add jetstack https://charts.jetstack.io && helm install cas jetstack/cert-manager-google-cas-issuer -n %s`, casNamespace)
+	helmHelperFile := filepath.Join(buildPruningBaseDir, "exec-helm-helper.yaml")
+	params := []string{"-f", helmHelperFile, "-p", "SA_NAME=" + installerSA, "ROLEBINDING_NAME=" + installerRolebinding, "POD_NAME=" + installerPodName, "HELM_CMD=" + cmd, "CONFIGMAP_NAME=" + configMapName, "NAMESPACE=" + ns, "HTTP_PROXY=" + httpProxy, "HTTPS_PROXY=" + httpsProxy, "NO_PROXY=" + noProxy}
+	exutil.ApplyClusterResourceFromTemplate(oc, params...)
+	defer func() {
+		e2e.Logf("cleanup created clusterrolebinding resource")
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding", installerRolebinding).Execute()
+	}()
+	// wait for Helm installer pod completed
+	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "pod", installerPodName).Output()
+		if strings.Contains(output, "Completed") {
+			e2e.Logf("Helm installer pod completed successfully")
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		e2e.Logf("Dumping Helm installer pod...")
+		oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "pod", installerPodName, "-o=jsonpath={.status}").Execute()
+		oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ns, installerPodName, "--tail=10").Execute()
+	}
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for Helm installer pod completed")
+	// wait for CAS Issuer controller pod to be up and running
+	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", casNamespace, "pod", "-l", casPodLabel).Output()
+		if strings.Contains(output, "Running") {
+			e2e.Logf("CAS Issuer controller pod is up and running")
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for CAS Issuer controller pod to be up and running")
 }
