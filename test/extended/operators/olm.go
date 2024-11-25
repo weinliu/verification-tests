@@ -652,7 +652,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			exutil.By(fmt.Sprintf("step-%d, subscribe to learn perator v0.0.3 in project %s", i, project.name))
 			if project.name != "default" && project.name != "openshift-operators" {
 				project.createwithCheck(oc, itName, dr)
-				defer project.deleteWithForce(oc)
+				defer func(p projectDescription) {
+					p.deleteWithForce(oc)
+				}(project)
 			}
 			// this project just for verifying the Copied CSV
 			if project.name == "openshift-test3-53914" {
