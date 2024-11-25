@@ -223,7 +223,69 @@ func ensureTrusteeKbsServiceRouteExists(oc *exutil.CLI, namespace, routeType, ro
 
 }
 
-// author: tbuskey@redhat.com, abhbaner@redhat.com
+func ensureTrusteeUrlReturnIsValid(oc *exutil.CLI, kbsClientTemplate, trusteeUrl, correctAnswer string) (err error) {
+	var (
+		podName        = "kbs-client"
+		kbsClientImage = "quay.io/confidential-containers/kbs-client:v0.9.0"
+		phase          = "Running"
+		outputFromOc   string
+		namespace      = "default"
+	)
+
+	kbsClientFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f",
+		kbsClientTemplate, "-p", "NAME="+podName, "IMAGE="+kbsClientImage).OutputToFile(getRandomString() + "kbsClientFile.json")
+	if kbsClientFile == "" {
+		return fmt.Errorf("Did not get a filename when processing %v: err:%v", kbsClientTemplate, err)
+	}
+
+	defer deleteKataResource(oc, "pod", namespace, podName)
+	outputFromOc, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", kbsClientFile, "-n", namespace).Output()
+	if err != nil {
+		e2e.Logf("WARNING: creating kbs-client %v err: %v", outputFromOc, err)
+	}
+
+	outputFromOc, err = checkResourceJsonpath(oc, "pod", podName, namespace, "-o=jsonpath={.status.phase}", phase, podSnooze*time.Second, 10*time.Second)
+	if err != nil {
+		return fmt.Errorf("Could not get pod (%v) status %v: %v err: %v", podName, phase, outputFromOc, err)
+	}
+
+	kbsAnswer, err := oc.AsAdmin().Run("rsh").Args("-T", "-n", namespace,
+		podName, "kbs-client", "--url", trusteeUrl, "get-resource", "--path", "default/kbsres1/key1").Output()
+	if err != nil || kbsAnswer != "cmVzMXZhbDE=" {
+		return fmt.Errorf("Could not query trustee at %v. %v err %v", trusteeUrl, kbsAnswer, err)
+	}
+	return err
+}
+
+func ensureTrusteeIsInstalled(oc *exutil.CLI, subscription SubscriptionDescription, namespaceTemplate, ogTemplate, subTemplate string) (trusteeRouteHost string, err error) {
+	err = ensureNamespaceIsInstalled(oc, subscription.namespace, namespaceTemplate)
+	if err != nil {
+		return trusteeRouteHost, err
+	}
+
+	err = ensureOperatorGroupIsInstalled(oc, subscription.namespace, ogTemplate)
+	if err != nil {
+		return trusteeRouteHost, err
+	}
+
+	err = ensureOperatorIsSubscribed(oc, subscription, subTemplate)
+	if err != nil {
+		return trusteeRouteHost, err
+	}
+
+	trusteeRouteName := "kbs-service"
+	err = ensureTrusteeKbsServiceRouteExists(oc, subscription.namespace, "edge", trusteeRouteName)
+	if err != nil {
+		return trusteeRouteHost, err
+	}
+
+	trusteeRouteHost, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("route", trusteeRouteName, "-o=jsonpath={.spec.host}", "-n", subscription.namespace).Output()
+	if trusteeRouteHost == "" {
+		err = fmt.Errorf("trusteeRouteHost was empty. err %v", err)
+	}
+	return trusteeRouteHost, err
+}
+
 func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub SubscriptionDescription) (msg string, err error) {
 	// If this is used, label the caller with [Disruptive][Serial][Slow]
 	// If kataconfig already exists, this must not error

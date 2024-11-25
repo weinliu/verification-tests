@@ -56,9 +56,11 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		ppParamsLibvirtConfigMapTemplate = filepath.Join(testDataDir, "peer-pods-param-libvirt-cm-template.yaml")
 		podAnnotatedTemplate             = filepath.Join(testDataDir, "pod-annotations-template.yaml")
 		featureGatesFile                 = filepath.Join(testDataDir, "cc-feature-gates-cm.yaml")
+		kbsClientTemplate                = filepath.Join(testDataDir, "kbs-client-template.yaml")
 		testrunConfigmapNs               = "default"
 		testrunConfigmapName             = "osc-config"
 		scratchRpmName                   string
+		trusteeRouteHost                 string
 	)
 
 	subscription := SubscriptionDescription{
@@ -257,6 +259,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		if testrun.workloadToTest == "coco" {
 			err = ensureFeatureGateIsApplied(oc, subscription, featureGatesFile)
 			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: could not apply osc-feature-gates cm: %v", err))
+
 			trusteeSubscription := SubscriptionDescription{
 				subName:                "trustee-operator",
 				namespace:              "trustee-operator-system",
@@ -268,31 +271,22 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 				template:               subTemplate,
 			}
 
-			err = ensureNamespaceIsInstalled(oc, trusteeSubscription.namespace, namespaceTemplate)
-			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
-
-			err = ensureOperatorGroupIsInstalled(oc, trusteeSubscription.namespace, ogTemplate)
-			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
-
-			err = ensureOperatorIsSubscribed(oc, trusteeSubscription, subTemplate)
-			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
-
-			trusteeRouteName := "kbs-service"
-			err = ensureTrusteeKbsServiceRouteExists(oc, trusteeSubscription.namespace, "edge", trusteeRouteName)
-			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
-
-			trusteeRouteHost, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", trusteeRouteName, "-o=jsonpath={.spec.host}", "-n", trusteeSubscription.namespace).Output()
-			o.Expect(trusteeRouteHost).NotTo(o.BeEmpty())
-			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", trusteeRouteHost))
+			trusteeRouteHost, err = ensureTrusteeIsInstalled(oc, trusteeSubscription, namespaceTemplate, ogTemplate, subTemplate)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: %v err: %v", trusteeRouteHost, err))
 
 			e2e.Logf("INFO in-cluster TRUSTEE_HOST is %v.  Using %v instead", trusteeRouteHost, testrun.trusteeUrl)
-			patch := fmt.Sprintf("{\"data\":{\"AA_KBC_PARAMS\": \"cc_kbc::%v\"}}", testrun.trusteeUrl)
 
+			err = ensureTrusteeUrlReturnIsValid(oc, kbsClientTemplate, testrun.trusteeUrl, "cmVzMXZhbDE=")
+			if err != nil {
+				testrun.checked = false // fail all tests
+			}
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: failing all tests \nERROR: %v", err))
+
+			patch := fmt.Sprintf("{\"data\":{\"AA_KBC_PARAMS\": \"cc_kbc::%v\"}}", testrun.trusteeUrl)
 			msg, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("cm", "peer-pods-cm", "--type", "merge", "-p", patch, "-n", subscription.namespace).Output()
 			if err != nil {
-				e2e.Logf("warning patching peer-pods-cm: %v %v", msg, err)
+				e2e.Logf("WARNING: patching peer-pods-cm: %v %v", msg, err)
 			}
-			// oc set env ds/peerpodconfig-ctrl-caa-daemon -n openshift-sandboxed-containers-operator REBOOT="$(date)"
 		}
 
 		// should check kataconfig here & already have checked subscription
