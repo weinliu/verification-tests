@@ -19,20 +19,22 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
+var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
+	// Hypershift will be supported from 4.19, so add NonHyperShiftHOST Per cases now.
 	defer g.GinkgoRecover()
 	var (
 		oc = exutil.NewCLI("olmv1-opeco"+getRandomString(), exutil.KubeConfigPath())
 	)
 
-	g.BeforeEach(func() {
-		if !exutil.IsTechPreviewNoUpgrade(oc) {
-			g.Skip("OLMv1 is supported in TP only currently, so skip it")
-		}
-	})
+	// it is GA from 4.18, so remove this checking
+	// g.BeforeEach(func() {
+	// 	if !exutil.IsTechPreviewNoUpgrade(oc) {
+	// 		g.Skip("OLMv1 is supported in TP only currently, so skip it")
+	// 	}
+	// })
 
 	// author: jitli@redhat.com
-	g.It("ConnectedOnly-VMonly-Author:jitli-High-69758-Catalogd Polling remote registries for update to images content", func() {
+	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-VMonly-High-69758-Catalogd Polling remote registries for update to images content", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
@@ -133,7 +135,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-High-69123-Catalogd clustercatalog offer the operator content through http server", func() {
+	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-69123-Catalogd clustercatalog offer the operator content through http server", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
@@ -164,7 +166,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-DEPRECATED-ConnectedOnly-High-69124-check the clustercatalog source type before created", func() {
+	g.It("Author:jitli-DEPRECATED-ConnectedOnly-NonHyperShiftHOST-High-69124-check the clustercatalog source type before created", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir             = exutil.FixturePath("testdata", "olm", "v1")
@@ -193,7 +195,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-High-69242-Catalogd deprecated package/bundlemetadata/catalogmetadata from clustercatalog CR", func() {
+	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-69242-Catalogd deprecated package/bundlemetadata/catalogmetadata from clustercatalog CR", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
@@ -224,7 +226,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("ConnectedOnly-Author:jitli-High-69069-Replace pod-based image unpacker with an image registry client", func() {
+	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-69069-Replace pod-based image unpacker with an image registry client", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
@@ -293,7 +295,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("ConnectedOnly-Author:jitli-High-69869-Catalogd Add metrics to the Storage implementation", func() {
+	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-69869-Catalogd Add metrics to the Storage implementation", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
@@ -346,7 +348,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("Author:xzha-VMonly-DEPRECATED-ConnectedOnly-High-70817-catalogd support setting a pull secret", func() {
+	g.It("Author:xzha-VMonly-DEPRECATED-ConnectedOnly-NonHyperShiftHOST-High-70817-catalogd support setting a pull secret", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -409,7 +411,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("Author:jfan-VMonly-ConnectedOnly-High-69202-Catalogd clustercatalog offer the operator content through http server off cluster", func() {
+	g.It("Author:jfan-VMonly-ConnectedOnly-NonHyperShiftHOST-High-69202-Catalogd clustercatalog offer the operator content through http server off cluster", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
@@ -446,7 +448,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("ConnectedOnly-Author:jitli-High-73219-Fetch deprecation data from the catalogd http server", func() {
+	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-73219-Fetch deprecation data from the catalogd http server", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
@@ -474,7 +476,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("ConnectedOnly-Author:jitli-High-73289-Check the deprecation conditions and messages", func() {
+	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-73289-Check the deprecation conditions and messages", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -585,7 +587,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		if strings.Contains(message, "The 'candidate-v3.0' channel is no longer supported. Please switch to the 'candidate-v3.1' channel.") {
 			e2e.Failf("ChannelDeprecated message still exists :%v", message)
 		}
-		clusterextension.WaitClusterExtensionCondition(oc, "Progressing", "False", 0)
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "reason", "Succeeded", 3, 150, 0)
 		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
 		clusterextension.Delete(oc)
 		exutil.By("ChannelDeprecated test done")
@@ -685,7 +687,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-High-74978-CRD upgrade will be prevented if the Scope is switched between Namespaced and Cluster", func() {
+	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-74978-CRD upgrade will be prevented if the Scope is switched between Namespaced and Cluster", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -759,7 +761,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-High-75218-Disabling the CRD Upgrade Safety preflight checks", func() {
+	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75218-Disabling the CRD Upgrade Safety preflight checks", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -820,7 +822,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 			`calculating schema diff for CRD version "v1alpha1"`, 10, 60, 0)
 
 		exutil.By("disabled crd upgrade safety check, it will not affect spec.scope: Invalid value: Cluster")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.2","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"policy":"Disabled"}}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.2","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"enforcement":"None"}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -838,7 +840,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("Unexpected results message: %v", message))
 
 		exutil.By("disabled crd upgrade safety check An existing stored version of the CRD is removed")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"policy":"Disabled"}}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"enforcement":"None"}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
@@ -846,9 +848,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 			`must have exactly one version marked as storage version, status.storedVersions[0]: Invalid value: "v1alpha1": must appear in spec.versions`, 10, 60, 0)
 
 		exutil.By("disabled crd upgrade safety successfully")
-		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.5","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"policy":"Disabled"}}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.5","upgradeConstraintPolicy":"SelfCertified"}}, "install":{"preflight":{"crdUpgradeSafety":{"enforcement":"None"}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterextension.WaitClusterExtensionCondition(oc, "Progressing", "False", 0)
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "reason", "Succeeded", 3, 150, 0)
 		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.5"))
@@ -859,7 +861,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-High-75122-CRD upgrade check Removing an existing stored version and add a new CRD with no modifications to existing versions", func() {
+	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75122-CRD upgrade check Removing an existing stored version and add a new CRD with no modifications to existing versions", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -918,7 +920,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		exutil.By("upgrade will be allowed if A new version of the CRD is added with no modifications to existing versions")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterextension.WaitClusterExtensionCondition(oc, "Progressing", "False", 0)
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "reason", "Succeeded", 3, 150, 0)
 		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.3"))
@@ -929,7 +931,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		exutil.By("upgrade will be prevented if An existing served version of the CRD is removed")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.6","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterextension.WaitClusterExtensionCondition(oc, "Progressing", "False", 0)
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "reason", "Succeeded", 3, 150, 0)
 		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.6"))
@@ -941,7 +943,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 
 	// author: jitli@redhat.com
 	// Cover test case: OCP-75123 and OCP-75217
-	g.It("Author:jitli-ConnectedOnly-High-75123-High-75217-CRD upgrade checks for changes in required field and field type", func() {
+	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75123-High-75217-CRD upgrade checks for changes in required field and field type", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -1019,7 +1021,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		exutil.By("upgrade will be allowed if An existing required field is changed to optional in an existing version")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.8","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterextension.WaitClusterExtensionCondition(oc, "Progressing", "False", 0)
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "reason", "Succeeded", 3, 150, 0)
 		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.8"))
@@ -1030,7 +1032,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-High-75124-CRD upgrade checks for changes in default values", func() {
+	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75124-CRD upgrade checks for changes in default values", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -1105,7 +1107,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-High-75515-CRD upgrade checks for changes in enumeration values", func() {
+	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75515-CRD upgrade checks for changes in enumeration values", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -1176,7 +1178,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		exutil.By("upgrade will be allowed if Adding new enum values to the list of allowed enum values in a field")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.6","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterextension.WaitClusterExtensionCondition(oc, "Progressing", "False", 0)
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "reason", "Succeeded", 3, 150, 0)
 		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.6"))
@@ -1187,7 +1189,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-High-75516-CRD upgrade checks for the field maximum minimum changes", func() {
+	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75516-CRD upgrade checks for the field maximum minimum changes", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -1289,7 +1291,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 		exutil.By("upgrade will be Allowed if The minimum value of an existing field is decreased in an existing version & The maximum value of an existing field is increased in an existing version")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.7","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterextension.WaitClusterExtensionCondition(oc, "Progressing", "False", 0)
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "reason", "Succeeded", 3, 150, 0)
 		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
 		clusterextension.GetBundleResource(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.7"))
@@ -1300,7 +1302,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED opeco should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("Author:jfan-ConnectedOnly-Critical-75441-Catalogd supports compression and jsonlines format", func() {
+	g.It("Author:jfan-ConnectedOnly-NonHyperShiftHOST-Critical-75441-Catalogd supports compression and jsonlines format", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")

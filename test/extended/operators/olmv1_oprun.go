@@ -17,7 +17,8 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
+var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
+	// Hypershift will be supported from 4.19, so add NonHyperShiftHOST Per cases now.
 	defer g.GinkgoRecover()
 	var (
 		oc = exutil.NewCLIWithoutNamespace("default")
@@ -27,14 +28,15 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		// if it need temp project, could use oc.SetupProject() in g.It to create it firstly.
 	)
 
-	g.BeforeEach(func() {
-		if !exutil.IsTechPreviewNoUpgrade(oc) {
-			g.Skip("OLMv1 is supported in TP only currently, so skip it")
-		}
-	})
+	// it is GA from 4.18, so remove this checking
+	// g.BeforeEach(func() {
+	// 	if !exutil.IsTechPreviewNoUpgrade(oc) {
+	// 		g.Skip("OLMv1 is supported in TP only currently, so skip it")
+	// 	}
+	// })
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-Medium-74638-Apply hypershift cluster-profile for ibm-cloud-managed", func() {
+	g.It("Author:jiazha-NonHyperShiftHOST-Medium-74638-Apply hypershift cluster-profile for ibm-cloud-managed", func() {
 		ibmCloudManaged, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("olm.operator.openshift.io", "cluster", `-o=jsonpath={.metadata.annotations.include\.release\.openshift\.io/ibm-cloud-managed}`).Output()
 		if err != nil {
 			e2e.Failf("fail to get include.release.openshift.io/ibm-cloud-managed annotation:%v, error:%v", ibmCloudManaged, err)
@@ -45,7 +47,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: kuiwang@redhat.com
-	g.It("Author:kuiwang-DEPRECATED-ConnectedOnly-Medium-68903-BundleDeployment Health resource unhealthy pod api crd ds", func() {
+	g.It("Author:kuiwang-DEPRECATED-ConnectedOnly-NonHyperShiftHOST-Medium-68903-BundleDeployment Health resource unhealthy pod api crd ds", func() {
 		// oc.SetupProject() // it is example if the case need temp project. here it does not need it, so comment it.
 		exutil.SkipOnProxyCluster(oc)
 		var (
@@ -120,7 +122,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: kuiwang@redhat.com
-	g.It("Author:kuiwang-ConnectedOnly-Medium-68936-cluster extension can not be installed with insufficient permission sa for operand", func() {
+	g.It("Author:kuiwang-ConnectedOnly-NonHyperShiftHOST-Medium-68936-cluster extension can not be installed with insufficient permission sa for operand", func() {
 		e2e.Logf("the rukpak is deprecated, so this case is deprecated, but here use 68936 for case 75492 becasue the duration of 75492 is too long")
 		exutil.SkipOnProxyCluster(oc)
 		exutil.SkipForSNOCluster(oc)
@@ -184,7 +186,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: kuiwang@redhat.com
-	g.It("Author:kuiwang-ConnectedOnly-Medium-68937-cluster extension can not be installed with insufficient permission sa for operand rbac object", func() {
+	g.It("Author:kuiwang-ConnectedOnly-NonHyperShiftHOST-Medium-68937-cluster extension can not be installed with insufficient permission sa for operand rbac object", func() {
 		e2e.Logf("the rukpak is deprecated, so this case is deprecated, but here use 68937 for case 75492 becasue the duration of 75492 is too long")
 		exutil.SkipOnProxyCluster(oc)
 		exutil.SkipForSNOCluster(oc)
@@ -333,7 +335,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: kuiwang@redhat.com
-	g.It("Author:kuiwang-ConnectedOnly-Medium-75493-cluster extension can be installed with enough permission sa", func() {
+	g.It("Author:kuiwang-ConnectedOnly-NonHyperShiftHOST-Medium-75493-cluster extension can be installed with enough permission sa", func() {
 		exutil.SkipOnProxyCluster(oc)
 		exutil.SkipForSNOCluster(oc)
 		var (
@@ -405,7 +407,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: kuiwang@redhat.com
-	g.It("Author:kuiwang-ConnectedOnly-Medium-74618-ClusterExtension supports simple registry vzero bundles only", func() {
+	g.It("Author:kuiwang-ConnectedOnly-NonHyperShiftHOST-Medium-74618-ClusterExtension supports simple registry vzero bundles only", func() {
 		exutil.SkipOnProxyCluster(oc)
 		exutil.SkipForSNOCluster(oc)
 		var (
@@ -698,7 +700,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: kuiwang@redhat.com
-	g.It("Author:kuiwang-ConnectedOnly-Medium-76983-install index and bundle from private image", func() {
+	g.It("Author:kuiwang-ConnectedOnly-NonHyperShiftHOST-Medium-76983-install index and bundle from private image", func() {
 		exutil.SkipOnProxyCluster(oc)
 		exutil.SkipForSNOCluster(oc)
 		// note: 1, it depends the default global secret to access private index and bundle in quay.io
@@ -878,7 +880,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("ConnectedOnly-Author:xzha-High-68821-OLMv1 Supports Version Ranges during Installation", func() {
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-68821-olmv1 Supports Version Ranges during Installation", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                                       = exutil.FixturePath("testdata", "olm", "v1")
@@ -961,7 +963,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("ConnectedOnly-Author:xzha-Medium-69196-OLMv1 Supports Version Ranges during clusterextension upgrade", func() {
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-Medium-69196-olmv1 Supports Version Ranges during clusterextension upgrade", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -1042,7 +1044,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("ConnectedOnly-Author:xzha-High-74108-OLM v1 supports legacy upgrade edges", func() {
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-74108-olm v1 supports legacy upgrade edges", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -1222,7 +1224,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("Author:xzha-ConnectedOnly-Medium-74923-no two ClusterExtensions can manage the same underlying object", func() {
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-Medium-74923-no two ClusterExtensions can manage the same underlying object", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -1347,7 +1349,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("Author:xzha-ConnectedOnly-Medium-75501-the updates of various status fields is orthogonal", func() {
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-Medium-75501-the updates of various status fields is orthogonal", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -1395,11 +1397,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		defer clusterextension.Delete(oc)
 		clusterextension.Create(oc)
 		olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
-		status, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].status}`)
-		o.Expect(status).To(o.ContainSubstring("False"))
 		reason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].reason}`)
 		o.Expect(reason).To(o.ContainSubstring("Succeeded"))
-		status, _ = olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Installed")].status}`)
+		status, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Installed")].status}`)
 		o.Expect(status).To(o.ContainSubstring("True"))
 		reason, _ = olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Installed")].reason}`)
 		o.Expect(reason).To(o.ContainSubstring("Succeeded"))
@@ -1419,10 +1419,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Version = "2.0.0"
 		clusterextension.CreateWithoutCheck(oc)
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
-			unpackedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].status}`)
 			unpackedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].reason}`)
 			unpackedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].message}`)
-			if !strings.Contains(unpackedStatus, "True") || !strings.Contains(unpackedReason, "Retrying") || !strings.Contains(unpackedMessage, "error resolving canonical reference") {
+			if !strings.Contains(unpackedReason, "Retrying") || !strings.Contains(unpackedMessage, "error resolving canonical reference") {
 				return false, nil
 			}
 			return true, nil
@@ -1437,10 +1436,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.Version = "3.0.0"
 		clusterextension.CreateWithoutCheck(oc)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-			resolvedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].status}`)
 			resolvedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].reason}`)
 			resolvedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].message}`)
-			if !strings.Contains(resolvedStatus, "True") || !strings.Contains(resolvedReason, "Retrying") || !strings.Contains(resolvedMessage, "no bundles found for package") {
+			if !strings.Contains(resolvedReason, "Retrying") || !strings.Contains(resolvedMessage, "no bundles found for package") {
 				return false, nil
 			}
 			return true, nil
@@ -1455,10 +1453,9 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 		clusterextension.PackageName = "nginxfake"
 		clusterextension.CreateWithoutCheck(oc)
 		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-			resolvedStatus, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].status}`)
 			resolvedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].reason}`)
 			resolvedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].message}`)
-			if !strings.Contains(resolvedStatus, "True") || !strings.Contains(resolvedReason, "Retrying") || !strings.Contains(resolvedMessage, "no bundles found for package") {
+			if !strings.Contains(resolvedReason, "Retrying") || !strings.Contains(resolvedMessage, "no bundles found for package") {
 				return false, nil
 			}
 			return true, nil
@@ -1471,7 +1468,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("Author:xzha-ConnectedOnly-High-76685-olm v1 supports selecting catalogs", func() {
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-76685-olm v1 supports selecting catalogs", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                                  = exutil.FixturePath("testdata", "olm", "v1")
@@ -1605,7 +1602,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("Author:xzha-ConnectedOnly-High-76668-olm v1 Supports MaxOCPVersion field", func() {
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-76668-olm v1 Supports MaxOCPVersion field", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
@@ -1723,7 +1720,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: bandrade@redhat.com
-	g.It("ConnectedOnly-Author:bandrade-High-69193-OLMv1 major version zero", func() {
+	g.It("Author:bandrade-ConnectedOnly-NonHyperShiftHOST-High-69193-olmv1 major version zero", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -1846,7 +1843,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: bandrade@redhat.com
-	g.It("ConnectedOnly-Author:bandrade-High-70719-OLMv1 Upgrade non-zero major version", func() {
+	g.It("Author:bandrade-ConnectedOnly-NonHyperShiftHOST-High-70719-olmv1 Upgrade non-zero major version", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -1971,7 +1968,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: bandrade@redhat.com
-	g.It("ConnectedOnly-Author:bandrade-High-70723-OLMv1 downgrade version", func() {
+	g.It("Author:bandrade-ConnectedOnly-NonHyperShiftHOST-High-70723-olmv1 downgrade version", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
@@ -2046,7 +2043,7 @@ var _ = g.Describe("[sig-operators] OLM v1 DEPRECATED oprun should", func() {
 	})
 
 	// author: bandrade@redhat.com
-	g.It("Author:bandrade-Medium-75877-Make sure that rukpak is removed from payload", func() {
+	g.It("Author:bandrade-NonHyperShiftHOST-Medium-75877-Make sure that rukpak is removed from payload", func() {
 		exutil.By("1) Check if bundledeployments.core.rukpak.io CRD is not installed")
 		_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd", "bundledeployments.core.rukpak.io").Output()
 		o.Expect(err).To(o.HaveOccurred())

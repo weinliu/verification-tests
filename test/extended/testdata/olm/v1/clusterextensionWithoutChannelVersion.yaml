@@ -3,15 +3,14 @@ kind: Template
 metadata:
   name: operator-without-channel-version-template
 objects:
-- apiVersion: olm.operatorframework.io/v1alpha1
+- apiVersion: olm.operatorframework.io/v1
   kind: ClusterExtension
   metadata:
     name: "${NAME}"
   spec:
-    install:
-      namespace: "${INSTALLNAMESPACE}"
-      serviceAccount:
-        name: "${SANAME}"
+    namespace: "${INSTALLNAMESPACE}"
+    serviceAccount:
+      name: "${SANAME}"
     source:
       sourceType: "${SOURCETYPE}"
       catalog:

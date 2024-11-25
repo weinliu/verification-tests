@@ -38,7 +38,7 @@ func (clusterextension *ClusterExtensionDescription) Create(oc *exutil.CLI) {
 	e2e.Logf("=========Create clusterextension %v=========", clusterextension.Name)
 	err := clusterextension.CreateWithoutCheck(oc)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	clusterextension.WaitClusterExtensionCondition(oc, "Progressing", "False", 0)
+	clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "reason", "Succeeded", 3, 150, 0)
 	clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
 	clusterextension.GetBundleResource(oc)
 }
