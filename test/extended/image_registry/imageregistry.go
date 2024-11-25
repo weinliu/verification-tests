@@ -46,6 +46,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		tenantIDErrInfo      = "Authentication failed"
 		imageRegistryBaseDir = exutil.FixturePath("testdata", "image_registry")
 		requireRules         = "requiredDuringSchedulingIgnoredDuringExecution"
+		platformLoadTime     = 120
 	)
 
 	g.BeforeEach(func() {
@@ -5030,5 +5031,127 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			checkOcmRoute := hasDuplicate(ocmStrs, userroute)
 			o.Expect(checkOcmRoute).To(o.BeFalse())
 		}
+	})
+
+	g.It("Author:wewang-NonHyperShiftHOST-ConnectedOnly-Critical-76854-Export storage metrics for read-only errors [Disruptive]", func() {
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		g.By("Create a pvc for image registry")
+		var (
+			pvcFile = filepath.Join(imageRegistryBaseDir, "pvc.yaml")
+			pvcInfo = persistentVolumeClaim{
+				name:             "image-registry-test-claim-76854",
+				namespace:        "openshift-image-registry",
+				accessmode:       "ReadWriteOnce",
+				memorysize:       "5Gi",
+				storageclassname: "gp3-csi",
+				template:         pvcFile,
+			}
+		)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pvc/image-registry-test-claim-76854", "-n", "openshift-image-registry").Execute()
+		pvcInfo.create(oc)
+
+		g.By("Config image registry to pvc")
+		defer func() {
+			g.By("Recover image registry change")
+			expectedStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+			err := oc.AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Managed"}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "image-registry", 360, expectedStatus)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		defer recoverRegistryStorageConfig(oc)
+		defer recoverRegistryDefaultReplicas(oc)
+		configureRegistryStorageToPvc(oc, pvcInfo.name)
+		waitForPvcStatus(oc, pvcInfo.namespace, pvcInfo.name)
+
+		g.By("Set the registry to unmanaged, and update PVC mount to readOnly")
+		err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"managementState":"Unmanaged"}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ocCommandOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment.apps/image-registry", "-n", "openshift-image-registry", "-o", "json").OutputToFile("ocCommandOutputFile.txt")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		jqCMD := fmt.Sprintf(`cat %s |jq '.spec.template.spec.volumes| map(select(.name=="registry-storage"))|index({ "name": "registry-storage", "persistentVolumeClaim": {"claimName":"image-registry-test-claim-76854"}})'`, ocCommandOutput)
+		getIndex, err := exec.Command("bash", "-c", jqCMD).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if string(getIndex) != "" {
+			cleanString := strings.Replace(string(getIndex), "\n", "", -1)
+			patchInfo := fmt.Sprintf("[{\"op\": \"add\", \"path\": \"/spec/template/spec/volumes/%s/persistentVolumeClaim/readOnly\", \"value\":true}]", cleanString)
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("deployment.apps/image-registry", "-n", "openshift-image-registry", "--type=json", "-p", patchInfo).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			e2e.Failf("No volumes found")
+		}
+
+		g.By("Wait for a new pod, then check that the volume is mounted read-only")
+		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", 1)
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("deployment/image-registry", "-n", "openshift-image-registry", "-ojsonpath={.spec.template.spec.volumes[?(@.name==\"registry-storage\")].persistentVolumeClaim.readOnly}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.Equal("true"))
+
+		g.By("Start a build")
+		createAppError := oc.WithoutNamespace().AsAdmin().Run("new-app").Args("quay.io/openshifttest/ruby-27:1.2.0~https://github.com/sclorg/ruby-ex", "--import-mode=PreserveOriginal", "-n", oc.Namespace()).Execute()
+		o.Expect(createAppError).NotTo(o.HaveOccurred())
+		exutil.WaitForABuild(oc.BuildClient().BuildV1().Builds(oc.Namespace()), "ruby-ex-1", nil, exutil.CheckBuildFailed, nil)
+		g.By("Trigger more builds")
+		for i := 0; i < 10; i++ {
+			_, _, err = exutil.StartBuild(oc, "ruby-ex")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+		}
+
+		g.By("Check the alert ImageRegistryStorageReadOnly is in alert manager")
+		token, err := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="ImageRegistryStorageReadOnly"}'`, token, `"alertstate":"pending"`, time.Duration(2*platformLoadTime))
+	})
+
+	g.It("Author:wewang-NonPreRelease-Longduration-ConnectedOnly-High-77160-Add device out of space alerts to prometheus rules [Disruptive]", func() {
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		g.By("Create a pvc for image registry")
+		var (
+			pvcFile = filepath.Join(imageRegistryBaseDir, "pvc.yaml")
+			pvcInfo = persistentVolumeClaim{
+				name:             "image-registry-test-claim-77160",
+				namespace:        "openshift-image-registry",
+				accessmode:       "ReadWriteOnce",
+				memorysize:       "1Gi",
+				storageclassname: "gp3-csi",
+				template:         pvcFile,
+			}
+		)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pvc/image-registry-test-claim-77160", "-n", "openshift-image-registry").Execute()
+		pvcInfo.create(oc)
+
+		g.By("Config image registry to pvc")
+		defer recoverRegistryDefaultReplicas(oc)
+		defer recoverRegistryStorageConfig(oc)
+		configureRegistryStorageToPvc(oc, pvcInfo.name)
+		waitForPvcStatus(oc, pvcInfo.namespace, pvcInfo.name)
+		checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", 1)
+
+		g.By("Create a build with uploading large layers image")
+		localImageName := "FROM registry.fedoraproject.org/fedora:37\nRUN dd if=/dev/urandom of=/bigfile bs=1M count=1536"
+		err := oc.AsAdmin().WithoutNamespace().Run("new-build").Args("-D", localImageName, "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(30*time.Second, 10*time.Minute, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("build", "-n", oc.Namespace()).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if strings.Contains(output, "PushImageToRegistryFailed") {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "Succeed to create build")
+		g.By("Trigger more builds")
+		for i := 0; i < 10; i++ {
+			_, _, err = exutil.StartBuild(oc, "fedora")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+		}
+
+		g.By("Check the alert ImageRegistryStorageFull is in alert manager")
+		token, err := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="ImageRegistryStorageFull"}'`, token, `"alertstate":"pending"`, time.Duration(2*platformLoadTime))
+
 	})
 })

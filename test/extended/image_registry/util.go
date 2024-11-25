@@ -1532,3 +1532,54 @@ func hasDuplicate(slice []string, value string) bool {
 	}
 	return false
 }
+
+func configureRegistryStorageToPvc(oc *exutil.CLI, pvcName string) {
+	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":null, "managementState":"Unmanaged"}}`, "--type=merge").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	patchInfo := fmt.Sprintf("{\"spec\":{\"managementState\":\"Managed\",\"replicas\":1,\"rolloutStrategy\":\"Recreate\",\"storage\":{\"managementState\":\"Managed\",\"pvc\":{\"claim\":\"%s\"}}}}", pvcName)
+	err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("configs.imageregistry/cluster", "-p", patchInfo, "--type=merge").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	checkPodsRunningWithLabel(oc, "openshift-image-registry", "docker-registry=default", 1)
+}
+
+type persistentVolumeClaim struct {
+	name             string
+	namespace        string
+	accessmode       string
+	memorysize       string
+	storageclassname string
+	template         string
+}
+
+func (pvc *persistentVolumeClaim) create(oc *exutil.CLI) {
+	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", pvc.template, "-p", "NAME="+pvc.name, "NAMESPACE="+pvc.namespace, "MEMORYSIZE="+pvc.memorysize, "STORAGECLASSNAME="+pvc.storageclassname, "ACCESSMODE="+pvc.accessmode)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func waitForPvcStatus(oc *exutil.CLI, namespace string, pvcname string) {
+	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
+		pvStatus, err := oc.AsAdmin().Run("get").Args("-n", namespace, "pvc", pvcname, "-o=jsonpath='{.status.phase}'").Output()
+		if err != nil {
+			return false, err
+		}
+		if match, _ := regexp.MatchString("Bound", pvStatus); match {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "The PVC is not Bound as expected")
+}
+
+func checkMetric(oc *exutil.CLI, url, token, metricString string, timeout time.Duration) {
+	var metrics string
+	var err error
+	getCmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + url
+	err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, timeout*time.Second, false, func(context.Context) (bool, error) {
+		metrics, err = exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", getCmd)
+		if err != nil || !strings.Contains(metrics, metricString) {
+			return false, nil
+		}
+		return true, err
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The metrics %s failed to contain %s", metrics, metricString))
+}
