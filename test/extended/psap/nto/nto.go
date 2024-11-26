@@ -3893,4 +3893,74 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Compare if the value kernel.shmmni in on labeled node, it will rollback to 4096")
 		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "4096")
 	})
+
+	g.It("Author:sahshah-Longduration-NonPreRelease-Medium-76674-NTO deferred feature with annotation deferred -never[Disruptive]", func() {
+
+		isSNO := exutil.IsSNOCluster(oc)
+
+		if !isNTO || isSNO {
+			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
+		}
+
+		machinesetName := getTotalLinuxMachinesetNum(oc)
+		e2e.Logf("len(machinesetName) is %v", machinesetName)
+		if machinesetName > 1 {
+			tunedNodeName = choseOneWorkerNodeToRunCase(oc, 0)
+		} else {
+			tunedNodeName = choseOneWorkerNodeNotByMachineset(oc, 0)
+		}
+
+		labeledNode := exutil.GetNodeListByLabel(oc, "deferred-never")
+
+		if len(labeledNode) == 0 {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "deferred-never-").Execute()
+		}
+
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "deferred-never-profile", "-n", ntoNamespace, "--ignore-not-found").Execute()
+			compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "4096")
+		}()
+
+		//Get the tuned pod name in the same node that labeled node
+		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		o.Expect(tunedPodName).NotTo(o.BeEmpty())
+
+		exutil.By("Pickup one worker nodes to label node to deferred-never ...")
+
+		if len(labeledNode) == 0 {
+			oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "deferred-never=").Execute()
+		}
+
+		defferedNTORes := ntoResource{
+			name:         "deferred-never-profile",
+			namespace:    ntoNamespace,
+			template:     ntoDefered,
+			sysctlparm:   "kernel.shmmni",
+			sysctlvalue:  "8192",
+			label:        "deferred-never",
+			deferedValue: "never",
+		}
+
+		exutil.By("Compare if the value kernel.shmmni in on labeled node, should be 4096")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "4096")
+
+		exutil.By("Create deferred-never profile")
+		defferedNTORes.applyNTOTunedProfileWithDeferredAnnotation(oc)
+
+		exutil.By("Create deferred-never profile and apply it to nodes")
+		defferedNTORes.assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "deferred-never-profile", "True")
+
+		exutil.By("Check current profile for each node")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current profile for each node: \n%v", output)
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile.tuned.openshift.io", tunedNodeName, `-ojsonpath='{.status.conditions[0].message}'`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).NotTo(o.BeEmpty())
+		o.Expect(output).To(o.ContainSubstring("TuneD profile applied"))
+
+		exutil.By("Compare if the value kernel.shmmni in on labeled node, should be 8192")
+		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "8192")
+	})
 })
