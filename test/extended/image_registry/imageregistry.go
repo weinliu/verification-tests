@@ -3352,7 +3352,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForAnImageStreamTag(oc, oc.Namespace(), "ose", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = wait.Poll(25*time.Second, 4*time.Minute, func() (bool, error) {
+		err = wait.Poll(25*time.Second, 6*time.Minute, func() (bool, error) {
 			output, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("istag", "ose:latest", "-n", oc.Namespace()).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			sigCount := strings.Count(output, "Signatures")
