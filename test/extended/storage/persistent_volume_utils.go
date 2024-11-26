@@ -512,6 +512,8 @@ func getTopologyLabelByProvisioner(provisioner string) (topologyLabel string) {
 		return "topology.disk.csi.azure.com/zone"
 	case gcpPdCsiDriverProvisioner:
 		return "topology.gke.io/zone"
+	case gcpFilestoreCsiDriverProvisioner:
+		return "topology.gke.io/zone"
 	case ibmVpcBlockCsiDriverProvisioner:
 		return "failure-domain.beta.kubernetes.io/zone"
 	case aliDiskpluginCsiDriverProvisioner:
