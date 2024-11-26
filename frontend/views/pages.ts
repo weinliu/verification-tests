@@ -162,5 +162,15 @@ export const Pages = {
     cy.byTestID('Labels-details-item__edit-button').click();
     cy.get('#tags-input').type(`${label}`);
     cy.byTestID('confirm-action').click();
+  },
+  checkDynamicConsolePluginDetails: (displayName, description, version, loadStatus, renderStatus, CSPStatus, backendService, proxyService) => {
+    cy.get('[data-test-selector$="Display Name"]').contains(`${displayName}`);
+    cy.get('[data-test-selector$="Description"]').contains(`${description}`);
+    cy.get('[data-test-selector$="Version"]').contains(`${version}`);
+    cy.get('[data-test-selector$="Status"]').contains(`${loadStatus}`);
+    cy.get('[data-test-selector$="Enabled"]').contains(`${renderStatus}`);
+    cy.get('[data-test-selector$="CSP Violations"]').contains(`${CSPStatus}`);
+    cy.get('[data-test-selector$="Backend Service"]').contains(`${backendService}`);
+    cy.get('[data-test-selector$="Proxy Services"]').contains(`${proxyService}`);
   }
 }

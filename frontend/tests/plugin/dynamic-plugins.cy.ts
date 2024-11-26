@@ -43,6 +43,22 @@ describe('Dynamic plugins features', () => {
     cy.adminCLI(`oc delete consoleplugin console-customization console-demo-plugin`,{failOnNonZeroExit: false});
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`,{failOnNonZeroExit: false});
   });
+  it('(OCP-77719,yanpzhan,UserInterface)Supply custom Consoleplugin details page',{tags:['@userinterface','@e2e','admin','@osd-ccs']}, () => {
+    cy.visit('/k8s/cluster/console.openshift.io~v1~ConsolePlugin/console-demo-plugin');
+    Pages.checkDynamicConsolePluginDetails('OpenShift Console Demo Plugin','-','-','-','Disabled','-','console-demo-plugin','thanos-querier');
+    cy.contains('Plugin manifest').click();
+    cy.contains('No Plugin manifest found').should('exist');
+    cy.adminCLI(`oc patch console.operator cluster --type='json' -p='[{"op": "add", "path": "/spec/plugins/-", "value":"console-demo-plugin"}]'`)
+      .then(result => expect(result.stdout).contains('patched'));
+    cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
+      expect(result.stdout).contains('"console-demo-plugin"');
+    });
+    cy.wait(30000);
+    cy.visit('/k8s/cluster/console.openshift.io~v1~ConsolePlugin/console-demo-plugin');
+    Pages.checkDynamicConsolePluginDetails('OpenShift Console Demo Plugin','Plasma reactors online','0.0.0','Loaded','Enabled','No','console-demo-plugin','thanos-querier');
+    cy.contains('Plugin manifest').click();
+    cy.get('code').should('contain', 'name');
+  });
 
   it('(OCP-51743,yapei,UserInterface)Preload - locale files are loaded once plugin is enabled',{tags:['@userinterface','@e2e','admin','@osd-ccs']}, () => {
     cy.intercept(
@@ -77,8 +93,11 @@ describe('Dynamic plugins features', () => {
     cy.switchPerspective('Developer');
     guidedTour.close();
     // enable console-demo-plugin
-    cy.adminCLI(`oc patch console.operator cluster --type='json' -p='[{"op": "add", "path": "/spec/plugins/-", "value":"console-demo-plugin"}]'`)
-      .then(result => expect(result.stdout).contains('patched'));
+    cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
+      if (!result.stdout.includes('console-demo-plugin')){
+        cy.adminCLI(`oc patch console.operator cluster --type='json' -p='[{"op": "add", "path": "/spec/plugins/-", "value":"console-demo-plugin"}]'`).then(result => expect(result.stdout).contains('patched'));
+      }
+    });
     cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
       expect(result.stdout).contains('"console-customization"').and.contains('"console-demo-plugin"');
     });
