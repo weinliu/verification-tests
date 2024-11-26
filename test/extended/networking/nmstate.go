@@ -576,7 +576,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 		e2e.Logf("SUCCESS - linux-bridge is removed from the node")
 	})
 
-	g.It("NonHyperShiftHOST-Author:qiowang-Medium-46327-Medium-46795-Static IP and Route can be applied [Disruptive]", func() {
+	g.It("Author:qiowang-NonHyperShiftHOST-NonPreRelease-Medium-46327-Medium-46795-Medium-64854-Static IP and Route can be applied [Disruptive]", func() {
 		var (
 			ipAddrV4      = "192.0.2.251"
 			destAddrV4    = "198.51.100.0/24"
@@ -668,8 +668,56 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 
 		e2e.Logf("SUCCESS - static ip and route are shown on the node")
 
-		g.By("3. Remove static ip and route on node")
-		g.By("3.1 Configure NNCP for removing static ip and route")
+		// Step3 is for https://issues.redhat.com/browse/OCPBUGS-8229
+		g.By("3. Apply default gateway in non-default route table")
+		g.By("3.1 Configure NNCP for default gateway")
+		policyName2 := "default-route-64854"
+		policyTemplate2 := generateTemplateAbsolutePath("apply-route-template.yaml")
+		routePolicy := routePolicyResource{
+			name:        policyName2,
+			nodelabel:   "kubernetes.io/hostname",
+			labelvalue:  nodeName,
+			ifacename:   "dummyst",
+			destaddr:    "0.0.0.0/0",
+			nexthopaddr: nextHopAddrV4,
+			tableid:     66,
+			template:    policyTemplate2,
+		}
+		defer removeResource(oc, true, true, "nncp", policyName2, "-n", opNamespace)
+		configErr2 := routePolicy.configNNCP(oc)
+		o.Expect(configErr2).NotTo(o.HaveOccurred())
+
+		g.By("3.2 Verify the policy is applied")
+		nncpErr2 := checkNNCPStatus(oc, policyName2, "Available")
+		exutil.AssertWaitPollNoErr(nncpErr2, "policy applied failed")
+
+		g.By("3.3 Verify the status of enactments is updated")
+		nnceName2 := nodeName + "." + policyName2
+		nnceErr2 := checkNNCEStatus(oc, nnceName2, "Available")
+		exutil.AssertWaitPollNoErr(nnceErr2, "status of enactments updated failed")
+
+		g.By("3.4 Verify the default gateway found in node network state")
+		routes, nnsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, `-ojsonpath={.status.currentState.routes.config[?(@.table-id==66)]}`).Output()
+		o.Expect(nnsErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(routes, "0.0.0.0/0")).Should(o.BeTrue())
+		o.Expect(strings.Contains(routes, nextHopAddrV4)).Should(o.BeTrue())
+
+		g.By("3.5 Verify the default gateway is shown on the node")
+		defaultGW, gwErr := exutil.DebugNode(oc, nodeName, "ip", "-4", "route", "show", "default", "table", "66")
+		o.Expect(gwErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(defaultGW, "default via "+nextHopAddrV4+" dev "+stIPRoutePolicy.ifacename)).Should(o.BeTrue())
+
+		g.By("3.6 Verify there is no error logs for pinging default gateway shown in nmstate-handler pod")
+		podName, getPodErr := exutil.GetPodName(oc, opNamespace, "component=kubernetes-nmstate-handler", nodeName)
+		o.Expect(getPodErr).NotTo(o.HaveOccurred())
+		o.Expect(podName).NotTo(o.BeEmpty())
+		logs, logErr := exutil.GetSpecificPodLogs(oc, opNamespace, "", podName, "")
+		o.Expect(logErr).ShouldNot(o.HaveOccurred())
+		o.Expect(logs).NotTo(o.BeEmpty())
+		o.Expect(strings.Contains(logs, "error pinging default gateway")).Should(o.BeFalse())
+
+		g.By("4. Remove static ip and route on node")
+		g.By("4.1 Configure NNCP for removing static ip and route")
 		policyTemplate = generateTemplateAbsolutePath("remove-static-ip-route-template.yaml")
 		stIPRoutePolicy = stIPRoutePolicyResource{
 			name:       policyName,
@@ -685,17 +733,17 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 		configErr1 := stIPRoutePolicy.configNNCP(oc)
 		o.Expect(configErr1).NotTo(o.HaveOccurred())
 
-		g.By("3.2 Verify the policy is applied")
+		g.By("4.2 Verify the policy is applied")
 		nncpErr1 := checkNNCPStatus(oc, policyName, "Available")
 		exutil.AssertWaitPollNoErr(nncpErr1, "policy applied failed")
 		e2e.Logf("SUCCESS - policy is applied")
 
-		g.By("3.3 Verify the status of enactments is updated")
+		g.By("4.3 Verify the status of enactments is updated")
 		nnceErr1 := checkNNCEStatus(oc, nnceName, "Available")
 		exutil.AssertWaitPollNoErr(nnceErr1, "status of enactments updated failed")
 		e2e.Logf("SUCCESS - status of enactments is updated")
 
-		g.By("3.4 Verify static ip and route cannot be found in node network state")
+		g.By("4.4 Verify static ip and route cannot be found in node network state")
 		iface1, nnsIfaceErr1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("nns", nodeName, "-ojsonpath={.status.currentState.interfaces[*]}").Output()
 		o.Expect(nnsIfaceErr1).NotTo(o.HaveOccurred())
 		o.Expect(iface1).ShouldNot(o.ContainSubstring(stIPRoutePolicy.ifacename))
@@ -708,7 +756,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 		o.Expect(routes1).ShouldNot(o.ContainSubstring(destAddrV6))
 		o.Expect(routes1).ShouldNot(o.ContainSubstring(nextHopAddrV6))
 
-		g.By("3.5 Verify the static ip and route are removed from the node")
+		g.By("4.5 Verify the static ip and route are removed from the node")
 		ifaceInfo1, ifaceErr1 := exutil.DebugNode(oc, nodeName, "ip", "addr", "show")
 		o.Expect(ifaceErr1).NotTo(o.HaveOccurred())
 		o.Expect(ifaceInfo1).ShouldNot(o.ContainSubstring(stIPRoutePolicy.ifacename))
