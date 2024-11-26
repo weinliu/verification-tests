@@ -89,7 +89,7 @@ class SummaryClient:
         self.launch_url = self.base_url +"/api/v1/ocp/launch"
         self.item_url = self.base_url + "/api/v1/ocp/item"
         self.ui_url = self.base_url + "/ui/#ocp/launches/all/"
-        self.jenkins_url = "https://mastern-jenkins-csb-openshift-qe.apps.ocp-c1.prod.psi.redhat.com/job/ocp-common/job/Flexy-install/"
+        self.jenkins_url = "https://jenkins-csb-openshift-qe-mastern.dno.corp.redhat.com/job/ocp-common/job/Flexy-install/"
         self.slack_url = ""
         self.group_channel = args.group_channel
         if args.webhook_url:

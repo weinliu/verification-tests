@@ -10,7 +10,7 @@
 $ ./bin/extended-platform-tests run all --dry-run|grep <Your-TestCase-ID>|./bin/extended-platform-tests run -f -
 
 </pre>
-### If you used the Jenkins job [ginkgo-test](https://mastern-jenkins-csb-openshift-qe.apps.ocp-c1.prod.psi.redhat.com/job/ocp-common/job/ginkgo-test/) to test your case, please paste the job link here.
+### If you used the Jenkins job [ginkgo-test](https://jenkins-csb-openshift-qe-mastern.dno.corp.redhat.com/job/ocp-common/job/ginkgo-test/) to test your case, please paste the job link here.
 <pre>
 
 </pre>
