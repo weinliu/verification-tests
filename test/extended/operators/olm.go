@@ -6535,6 +6535,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 			g.Skip("it is not supported")
 		}
 		platform := exutil.CheckPlatform(oc)
+		e2e.Logf("platform: %v", platform)
 		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
 		o.Expect(errProxy).NotTo(o.HaveOccurred())
 		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || exutil.Is3MasterNoDedicatedWorkerNode(oc) ||
@@ -10062,15 +10063,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		sub.createWithoutCheck(oc, itName, dr)
 
 		exutil.By("no Installplan is generated, without sa for og")
-		waitErr = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
-			var err error
-			installPlan, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installPlanRef.name}").Output()
-			if strings.Compare(installPlan, "") == 0 || err != nil {
-				return false, nil
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollWithErr(waitErr, fmt.Sprintf("sub %s has installplan", sub.subName))
+		installPlan, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installPlanRef.name}").Output()
+		if strings.Compare(installPlan, "") != 0 && err == nil {
+			subContent, _ := oc.WithoutNamespace().AsAdmin().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-oyaml").Output()
+			e2e.Logf("subContent: %v", subContent)
+			e2e.Failf("should no ip")
+		}
 	})
 
 	// author: xzha@redhat.com
