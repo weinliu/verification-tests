@@ -6,7 +6,9 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -38,12 +40,61 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		workaroundForOCPBUGS44608 := func() {
+			// Check if the cluster is abnormal, There will be some delay into the OCPBUGS-44608 after case last step
+			err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=120s", "--timeout=3m").Execute()
+			if err == nil {
+				return
+			}
+
+			// Define the etcd CO status for the degraded state
+			etcdCoStatus := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "True"}
+			currentEtcdCoStatus := getCoStatus(oc, "etcd", etcdCoStatus)
+			// If etcd CO is degraded
+			if reflect.DeepEqual(currentEtcdCoStatus, etcdCoStatus) {
+				etcdPodList, err := exutil.GetAllPodsWithLabel(oc, "openshift-etcd", "etcd")
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(etcdPodList).ShouldNot(o.BeEmpty())
+
+				// Identify the abnormal etcd pod and check if it runs into the bug https://issues.redhat.com/browse/OCPBUGS-44608
+				errMsg := "dataDir has been destroyed and must be removed from the cluster"
+				var abnormalEtcdNode, abnormalEtcdPod string
+				for _, etcdPod := range etcdPodList {
+					etcdPodName := string(etcdPod)
+					containerLastState, errEtcd := oc.WithoutNamespace().Run("get").Args("pod", etcdPodName, "-n", "openshift-etcd", "-o", `jsonpath={.status.containerStatuses[0].lastState}`).Output()
+					o.Expect(errEtcd).NotTo(o.HaveOccurred())
+					if len(containerLastState) != 0 && strings.Contains(containerLastState, errMsg) {
+						abnormalEtcdPod = etcdPodName
+						abnormalEtcdNode, err = oc.WithoutNamespace().Run("get").Args("pod", abnormalEtcdPod, "-n", "openshift-etcd", "-o", `jsonpath={.spec.nodeName}`).Output()
+						o.Expect(err).NotTo(o.HaveOccurred())
+						e2e.Logf("[Warning:] The cluster ran into the bug OCPBUGS-44608, fixing with workaround ...")
+						break
+					}
+				}
+
+				// Apply the workaround: https://access.redhat.com/solutions/6962106
+				for _, etcdPod := range etcdPodList {
+					if etcdPod != abnormalEtcdPod {
+						removeEtcdMember(oc, etcdPod, abnormalEtcdNode)
+						break
+					}
+				}
+
+				// Force redeploy etcd
+				patch := fmt.Sprintf(`[ {"op": "replace", "path": "/spec/forceRedeploymentReason", "value": "Force Redploy %v" } ]`, time.Now().UnixNano())
+				patchForceRedploymentError := oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd/cluster", "--type=json", "-p", patch).Execute()
+				o.Expect(patchForceRedploymentError).NotTo(o.HaveOccurred())
+				// Wait for cluster stability
+				err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=30s", "--timeout=20m").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}
+
 		e2e.Logf("Cluster should be healthy befor running dr case.")
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("wait-for-stable-cluster", "--minimum-stable-period=30s", "--timeout=20m").Execute()
 		if err != nil {
 			g.Skip(fmt.Sprintf("Cluster health check failed before running case :: %s ", err))
 		}
-
 		platform := exutil.CheckPlatform(oc)
 		isAzureStack, _ := isAzureStackCluster(oc)
 		exutil.By("1. Get the leader master node of cluster")
@@ -228,6 +279,9 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 			e2e.Logf("Post restarting the leader master node, cluster health check passed")
 		} else {
 			e2e.Failf("Post restarting the leader master node, cluster health check failed :: %s ", err)
+		}
+		if platform == "openstack" {
+			workaroundForOCPBUGS44608()
 		}
 	})
 

@@ -16,6 +16,14 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
+const (
+	asAdmin                   = true
+	withoutNamespace          = true
+	contain                   = false
+	ok                        = true
+	defaultRegistryServiceURL = "image-registry.openshift-image-registry.svc:5000"
+)
+
 var (
 	startStates = map[string]bool{
 		exutil.BMPoweredOn: true,
@@ -245,4 +253,49 @@ func isAzureStackCluster(oc *exutil.CLI) (bool, string) {
 func getRandomNum(m int32, n int32) int32 {
 	rand.Seed(time.Now().UnixNano())
 	return rand.Int31n(n-m+1) + m
+}
+
+// the method is to do something with oc.
+func doAction(oc *exutil.CLI, action string, asAdmin bool, withoutNamespace bool, parameters ...string) (string, error) {
+	if asAdmin && withoutNamespace {
+		return oc.AsAdmin().WithoutNamespace().Run(action).Args(parameters...).Output()
+	}
+	if asAdmin && !withoutNamespace {
+		return oc.AsAdmin().Run(action).Args(parameters...).Output()
+	}
+	if !asAdmin && withoutNamespace {
+		return oc.WithoutNamespace().Run(action).Args(parameters...).Output()
+	}
+	if !asAdmin && !withoutNamespace {
+		return oc.Run(action).Args(parameters...).Output()
+	}
+	return "", nil
+}
+
+// Get something existing resource
+func getResource(oc *exutil.CLI, asAdmin bool, withoutNamespace bool, parameters ...string) (string, error) {
+	return doAction(oc, "get", asAdmin, withoutNamespace, parameters...)
+}
+
+func getCoStatus(oc *exutil.CLI, coName string, statusToCompare map[string]string) map[string]string {
+	newStatusToCompare := make(map[string]string)
+	for key := range statusToCompare {
+		args := fmt.Sprintf(`-o=jsonpath={.status.conditions[?(.type == '%s')].status}`, key)
+		status, _ := getResource(oc, asAdmin, withoutNamespace, "co", coName, args)
+		newStatusToCompare[key] = status
+	}
+	return newStatusToCompare
+}
+
+// Helper function to remove an etcd member of the abnormal node
+func removeEtcdMember(oc *exutil.CLI, pod, abnormalNode string) {
+	listCmd := fmt.Sprintf("etcdctl member list | awk -F, '$3 ~ /%v/ {print $1}'", abnormalNode)
+	memberID, err := oc.Run("exec").WithoutNamespace().
+		Args(pod, "-n", "openshift-etcd", "--", "sh", "-c", listCmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	removeCmd := fmt.Sprintf("etcdctl member remove %s", memberID)
+	_, err = oc.Run("exec").WithoutNamespace().
+		Args(pod, "-n", "openshift-etcd", "--", "sh", "-c", removeCmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
 }

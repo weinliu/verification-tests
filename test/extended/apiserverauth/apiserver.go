@@ -6238,7 +6238,7 @@ metadata:
 		o.Expect(ethName).ShouldNot(o.BeEmpty())
 		e2e.Logf("Found Ethernet :: %v", ethName)
 
-		e2e.Logf("Simulating network conditions: 50% packet loss on the master node")
+		e2e.Logf(`Simulating network conditions: "50%% packet loss on the master node"`)
 		channel := make(chan string)
 		go func() {
 			defer g.GinkgoRecover()
