@@ -242,16 +242,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	// author: iamin@redhat.com
 	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-11635-NetworkEdge Set timeout server for passthough route", func() {
 		var (
-			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "httpbin")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-pod.json")
-			unSecSvcName        = "service-secure"
-			svcFileDir          = filepath.Join(buildPruningBaseDir, "service_secure.json")
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
+			secureSvcName       = "httpbin-svc-secure"
 		)
 
 		exutil.By("1.0: Deploy a project with single pod and the service")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		createResourceFromFile(oc, project1, svcFileDir)
 		err := waitForPodWithLabelReady(oc, project1, "name=httpbin-pod")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=httpbin-pod Ready status not met")
 
@@ -259,8 +257,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		routeName := "route-passthrough11635"
 		routehost := routeName + "-" + project1 + ".apps." + getBaseDomain(oc)
 
-		createRoute(oc, project1, "passthrough", "route-passthrough11635", unSecSvcName, []string{})
-		waitForOutput(oc, project1, "route/route-passthrough11635", "{.status.ingress[0].conditions[0].status}", "True")
+		createRoute(oc, project1, "passthrough", routeName, secureSvcName, []string{})
+		waitForOutput(oc, project1, "route/"+routeName, "{.status.ingress[0].conditions[0].status}", "True")
 
 		exutil.By("3.0: Annotate passthrough route")
 		setAnnotation(oc, project1, "route/"+routeName, "haproxy.router.openshift.io/timeout=3s")
@@ -268,60 +266,55 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout":"3s`))
 
 		exutil.By("4.0: Curl the edge route for two times, one with normal delay and other above timeout delay")
-		waitForOutsideCurlContains("https://"+routehost+"/delay/2", "-kl", `"Host": "route-passthrough11635`)
-		waitForOutsideCurlContains("https://"+routehost+"/delay/2", "-kl", `delay/2`)
-		waitForOutsideCurlContains("https://"+routehost+"/delay/5", "-kl", `exit status`)
+		waitForOutsideCurlContains("https://"+routehost+"/delay/2", "-kI", `200 OK`)
+		waitForOutsideCurlContains("https://"+routehost+"/delay/5", "-kI", `exit status`)
 
 		exutil.By("5.0: Check HAProxy file for timeout tunnel")
-		routerpod := getNewRouterPod(oc, "default")
+		routerpod := getRouterPod(oc, "default")
 		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", routeName)
 		o.Expect(searchOutput).To(o.ContainSubstring(`timeout tunnel  3s`))
-
 	})
 
 	// author: iamin@redhat.com
-	g.It("Author:iamin-ROSA-OSD_CCS-ARO-High-11982-NetworkEdge Set timeout server for unsecure route", func() {
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-High-11982-NetworkEdge Set timeout server for http route", func() {
 		var (
-			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "httpbin")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-pod.json")
-			unSecSvcName        = "service-unsecure"
-			svcFileDir          = filepath.Join(buildPruningBaseDir, "service_unsecure.json")
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
+			insecureSvcName     = "httpbin-svc-insecure"
 		)
 
 		exutil.By("1.0: Deploy a project with single pod and the service")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		createResourceFromFile(oc, project1, svcFileDir)
 		err := waitForPodWithLabelReady(oc, project1, "name=httpbin-pod")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=httpbin-pod Ready status not met")
 		output, err := oc.Run("get").Args("service").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring(unSecSvcName))
+		o.Expect(output).To(o.ContainSubstring(insecureSvcName))
 
-		exutil.By("2.0: Create an unsecure route")
-		routeName := unSecSvcName
+		exutil.By("2.0: Create an http route")
+		routeName := "route-http11982"
 		routehost := routeName + "-" + project1 + ".apps." + getBaseDomain(oc)
 
-		createRoute(oc, project1, "http", unSecSvcName, unSecSvcName, []string{})
+		createRoute(oc, project1, "http", routeName, insecureSvcName, []string{})
 		output, err = oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring(unSecSvcName))
+		o.Expect(output).To(o.ContainSubstring(routeName))
 
-		exutil.By("3.0: Annotate unsecure route")
+		exutil.By("3.0: Annotate http route")
 		setAnnotation(oc, project1, "route/"+routeName, "haproxy.router.openshift.io/timeout=2s")
 		findAnnotation := getAnnotation(oc, project1, "route", routeName)
 		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout":"2s`))
 
-		exutil.By("4.0: Curl the unsecure route for two times, one with normal delay and other above timeout delay")
-		waitForOutsideCurlContains("http://"+routehost+"/delay/1", "-l", `"Host": "service-unsecure`)
-		waitForOutsideCurlContains("http://"+routehost+"/delay/1", "-l", `delay/1`)
-		waitForOutsideCurlContains("http://"+routehost+"/delay/5", "-l", `The server didn't respond in time`)
+		exutil.By("4.0: Curl the http route for two times, one with normal delay and other above timeout delay")
+		waitForOutsideCurlContains("http://"+routehost+"/delay/1", "-I", `200 OK`)
+		// some proxies return "Gateway Timeout" but some return "Gateway Time-out"
+		waitForOutsideCurlContains("http://"+routehost+"/delay/5", "-I", `504 Gateway Time`)
 
 		exutil.By("5.0: Check HAProxy file for timeout tunnel")
-		routerpod := getNewRouterPod(oc, "default")
+		routerpod := getRouterPod(oc, "default")
 		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", routeName)
 		o.Expect(searchOutput).To(o.ContainSubstring(`timeout server  2s`))
-
 	})
 
 	// author: iamin@redhat.com
