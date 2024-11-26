@@ -126,7 +126,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 
 		deschedulerCsvOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-l=operators.coreos.com/cluster-kube-descheduler-operator.openshift-kube-descheduler-op=", "-n", kubeNamespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(deschedulerCsvOutput, "clusterkubedescheduleroperator.v5.0.1")).To(o.BeTrue())
+		o.Expect(strings.Contains(deschedulerCsvOutput, "clusterkubedescheduleroperator.v5.1.1")).To(o.BeTrue())
 
 		g.By("Get the latest version of Kubernetes")
 		ocVersion, versionErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
