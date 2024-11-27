@@ -153,7 +153,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 			"No build was created when OCB was enabled")
 		mosb, err := mosc.GetCurrentMachineOSBuild()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting MOSB from MOSC")
-		o.Eventually(mosb.GetPod).Should(Exist(),
+		o.Eventually(mosb.GetJob).Should(Exist(),
 			"No build pod was created when OCB was enabled")
 		o.Eventually(mosb, "5m", "20s").Should(HaveConditionField("Building", "status", TrueString),
 			"MachineOSBuild didn't report that the build has begun")
@@ -523,8 +523,8 @@ func ValidateSuccessfulMOSC(mosc *MachineOSConfig, checkers []Checker) {
 		"No build was created when OCB was enabled")
 	mosb, err := mosc.GetCurrentMachineOSBuild()
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting MOSB from MOSC")
-	o.Eventually(mosb.GetPod).Should(Exist(),
-		"No build pod was created when OCB was enabled")
+	o.Eventually(mosb.GetJob).Should(Exist(),
+		"No build job was created when OCB was enabled")
 	o.Eventually(mosb, "5m", "20s").Should(HaveConditionField("Building", "status", TrueString),
 		"MachineOSBuild didn't report that the build has begun")
 	logger.Infof("OK!\n")
@@ -534,8 +534,8 @@ func ValidateSuccessfulMOSC(mosc *MachineOSConfig, checkers []Checker) {
 	o.Eventually(mosb, "10m", "20s").Should(HaveConditionField("Succeeded", "status", TrueString), "Build didn't succeed")
 	o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Interrupted", "status", FalseString), "Build was interrupted")
 	o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Failed", "status", FalseString), "Build was failed")
-	logger.Infof("Check that the build pod was deleted")
-	o.Eventually(mosb.GetPod, "2m", "20s").ShouldNot(Exist(), "Build pod was not cleaned")
+	logger.Infof("Check that the build job was deleted")
+	o.Eventually(mosb.GetJob, "2m", "20s").ShouldNot(Exist(), "Build job was not cleaned")
 	logger.Infof("OK!\n")
 
 	numNodes, err := mcp.getMachineCount()

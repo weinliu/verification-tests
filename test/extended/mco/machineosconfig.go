@@ -241,7 +241,7 @@ func (mosc MachineOSConfig) GetCurrentMachineOSBuild() (*MachineOSBuild, error) 
 	}
 
 	if mosbName == "" {
-		return nil, fmt.Errorf("Cannot find the current MOSB for %s. Annotation empty.", mosc)
+		return nil, fmt.Errorf("Cannot find the current MOSB for %s. Annotation empty", mosc)
 	}
 
 	return NewMachineOSBuild(mosc.GetOC(), mosbName), nil
