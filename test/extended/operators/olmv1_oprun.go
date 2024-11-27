@@ -1664,7 +1664,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		if errWait != nil {
 			olmv1util.GetNoEmpty(oc, "co", "olm", "-o=jsonpath-as-json={.status.conditions}")
 		}
-		exutil.AssertWaitPollNoErr(errWait, "no error message raised")
+		exutil.AssertWaitPollNoErr(errWait, "the Upgradeable of olm is not True")
 
 		exutil.By("3) upgrade clusterextension to 1.0.1, olm.maxOpenShiftVersion is 4.17")
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version":"1.0.1"}}}}`)
@@ -1681,7 +1681,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		if errWait != nil {
 			olmv1util.GetNoEmpty(oc, "co", "olm", "-o=jsonpath-as-json={.status.conditions}")
 		}
-		exutil.AssertWaitPollNoErr(errWait, "no error message raised")
+		exutil.AssertWaitPollNoErr(errWait, "the Upgradeable of olm is not False")
 
 		exutil.By("4) upgrade clusterextension to 2.0.0, olm.maxOpenShiftVersion is 4.18")
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version":"2.0.0"}}}}`)
@@ -1698,11 +1698,11 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		if errWait != nil {
 			olmv1util.GetNoEmpty(oc, "co", "olm", "-o=jsonpath-as-json={.status.conditions}")
 		}
-		exutil.AssertWaitPollNoErr(errWait, "no error message raised")
+		exutil.AssertWaitPollNoErr(errWait, "the Upgradeable of olm is not False")
 
 		exutil.By("5) upgrade clusterextension to 3.0.0, olm.maxOpenShiftVersion is 4.19")
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version":"3.0.0"}}}}`)
-		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 6*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
 			status, _ := olmv1util.GetNoEmpty(oc, "co", "olm", "-o", `jsonpath={.status.conditions[?(@.type=="Upgradeable")].status}`)
 			if strings.Contains(status, "True") {
 				e2e.Logf("status is %s", status)
@@ -1715,7 +1715,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		if errWait != nil {
 			olmv1util.GetNoEmpty(oc, "co", "olm", "-o=jsonpath-as-json={.status.conditions}")
 		}
-		exutil.AssertWaitPollNoErr(errWait, "no error message raised")
+		exutil.AssertWaitPollNoErr(errWait, "the Upgradeable of olm is not True")
 
 	})
 
