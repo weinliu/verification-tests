@@ -2579,4 +2579,264 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 
 	})
 
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-77060-support to mirror helm for oc-mirror v2 [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case77060"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "30G", "/var/lib/registry")
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-77060.yaml")
+
+		exutil.By("Start mirror2disk")
+		defer os.RemoveAll("~/.oc-mirror/")
+		defer os.RemoveAll("~/.oc-mirror.log")
+		waitErr := wait.PollImmediate(30*time.Second, 900*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2disk for mirroring helm chars with oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk for mirroring helm charts with oc-mirror v2 failed, retrying...")
+
+		exutil.By("Start disk2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			disk2mirrorOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--from", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The disk2mirror for mirroring helm charts with oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(disk2mirrorOutput, "idms-oc-mirror.yaml") && strings.Contains(disk2mirrorOutput, "itms-oc-mirror.yaml") {
+				e2e.Logf("Helm chart mirroring via disk2mirror completed successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the disk2mirror for mirroring helm charts with oc-mirror v2 failed")
+
+		exutil.By("Start mirror2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		dirnameM2M := "/tmp/case77060m2m"
+		defer os.RemoveAll(dirnameM2M)
+		err = os.MkdirAll(dirnameM2M, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			mirror2mirrorOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirnameM2M, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror for helm chart mirroring via oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(mirror2mirrorOutput, "idms-oc-mirror.yaml") && strings.Contains(mirror2mirrorOutput, "itms-oc-mirror.yaml") {
+				e2e.Logf("Helm chart mirroring via mirror2mirror completed successfully")
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror for mirroring helm charts with oc-mirror v2 still failed")
+	})
+
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-77061-support the delete helm for v2 [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case77061"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "30G", "/var/lib/registry")
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-77060.yaml")
+		imageDeleteYamlFileF := filepath.Join(ocmirrorBaseDir, "delete-config-77061.yaml")
+
+		exutil.By("Start mirror2disk")
+		defer os.RemoveAll("~/.oc-mirror/")
+		defer os.RemoveAll("~/.oc-mirror.log")
+		waitErr := wait.PollImmediate(30*time.Second, 900*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2disk for mirroring helm chars with oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk for mirroring helm charts with oc-mirror v2 failed, retrying...")
+
+		exutil.By("Start disk2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			disk2mirrorOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--from", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The disk2mirror for mirroring helm charts with oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(disk2mirrorOutput, "idms-oc-mirror.yaml") && strings.Contains(disk2mirrorOutput, "itms-oc-mirror.yaml") {
+				e2e.Logf("Helm chart mirroring via disk2mirror completed successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the disk2mirror for mirroring helm charts with oc-mirror v2 failed")
+
+		exutil.By("Generete delete image file")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--config", imageDeleteYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--generate").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Execute delete with out force-cache-delete")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--delete-yaml-file", dirname+"/working-dir/delete/delete-images.yaml", "docker://"+serInfo.serviceName, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Start mirror2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		dirnameM2M := "/tmp/case77061m2m"
+		defer os.RemoveAll(dirnameM2M)
+		err = os.MkdirAll(dirnameM2M, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			mirror2mirrorOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirnameM2M, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror for helm chart mirroring via oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(mirror2mirrorOutput, "idms-oc-mirror.yaml") && strings.Contains(mirror2mirrorOutput, "itms-oc-mirror.yaml") {
+				e2e.Logf("Helm chart mirroring via mirror2mirror completed successfully")
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror for mirroring helm charts with oc-mirror v2 still failed")
+
+		exutil.By("Generete delete image file")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--config", imageDeleteYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--generate").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Execute delete with out force-cache-delete")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--delete-yaml-file", dirname+"/working-dir/delete/delete-images.yaml", "docker://"+serInfo.serviceName, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-77693-support the delete helm for v2 with --force-cache-delete=true [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case77061"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "30G", "/var/lib/registry")
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-77060.yaml")
+		imageDeleteYamlFileF := filepath.Join(ocmirrorBaseDir, "delete-config-77061.yaml")
+
+		exutil.By("Start mirror2disk")
+		defer os.RemoveAll("~/.oc-mirror/")
+		defer os.RemoveAll("~/.oc-mirror.log")
+		waitErr := wait.PollImmediate(30*time.Second, 900*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+			if err != nil {
+				e2e.Logf("The mirror2disk for mirroring helm chars with oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk for mirroring helm charts with oc-mirror v2 failed, retrying...")
+
+		exutil.By("Start disk2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			disk2mirrorOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--from", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The disk2mirror for mirroring helm charts with oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(disk2mirrorOutput, "idms-oc-mirror.yaml") && strings.Contains(disk2mirrorOutput, "itms-oc-mirror.yaml") {
+				e2e.Logf("Helm chart mirroring via disk2mirror completed successfully")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the disk2mirror for mirroring helm charts with oc-mirror v2 failed")
+
+		exutil.By("Generete delete image file")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--config", imageDeleteYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--generate").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Execute delete with force-cache-delete")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--delete-yaml-file", dirname+"/working-dir/delete/delete-images.yaml", "docker://"+serInfo.serviceName, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false", "--force-cache-delete=true").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Start mirror2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		dirnameM2M := "/tmp/case77061m2m"
+		defer os.RemoveAll(dirnameM2M)
+		err = os.MkdirAll(dirnameM2M, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			mirror2mirrorOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirnameM2M, "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror for helm chart mirroring via oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(mirror2mirrorOutput, "idms-oc-mirror.yaml") && strings.Contains(mirror2mirrorOutput, "itms-oc-mirror.yaml") {
+				e2e.Logf("Helm chart mirroring via mirror2mirror completed successfully")
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror for mirroring helm charts with oc-mirror v2 still failed")
+
+		exutil.By("Generete delete image file")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--config", imageDeleteYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--generate").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Execute delete with force-cache-delete")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--delete-yaml-file", dirname+"/working-dir/delete/delete-images.yaml", "docker://"+serInfo.serviceName, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false", "--force-cache-delete=true").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+	})
+
 })
