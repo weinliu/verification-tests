@@ -4990,7 +4990,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(podName).NotTo(o.BeEmpty())
 		podLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(podName, "-n", nsOperator, "--limit-bytes", "50000").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(podLogs).To(o.ContainSubstring("multiple"))
+		o.Expect(podLogs).To(o.ContainSubstring(`"msg":"Watching namespaces","namespaces":["default","nginx-operator-69005-system"]`))
 
 		exutil.By("run make undeploy")
 		_, err = makeCLI.Run("undeploy").Args().Output()
@@ -5032,7 +5032,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(podName).NotTo(o.BeEmpty())
 		podLogs, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args(podName, "-n", nsOperator, "--limit-bytes", "50000").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(podLogs).To(o.ContainSubstring("single"))
+		o.Expect(podLogs).To(o.ContainSubstring(`"msg":"Watching namespaces","namespaces":["nginx-operator-69005-system"]`))
 
 	})
 
