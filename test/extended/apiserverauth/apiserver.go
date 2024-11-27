@@ -3170,6 +3170,9 @@ spec:
 			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
 		}
 
+		errNS := oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "opa", "--ignore-not-found").Execute()
+		o.Expect(errNS).NotTo(o.HaveOccurred())
+
 		var (
 			caKeypem          = tmpdir + "/caKey.pem"
 			caCertpem         = tmpdir + "/caCert.pem"
@@ -6779,5 +6782,145 @@ spec:
 			o.Expect(err).NotTo(o.HaveOccurred())
 			i = i + 1
 		}
+	})
+
+	// author: rgangwar@redhat.com
+	g.It("Author:rgangwar-LEVEL0-ROSA-ARO-OSD_CCS-ConnectedOnly-Critical-77919-[Apiserver] HPA/oc scale and DeploymenConfig Should be working [Disruptive]", func() {
+		if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "Build") && isEnabledCapability(oc, "DeploymentConfig")) {
+			g.Skip("Skipping the test as baselinecaps have been set and some of API capabilities are not enabled!")
+		}
+
+		errNS := oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "opa", "--ignore-not-found").Execute()
+		o.Expect(errNS).NotTo(o.HaveOccurred())
+
+		var (
+			caKeypem          = tmpdir + "/caKey.pem"
+			caCertpem         = tmpdir + "/caCert.pem"
+			serverKeypem      = tmpdir + "/serverKey.pem"
+			serverconf        = tmpdir + "/server.conf"
+			serverWithSANcsr  = tmpdir + "/serverWithSAN.csr"
+			serverCertWithSAN = tmpdir + "/serverCertWithSAN.pem"
+			randomStr         = exutil.GetRandomString()
+		)
+
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "opa", "--ignore-not-found").Execute()
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "test-ns"+randomStr, "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ValidatingWebhookConfiguration", "opa-validating-webhook", "--ignore-not-found").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterrolebinding.rbac.authorization.k8s.io/opa-viewer", "--ignore-not-found").Execute()
+
+		// Skipped case on arm64 and proxy cluster with techpreview
+		exutil.By("Check if it's a proxy cluster with techpreview")
+		featureTech, err := getResource(oc, asAdmin, withoutNamespace, "featuregate", "cluster", "-o=jsonpath={.spec.featureSet}")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		httpProxy, _, _ := getGlobalProxy(oc)
+		if (strings.Contains(httpProxy, "http") && strings.Contains(featureTech, "TechPreview")) || checkDisconnect(oc) {
+			g.Skip("Skip for proxy platform with techpreview or disconnected env")
+		}
+
+		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.By("1. Create certificates with SAN.")
+		opensslCMD := fmt.Sprintf("openssl genrsa -out %v 2048", caKeypem)
+		_, caKeyErr := exec.Command("bash", "-c", opensslCMD).Output()
+		o.Expect(caKeyErr).NotTo(o.HaveOccurred())
+		opensslCMD = fmt.Sprintf(`openssl req -x509 -new -nodes -key %v -days 100000 -out %v -subj "/CN=wb_ca"`, caKeypem, caCertpem)
+		_, caCertErr := exec.Command("bash", "-c", opensslCMD).Output()
+		o.Expect(caCertErr).NotTo(o.HaveOccurred())
+		opensslCMD = fmt.Sprintf("openssl genrsa -out %v 2048", serverKeypem)
+		_, serverKeyErr := exec.Command("bash", "-c", opensslCMD).Output()
+		o.Expect(serverKeyErr).NotTo(o.HaveOccurred())
+		serverconfCMD := fmt.Sprintf(`cat > %v << EOF
+[req]
+req_extensions = v3_req
+distinguished_name = req_distinguished_name
+[req_distinguished_name]
+[ v3_req ]
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+extendedKeyUsage = clientAuth, serverAuth
+subjectAltName = @alt_names
+[alt_names]
+IP.1 = 127.0.0.1
+DNS.1 = opa.opa.svc
+EOF`, serverconf)
+		_, serverconfErr := exec.Command("bash", "-c", serverconfCMD).Output()
+		o.Expect(serverconfErr).NotTo(o.HaveOccurred())
+		serverWithSANCMD := fmt.Sprintf(`openssl req -new -key %v -out %v -subj "/CN=opa.opa.svc" -config %v`, serverKeypem, serverWithSANcsr, serverconf)
+		_, serverWithSANErr := exec.Command("bash", "-c", serverWithSANCMD).Output()
+		o.Expect(serverWithSANErr).NotTo(o.HaveOccurred())
+		serverCertWithSANCMD := fmt.Sprintf(`openssl x509 -req -in %v -CA %v -CAkey %v -CAcreateserial -out %v -days 100000 -extensions v3_req -extfile %s`, serverWithSANcsr, caCertpem, caKeypem, serverCertWithSAN, serverconf)
+		_, serverCertWithSANErr := exec.Command("bash", "-c", serverCertWithSANCMD).Output()
+		o.Expect(serverCertWithSANErr).NotTo(o.HaveOccurred())
+		e2e.Logf("1. Step passed: SAN certificate has been generated")
+
+		exutil.By("2. Create new secret with SAN cert.")
+		opaOutput, opaerr := oc.Run("create").Args("namespace", "opa").Output()
+		o.Expect(opaerr).NotTo(o.HaveOccurred())
+		o.Expect(opaOutput).Should(o.ContainSubstring("namespace/opa created"), "namespace/opa not created...")
+		opasecretOutput, opaerr := oc.Run("create").Args("secret", "tls", "opa-server", "--cert="+serverCertWithSAN, "--key="+serverKeypem, "-n", "opa").Output()
+		o.Expect(opaerr).NotTo(o.HaveOccurred())
+		o.Expect(opasecretOutput).Should(o.ContainSubstring("secret/opa-server created"), "secret/opa-server not created...")
+		e2e.Logf("2. Step passed: %v with SAN certificate", opasecretOutput)
+
+		exutil.By("3. Create admission webhook")
+		policyOutput, policyerr := oc.WithoutNamespace().Run("adm").Args("policy", "add-scc-to-user", "privileged", "-z", "default", "-n", "opa").Output()
+		o.Expect(policyerr).NotTo(o.HaveOccurred())
+		o.Expect(policyOutput).Should(o.ContainSubstring(`clusterrole.rbac.authorization.k8s.io/system:openshift:scc:privileged added: "default"`), "Policy scc privileged not default")
+		admissionTemplate := getTestDataFilePath("ocp55494-admission-controller.yaml")
+		admissionOutput, admissionerr := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", admissionTemplate).Output()
+		o.Expect(admissionerr).NotTo(o.HaveOccurred())
+		admissionOutput1 := regexp.MustCompile(`\n`).ReplaceAllString(string(admissionOutput), "")
+		admissionOutput2 := `clusterrolebinding.rbac.authorization.k8s.io/opa-viewer.*role.rbac.authorization.k8s.io/configmap-modifier.*rolebinding.rbac.authorization.k8s.io/opa-configmap-modifier.*service/opa.*deployment.apps/opa.*configmap/opa-default-system-main`
+		o.Expect(admissionOutput1).Should(o.MatchRegexp(admissionOutput2), "3. Step failed: Admission controller not created as expected")
+		e2e.Logf("3. Step passed: Admission controller webhook ::\n %v", admissionOutput)
+
+		exutil.By("4. Create webhook with certificates with SAN.")
+		csrpemcmd := `cat ` + serverCertWithSAN + ` | base64 | tr -d '\n'`
+		csrpemcert, csrpemErr := exec.Command("bash", "-c", csrpemcmd).Output()
+		o.Expect(csrpemErr).NotTo(o.HaveOccurred())
+		webhookTemplate := getTestDataFilePath("ocp77919-webhook-configuration.yaml")
+		exutil.CreateClusterResourceFromTemplate(oc.NotShowInfo(), "--ignore-unknown-parameters=true", "-f", webhookTemplate, "-n", "opa", "-p", `SERVERCERT=`+string(csrpemcert))
+		e2e.Logf("4. Step passed: opa-validating-webhook created with SAN certificate")
+
+		exutil.By("5. Check rollout latest deploymentconfig.")
+		tmpnsOutput, tmpnserr := oc.Run("create").Args("ns", "test-ns"+randomStr).Output()
+		o.Expect(tmpnserr).NotTo(o.HaveOccurred())
+		o.Expect(tmpnsOutput).Should(o.ContainSubstring(fmt.Sprintf("namespace/test-ns%v created", randomStr)), fmt.Sprintf("namespace/test-ns%v not created", randomStr))
+		e2e.Logf("namespace/test-ns%v created", randomStr)
+
+		tmplabelOutput, tmplabelErr := oc.Run("label").Args("ns", "test-ns"+randomStr, "openpolicyagent.org/webhook=ignore").Output()
+		o.Expect(tmplabelErr).NotTo(o.HaveOccurred())
+		o.Expect(tmplabelOutput).Should(o.ContainSubstring(fmt.Sprintf("namespace/test-ns%v labeled", randomStr)), fmt.Sprintf("namespace/test-ns%v not labeled", randomStr))
+		e2e.Logf("namespace/test-ns%v labeled", randomStr)
+
+		var (
+			deployErr    error
+			deployOutput string
+		)
+
+		deployConfigErr := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
+			deployOutput, deployErr = oc.WithoutNamespace().AsAdmin().Run("create").Args("deploymentconfig", "mydc", "--image", "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", "test-ns"+randomStr).Output()
+			if deployErr != nil {
+				return false, nil
+			}
+			o.Expect(deployOutput).Should(o.ContainSubstring("deploymentconfig.apps.openshift.io/mydc created"), "deploymentconfig.apps.openshift.io/mydc not created")
+			e2e.Logf("deploymentconfig.apps.openshift.io/mydc created")
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(deployConfigErr, fmt.Sprintf("Not able to create mydc deploymentconfig :: %v", deployErr))
+
+		waiterrRollout := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 300*time.Second, false, func(cxt context.Context) (bool, error) {
+			rollOutput, _ := oc.WithoutNamespace().AsAdmin().Run("rollout").Args("latest", "dc/mydc", "-n", "test-ns"+randomStr).Output()
+			if strings.Contains(rollOutput, "rolled out") {
+				o.Expect(rollOutput).Should(o.ContainSubstring("deploymentconfig.apps.openshift.io/mydc rolled out"))
+				e2e.Logf("5. Step passed: deploymentconfig.apps.openshift.io/mydc rolled out latest deploymentconfig.")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waiterrRollout, "5. Step failed: deploymentconfig.apps.openshift.io/mydc not rolled out")
+
+		exutil.By("6. Try to scale deployment config, oc scale should work without error")
+		scaleErr := oc.WithoutNamespace().AsAdmin().Run("scale").Args("dc/mydc", "--replicas=10", "-n", "test-ns"+randomStr).Execute()
+		o.Expect(scaleErr).NotTo(o.HaveOccurred())
 	})
 })

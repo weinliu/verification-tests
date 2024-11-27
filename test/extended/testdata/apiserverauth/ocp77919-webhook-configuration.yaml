@@ -1,0 +1,28 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: opa-validating-webhook-template
+objects:
+  - apiVersion: admissionregistration.k8s.io/v1
+    kind: ValidatingWebhookConfiguration
+    metadata:
+      name: opa-validating-webhook
+    webhooks:
+      - name: opa-validating-webhook.openpolicyagent.org
+        rules:
+          - operations: ["UPDATE"]
+            apiGroups: ["apps.openshift.io"]
+            apiVersions: ["v1"]
+            resources: ["deploymentconfigs/scale"]
+            scope: "Namespaced"
+        clientConfig:
+          service:
+            namespace: opa
+            name: opa
+          caBundle: "${SERVERCERT}"
+        admissionReviewVersions:
+        - v1
+        sideEffects: None
+        timeoutSeconds: 5
+parameters:
+  - name: SERVERCERT
