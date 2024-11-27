@@ -335,7 +335,7 @@ func (so *SubscriptionObjects) SubscribeOperator(oc *exutil.CLI) {
 	}
 
 	// check pod status
-	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+	err = wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 240*time.Second, true, func(context.Context) (done bool, err error) {
 		pods, err := oc.AdminKubeClient().CoreV1().Pods(so.Namespace).List(context.Background(), metav1.ListOptions{LabelSelector: so.OperatorPodLabel})
 		if err != nil {
 			e2e.Logf("Hit error %v when getting pods", err)
@@ -589,6 +589,7 @@ func (r resource) clear(oc *exutil.CLI) error {
 
 func (r resource) WaitForResourceToAppear(oc *exutil.CLI) {
 	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+		e2e.Logf("wait %s %s ready ... ", r.kind, r.name)
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", r.namespace, r.kind, r.name).Output()
 		if err != nil {
 			msg := fmt.Sprintf("%v", output)
@@ -597,7 +598,7 @@ func (r resource) WaitForResourceToAppear(oc *exutil.CLI) {
 			}
 			return false, err
 		}
-		e2e.Logf("Find %s %s", r.kind, r.name)
+		e2e.Logf("found %s %s", r.kind, r.name)
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %s/%s is not appear", r.kind, r.name))
@@ -1402,18 +1403,40 @@ func getInfrastructureName(oc *exutil.CLI) string {
 }
 
 func getDataFromKafkaConsumerPod(oc *exutil.CLI, kafkaNS, consumerPod string) ([]LogEntity, error) {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", kafkaNS, consumerPod, "--since=30s", "--tail=30").Output()
-	if err != nil {
-		return nil, fmt.Errorf("get error when checking data in kafka consumer: %v", err)
-	}
+	e2e.Logf("get logs from kakfa consumerPod %s", consumerPod)
 	var logs []LogEntity
-	for _, line := range strings.Split(strings.TrimSuffix(output, "\n"), "\n") {
-		var log LogEntity
-		err = json.Unmarshal([]byte(line), &log)
+	//wait up to 5 minutes for logs appear in consumer pod
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 300*time.Second, true, func(context.Context) (done bool, err error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", kafkaNS, consumerPod, "--since=30s", "--tail=30").Output()
 		if err != nil {
-			return nil, nil
+			e2e.Logf("error when oc logs consumer pod, continue")
+			return false, nil
 		}
-		logs = append(logs, log)
+		for _, line := range strings.Split(strings.TrimSuffix(output, "\n"), "\n") {
+			//exclude those kafka-consumer logs, for exampe:
+			//[2024-11-09 07:25:47,953] WARN [Consumer clientId=consumer-console-consumer-99163-1, groupId=console-consumer-99163] Error while fetching metadata with correlation id 165
+			//: {topic-logging-app=UNKNOWN_TOPIC_OR_PARTITION} (org.apache.kafka.clients.NetworkClient)
+			match, _ := regexp.MatchString(`^{"@timestamp":.*}`, line)
+			if match {
+				var log LogEntity
+				err = json.Unmarshal([]byte(line), &log)
+				if err != nil {
+					continue
+				}
+				logs = append(logs, log)
+			} else {
+				continue
+			}
+		}
+		if len(logs) > 0 {
+			return true, nil
+		} else {
+			e2e.Logf("can not find logs in consumerPod %s, continue", consumerPod)
+			return false, nil
+		}
+	})
+	if err != nil {
+		return logs, fmt.Errorf("can not find consumer logs in 3 minutes.")
 	}
 	return logs, nil
 }
@@ -1580,6 +1603,188 @@ func (k kafka) removeKafka(oc *exutil.CLI) {
 	resource{"statefulset", k.kafkasvcName, k.namespace}.clear(oc)
 	resource{"configmap", "kafka-client", k.namespace}.clear(oc)
 	resource{"deployment", "kafka-consumer-" + k.authtype, k.namespace}.clear(oc)
+}
+
+// deploy amqstream instance, kafka user for predefined topics
+// if amqstreams absent, deploy amqstream operator
+func (amqi *amqInstance) deploy(oc *exutil.CLI) {
+	e2e.Logf("deploy amq instance")
+	//initialize kakfa vars
+	if amqi.name == "" {
+		amqi.name = "my-cluster"
+	}
+	if amqi.namespace == "" {
+		e2e.Failf("error, please define a namespace for amqstream instance")
+	}
+	if amqi.user == "" {
+		amqi.user = "my-user"
+	}
+	if amqi.topicPrefix == "" {
+		amqi.topicPrefix = "topic-logging"
+	}
+	if amqi.instanceType == "" {
+		amqi.instanceType = "kafka-sasl-cluster"
+	}
+
+	loggingBaseDir := exutil.FixturePath("testdata", "logging")
+	operatorDeployed := false
+	// Wait csv appears up to 3 minutes
+	wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", "openshift-operators").Output()
+		if err != nil {
+			return false, err
+		}
+		if strings.Contains(output, "amqstreams") {
+			operatorDeployed = true
+			return true, nil
+		}
+		return false, nil
+	})
+	if !operatorDeployed {
+		e2e.Logf("deploy amqstream operator")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhub/cluster", `-ojsonpath='{.status.sources[?(@.name=="redhat-operators")].disabled}'`).Output()
+		if err != nil {
+			g.Skip("Can not detect the catalog source/redhat-operators status")
+		}
+		if output == "true" {
+			g.Skip("catalog source/redhat-operators is disabled")
+		}
+		catsrc := CatalogSourceObjects{"stable", "redhat-operators", "openshift-marketplace"}
+		amqs := SubscriptionObjects{
+			OperatorName:  "amq-streams-cluster-operator",
+			Namespace:     amqi.namespace,
+			PackageName:   "amq-streams",
+			Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
+			CatalogSource: catsrc,
+		}
+		amqs.SubscribeOperator(oc)
+		if isFipsEnabled(oc) {
+			//disable FIPS_MODE due to "java.io.IOException: getPBEAlgorithmParameters failed: PBEWithHmacSHA256AndAES_256 AlgorithmParameters not available"
+			err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("sub/"+amqs.PackageName, "-n", amqs.Namespace, "-p", "{\"spec\": {\"config\": {\"env\": [{\"name\": \"FIPS_MODE\", \"value\": \"disabled\"}]}}}", "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+	}
+	// before creating kafka, check the existence of crd kafkas.kafka.strimzi.io
+	checkResource(oc, true, true, "kafka.strimzi.io", []string{"crd", "kafkas.kafka.strimzi.io", "-ojsonpath={.spec.group}"})
+	kafka := resource{"kafka", amqi.name, amqi.namespace}
+	kafkaTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", amqi.instanceType+".yaml")
+	kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name)
+	// wait for kafka cluster to be ready
+	waitForPodReadyWithLabel(oc, kafka.namespace, "app.kubernetes.io/instance="+kafka.name)
+	if amqi.instanceType == "kafka-sasl-cluster" {
+		e2e.Logf("deploy kafka user")
+		kafkaUser := resource{"kafkauser", amqi.user, amqi.namespace}
+		kafkaUserTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-sasl-user.yaml")
+		kafkaUser.applyFromTemplate(oc, "-n", kafkaUser.namespace, "-f", kafkaUserTemplate, "-p", "NAME="+amqi.user, "-p", "KAFKA_NAME="+amqi.name, "-p", "TOPIC_PREFIX="+amqi.topicPrefix)
+		// get user password from secret my-user
+		err := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
+			secrets, err := oc.AdminKubeClient().CoreV1().Secrets(kafkaUser.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "app.kubernetes.io/instance=" + kafkaUser.name})
+			if err != nil {
+				e2e.Logf("failed to list secret, continue")
+				return false, nil
+			}
+			count := len(secrets.Items)
+			if count == 0 {
+				e2e.Logf("canot not find the secret %s, continues", kafkaUser.name)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can not find the kafka user Secret %s", amqi.user))
+
+		e2e.Logf("set kafka user password")
+		amqi.password, err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("get").Args("secret", amqi.user, "-n", amqi.namespace, "-o", "jsonpath={.data.password}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		temp, err := base64.StdEncoding.DecodeString(amqi.password)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		amqi.password = string(temp)
+
+		// get extranal route of amqstream kafka
+		e2e.Logf("get kafka route")
+		amqi.route = getRouteAddress(oc, amqi.namespace, amqi.name+"-kafka-external-bootstrap")
+		amqi.route = amqi.route + ":443"
+
+		// get ca for route
+		e2e.Logf("get kafka routeCA")
+		amqi.routeCA, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", amqi.name+"-cluster-ca-cert", "-n", amqi.namespace, "-o", `jsonpath={.data.ca\.crt}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		temp, err = base64.StdEncoding.DecodeString(amqi.routeCA)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		amqi.routeCA = string(temp)
+	}
+	// get internal service URL of amqstream kafka
+	amqi.service = amqi.name + "-kafka-bootstrap." + amqi.namespace + ".svc:9092"
+	e2e.Logf("amqstream deployed")
+}
+
+// try best to delete resources which will block normal deletion
+func (amqi *amqInstance) destroy(oc *exutil.CLI) {
+	e2e.Logf("delete kakfa resources")
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("job", "--all", "-n", amqi.namespace).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("kafkauser", "--all", "-n", amqi.namespace).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("kafkatopic", "--all", "-n", amqi.namespace).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args("kafka", amqi.name, "-n", amqi.namespace).Execute()
+}
+
+// Create kafka topic, create consumer pod and return consumer pod name
+// Note: the topic name must match the amq.topicPrefix
+func (amqi amqInstance) createTopicAndConsumber(oc *exutil.CLI, topicName string) string {
+	e2e.Logf("create kakfa topic %s and consume pod", topicName)
+	if !strings.HasPrefix(topicName, amqi.topicPrefix) {
+		e2e.Failf("error, the topic %s must has prefix %s", topicName, amqi.topicPrefix)
+	}
+	var (
+		consumerPodName string
+		loggingBaseDir  = exutil.FixturePath("testdata", "logging")
+		topicTemplate   = filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-topic.yaml")
+		topic           = resource{"Kafkatopic", topicName, amqi.namespace}
+	)
+	err := topic.applyFromTemplate(oc, "-n", topic.namespace, "-f", topicTemplate, "-p", "NAMESPACE="+topic.namespace, "-p", "NAME="+topic.name, "CLUSTER_NAME="+amqi.name)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	if amqi.instanceType == "kafka-sasl-cluster" {
+		//create consumers sasl.client.property
+		truststorePassword, err := oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("get").Args("secret", amqi.name+"-cluster-ca-cert", "-n", amqi.namespace, "-o", `jsonpath={.data.ca\.password}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		temp, err := base64.StdEncoding.DecodeString(truststorePassword)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		truststorePassword = string(temp)
+		consumerConfigTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-sasl-consumers-config.yaml")
+		consumerConfig := resource{"configmap", "client-property-" + amqi.user, amqi.namespace}
+		err = consumerConfig.applyFromTemplate(oc.NotShowInfo(), "-n", consumerConfig.namespace, "-f", consumerConfigTemplate, "-p", "NAME="+consumerConfig.name, "-p", "USER="+amqi.user, "-p", "PASSWORD="+amqi.password, "-p", "TRUSTSTORE_PASSWORD="+truststorePassword, "-p", "KAFKA_NAME="+amqi.name)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//create consumer pod
+		consumerTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-sasl-consumer-job.yaml")
+		consumer := resource{"job", topicName + "-consumer", amqi.namespace}
+		err = consumer.applyFromTemplate(oc, "-n", consumer.namespace, "-f", consumerTemplate, "-p", "NAME="+consumer.name, "-p", "CLUSTER_NAME="+amqi.name, "-p", "TOPIC_NAME="+topicName, "-p", "CLIENT_CONFIGMAP_NAME="+consumerConfig.name, "-p", "CA_SECRET_NAME="+amqi.name+"-cluster-ca-cert")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForPodReadyWithLabel(oc, amqi.namespace, "job-name="+consumer.name)
+
+		consumerPods, err := oc.AdminKubeClient().CoreV1().Pods(amqi.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=" + topicName + "-consumer"})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		consumerPodName = consumerPods.Items[0].Name
+
+	}
+	if amqi.instanceType == "kafka-no-auth-cluster" {
+		//create consumer pod
+		consumerTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-no-auth-consumer-job.yaml")
+		consumer := resource{"job", topicName + "-consumer", amqi.namespace}
+		err = consumer.applyFromTemplate(oc, "-n", consumer.namespace, "-f", consumerTemplate, "-p", "NAME="+consumer.name, "-p", "CLUSTER_NAME="+amqi.name, "-p", "TOPIC_NAME="+topicName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForPodReadyWithLabel(oc, amqi.namespace, "job-name="+consumer.name)
+
+		consumerPods, err := oc.AdminKubeClient().CoreV1().Pods(amqi.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=" + topicName + "-consumer"})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		consumerPodName = consumerPods.Items[0].Name
+	}
+	if consumerPodName == "" {
+		e2e.Logf("can not get comsumer pod for the topic %s", topicName)
+	} else {
+		e2e.Logf("found the comsumer pod %s ", consumerPodName)
+	}
+	return consumerPodName
 }
 
 type eventRouter struct {
@@ -2247,8 +2452,8 @@ func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, 
 		e2e.Logf("rapidast result: riskHigh=unknown riskMedium=unknown")
 		return false, err
 	}
-	//Waiting up to 10 minutes until pod Failed or Success
-	wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 10*time.Minute, true, func(context.Context) (done bool, err error) {
+	//Waiting up to 3 minutes until pod Failed or Success
+	wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 3*time.Minute, true, func(context.Context) (done bool, err error) {
 		jobStatus, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "pod", "-l", "job-name=rapidast-job", "-ojsonpath={.items[0].status.phase}").Output()
 		e2e.Logf(" rapidast Job status %s ", jobStatus)
 		if err1 != nil {

@@ -855,3 +855,18 @@ type LimitsConfig struct {
 	} `yaml:"shard_streams"`
 	AllowStructuredMetadata bool `yaml:"allow_structured_metadata"`
 }
+
+/*
+A amqstream instance struct which can share data in kafka intance, CLF and cases
+*/
+type amqInstance struct {
+	name         string // amqstream kakfa clustername
+	namespace    string // amqstream kafka namespace
+	user         string // amqstream user for topicPrefix
+	password     string // amqstream user password
+	service      string // amqstream kafka service name for internal service using sasl Plain auth
+	route        string // amqstream kakfa broker external route using sasl ssl auth
+	routeCA      string // amqstream kafka route ca
+	topicPrefix  string // amqstream topicPrefix, only topic with this prefix are allowed.
+	instanceType string // the my kafka instance type: kafka-no-auth-cluster,kafka-sasl-cluster
+}

@@ -151,61 +151,51 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", kafka.namespace, consumerPodPodName))
 		})
 
-		g.It("Author:ikanse-CPaasrunOnly-WRS-Critical-52496-VA-IAC.03-Vector Forward logs to kafka using SASL SSL", func() {
-			g.By("Create log producer")
+		g.It("Author:anli-CPaasrunOnly-WRS-Critical-68312-VA-IAC.03-Forward to Kafka using SSL-SASL_SCRAM auth", func() {
+			amqNS := oc.Namespace()
+
+			g.By("crete kafka instance")
+			amqi := amqInstance{
+				name:         "my-cluster",
+				namespace:    amqNS,
+				topicPrefix:  "logging-topic",
+				instanceType: "kafka-sasl-cluster",
+			}
+			defer amqi.destroy(oc)
+			amqi.deploy(oc)
+			topicName := "logging-topic-52496"
+			consumerPodName := amqi.createTopicAndConsumber(oc, topicName)
+
+			g.By("create log producer")
+			oc.SetupProject()
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			kafkaNS := "openshift-kafka-" + getRandomString()
-			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", kafkaNS, "--wait=false").Execute()
-			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kafkaNS).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			g.By("Deploy zookeeper")
-			kafka := kafka{
-				namespace:      kafkaNS,
-				kafkasvcName:   "kafka",
-				zoosvcName:     "zookeeper",
-				authtype:       "sasl-ssl",
-				pipelineSecret: "vector-kafka",
-				collectorType:  "vector",
-				loggingNS:      appProj,
-			}
-			defer kafka.removeZookeeper(oc)
-			kafka.deployZookeeper(oc)
-			g.By("Deploy kafka")
-			defer kafka.removeKafka(oc)
-			kafka.deployKafka(oc)
-			kafkaEndpoint := "tls://" + kafka.kafkasvcName + "." + kafka.namespace + ".svc.cluster.local:9093/clo-topic"
-
-			g.By("Create clusterlogforwarder/instance")
+			g.By("forward logs to Kafkas using ssl sasl scram-sha-512")
 			clf := clusterlogforwarder{
-				name:                   "clf-52496",
-				namespace:              appProj,
-				templateFile:           filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "clf-kafka-with-auth.yaml"),
-				secretName:             kafka.pipelineSecret,
-				waitForPodReady:        true,
-				collectApplicationLogs: true,
-				serviceAccountName:     "clf-" + getRandomString(),
+				name:                      "clf-52496",
+				namespace:                 amqNS,
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "clf-kafka-sasl-ssl.yaml"),
+				waitForPodReady:           true,
+				collectApplicationLogs:    true,
+				collectAuditLogs:          false,
+				collectInfrastructureLogs: false,
+				serviceAccountName:        "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			clf.create(oc, "URL="+kafkaEndpoint, "TLS_SECRET_NAME="+clf.secretName)
+			secretName := "secret-for-kafka-52420"
+			oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "-n", clf.namespace, "--from-literal=username="+amqi.user, "--from-literal=password="+amqi.password, "--from-literal=ca-bundle.crt="+amqi.routeCA).Execute()
+			//To reduce the logs collected, we only collect app logs from appProj
+			//Note: all sasl and tls data are from secret clf-to-amq with fix name -- user,password,ca
+			clf.create(oc, "URL=tls://"+amqi.route+"/"+topicName, "SECRET_NAME="+secretName, "NAMESPACE_PATTERN="+appProj)
 
-			// Validate tuning configuration under vector.toml
-			checkCollectorConfiguration(oc, clf.namespace, clf.name+"-config", `compression = "zstd"`, "[sinks.output_kafka_app.batch]", `max_bytes = 10000000`, `[sinks.output_kafka_app.buffer]`)
-
-			g.By("Check app logs in kafka consumer pod")
-			consumerPodPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", kafka.namespace, "-l", "component=kafka-consumer", "-o", "name").Output()
+			g.By("verifiy the data are sent to kafka")
+			//application logs
+			logs, err := getDataFromKafkaConsumerPod(oc, amqi.namespace, consumerPodName)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
-				appLogs, err := getDataFromKafkaByNamespace(oc, kafka.namespace, consumerPodPodName, appProj)
-				if err != nil {
-					return false, err
-				}
-				return len(appLogs) > 0, nil
-			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", kafka.namespace, consumerPodPodName))
+			o.Expect(len(logs) > 0).Should(o.BeTrue(), "Can not find any logs from kafka consumer pods")
 		})
 
 		// author qitang@redhat.com
@@ -214,239 +204,133 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			if err != nil || len(nodes.Items) == 0 {
 				g.Skip("Skip for the cluster doesn't have amd64 node")
 			}
+			amqNS := oc.Namespace()
+
+			g.By("crete kafka instance")
+			amqi := amqInstance{
+				name:         "my-cluster",
+				namespace:    amqNS,
+				topicPrefix:  "topic-logging",
+				instanceType: "kafka-sasl-cluster",
+			}
+			defer amqi.destroy(oc)
+			amqi.deploy(oc)
+			//topic name are fix value in clf_kafka_multi_topics.yaml
+			consumerAppPodName := amqi.createTopicAndConsumber(oc, amqi.topicPrefix+"-app")
+			consumerInfraPodName := amqi.createTopicAndConsumber(oc, amqi.topicPrefix+"-infra")
+			consumerAuditPodName := amqi.createTopicAndConsumber(oc, amqi.topicPrefix+"-audit")
 
 			g.By("create log producer")
+			oc.SetupProject()
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("subscribe AMQ kafka")
-			oc.SetupProject()
-			amqNS := oc.Namespace()
-			catsrc := CatalogSourceObjects{"stable", "redhat-operators", "openshift-marketplace"}
-			amq := SubscriptionObjects{
-				OperatorName:  "amq-streams-cluster-operator",
-				Namespace:     amqNS,
-				PackageName:   "amq-streams",
-				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
-				CatalogSource: catsrc,
-			}
-
-			kafkaClusterName := "kafka-cluster"
-			//defer amq.uninstallOperator(oc)
-			amq.SubscribeOperator(oc)
-			if isFipsEnabled(oc) {
-				//disable FIPS_MODE due to "java.io.IOException: getPBEAlgorithmParameters failed: PBEWithHmacSHA256AndAES_256 AlgorithmParameters not available"
-				err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("sub/"+amq.PackageName, "-n", amq.Namespace, "-p", "{\"spec\": {\"config\": {\"env\": [{\"name\": \"FIPS_MODE\", \"value\": \"disabled\"}]}}}", "--type=merge").Execute()
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}
-			// before creating kafka, check the existence of crd kafkas.kafka.strimzi.io
-			checkResource(oc, true, true, "kafka.strimzi.io", []string{"crd", "kafkas.kafka.strimzi.io", "-ojsonpath={.spec.group}"})
-			kafka := resource{"kafka", kafkaClusterName, amqNS}
-			kafkaTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-cluster-no-auth.yaml")
-			defer kafka.clear(oc)
-			kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.7.0", "MESSAGE_VERSION=3.7.0")
-			o.Expect(err).NotTo(o.HaveOccurred())
-			// create topics
-			topicNames := []string{"topic-logging-app", "topic-logging-infra", "topic-logging-audit"}
-			for _, topicName := range topicNames {
-				topicTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-topic.yaml")
-				topic := resource{"Kafkatopic", topicName, amqNS}
-				defer topic.clear(oc)
-				err = topic.applyFromTemplate(oc, "-n", topic.namespace, "-f", topicTemplate, "-p", "NAME="+topic.name, "CLUSTER_NAME="+kafka.name, "NAMESPACE="+topic.namespace)
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}
-			// wait for kafka cluster to be ready
-			waitForPodReadyWithLabel(oc, kafka.namespace, "app.kubernetes.io/instance="+kafka.name)
-			//create consumer pod
-			for _, topicName := range topicNames {
-				consumerTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "topic-consumer.yaml")
-				consumer := resource{"job", topicName + "-consumer", amqNS}
-				defer consumer.clear(oc)
-				err = consumer.applyFromTemplate(oc, "-n", consumer.namespace, "-f", consumerTemplate, "-p", "NAME="+consumer.name, "NAMESPACE="+consumer.namespace, "KAFKA_TOPIC="+topicName, "CLUSTER_NAME="+kafkaClusterName)
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}
-			for _, topicName := range topicNames {
-				waitForPodReadyWithLabel(oc, amqNS, "job-name="+topicName+"-consumer")
-			}
-
-			oc.SetupProject()
-			clfNS := oc.Namespace()
-
 			g.By("forward logs to Kafkas")
 			clf := clusterlogforwarder{
 				name:                      "clf-47036",
-				namespace:                 clfNS,
-				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "clf_kafka_multi_topics.yaml"),
+				namespace:                 amqNS,
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "clf-kafka-multi-topics.yaml"),
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
 				collectInfrastructureLogs: true,
 				serviceAccountName:        "clf-" + getRandomString(),
 			}
+			secretName := "secret-for-kafka-47036"
+			oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "-n", clf.namespace, "--from-literal=username="+amqi.user, "--from-literal=password="+amqi.password, "--from-literal=ca-bundle.crt="+amqi.routeCA).Execute()
 			defer clf.delete(oc)
-
-			bootstrapSVC := kafkaClusterName + "-kafka-bootstrap." + amqNS + ".svc"
-			//since the data in kafka will be write to comsumer pods' stdout, and to avoid collecting these logs, here only collect app logs from appProj
-			clf.create(oc, "BOOTSTRAP_SVC="+bootstrapSVC, "APP_PROJECT="+appProj, "APP_TOPIC="+topicNames[0], "INFRA_TOPIC="+topicNames[1], "AUDIT_TOPIC="+topicNames[2])
-
+			clf.create(oc, "BOOTSTRAP_SVC="+amqi.service, "NAMESPACE_PATTERN="+appProj, "APP_TOPIC="+amqi.topicPrefix+"-app", "INFRA_TOPIC="+amqi.topicPrefix+"-infra", "AUDIT_TOPIC="+amqi.topicPrefix+"-audit", "SECRET_NAME="+secretName)
 			g.By("check data in kafka")
-			//application logs
-			consumerPods, err := oc.AdminKubeClient().CoreV1().Pods(amqNS).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=topic-logging-app-consumer"})
+			//app logs
+			appLogs, err := getDataFromKafkaConsumerPod(oc, amqNS, consumerAppPodName)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
-				logs, err := getDataFromKafkaConsumerPod(oc, amqNS, consumerPods.Items[0].Name)
-				if err != nil {
-					return false, err
-				}
-				for _, log := range logs {
-					if log.Kubernetes.NamespaceName == appProj {
-						return true, nil
-					}
-				}
-				return false, nil
-			})
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can't find app logs in %s/topic-logging-app-consumer", amqNS))
-			e2e.Logf("find app logs \n")
+			o.Expect(len(appLogs) > 0).Should(o.BeTrue(), "Can not find any logs from topic-logging-app-consumer")
+			e2e.Logf("found app logs \n")
 
 			//infrastructure logs
-			infraConsumerPods, err := oc.AdminKubeClient().CoreV1().Pods(amqNS).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=topic-logging-infra-consumer"})
+			infraLogs, err := getDataFromKafkaConsumerPod(oc, amqNS, consumerInfraPodName)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			infraLogs, err := getDataFromKafkaConsumerPod(oc, amqNS, infraConsumerPods.Items[0].Name)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(infraLogs) > 0).Should(o.BeTrue())
-			o.Expect(infraLogs[0].LogType == "infrastructure").Should(o.BeTrue())
-			e2e.Logf("find infra logs \n")
+			o.Expect(len(infraLogs) > 0).Should(o.BeTrue(), "Can not find any logs from topic-logging-infra-consumer")
+			o.Expect(infraLogs[0].LogType == "infrastructure").Should(o.BeTrue(), "Can not find infra logs in consumer pod")
+			e2e.Logf("found infra logs \n")
 
 			//audit logs
-			auditConsumerPods, err := oc.AdminKubeClient().CoreV1().Pods(amqNS).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=topic-logging-audit-consumer"})
+			auditLogs, err := getDataFromKafkaConsumerPod(oc, amqNS, consumerAuditPodName)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			auditLogs, err := getDataFromKafkaConsumerPod(oc, amqNS, auditConsumerPods.Items[0].Name)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(len(auditLogs) > 0).Should(o.BeTrue())
-			o.Expect(auditLogs[0].LogType == "audit").Should(o.BeTrue())
-			e2e.Logf("find audit logs \n")
+			o.Expect(len(auditLogs) > 0).Should(o.BeTrue(), "Can not find any logs from topic-logging-audit-consumer")
+			o.Expect(auditLogs[0].LogType == "audit").Should(o.BeTrue(), "Can not find audit logs in consumer pod")
+			e2e.Logf("found audit logs \n")
 		})
 
 		// author qitang@redhat.com
-		g.It("Author:qitang-CPaasrunOnly-WRS-Medium-48141-V-ICA.03-Vector Forward logs to different Kafka brokers.[Slow]", func() {
+		g.It("Author:qitang-CPaasrunOnly-Medium-48141-Vector Forward logs to different Kafka brokers.[Slow]", func() {
 			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux,kubernetes.io/arch=amd64"})
 			if err != nil || len(nodes.Items) == 0 {
 				g.Skip("Skip for the cluster doesn't have amd64 node")
 			}
+			//create project at first , so the OLM has more time to prepare CSV in these namespaces
+			amqi1NS := oc.Namespace()
+			oc.SetupProject()
+			amqi2NS := oc.Namespace()
+			g.By("deploy AMQ kafka instance in two different namespaces")
+			// to avoid collecting kafka logs, deploy kafka in project openshift-*
+			// In general, we send data to brokers in kafka cluster. for historical, we use two clusters here. toDo: launch one cluster with more than one broker
+			topicName := "topic-logging"
+			amqi1 := amqInstance{
+				name:         "my-cluster",
+				namespace:    amqi1NS,
+				topicPrefix:  topicName,
+				instanceType: "kafka-no-auth-cluster",
+			}
+			amqi2 := amqInstance{
+				name:         "my-cluster",
+				namespace:    amqi2NS,
+				topicPrefix:  topicName,
+				instanceType: "kafka-no-auth-cluster",
+			}
+
+			defer amqi1.destroy(oc)
+			amqi1.deploy(oc)
+			amqi1ConsumerPodName := amqi1.createTopicAndConsumber(oc, topicName)
+			defer amqi2.destroy(oc)
+			amqi2.deploy(oc)
+			amqi2ConsumerPodName := amqi2.createTopicAndConsumber(oc, topicName)
 
 			g.By("create log producer")
+			oc.SetupProject()
 			appProj := oc.Namespace()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			// avoid hitting https://issues.redhat.com/browse/LOG-3025, set replicas to 3
 			err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile, "-p", "REPLICAS=3").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			g.By("subscribe AMQ kafka into 2 different namespaces")
-			// to avoid collecting kafka logs, deploy kafka in project openshift-*
-			amqNs1 := "openshift-amq-1-" + getRandomString()
-			amqNs2 := "openshift-amq-2-" + getRandomString()
-			catsrc := CatalogSourceObjects{"stable", "redhat-operators", "openshift-marketplace"}
-			amq1 := SubscriptionObjects{
-				OperatorName:  "amq-streams-cluster-operator",
-				Namespace:     amqNs1,
-				PackageName:   "amq-streams",
-				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
-				CatalogSource: catsrc,
-			}
-			amq2 := SubscriptionObjects{
-				OperatorName:  "amq-streams-cluster-operator",
-				Namespace:     amqNs2,
-				PackageName:   "amq-streams",
-				Subscription:  filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml"),
-				OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "singlenamespace-og.yaml"),
-				CatalogSource: catsrc,
-			}
-			topicName := "topic-logging-app"
-			kafkaClusterName := "kafka-cluster"
-			fips := isFipsEnabled(oc)
-			for _, amq := range []SubscriptionObjects{amq1, amq2} {
-				defer deleteNamespace(oc, amq.Namespace)
-				//defer amq.uninstallOperator(oc)
-				amq.SubscribeOperator(oc)
-				if fips {
-					//disable FIPS_MODE due to "java.io.IOException: getPBEAlgorithmParameters failed: PBEWithHmacSHA256AndAES_256 AlgorithmParameters not available"
-					err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("sub/"+amq.PackageName, "-n", amq.Namespace, "-p", "{\"spec\": {\"config\": {\"env\": [{\"name\": \"FIPS_MODE\", \"value\": \"disabled\"}]}}}", "--type=merge").Execute()
-					o.Expect(err).NotTo(o.HaveOccurred())
-				}
-				// before creating kafka, check the existence of crd kafkas.kafka.strimzi.io
-				checkResource(oc, true, true, "kafka.strimzi.io", []string{"crd", "kafkas.kafka.strimzi.io", "-ojsonpath={.spec.group}"})
-				kafka := resource{"kafka", kafkaClusterName, amq.Namespace}
-				kafkaTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-cluster-no-auth.yaml")
-				defer kafka.clear(oc)
-				kafka.applyFromTemplate(oc, "-n", kafka.namespace, "-f", kafkaTemplate, "-p", "NAME="+kafka.name, "NAMESPACE="+kafka.namespace, "VERSION=3.7.0", "MESSAGE_VERSION=3.7.0")
-				o.Expect(err).NotTo(o.HaveOccurred())
-				// create topics
-				topicTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "kafka-topic.yaml")
-				topic := resource{"Kafkatopic", topicName, amq.Namespace}
-				defer topic.clear(oc)
-				err = topic.applyFromTemplate(oc, "-n", topic.namespace, "-f", topicTemplate, "-p", "NAME="+topic.name, "CLUSTER_NAME="+kafka.name, "NAMESPACE="+topic.namespace)
-				o.Expect(err).NotTo(o.HaveOccurred())
-				// wait for kafka cluster to be ready
-				waitForPodReadyWithLabel(oc, kafka.namespace, "app.kubernetes.io/instance="+kafka.name)
-			}
-			//deploy consumer pod
-			for _, ns := range []string{amqNs1, amqNs2} {
-				consumerTemplate := filepath.Join(loggingBaseDir, "external-log-stores", "kafka", "amqstreams", "topic-consumer.yaml")
-				consumer := resource{"job", topicName + "-consumer", ns}
-				defer consumer.clear(oc)
-				err = consumer.applyFromTemplate(oc, "-n", consumer.namespace, "-f", consumerTemplate, "-p", "NAME="+consumer.name, "NAMESPACE="+consumer.namespace, "KAFKA_TOPIC="+topicName, "CLUSTER_NAME="+kafkaClusterName)
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}
-
 			g.By("forward logs to Kafkas")
 			clf := clusterlogforwarder{
 				name:                      "clf-48141",
-				namespace:                 loggingNS,
-				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "kafka-multi-brokers.yaml"),
+				namespace:                 amqi1NS,
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "clf-kafka-multi-brokers.yaml"),
 				waitForPodReady:           true,
 				collectApplicationLogs:    true,
 				collectAuditLogs:          true,
-				collectInfrastructureLogs: true,
+				collectInfrastructureLogs: false,
 				serviceAccountName:        "clf-" + getRandomString(),
 			}
 			defer clf.delete(oc)
-			brokers, _ := json.Marshal([]string{"tls://" + kafkaClusterName + "-kafka-bootstrap." + amqNs1 + ".svc:9092", "tls://" + kafkaClusterName + "-kafka-bootstrap." + amqNs2 + ".svc:9092"})
-			clf.create(oc, "TOPIC="+topicName, "BROKERS="+string(brokers))
+			brokers, _ := json.Marshal([]string{"tls://" + amqi1.service, "tls://" + amqi2.service})
+			clf.create(oc, "TOPIC="+topicName, "BROKERS="+string(brokers), "NAMESPACE_PATTERN="+appProj)
 
-			g.By("check data in kafka")
-			for _, consumer := range []resource{{"job", topicName + "-consumer", amqNs1}, {"job", topicName + "-consumer", amqNs2}} {
-				waitForPodReadyWithLabel(oc, consumer.namespace, "job-name="+consumer.name)
-				consumerPods, err := oc.AdminKubeClient().CoreV1().Pods(consumer.namespace).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=" + consumer.name})
-				o.Expect(err).NotTo(o.HaveOccurred())
-				err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
-					logs, err := getDataFromKafkaConsumerPod(oc, consumer.namespace, consumerPods.Items[0].Name)
-					if err != nil {
-						return false, err
-					}
-					for _, log := range logs {
-						if log.Kubernetes.NamespaceName == appProj {
-							return true, nil
-						}
-					}
-					return false, nil
-				})
-				exutil.AssertWaitPollNoErr(err, fmt.Sprintf("App logs are not found in %s/%s", consumer.namespace, consumer.name))
-			}
+			g.By("check data in the first broker")
+			amqi1logs, _ := getDataFromKafkaConsumerPod(oc, amqi1.namespace, amqi1ConsumerPodName)
+			o.Expect(len(amqi1logs) > 0).Should(o.BeTrue(), "Can not fetch any logs from broker1-consumer")
+
+			g.By("check data in the second broker")
+			amqi2logs, _ := getDataFromKafkaConsumerPod(oc, amqi2.namespace, amqi2ConsumerPodName)
+			o.Expect(len(amqi2logs) > 0).Should(o.BeTrue(), "Can not fetch any logs from broker2-consumer")
 		})
 
 		g.It("Author:ikanse-CPaasrunOnly-High-61549-Collector-External Kafka output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
-			g.By("Create log producer")
-			appProj := oc.Namespace()
-			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
-
-			g.By("Deploy the log generator app")
-			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-
 			g.By("Configure the global tlsSecurityProfile to use custom profile")
 			ogTLS, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiserver/cluster", "-o", "jsonpath={.spec.tlsSecurityProfile}").Output()
 			o.Expect(er).NotTo(o.HaveOccurred())
@@ -481,6 +365,12 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			defer kafka.removeKafka(oc)
 			kafka.deployKafka(oc)
 			kafkaEndpoint := "tls://" + kafka.kafkasvcName + "." + kafka.namespace + ".svc.cluster.local:9093/clo-topic"
+
+			g.By("Create log producer")
+			appProj := oc.Namespace()
+			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+			err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
 
 			g.By("Create clusterlogforwarder")
 			clf := clusterlogforwarder{
