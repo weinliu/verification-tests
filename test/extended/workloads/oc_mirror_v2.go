@@ -626,9 +626,9 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		exutil.By("Start mirror2disk with strict-archive")
 		defer os.RemoveAll(".oc-mirror.log")
 		defer os.RemoveAll("~/.oc-mirror/")
-		_, warningOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--v2", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--strict-archive").Outputs()
+		outputMes, _, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--v2", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--strict-archive").Outputs()
 		o.Expect(err).Should(o.HaveOccurred())
-		o.Expect(strings.Contains(warningOutput, "maxArchiveSize 1G is too small compared to sizes of files")).To(o.BeTrue())
+		o.Expect(strings.Contains(outputMes, "maxArchiveSize 1G is too small compared to sizes of files")).To(o.BeTrue())
 
 		exutil.By("Start mirror2disk without strict-archive")
 		waitErr := wait.PollImmediate(300*time.Second, 600*time.Second, func() (bool, error) {
@@ -681,7 +681,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 			return true, nil
 		})
 		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror still failed")
-		payloadImageInfo, err := oc.WithoutNamespace().Run("image").Args("info", "--insecure", serInfo.serviceName+"/openshift-release-dev/ocp-release:4.15.19-s390x").Output()
+		payloadImageInfo, err := oc.WithoutNamespace().Run("image").Args("info", "--insecure", serInfo.serviceName+"/openshift/release-images:4.15.19-s390x").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Payloadinfo is %s", payloadImageInfo)
 		o.Expect(strings.Contains(payloadImageInfo, "s390x")).To(o.BeTrue())
@@ -695,7 +695,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--delete-yaml-file", dirname+"/working-dir/delete/delete-images.yaml", "docker://"+serInfo.serviceName, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.By("Checked the payload manifest again should failed")
-		_, err = oc.WithoutNamespace().Run("image").Args("info", "--insecure", serInfo.serviceName+"/openshift-release-dev/ocp-release:4.15.19-s390x").Output()
+		_, err = oc.WithoutNamespace().Run("image").Args("info", "--insecure", serInfo.serviceName+"/openshift/release-images:4.15.19-s390x").Output()
 		o.Expect(err).Should(o.HaveOccurred())
 
 		exutil.By("Checked the operator manifest again should failed")
