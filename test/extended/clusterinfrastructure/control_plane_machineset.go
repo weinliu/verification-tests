@@ -26,6 +26,12 @@ const (
 	getCPMSAvailabilityZonesJSONCon   = "getCPMSAvailabilityZonesJSON"
 	updateFieldsCon                   = "updateFields"
 	recoverFieldsCon                  = "recoverFields"
+	getSpecificFieldJSONCon           = "getSpecificFieldJSON"
+	patchSpecificFieldPrefixCon       = "patchSpecificFieldPrefix"
+	patchSpecificFieldSuffixCon       = "patchSpecificFieldSuffix"
+	getMachineFieldValueJSONCon       = "getMachineFieldValueJSON"
+	changeSpecificFieldCon            = "changeSpecificField"
+	backupSpecificFieldCon            = "backupSpecificField"
 )
 
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", func() {
@@ -51,6 +57,20 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 			clusterinfra.GCP: {getInstanceTypeJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.machineType}",
 				patchInstanceTypePrefixCon: `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"machineType":`,
 				patchInstanceTypeSuffixCon: `}}}}}}}`},
+		}
+		getSpecificFieldJsonByCloud = map[clusterinfra.PlatformType]map[string]string{
+			clusterinfra.Nutanix: {getSpecificFieldJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.vcpusPerSocket}",
+				patchSpecificFieldPrefixCon: `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"vcpusPerSocket":`,
+				patchSpecificFieldSuffixCon: `}}}}}}}`,
+				getMachineFieldValueJSONCon: "-o=jsonpath={.spec.providerSpec.value.vcpusPerSocket}"},
+			clusterinfra.VSphere: {getSpecificFieldJSONCon: "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.diskGiB}",
+				patchSpecificFieldPrefixCon: `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"diskGiB":`,
+				patchSpecificFieldSuffixCon: `}}}}}}}`,
+				getMachineFieldValueJSONCon: "-o=jsonpath={.spec.providerSpec.value.diskGiB}"},
+		}
+		changeToBackupSpecificField = map[clusterinfra.PlatformType]map[string]string{
+			clusterinfra.Nutanix: {changeSpecificFieldCon: "2", backupSpecificFieldCon: "1"},
+			clusterinfra.VSphere: {changeSpecificFieldCon: "130", backupSpecificFieldCon: "120"},
 		}
 		otherUpdateFieldsByCloud = map[clusterinfra.PlatformType]map[string]string{
 			clusterinfra.AWS: {updateFieldsCon: `,"placementGroupPartition":3,"placementGroupName":"pgpartition3"`,
@@ -220,17 +240,18 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-53323-Implement update logic for RollingUpdate CPMS strategy update some field [Disruptive]", func() {
 		//For the providers which don't have instance type, we will update some other field to trigger update
 		//For nutanix, we choose vcpusPerSocket
+		//For vsphere, we choose diskGiB
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Nutanix)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Nutanix, clusterinfra.VSphere)
 		skipForCPMSNotStable(oc)
 		skipForClusterNotStable(oc)
 		var changeFieldValue, backupFieldValue, getFieldValueJSON string
 		var patchstrPrefix, patchstrSuffix string
-		changeFieldValue = "2"
-		backupFieldValue = "1"
-		getFieldValueJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.vcpusPerSocket}"
-		patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"vcpusPerSocket":`
-		patchstrSuffix = `}}}}}}}`
+		changeFieldValue = changeToBackupSpecificField[iaasPlatform][changeSpecificFieldCon]
+		backupFieldValue = changeToBackupSpecificField[iaasPlatform][backupSpecificFieldCon]
+		getFieldValueJSON = getSpecificFieldJsonByCloud[iaasPlatform][getSpecificFieldJSONCon]
+		patchstrPrefix = getSpecificFieldJsonByCloud[iaasPlatform][patchSpecificFieldPrefixCon]
+		patchstrSuffix = getSpecificFieldJsonByCloud[iaasPlatform][patchSpecificFieldSuffixCon]
 
 		g.By("Get current field value")
 		currentFieldValue, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getFieldValueJSON, "-n", machineAPINamespace).Output()
@@ -240,7 +261,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 			changeFieldValue = backupFieldValue
 		}
 
-		getMachineFieldValueJSON := "-o=jsonpath={.spec.providerSpec.value.vcpusPerSocket}"
+		getMachineFieldValueJSON := getSpecificFieldJsonByCloud[iaasPlatform][getMachineFieldValueJSONCon]
 		patchstrChange := patchstrPrefix + changeFieldValue + patchstrSuffix
 		patchstrRecover := patchstrPrefix + currentFieldValue + patchstrSuffix
 
@@ -349,17 +370,18 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-54005-Control plane machine set OnDelete update strategies - update some field [Disruptive]", func() {
 		//For the providers which don't have instance type, we will update some other field to trigger update
 		//For nutanix, we choose vcpusPerSocket
+		//For vsphere, we choose diskGiB
 		clusterinfra.SkipConditionally(oc)
-		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Nutanix)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Nutanix, clusterinfra.VSphere)
 		skipForCPMSNotStable(oc)
 		skipForClusterNotStable(oc)
 		var changeFieldValue, backupFieldValue, getFieldValueJSON string
 		var patchstrPrefix, patchstrSuffix string
-		changeFieldValue = "2"
-		backupFieldValue = "1"
-		getFieldValueJSON = "-o=jsonpath={.spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.vcpusPerSocket}"
-		patchstrPrefix = `{"spec":{"template":{"machines_v1beta1_machine_openshift_io":{"spec":{"providerSpec":{"value":{"vcpusPerSocket":`
-		patchstrSuffix = `}}}}}}}`
+		changeFieldValue = changeToBackupSpecificField[iaasPlatform][changeSpecificFieldCon]
+		backupFieldValue = changeToBackupSpecificField[iaasPlatform][backupSpecificFieldCon]
+		getFieldValueJSON = getSpecificFieldJsonByCloud[iaasPlatform][getSpecificFieldJSONCon]
+		patchstrPrefix = getSpecificFieldJsonByCloud[iaasPlatform][patchSpecificFieldPrefixCon]
+		patchstrSuffix = getSpecificFieldJsonByCloud[iaasPlatform][patchSpecificFieldSuffixCon]
 
 		g.By("Get current field value")
 		currentFieldValue, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("controlplanemachineset/cluster", getFieldValueJSON, "-n", machineAPINamespace).Output()
@@ -368,7 +390,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 		if currentFieldValue == changeFieldValue {
 			changeFieldValue = backupFieldValue
 		}
-		getMachineFieldValueJSON := "-o=jsonpath={.spec.providerSpec.value.vcpusPerSocket}"
+		getMachineFieldValueJSON := getSpecificFieldJsonByCloud[iaasPlatform][getMachineFieldValueJSONCon]
 		patchstrChange := patchstrPrefix + changeFieldValue + patchstrSuffix
 		patchstrRecover := patchstrPrefix + currentFieldValue + patchstrSuffix
 
