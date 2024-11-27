@@ -870,6 +870,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 
 	// author: xiyuan@redhat.com
 	g.It("Author:xiyuan-CPaasrunOnly-WRS-High-71796-V-EST.01-file integrity operator should pass DAST test", func() {
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 		configFile := filepath.Join(buildPruningBaseDir, "rapidast/data_rapidastconfig_fileintegrity_v1alpha1.yaml")
 		policyFile := filepath.Join(buildPruningBaseDir, "rapidast/customscan.policy")
 		_, err := rapidastScan(oc, oc.Namespace(), configFile, policyFile, "fileintegrity.openshift.io_v1alpha1")
