@@ -1815,6 +1815,21 @@ func getValidInterfacesAndIPs(addressInfo string) (intList, IPList []string) {
 	return intList, IPList
 }
 
+// used to get a microshift node's valid host IPv6 addresses
+func getValidIPv6Addresses(addressInfo string) (IPList []string) {
+	IPList = []string{}
+	ipv6Re := regexp.MustCompile("([0-9a-zA-Z]+:[0-9a-zA-Z:]+)")
+	for _, line := range strings.Split(addressInfo, "\n") {
+		if !strings.Contains(line, "deprecated") {
+			ipv6Info := ipv6Re.FindStringSubmatch(line)
+			if len(ipv6Info) > 0 {
+				IPList = append(IPList, ipv6Info[1])
+			}
+		}
+	}
+	return IPList
+}
+
 // used to sort string type of slice or string which can be transformed to the slice
 func getSortedString(obj interface{}) string {
 	objList := []string{}

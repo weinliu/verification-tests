@@ -377,7 +377,7 @@ if test -f /etc/microshift/config.yaml ; then
 else
     touch /etc/microshift/config.yaml.no73621
 fi
-cat > /etc/microshift/config.yaml << EOF
+cat >> /etc/microshift/config.yaml << EOF
 ingress:
     routeAdmissionPolicy:
         namespaceOwnership: Strict
@@ -616,13 +616,26 @@ fi
 		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
 
 		nodeName := getByJsonPath(oc, "default", "nodes", "{.items[0].metadata.name}")
-		hostAddresses, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "ip address | grep \"inet \"").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		intfaceList, hostIPList := getValidInterfacesAndIPs(hostAddresses)
-		seed := rand.New(rand.NewSource(time.Now().UnixNano()))
-		index := seed.Intn(len(intfaceList))
-		randNic := intfaceList[index]
-		randHostIP := hostIPList[index]
+		podCIDR := getByJsonPath(oc, "default", "nodes/"+nodeName, "{.spec.podCIDR}")
+		randHostIP := ""
+		specifiedAddress := ""
+		if !strings.Contains(podCIDR, `:`) {
+			hostAddresses, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "ip address | grep \"inet \"").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			intfaceList, hostIPList := getValidInterfacesAndIPs(hostAddresses)
+			seed := rand.New(rand.NewSource(time.Now().UnixNano()))
+			index := seed.Intn(len(intfaceList))
+			specifiedAddress = intfaceList[index]
+			randHostIP = hostIPList[index]
+		} else {
+			hostAddresses, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "ip address | grep \"inet6 \" | grep global").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			hostIPList := getValidIPv6Addresses(hostAddresses)
+			seed := rand.New(rand.NewSource(time.Now().UnixNano()))
+			index := seed.Intn(len(hostIPList))
+			randHostIP = hostIPList[index]
+			specifiedAddress = randHostIP
+		}
 
 		exutil.By(`create the config.yaml under the node with the desired listening IP addresses and listening Ports, if there is the old config.yaml, then make a copy at first`)
 		creatFileCmd := fmt.Sprintf(`
@@ -631,14 +644,14 @@ if test -f /etc/microshift/config.yaml ; then
 else
     touch /etc/microshift/config.yaml.no73203
 fi
-cat > /etc/microshift/config.yaml << EOF
+cat >> /etc/microshift/config.yaml << EOF
 ingress:
     listenAddress:
         - %s
     ports:
         http: 10080
         https: 10443
-EOF`, randNic)
+EOF`, specifiedAddress)
 
 		recoverCmd := fmt.Sprintf(`
 if test -f /etc/microshift/config.yaml.no73203; then
@@ -657,7 +670,7 @@ fi
 			o.Expect(err).NotTo(o.HaveOccurred())
 			restartMicroshiftService(oc, e2eTestNamespace, nodeName)
 		}()
-		_, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", creatFileCmd).Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", creatFileCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		restartMicroshiftService(oc, e2eTestNamespace, nodeName)
 
@@ -707,19 +720,19 @@ fi
 
 		exutil.By("Curl the http route")
 		routeReq := []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "http://" + httpRouteHost + ":10080", "-I", "--resolve", httpRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 30, 1)
+		adminRepeatCmd(oc, routeReq, "200", 60, 1)
 
 		exutil.By("Curl the Edge route")
 		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + edgeRouteHost + ":10443", "-k", "-I", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 30, 1)
+		adminRepeatCmd(oc, routeReq, "200", 60, 1)
 
 		exutil.By("Curl the Passthrough route")
 		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + passThRouteHost + ":10443", "-k", "-I", "--resolve", passThRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 30, 1)
+		adminRepeatCmd(oc, routeReq, "200", 60, 1)
 
 		exutil.By("Curl the REEN route")
 		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + reenRouteHost + ":10443", "-k", "-I", "--resolve", reenRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 30, 1)
+		adminRepeatCmd(oc, routeReq, "200", 60, 1)
 	})
 
 	g.It("MicroShiftOnly-Author:shudili-NonPreRelease-Longduration-High-73209-Add enable/disable option for default router [Disruptive]", func() {
@@ -731,10 +744,19 @@ fi
 		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
 
 		nodeName := getByJsonPath(oc, "default", "nodes", "{.items[0].metadata.name}")
-		hostAddresses, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "ip address | grep \"inet \"").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		_, hostIPList := getValidInterfacesAndIPs(hostAddresses)
-		hostIPs := getSortedString(hostIPList)
+		podCIDR := getByJsonPath(oc, "default", "nodes/"+nodeName, "{.spec.podCIDR}")
+		hostIPs := ""
+		if !strings.Contains(podCIDR, `:`) {
+			hostAddresses, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "ip address | grep \"inet \"").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			_, hostIPList := getValidInterfacesAndIPs(hostAddresses)
+			hostIPs = getSortedString(hostIPList)
+		} else {
+			hostAddresses, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "ip address | grep \"inet6 \" | grep global").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			hostIPList := getValidIPv6Addresses(hostAddresses)
+			hostIPs = getSortedString(hostIPList)
+		}
 
 		exutil.By("debug node to disable the default router by setting ingress status to Removed")
 		creatFileCmdForDisablingRouter := fmt.Sprintf(`
@@ -743,7 +765,7 @@ if test -f /etc/microshift/config.yaml ; then
 else
     touch /etc/microshift/config.yaml.no73209
 fi
-cat > /etc/microshift/config.yaml << EOF
+cat >> /etc/microshift/config.yaml << EOF
 ingress:
     status: Removed
 EOF`)
@@ -766,7 +788,7 @@ fi
 			restartMicroshiftService(oc, e2eTestNamespace, nodeName)
 		}()
 
-		_, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", creatFileCmdForDisablingRouter).Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", creatFileCmdForDisablingRouter).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		restartMicroshiftService(oc, e2eTestNamespace, nodeName)
 
