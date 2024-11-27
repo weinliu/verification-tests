@@ -30,14 +30,21 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc = exutil.NewCLI("default-"+getRandomString(8), exutil.KubeConfigPath())
+		oc                  = exutil.NewCLI("cert-manager", exutil.KubeConfigPath())
+		buildPruningBaseDir string
 	)
 	g.BeforeEach(func() {
+		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		createCertManagerOperator(oc)
 	})
 
 	// author: geliu@redhat.com
 	g.It("Author:geliu-ROSA-ConnectedOnly-High-62494-Use explicit credential in ACME dns01 solver with route53 to generate certificate", func() {
+		var (
+			issuerName = "clusterissuer-acme-dns01-route53"
+			certName   = "cert-from-" + issuerName
+		)
+
 		exutil.By("Check proxy env.")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -77,8 +84,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 		exutil.By("Create clusterissuer with route53 as dns01 solver.")
 		defer func() {
-			e2e.Logf("Delete clusterissuers.cert-manager.io letsencrypt-dns01")
-			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuers.cert-manager.io", "letsencrypt-dns01").Execute()
+			e2e.Logf("delete the clusterissuer")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuer", issuerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		baseDomain := getBaseDomain(oc)
@@ -91,39 +98,41 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			g.Skip("Skipping test case for retreiving Route53 hosted zone ID for current env returns none")
 		}
 		e2e.Logf("Route53 HostedZoneID=%s", hostedZoneID)
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		clusterIssuerTemplate := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-dns01-route53.yaml")
 		oc.NotShowInfo()
-		params := []string{"-f", clusterIssuerTemplate, "-p", "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
+		params := []string{"-f", clusterIssuerTemplate, "-p", "ISSUER_NAME=" + issuerName, "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
 		exutil.ApplyClusterResourceFromTemplate(oc, params...)
 		oc.SetShowInfo()
-		err = waitForResourceReadiness(oc, "", "clusterissuer", "letsencrypt-dns01", 10*time.Second, 120*time.Second)
+		err = waitForResourceReadiness(oc, "", "clusterissuer", issuerName, 10*time.Second, 120*time.Second)
 		if err != nil {
-			dumpResource(oc, "", "clusterissuer", "letsencrypt-dns01", "-o=yaml")
+			dumpResource(oc, "", "clusterissuer", issuerName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for clusterissuer to become Ready")
 
 		exutil.By("create certificate which references previous clusterissuer")
-		e2e.Logf("Create ns with normal user.")
-		oc.SetupProject()
 		dnsName := constructDNSName(dnsZone)
-		certTemplate := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
-		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName, "ISSUER_NAME=" + "letsencrypt-dns01"}
+		certTemplate := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params = []string{"-f", certTemplate, "-p", "CERT_NAME=" + certName, "ISSUER_KIND=" + "ClusterIssuer", "ISSUER_NAME=" + issuerName, "DNS_NAME=" + dnsName, "COMMON_NAME=" + dnsName, "SECRET_NAME=" + certName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
-		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", "certificate-from-dns01", 10*time.Second, 300*time.Second)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
 		if err != nil {
-			dumpResource(oc, oc.Namespace(), "certificate", "certificate-from-dns01", "-o=yaml")
+			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 
 		e2e.Logf("Check and verify issued certificate content")
-		verifyCertificate(oc, "certificate-from-dns01", oc.Namespace())
+		verifyCertificate(oc, certName, oc.Namespace())
 	})
 
 	// author: geliu@redhat.com
 	// This case contains three Polarion cases: 62063, 63325, and 63486. The root case is 62063.
 	g.It("Author:geliu-ROSA-ARO-ConnectedOnly-High-62063-Use specified ingressclass in ACME http01 solver to generate certificate [Serial]", func() {
+		var (
+			issuerName = "letsencrypt-http01"
+			certName   = "cert-from-" + issuerName
+		)
+
 		skipIfRouteUnreachable(oc)
 
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
@@ -166,16 +175,13 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			exutil.AssertWaitPollNoErr(waitErr, "Waiting for deployment times out.")
 		}
 
-		e2e.Logf("Login with normal user and create new ns.")
-		oc.SetupProject()
 		e2e.Logf("Create issuer in ns scope created in last step.")
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		issuerHTTP01File := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
 		err = oc.Run("create").Args("-f", issuerHTTP01File).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", "letsencrypt-http01", 10*time.Second, 120*time.Second)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", issuerName, 10*time.Second, 120*time.Second)
 		if err != nil {
-			dumpResource(oc, oc.Namespace(), "issuer", "letsencrypt-http01", "-o=yaml")
+			dumpResource(oc, oc.Namespace(), "issuer", issuerName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
 
@@ -183,25 +189,25 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}", "--context=admin").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		dnsName := constructDNSName(ingressDomain)
-		certHTTP01File := filepath.Join(buildPruningBaseDir, "cert-test-http01.yaml")
-		params := []string{"-f", certHTTP01File, "-p", "ISSUER_NAME=" + "letsencrypt-http01", "CERT_NAME=" + "cert-test-http01", "DNS_NAME=" + dnsName}
+		certHTTP01File := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params := []string{"-f", certHTTP01File, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName, "DNS_NAME=" + dnsName, "COMMON_NAME=" + dnsName, "SECRET_NAME=" + certName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
-		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", "cert-test-http01", 10*time.Second, 300*time.Second)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
 		if err != nil {
-			dumpResource(oc, oc.Namespace(), "certificate", "cert-test-http01", "-o=yaml")
+			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 
 		e2e.Logf("Check and verify issued certificate content")
-		verifyCertificate(oc, "cert-test-http01", oc.Namespace())
+		verifyCertificate(oc, certName, oc.Namespace())
 
 		// Low-63486-When a Certificate CR is deleted its certificate secret should not be deleted
 		e2e.Logf("Delete certification for ocp-63486.\n")
-		err = oc.Run("delete").Args("certificate", "cert-test-http01").Execute()
+		err = oc.Run("delete").Args("certificate", certName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("ocp-63486: Waiting 1 min to ensure secret have not be removed.\n")
 		time.Sleep(60 * time.Second)
-		err = oc.Run("get").Args("secret", "cert-test-http01-tls").Execute()
+		err = oc.Run("get").Args("secret", certName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
@@ -221,6 +227,11 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 	// author: geliu@redhat.com
 	g.It("Author:geliu-ROSA-ConnectedOnly-Medium-62582-Need override dns args when the target hosted zone in ACME dns01 solver overlaps with the cluster's default private hosted zone [Disruptive]", func() {
+		var (
+			issuerName = "clusterissuer-acme-dns01-hosted-zone-overlapped"
+			certName   = "cert-from-" + issuerName
+		)
+
 		exutil.By("Check proxy env.")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -268,31 +279,28 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			g.Skip("Skipping test case for retreiving Route53 hosted zone ID for current env returns none")
 		}
 		e2e.Logf("Route53 HostedZoneID=%s", hostedZoneID)
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		clusterIssuerTemplate := filepath.Join(buildPruningBaseDir, "clusterissuer-overlapped-zone.yaml")
 		oc.NotShowInfo()
-		params := []string{"-f", clusterIssuerTemplate, "-p", "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
+		params := []string{"-f", clusterIssuerTemplate, "-p", "ISSUER_NAME=" + issuerName, "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
 		exutil.ApplyClusterResourceFromTemplate(oc, params...)
 		oc.SetShowInfo()
 		defer func() {
-			e2e.Logf("Delete clusterissuers.")
-			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuers.cert-manager.io", "hosted-zone-overlapped").Execute()
+			e2e.Logf("delete the clusterissuer")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuer", issuerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		err = waitForResourceReadiness(oc, "", "clusterissuer", "hosted-zone-overlapped", 10*time.Second, 120*time.Second)
+		err = waitForResourceReadiness(oc, "", "clusterissuer", issuerName, 10*time.Second, 120*time.Second)
 		if err != nil {
-			dumpResource(oc, "", "clusterissuer", "hosted-zone-overlapped", "-o=yaml")
+			dumpResource(oc, "", "clusterissuer", issuerName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for clusterissuer to become Ready")
 
 		exutil.By("create certificate which references previous clusterissuer")
-		e2e.Logf("Create ns with normal user.")
-		oc.SetupProject()
 		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		dnsName := constructDNSName(ingressDomain)
-		certTemplate := filepath.Join(buildPruningBaseDir, "cert-hosted-zone-overlapped.yaml")
-		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName}
+		certTemplate := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName, "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName, "ISSUER_KIND=" + "ClusterIssuer", "COMMON_NAME=" + dnsName, "SECRET_NAME=" + certName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 		statusErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 			output, err := oc.Run("get").Args("challenge", "-o", "wide").Output()
@@ -322,19 +330,24 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		waitForPodsToBeRedeployed(oc, "cert-manager", "app=cert-manager", oldPodList, 10*time.Second, 120*time.Second)
 
 		exutil.By("Check the certificate content AGAIN.")
-		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", "certificate-hosted-zone-overlapped", 10*time.Second, 300*time.Second)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
 		if err != nil {
-			dumpResource(oc, oc.Namespace(), "certificate", "certificate-hosted-zone-overlapped", "-o=yaml")
+			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 
 		e2e.Logf("Check and verify issued certificate content")
-		verifyCertificate(oc, "certificate-hosted-zone-overlapped", oc.Namespace())
+		verifyCertificate(oc, certName, oc.Namespace())
 	})
 
 	// author: geliu@redhat.com
 	// This case contains two Polarion cases: 63555 and 69798. The root case is 63555.
 	g.It("Author:geliu-ROSA-ConnectedOnly-Medium-63555-ACME dns01 solver should work in OpenShift proxy env [Serial]", func() {
+		var (
+			issuerName = "clusterissuer-acme-dns01-proxy"
+			certName   = "cert-from-" + issuerName
+		)
+
 		exutil.By("Check proxy env.")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -370,8 +383,6 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Login with normal user and create issuers.\n")
-		oc.SetupProject()
 		baseDomain := getBaseDomain(oc)
 		e2e.Logf("baseDomain=%s", baseDomain)
 		dnsZone, err := getParentDomain(baseDomain)
@@ -382,27 +393,26 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			g.Skip("Skipping test case for retreiving Route53 hosted zone ID for current env returns none")
 		}
 		e2e.Logf("Route53 HostedZoneID=%s", hostedZoneID)
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		clusterIssuerTemplate := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-dns01-route53.yaml")
 		oc.NotShowInfo()
-		params := []string{"-f", clusterIssuerTemplate, "-p", "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
+		params := []string{"-f", clusterIssuerTemplate, "-p", "ISSUER_NAME=" + issuerName, "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
 		exutil.ApplyClusterResourceFromTemplate(oc, params...)
 		oc.SetShowInfo()
 		defer func() {
-			e2e.Logf("Delete clusterissuers.cert-manager.io letsencrypt-dns01")
-			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuers.cert-manager.io", "letsencrypt-dns01").Execute()
+			e2e.Logf("delete the clusterissuer")
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuer", issuerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		err = waitForResourceReadiness(oc, "", "clusterissuer", "letsencrypt-dns01", 10*time.Second, 120*time.Second)
+		err = waitForResourceReadiness(oc, "", "clusterissuer", issuerName, 10*time.Second, 120*time.Second)
 		if err != nil {
-			dumpResource(oc, "", "clusterissuer", "letsencrypt-dns01", "-o=yaml")
+			dumpResource(oc, "", "clusterissuer", issuerName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for clusterissuer to become Ready")
 
 		exutil.By("Create the certificate.")
 		dnsName := constructDNSName(dnsZone)
-		certTemplate := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
-		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName, "ISSUER_NAME=" + "letsencrypt-dns01"}
+		certTemplate := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName, "CERT_NAME=" + certName, "ISSUER_KIND=" + "ClusterIssuer", "ISSUER_NAME=" + issuerName, "COMMON_NAME=" + dnsName, "SECRET_NAME=" + certName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
 		exutil.By("Check the certificate and its challenge")
@@ -445,14 +455,14 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		waitForPodsToBeRedeployed(oc, "cert-manager", "app=cert-manager", oldPodList, 10*time.Second, 120*time.Second)
 
 		exutil.By("Checke certificate again.")
-		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", "certificate-from-dns01", 10*time.Second, 300*time.Second)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
 		if err != nil {
-			dumpResource(oc, oc.Namespace(), "certificate", "certificate-from-dns01", "-o=yaml")
+			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 
 		e2e.Logf("Check and verify issued certificate content")
-		verifyCertificate(oc, "certificate-from-dns01", oc.Namespace())
+		verifyCertificate(oc, certName, oc.Namespace())
 
 		// author: yuewu@redhat.com
 		// Medium-69798-ACME dns01 solver should work in OpenShift proxy env with DNS over HTTPS (DoH) for doing the self-checks
@@ -470,8 +480,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 			exutil.By("Create a new certificate.")
 			dnsName := constructDNSName(dnsZone)
-			certTemplate = filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
-			params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName, "ISSUER_NAME=" + "letsencrypt-dns01"}
+			certTemplate = filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+			params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName, "CERT_NAME=" + certName, "COMMON_NAME=" + dnsName, "ISSUER_NAME=" + issuerName, "ISSUER_KIND=" + "ClusterIssuer", "SECRET_NAME=" + certName}
 			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
 			exutil.By("Check if challenge will be pending and show HTTP 403 error")
@@ -493,14 +503,14 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			exutil.AssertAllPodsToBeReadyWithPollerParams(oc, "cert-manager", 10*time.Second, 120*time.Second)
 
 			exutil.By("Check if certificate will be True.")
-			err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", "certificate-from-dns01", 10*time.Second, 300*time.Second)
+			err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
 			if err != nil {
-				dumpResource(oc, oc.Namespace(), "certificate", "certificate-from-dns01", "-o=yaml")
+				dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
 			}
 			exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 
 			exutil.By("Check and verify issued certificate content")
-			verifyCertificate(oc, "certificate-from-dns01", oc.Namespace())
+			verifyCertificate(oc, certName, oc.Namespace())
 		} else {
 			e2e.Logf("currentVersion(%s) < minDoHSupportedVersion(%s), therefore skipping the DoH checkpoint test (case 69798)", currentVersion, minDoHSupportedVersion)
 		}
@@ -508,29 +518,28 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 	// author: geliu@redhat.com
 	g.It("Author:geliu-ROSA-ARO-OSD_CCS-ConnectedOnly-Low-63500-Multiple solvers mixed with http01 and dns01 in ACME issuer should work well", func() {
+		var (
+			issuerName = "acme-multiple-solvers"
+		)
+
 		exutil.By("Create a clusterissuer which has multiple solvers mixed with http01 and dns01.")
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		clusterIssuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-multiple-solvers.yaml")
 		defer func() {
-			e2e.Logf("Delete clusterissuers.")
-			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuers.cert-manager.io", "acme-multiple-solvers").Execute()
+			e2e.Logf("delete the clusterissuer")
+			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuer", issuerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", clusterIssuerFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		err = waitForResourceReadiness(oc, "", "clusterissuer", "acme-multiple-solvers", 10*time.Second, 120*time.Second)
+		err = waitForResourceReadiness(oc, "", "clusterissuer", issuerName, 10*time.Second, 120*time.Second)
 		if err != nil {
-			dumpResource(oc, "", "clusterissuer", "acme-multiple-solvers", "-o=yaml")
+			dumpResource(oc, "", "clusterissuer", issuerName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for clusterissuer to become Ready")
 
-		e2e.Logf("Create ns with normal user.")
-		oc.SetupProject()
-
 		exutil.By("As normal user, create below 3 certificates in later steps with above clusterissuer.")
 		e2e.Logf("Create cert, cert-match-test-1.")
-		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		certFile1 := filepath.Join(buildPruningBaseDir, "cert-match-test-1.yaml")
 		err = oc.Run("create").Args("-f", certFile1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -552,7 +561,6 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Create cert, cert-match-test-2.")
-		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		certFile2 := filepath.Join(buildPruningBaseDir, "cert-match-test-2.yaml")
 		err = oc.Run("create").Args("-f", certFile2).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -574,7 +582,6 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Create cert, cert-match-test-3.")
-		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		certFile3 := filepath.Join(buildPruningBaseDir, "cert-match-test-3.yaml")
 		err = oc.Run("create").Args("-f", certFile3).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -597,14 +604,14 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 	// author: yuewu@redhat.com
 	// This case contains two Polarion cases: 62500 and 65132. The root case is 62500.
 	g.It("Author:yuewu-ROSA-ConnectedOnly-High-62500-Use IRSA as ambient credential in AWS STS env for ACME dns01 route53 solver to generate certificate [Serial] [Flaky]", func() {
-		const (
+		var (
 			rolePrefix          = "test-private-62500-sts-"
 			policyPrefix        = "test-private-62500-dns01-"
 			controllerNamespace = "cert-manager"
 			controllerLabel     = "app.kubernetes.io/name=cert-manager"
-			issuerName          = "route53-ambient"
-			certName62500       = "certificate-from-dns01-route53-pod-identity-webhook"
-			certName65132       = "certificate-from-dns01-route53-manual-patch"
+			issuerName          = "clusterissuer-acme-dns01-route53-ambient"
+			certName62500       = "cert-from-" + issuerName + "-webhook"
+			certName65132       = "cert-from-" + issuerName + "-manual"
 			stsSecretName       = "aws-sts-creds"
 		)
 
@@ -765,9 +772,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			g.Skip("skipping as retreiving Route53 hosted zone ID for current env returns none")
 		}
 
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		issuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-route53-ambient-credential.yaml")
-		params := []string{"-f", issuerFile, "-p", "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
+		params := []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
 		exutil.ApplyClusterResourceFromTemplate(oc, params...)
 		defer func() {
 			e2e.Logf("delete the clusterissuer")
@@ -784,8 +790,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		exutil.By("create a certificate")
 		dnsName := getRandomString(4) + "." + dnsZone
 
-		certFile := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
-		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName62500, "DNS_NAME=" + dnsName, "ISSUER_NAME=" + issuerName}
+		certFile := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName62500, "DNS_NAME=" + dnsName, "ISSUER_NAME=" + issuerName, "ISSUER_KIND=" + "ClusterIssuer", "COMMON_NAME=" + dnsName, "SECRET_NAME=" + certName62500}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
 		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName62500, 10*time.Second, 300*time.Second)
@@ -835,8 +841,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		exutil.By("create another certificate")
 		dnsName = getRandomString(4) + "." + dnsZone
 
-		certFile = filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
-		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName65132, "DNS_NAME=" + dnsName, "ISSUER_NAME=" + issuerName}
+		certFile = filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName65132, "DNS_NAME=" + dnsName, "ISSUER_NAME=" + issuerName, "ISSUER_KIND=" + "ClusterIssuer", "COMMON_NAME=" + dnsName, "SECRET_NAME=" + certName65132}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
 		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName65132, 10*time.Second, 300*time.Second)
@@ -850,12 +856,12 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-ConnectedOnly-High-62946-Use Google workload identity federation as ambient credential in GCP STS env for ACME dns01 cloudDNS solver to generate certificate [Serial]", func() {
-		const (
+		var (
 			serviceAccountPrefix = "test-private-62946-dns01-"
 			controllerNamespace  = "cert-manager"
 			controllerLabel      = "app.kubernetes.io/name=cert-manager"
-			issuerName           = "google-clouddns-ambient"
-			certName             = "certificate-from-dns01-clouddns"
+			issuerName           = "clusterissuer-acme-dns01-clouddns-ambient"
+			certName             = "cert-from-" + issuerName
 			stsSecretName        = "gcp-sts-creds"
 		)
 
@@ -979,7 +985,6 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
 
 		exutil.By("create a clusterissuer with Google Clould DNS as dns01 solver")
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		issuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-clouddns-ambient-credential.yaml")
 		params := []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "PROJECT_ID=" + projectID}
 		exutil.ApplyClusterResourceFromTemplate(oc, params...)
@@ -1001,8 +1006,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		dnsName := getRandomString(4) + "." + dnsZone
 
-		certFile := filepath.Join(buildPruningBaseDir, "certificate-from-clusterissuer-letsencrypt-dns01.yaml")
-		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "DNS_NAME=" + dnsName, "ISSUER_NAME=" + issuerName}
+		certFile := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "DNS_NAME=" + dnsName, "ISSUER_NAME=" + issuerName, "ISSUER_KIND=" + "ClusterIssuer", "COMMON_NAME=" + dnsName, "SECRET_NAME=" + certName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
 		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
@@ -1014,14 +1019,14 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-High-74267-Route TLS secret can be managed by cert-manager", func() {
-		const (
+		var (
 			appImage        = "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83"
 			serviceName     = "hello-openshift"
 			routeType       = "edge"
 			routeName       = "myroute"
-			certName        = "myroute-cert"
-			secretName      = "myroute-tls"
 			issuerName      = "default-selfsigned"
+			certName        = "cert-from-" + issuerName
+			secretName      = routeName + "-tls"
 			podName         = "exec-curl-helper"
 			secretMountPath = "/tmp"
 		)
@@ -1045,7 +1050,6 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("create an issuer")
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		issuerFile := filepath.Join(buildPruningBaseDir, "issuer-selfsigned.yaml")
 		err = oc.Run("create").Args("-f", issuerFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1057,8 +1061,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
 
 		exutil.By("create a certificate")
-		certFile := filepath.Join(buildPruningBaseDir, "cert-selfsigned-route.yaml")
-		params := []string{"-f", certFile, "-p", "ISSUER_NAME=" + issuerName, "CERT_NAME=" + certName, "SECRET_NAME=" + secretName, "DNS_NAME=" + hostName}
+		certFile := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params := []string{"-f", certFile, "-p", "ISSUER_NAME=" + issuerName, "CERT_NAME=" + certName, "SECRET_NAME=" + secretName, "DNS_NAME=" + hostName, "COMMON_NAME=" + hostName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
 		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 120*time.Second)
@@ -1066,10 +1070,6 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
-
-		// store the initial cert expire time for verifying renewal in the end
-		initialExpireTime, _ := getCertificateExpireTime(oc, oc.Namespace(), secretName)
-		e2e.Logf("certificate initial expire time: %v ", initialExpireTime)
 
 		exutil.By("grant the router service account access to load secret")
 		rbacFile := filepath.Join(buildPruningBaseDir, "rbac-secret-reader.yaml")
@@ -1100,22 +1100,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		exutil.AssertWaitPollNoErr(statusErr, "timeout waiting for curl validation succeeded")
 
 		exutil.By("verify if the certificate in secret was renewed")
-		var currentExpireTime time.Time
-		statusErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
-			currentExpireTime, err = getCertificateExpireTime(oc, oc.Namespace(), secretName)
-			if err != nil {
-				e2e.Logf("got error in func 'getCertificateExpireTime':\n%v", err)
-				return false, nil
-			}
-
-			// returns Ture if currentExpireTime > initialExpireTime, indicates cert got renewed.
-			if currentExpireTime.After(initialExpireTime) {
-				return true, nil
-			}
-			return false, nil
-		})
-		e2e.Logf("certificate current expire time: %v ", currentExpireTime)
-		exutil.AssertWaitPollNoErr(statusErr, "timeout waiting for certificate in secret to be renewed")
+		verifyCertificateRenewal(oc, oc.Namespace(), secretName, 150*time.Second)
 
 		exutil.By("check the route is indeed serving with renewed(unexpired) certificate")
 		statusErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
@@ -1130,8 +1115,9 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-LEVEL0-Medium-73293-Certificates with duplicate secretName should not cause flood of re-issuance attempt", func() {
-		const (
+		var (
 			minSupportedVersion = "1.14.0"
+			issuerName          = "default-ca"
 		)
 
 		skipUnsupportedVersion(oc, minSupportedVersion)
@@ -1140,23 +1126,22 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		createIssuer(oc, oc.Namespace())
 		createCertificate(oc, oc.Namespace())
 
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		issuerFile := filepath.Join(buildPruningBaseDir, "issuer-ca.yaml")
-		certTemplate := filepath.Join(buildPruningBaseDir, "cert-duplicate-secret.yaml")
+		certTemplate := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
 
 		exutil.By("create a CA Issuer")
 		err := oc.Run("apply").Args("-f", issuerFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", "default-ca", 10*time.Second, 120*time.Second)
+		err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", issuerName, 10*time.Second, 120*time.Second)
 		if err != nil {
-			dumpResource(oc, oc.Namespace(), "issuer", "default-ca", "-o=yaml")
+			dumpResource(oc, oc.Namespace(), "issuer", issuerName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer 'default-ca' to become Ready")
 
 		exutil.By("create 3 Certificates with the same secretName")
 		certNames := []string{"duplicate-cert-1", "duplicate-cert-2", "duplicate-cert-3"}
 		for _, name := range certNames {
-			params := []string{"-f", certTemplate, "-p", "CERT_NAME=" + name, "SECRET_NAME_SUFFIX=" + "duplicate"}
+			params := []string{"-f", certTemplate, "-p", "CERT_NAME=" + name, "ISSUER_NAME=" + issuerName, "SECRET_NAME=" + "secret-duplicate", "COMMON_NAME=" + name}
 			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 		}
 
@@ -1194,7 +1179,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 		exutil.By("update Certificates to make sure all should have an unique secretName")
 		for i, name := range certNames {
-			params := []string{"-f", certTemplate, "-p", "CERT_NAME=" + name, "SECRET_NAME_SUFFIX=" + strconv.Itoa(i)}
+			params := []string{"-f", certTemplate, "-p", "CERT_NAME=" + name, "ISSUER_NAME=" + issuerName, "SECRET_NAME=" + "secret-" + strconv.Itoa(i), "COMMON_NAME=" + name}
 			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 		}
 
@@ -1217,14 +1202,13 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-ConnectedOnly-Low-63583-Check operand metrics by using user-workload-monitoring [Serial]", func() {
-		const (
+		var (
 			operandNamespace                = "cert-manager"
 			clusterMonitoringNamespace      = "openshift-monitoring"
 			clusterMonitoringConfigMapName  = "cluster-monitoring-config"
 			userWorkloadMonitoringNamespace = "openshift-user-workload-monitoring"
 			metricsQueryURL                 = "https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query"
 		)
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 
 		exutil.By("Check if the cluster-monitoring ConfigMap exists")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", clusterMonitoringConfigMapName, "-n", clusterMonitoringNamespace).Output()
@@ -1293,7 +1277,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-65031-Operand and operator log levels can be set [Serial]", func() {
-		const (
+		var (
 			operandNamespace  = "cert-manager"
 			operandLabel      = "app.kubernetes.io/instance=cert-manager"
 			operatorNamespace = "cert-manager-operator"
@@ -1376,15 +1360,13 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-CPaasrunOnly-ConnectedOnly-Medium-71327-cert-manager API groups should pass DAST scan", func() {
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		configFile := filepath.Join(buildPruningBaseDir, "rapidast-config.yaml")
-
 		rapidastScan(oc, oc.Namespace(), configFile)
 	})
 
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-NonPreRelease-PreChkUpgrade-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-65134-Prepare cert-manager test data before OCP upgrade", func() {
-		const (
+		var (
 			acmeIssuerName  = "letsencrypt-http01"
 			sharedNamespace = "ocp-65134-shared-ns"
 		)
@@ -1398,7 +1380,6 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		createCertificate(oc, sharedNamespace)
 
 		exutil.By("create an ACME http01 issuer")
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		acmeIssuerFile := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", sharedNamespace, "-f", acmeIssuerFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1415,9 +1396,9 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 	g.It("Author:yuewu-NonPreRelease-PstChkUpgrade-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-65134-cert-manager functions should work normally after OCP upgrade", func() {
 		const (
 			selfsignedIssuerName = "default-selfsigned"
-			selfsignedCertName   = "default-selfsigned-cert"
+			selfsignedCertName   = "cert-from-" + selfsignedIssuerName
 			acmeIssuerName       = "letsencrypt-http01"
-			acmeCertName         = "letsencrypt-http01-cert"
+			acmeCertName         = "cert-from-" + acmeIssuerName
 			operatorNamespace    = "cert-manager-operator"
 			operandNamespace     = "cert-manager"
 			sharedNamespace      = "ocp-65134-shared-ns"
@@ -1461,9 +1442,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		dnsName := constructDNSName(ingressDomain)
 
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
-		acmeCertFile := filepath.Join(buildPruningBaseDir, "cert-test-http01.yaml")
-		params := []string{"-f", acmeCertFile, "-p", "ISSUER_NAME=" + acmeIssuerName, "CERT_NAME=" + acmeCertName, "DNS_NAME=" + dnsName}
+		acmeCertFile := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params := []string{"-f", acmeCertFile, "-p", "ISSUER_NAME=" + acmeIssuerName, "CERT_NAME=" + acmeCertName, "DNS_NAME=" + dnsName, "COMMON_NAME=" + dnsName, "SECRET_NAME=" + acmeCertName}
 		exutil.ApplyNsResourceFromTemplate(oc, sharedNamespace, params...)
 
 		exutil.By("wait for the ACME http01 certificate to become Ready")
@@ -1476,12 +1456,12 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-65028-Vault issuer should work well when authenticating with Vault AppRole", func() {
-		const (
+		var (
 			vaultReleaseName = "vault-65028"
 			vaultRoleName    = "cert-manager"
 			vaultSecretName  = "cert-manager-vault-approle"
 			issuerName       = "issuer-vault-approle"
-			certName         = "cert-from-issuer-vault-approle"
+			certName         = "cert-from-" + issuerName
 		)
 
 		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
@@ -1507,7 +1487,6 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("create an issuer using Vault AppRole")
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		issuerFile := filepath.Join(buildPruningBaseDir, "issuer-vault-approle.yaml")
 		params := []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "VAULT_SERVICE=" + vaultReleaseName, "VAULT_NAMESPACE=" + oc.Namespace(), "ROLE_ID=" + vaultRoleId, "SECRET_NAME=" + vaultSecretName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
@@ -1518,8 +1497,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
 
 		exutil.By("create a certificate")
-		certFile := filepath.Join(buildPruningBaseDir, "cert-from-vault.yaml")
-		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName}
+		certFile := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName, "COMMON_NAME=" + certName, "SECRET_NAME=" + certName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
 		if err != nil {
@@ -1530,11 +1509,11 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-65029-Vault issuer should work well when authenticating with Vault token", func() {
-		const (
+		var (
 			vaultReleaseName = "vault-65029"
 			vaultSecretName  = "cert-manager-vault-token"
 			issuerName       = "issuer-vault-token"
-			certName         = "cert-from-issuer-vault-token"
+			certName         = "cert-from-" + issuerName
 		)
 
 		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
@@ -1552,7 +1531,6 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("create an issuer using Vault token")
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		issuerFile := filepath.Join(buildPruningBaseDir, "issuer-vault-token.yaml")
 		params := []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "VAULT_SERVICE=" + vaultReleaseName, "VAULT_NAMESPACE=" + oc.Namespace(), "SECRET_NAME=" + vaultSecretName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
@@ -1563,8 +1541,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
 
 		exutil.By("create a certificate")
-		certFile := filepath.Join(buildPruningBaseDir, "cert-from-vault.yaml")
-		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName}
+		certFile := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName, "COMMON_NAME=" + certName, "SECRET_NAME=" + certName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
 		if err != nil {
@@ -1575,11 +1553,11 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Low-65030-Vault issuer should work well when authenticating with Kubernetes static service account", func() {
-		const (
+		var (
 			vaultReleaseName   = "vault-65030"
 			serviceAccountName = "cert-manager-vault-static-serviceaccount"
 			issuerName         = "issuer-vault-static-serviceaccount"
-			certName           = "cert-from-issuer-vault-static-serviceaccount"
+			certName           = "cert-from-" + issuerName
 		)
 
 		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
@@ -1588,7 +1566,6 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		exutil.By("create a long-lived API token for a service account")
 		err := oc.Run("create").Args("serviceaccount", serviceAccountName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		secretFile := filepath.Join(buildPruningBaseDir, "secret-vault-static-sa-token.yaml")
 		params := []string{"-f", secretFile, "-p", "SA_NAME=" + serviceAccountName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
@@ -1610,8 +1587,8 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
 
 		exutil.By("create a certificate")
-		certFile := filepath.Join(buildPruningBaseDir, "cert-from-vault.yaml")
-		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName}
+		certFile := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName, "COMMON_NAME=" + certName, "SECRET_NAME=" + certName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
 		if err != nil {
@@ -1622,12 +1599,12 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-66907-Vault issuer should work well when authenticating with Kubernetes bound service account through Kubernetes auth", func() {
-		const (
+		var (
 			minSupportedVersion = "1.12.0"
 			vaultReleaseName    = "vault-66907"
 			serviceAccountName  = "cert-manager-vault-bound-serviceaccount"
 			issuerName          = "issuer-vault-bound-serviceaccount"
-			certName            = "cert-from-issuer-vault-bound-serviceaccount"
+			certName            = "cert-from-" + issuerName
 		)
 
 		skipUnsupportedVersion(oc, minSupportedVersion)
@@ -1638,7 +1615,6 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 		exutil.By("create RBAC resources for the service account to get tokens")
 		err := oc.Run("create").Args("serviceaccount", serviceAccountName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		rbacFile := filepath.Join(buildPruningBaseDir, "rbac-vault-bound-sa.yaml")
 		params := []string{"-f", rbacFile, "-p", "SA_NAME=" + serviceAccountName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
@@ -1660,8 +1636,8 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
 
 		exutil.By("create a certificate")
-		certFile := filepath.Join(buildPruningBaseDir, "cert-from-vault.yaml")
-		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName}
+		certFile := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName, "COMMON_NAME=" + certName, "SECRET_NAME=" + certName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
 		if err != nil {
@@ -1672,12 +1648,12 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-76515-Vault issuer should work well when authenticating with Kubernetes bound service account through JWT/OIDC auth", func() {
-		const (
+		var (
 			minSupportedVersion = "1.12.0"
 			vaultReleaseName    = "vault-76515"
 			serviceAccountName  = "cert-manager-vault-bound-serviceaccount"
 			issuerName          = "issuer-vault-bound-serviceaccount"
-			certName            = "cert-from-issuer-vault-bound-serviceaccount"
+			certName            = "cert-from-" + issuerName
 		)
 
 		skipUnsupportedVersion(oc, minSupportedVersion)
@@ -1688,7 +1664,6 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 		exutil.By("create RBAC resources for the service account to get tokens")
 		err := oc.Run("create").Args("serviceaccount", serviceAccountName).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		rbacFile := filepath.Join(buildPruningBaseDir, "rbac-vault-bound-sa.yaml")
 		params := []string{"-f", rbacFile, "-p", "SA_NAME=" + serviceAccountName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
@@ -1732,8 +1707,8 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
 
 		exutil.By("create a certificate")
-		certFile := filepath.Join(buildPruningBaseDir, "cert-from-vault.yaml")
-		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName}
+		certFile := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params = []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName, "COMMON_NAME=" + certName, "SECRET_NAME=" + certName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
 		if err != nil {
@@ -1750,8 +1725,8 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 			location      = "us-central1"
 			saPrefix      = "test-private-77811-cas-"
 			saSecretName  = "google-cas-sa-key"
-			issuerName    = "google-cas-issuer"
-			certName      = "certificate-from-google-cas"
+			issuerName    = "external-issuer-google-cas"
+			certName      = "cert-from-" + issuerName
 			tlsSecretName = certName + "-tls"
 		)
 
@@ -1809,7 +1784,6 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 		installGoogleCASIssuer(oc, oc.Namespace())
 
 		exutil.By("create a Google CAS issuer")
-		buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 		issuerFile := filepath.Join(buildPruningBaseDir, "issuer-google-cas.yaml")
 		params := []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "PROJECT=" + projectID, "LOCATION=" + location, "CAPOOL_ID=" + caPoolID, "SA_SECRET=" + saSecretName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)

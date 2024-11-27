@@ -222,7 +222,7 @@ func getAzureCloudName(oc *exutil.CLI) string {
 
 // create cert-manager operator
 func createCertManagerOperator(oc *exutil.CLI) {
-	const (
+	var (
 		subscriptionName       = "openshift-cert-manager-operator"
 		subscriptionNamespace  = "cert-manager-operator"
 		catalogSourceNamespace = "openshift-marketplace"
@@ -307,7 +307,7 @@ func createCertManagerOperator(oc *exutil.CLI) {
 
 // uninstall cert-manager operator and cleanup its operand resources
 func cleanupCertManagerOperator(oc *exutil.CLI) {
-	const (
+	var (
 		subscriptionName  = "openshift-cert-manager-operator"
 		operatorNamespace = "cert-manager-operator"
 		operatorLabel     = "name=cert-manager-operator"
@@ -618,7 +618,7 @@ func skipUnsupportedVersion(oc *exutil.CLI, version string) {
 // rapidastScan performs the RapiDAST scan based on the provided configuration file
 // config examples: https://github.com/RedHatProductSecurity/rapidast/tree/development/config
 func rapidastScan(oc *exutil.CLI, ns, configFile string) {
-	const (
+	var (
 		serviceAccountName = "rapidast-privileged-sa"
 		configMapName      = "rapidast-configmap"
 		pvcName            = "rapidast-pvc"
@@ -709,7 +709,7 @@ func getRapidastRiskNumberFromLogs(podLogs string) (riskHigh, riskMedium int) {
 
 // syncRapidastResultsToArtifactDir copies RapiDAST generated results directory from the given PVC to ArtifactDir
 func syncRapidastResultsToArtifactDir(oc *exutil.CLI, ns, pvcName string) {
-	const (
+	var (
 		podName                  = "rapidast-results-sync-helper"
 		volumeMountPath          = "/opt/rapidast/results"
 		artifactDirSubFolderName = "rapidast-results-cfe"
