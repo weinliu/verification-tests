@@ -3241,30 +3241,6 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-Low-63784-[P1][OnCLayer] MCD pivot command should be deprecated", func() {
-		var (
-			mMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
-			// Note the last space in the first line.
-			expectedOutput = "ERROR: pivot no longer forces a system upgrade. It will be fully removed in a later y release. \n" +
-				"\tIf you are attempting a manual OS upgrade, please try the following steps:\n" +
-				"\t-delete the currentconfig(rm /etc/machine-config-daemon/currentconfig)\n" +
-				"\t-create a forcefile(touch /run/machine-config-daemon-force) to retry the OS upgrade.\n" +
-				"\n" +
-				"\tMore instructions can be found here: https://access.redhat.com/solutions/5598401\n"
-		)
-		masterNode := mMcp.GetNodesOrFail()[0]
-
-		output, _ := masterNode.DebugNodeWithChroot("/run/bin/machine-config-daemon", "pivot", "test")
-		logger.Infof("expect:\n%s", expectedOutput)
-		logger.Infof("output:\n%s", output)
-		o.Expect(
-			output,
-		).To(
-			o.ContainSubstring(expectedOutput),
-			"MCD pivot command should show a deprecation warning. But it doesn't",
-		)
-	})
-
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-63477-[P2] Deploy files using all available ignition configs. Default 3.4.0[Disruptive]", func() {
 		var (
 			wMcp                   = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
