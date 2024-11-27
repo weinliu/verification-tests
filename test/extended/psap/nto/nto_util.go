@@ -782,7 +782,7 @@ func compareSpecifiedValueByNameOnLabelNodewithRetry(oc *exutil.CLI, ntoNamespac
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "The certificate is different, please check")
+	exutil.AssertWaitPollNoErr(err, "The value of sysctl mismatch, , please check")
 }
 
 // skipDeployPAO
@@ -1154,3 +1154,11 @@ func getTotalLinuxMachinesetNum(oc *exutil.CLI) int {
 	e2e.Logf("machinesetNum is %v in getWorkerMachinesetName", machinesetNum)
 	return machinesetNum
 }
+
+// func ifApplyDisableHttpsMC(oc *exutil.CLI, ntoNamespace string, tunedNodeName string) bool {
+
+// 	ncOutPut, _ := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot /host", "bash -c", "nc -vz quay.io 443 -w 3").Output()
+// 	e2e.Logf("ncOutPut is %v ", ncOutPut)
+// 	return strings.Contains(ncOutPut, "Connected")
+
+// }

@@ -3813,7 +3813,8 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.By("Compare if the value kernel.shmmni in on labeled node, it will rollback to 4096")
 		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "4096")
 	})
-	g.It("Author:sahshah-Longduration-NonPreRelease-Medium-75434-NTO deferred feature with annotation deferred -always[Disruptive]", func() {
+
+	g.It("Author:liqcui-Longduration-NonPreRelease-Medium-77764-NTO - Failure to pull NTO image preventing startup of ocp-tuned-one-shot.service[Disruptive]", func() {
 
 		isSNO := exutil.IsSNOCluster(oc)
 
@@ -3821,6 +3822,17 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			g.Skip("NTO is not installed or is Single Node Cluster- skipping test ...")
 		}
 
+		var (
+			ntoDisableHttpsMCPFile = exutil.FixturePath("testdata", "psap", "nto", "disable-https-mcp.yaml")
+			ntoDisableHttpsPPFile  = exutil.FixturePath("testdata", "psap", "nto", "disable-https-pp.yaml")
+		)
+
+		proxyStdOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-ojsonpath={.spec.httpsProxy}").Output()
+		e2e.Logf("proxyStdOut is %v", proxyStdOut)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(proxyStdOut) == 0 {
+			g.Skip("No proxy in the cluster - skipping test ...")
+		}
 		machinesetName := getTotalLinuxMachinesetNum(oc)
 		e2e.Logf("len(machinesetName) is %v", machinesetName)
 		if machinesetName > 1 {
@@ -3829,69 +3841,83 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 			tunedNodeName = choseOneWorkerNodeNotByMachineset(oc, 0)
 		}
 
-		labeledNode := exutil.GetNodeListByLabel(oc, "deferred-always")
+		//Get how many cpus on the specified worker node
+		exutil.By("Get how many cpus cores on the labeled worker node")
+		nodeCPUCores, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", tunedNodeName, "-ojsonpath={.status.capacity.cpu}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(nodeCPUCores).NotTo(o.BeEmpty())
 
-		if len(labeledNode) == 0 {
-			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "deferred-always-").Execute()
+		nodeCPUCoresInt, err := strconv.Atoi(nodeCPUCores)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if nodeCPUCoresInt <= 1 {
+			g.Skip("the worker node don't have enough cpus - skipping test ...")
 		}
 
+		labeledNode := exutil.GetNodeListByLabel(oc, "node-role.kubernetes.io/worker-nohttps")
+
 		defer func() {
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("tuned", "deferred-always-profile", "-n", ntoNamespace, "--ignore-not-found").Execute()
-			compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "4096")
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("mcp", "worker-nohttps", "--ignore-not-found").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("PerformanceProfile", "performance", "-n", ntoNamespace, "--ignore-not-found").Execute()
 		}()
+
+		if len(labeledNode) == 0 {
+			defer func() {
+				oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-nohttps-").Execute()
+				//make sure labeled node return to worker mcp
+				exutil.AssertIfMCPChangesAppliedByName(oc, "worker", 720)
+			}()
+		}
 
 		//Get the tuned pod name in the same node that labeled node
 		tunedPodName := getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
 		o.Expect(tunedPodName).NotTo(o.BeEmpty())
 
-		exutil.By("Pickup one worker nodes to label node to deferred-always ..")
+		exutil.By("Pickup one worker nodes to label node to worker-nohttps ...")
 
 		if len(labeledNode) == 0 {
-			oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "deferred-always=").Execute()
+			oc.AsAdmin().WithoutNamespace().Run("label").Args("node", tunedNodeName, "node-role.kubernetes.io/worker-nohttps=").Execute()
 		}
 
-		defferedNTORes := ntoResource{
-			name:         "deferred-always-profile",
-			namespace:    ntoNamespace,
-			template:     ntoDefered,
-			sysctlparm:   "kernel.shmmni",
-			sysctlvalue:  "8192",
-			label:        "deferred-always",
-			deferedValue: "always",
-		}
+		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, ntoDisableHttpsMCPFile)
 
-		exutil.By("Create deferred-always profile")
-		defferedNTORes.applyNTOTunedProfileWithDeferredAnnotation(oc)
+		exutil.By("Remove NTO image on label node")
+		stdOut, _ := exutil.DebugNodeRetryWithOptionsAndChroot(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", ". /var/lib/ocp-tuned/image.env;podman rmi $NTO_IMAGE --force")
+		e2e.Logf("removed NTO image is %v", stdOut)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Create deferred-always profile and apply it to nodes")
-		defferedNTORes.assertIfTunedProfileApplied(oc, ntoNamespace, tunedNodeName, "openshift-node", "False")
+		exutil.By("Apply pao performance profile")
+		exutil.ApplyOperatorResourceByYaml(oc, ntoNamespace, ntoDisableHttpsPPFile)
+		exutil.AssertIfMCPChangesAppliedByName(oc, "worker-nohttps", 720)
 
 		exutil.By("Check current profile for each node")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profiles.tuned.openshift.io").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Current profile for each node: \n%v", output)
 
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ntoNamespace, "profile.tuned.openshift.io", tunedNodeName, `-ojsonpath='{.status.conditions[0].message}'`).Output()
+		//Inactive status mean error in systemctl status ocp-tuned-one-shot.service, that's expected
+		exutil.By("Check systemctl status ocp-tuned-one-shot.service, Active: inactive is expected")
+		stdOut, _ = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ntoNamespace, "--quiet=true", "node/"+tunedNodeName, "--", "chroot", "/host", "systemctl", "status", "ocp-tuned-one-shot.service").Output()
+		o.Expect(stdOut).To(o.ContainSubstring("ocp-tuned-one-shot.service: Deactivated successfully"))
+
+		exutil.By("Check systemctl status kubelet, Active: active (running) is expected")
+		stdOut, err = exutil.DebugNodeRetryWithOptionsAndChroot(oc, tunedNodeName, []string{"-q"}, "systemctl", "status", "kubelet")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).NotTo(o.BeEmpty())
-		o.Expect(output).To(o.ContainSubstring("The TuneD daemon profile is waiting for the next node restart"))
+		o.Expect(stdOut).To(o.ContainSubstring("Active: active (running)"))
 
-		exutil.By("Compare if the value kernel.shmmni in on labeled node, should be 4096")
-		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "4096")
-
-		exutil.By("Reboot the node with updated tuned profile")
-		err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", ntoNamespace, "-it", tunedPodName, "--", "reboot").Execute()
+		exutil.By("Remove NTO image on label node and delete tuned pod, the image can pull successfully")
+		stdOut, err = exutil.DebugNodeRetryWithOptionsAndChroot(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", ". /var/lib/ocp-tuned/image.env;podman rmi $NTO_IMAGE --force")
+		e2e.Logf("removed NTO image is %v", stdOut)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.AssertIfMCPChangesAppliedByName(oc, "worker", 600)
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", ntoNamespace, "pod", tunedPodName).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Compare if the value kernel.shmmni in on labeled node, should be 8192")
-		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "8192")
-
-		exutil.By("Removed deffered tuned custom profile and unlabel node")
-		defferedNTORes.delete(oc)
-
-		exutil.By("Compare if the value kernel.shmmni in on labeled node, it will rollback to 4096")
-		compareSpecifiedValueByNameOnLabelNodewithRetry(oc, ntoNamespace, tunedNodeName, "kernel.shmmni", "4096")
+		//Get the tuned pod name in the same node that labeled node again
+		tunedPodName = getTunedPodNamebyNodeName(oc, tunedNodeName, ntoNamespace)
+		exutil.AssertPodToBeReady(oc, tunedPodName, ntoNamespace)
+		podDescOuput, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", ntoNamespace, "pod", tunedPodName).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(podDescOuput).To(o.ContainSubstring("Successfully pulled image"))
 	})
 
 	g.It("Author:sahshah-Longduration-NonPreRelease-Medium-76674-NTO deferred feature with annotation deferred -never[Disruptive]", func() {
