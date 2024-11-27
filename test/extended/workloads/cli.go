@@ -2068,7 +2068,10 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		tmeFile2, err := oc.WithoutNamespace().Run("get").Args("template", "httpd-example", "-n", "openshift", "-o", "yaml").OutputToFile("httpdexampleT.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.WithoutNamespace().Run("process").Args("-f", tmeFile2).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			e2e.Logf("Current project is %s: ", oc.Namespace())
+			e2e.Failf("Current-context error %v", err)
+		}
 	})
 	// author: yinzhou@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Low-68670-oc whoami works well with oauth operator", func() {
