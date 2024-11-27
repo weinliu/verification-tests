@@ -2052,4 +2052,14 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		o.Expect(err).To(o.HaveOccurred())
 	})
 
+	// author: bandrade@redhat.com
+	g.It("Author:bandrade-Medium-77413-Check if ClusterCatalog is in Serving properly", func() {
+		exutil.By("1) Check the status of each one, all of them should be in with the Serving state")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "True", ok, []string{"clustercatalog", "openshift-certified-operators", "-o=jsonpath={.status.conditions[?(@.type==\"Serving\")].status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "True", ok, []string{"clustercatalog", "openshift-community-operators", "-o=jsonpath={.status.conditions[?(@.type==\"Serving\")].status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "True", ok, []string{"clustercatalog", "openshift-redhat-operators", "-o=jsonpath={.status.conditions[?(@.type==\"Serving\")].status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "True", ok, []string{"clustercatalog", "openshift-redhat-marketplace", "-o=jsonpath={.status.conditions[?(@.type==\"Serving\")].status}"}).check(oc)
+
+	})
+
 })
