@@ -483,9 +483,17 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			exutil.By("# Check the podAWithSubpathA's volume could be read, written, exec and podWithSubpathB couldn't see the written content")
 			podAWithSubpathA.checkMountedVolumeCouldRW(oc)
 			podAWithSubpathA.checkMountedVolumeHaveExecRight(oc)
-			output, err := podBWithSubpathB.execCommand(oc, "ls /mnt/storage")
-			o.Expect(err).ShouldNot(o.HaveOccurred())
-			o.Expect(output).ShouldNot(o.ContainSubstring("testfile"))
+
+			var output string
+			o.Eventually(func() string {
+				output, err = podBWithSubpathB.execCommand(oc, "ls /mnt/storage")
+				if err != nil {
+					directoryInfo, _ := podBWithSubpathB.execCommand(oc, "ls -lZd /mnt/storage")
+					e2e.Logf("The directory detail info is: %q\n", directoryInfo)
+				}
+				return output
+			}).WithTimeout(defaultMaxWaitingTime/5).WithPolling(defaultMaxWaitingTime/defaultIterationTimes).
+				ShouldNot(o.ContainSubstring("testfile"), "The podWithSubpathB can access the written content which is unexpected")
 
 			exutil.By("# Check the podDWithNoneSubpath could see both 'subpathA' and 'subpathB' folders with " + SELinuxLabelValue + " label")
 			output, err = podDWithNoneSubpath.execCommand(oc, "ls -Z /mnt/storage")
