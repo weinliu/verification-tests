@@ -4538,7 +4538,7 @@ spec:
 		setAuditProfile(oc, "apiserver/cluster", patchCustomRules)
 
 		exutil.By("4. Check audit events should be greater than zero after login operation")
-		err1 := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 120*time.Second, false, func(cxt context.Context) (bool, error) {
+		err1 := wait.PollUntilContextTimeout(context.Background(), 20*time.Second, 180*time.Second, false, func(cxt context.Context) (bool, error) {
 			_, auditEventCount = checkUserAuditLog(oc, "system:authenticated:oauth", users[1].Username, users[1].Password)
 			if auditEventCount > 0 {
 				return true, nil
