@@ -2631,7 +2631,7 @@ spec:
 		format := `[0-9TZ.:]{5,30}`
 		frontwords := `(\w+?[^0-9a-zA-Z]+?){,3}`
 		afterwords := `(\w+?[^0-9a-zA-Z]+?){,30}`
-		exceptions := "panicked: false|e2e-test-|kernel.*-panic|non-fatal|(ocp|OCP)[0-9]{4,}|W[0-9]{4}.*fatal|SHOULD NOT HAPPEN.*(pwomnew-app|lmnew-app|pmnew-app|lwomnew-app|SubjectAccessReview)"
+		exceptions := `panicked: false|e2e-test-|kernel.*-panic|non-fatal|(ocp|OCP)\d{4,}|W\d{4}.*fatal|SHOULD NOT HAPPEN.*(pwomnew|lmnew|pmnew|lwomnew)-(app|build)|SubjectAccessReview|LocalResourceAccessReview`
 		cmd := fmt.Sprintf(`export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig
 		grep -hriE "(%s%s%s)+" /var/log/pods/openshift-apiserver-operator* | grep -Ev "%s" > /tmp/OCP-38865-oaso-errors.log
 		sed -E "s/%s/../g" /tmp/OCP-38865-oaso-errors.log | sort | uniq -c | sort -h | tee /tmp/OCP-38865-oaso-uniq-errors.log | head -10
