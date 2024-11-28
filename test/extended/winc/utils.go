@@ -1560,9 +1560,13 @@ func extractMetricValue(queryResult string) string {
 }
 
 func isDisconnectedCluster(oc *exutil.CLI) bool {
-	primaryDisconnectedImage := getConfigMapData(oc, wincTestCM, primary_disconnected_image_key, defaultNamespace)
-	if primaryDisconnectedImage == "" || strings.Contains(primaryDisconnectedImage, "<primary_windows_container_disconnected_image>") {
+	// Get the configmap content in YAML format using the more concise method
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", wincTestCM, "-n", defaultNamespace, "-o=yaml").Output()
+	if err != nil {
 		return false
 	}
-	return true
+
+	// Return false if configmap doesn't contain disconnected image key
+	// This means it's not configured for disconnected environment
+	return strings.Contains(output, "primary_windows_container_disconnected_image")
 }

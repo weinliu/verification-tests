@@ -546,17 +546,49 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		namespace := "winc-31276"
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
-		createWorkload(oc, namespace, windowsWebserverFile, map[string]string{"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)}, true, windowsWorkloads)
-		// Determine the Linux web server image based on disconnected status
-		var linuxWebserverImage string
+
+		// Create Windows workload
+		createWorkload(oc, namespace, windowsWebserverFile,
+			map[string]string{
+				"<windows_container_image>": getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace),
+			},
+			true,
+			windowsWorkloads,
+		)
+
+		// Get Linux container image for disconnected environment
+		linuxWebserverImage := getConfigMapData(oc, wincTestCM, "linux_container_disconnected_image", defaultNamespace)
+
+		// Create Linux workload based on environment type
 		if isDisconnectedCluster(oc) {
-			linuxWebserverImage = getConfigMapData(oc, wincTestCM, "linux_container_disconnected_image", defaultNamespace)
-			createWorkload(oc, namespace, linuxWebserverFileDisconnected, map[string]string{
-				"<linux_webserver_image>": linuxWebserverImage,
-			}, true, linuxWorkloads)
+			if linuxWebserverImage != "<linux_container_disconnected_image>" {
+				// Use disconnected Linux image
+				e2e.Logf("Using disconnected Linux webserver image: %v", linuxWebserverImage)
+				createWorkload(oc, namespace, linuxWebserverFileDisconnected,
+					map[string]string{
+						"<linux_webserver_image>": linuxWebserverImage,
+					},
+					true,
+					linuxWorkloads,
+				)
+			} else {
+				e2e.Logf("Warning: No valid Linux image config found in disconnected environment")
+				// Fallback to default Linux image
+				createWorkload(oc, namespace, linuxWebserverFile,
+					map[string]string{},
+					true,
+					linuxWorkloads,
+				)
+			}
 		} else {
-			createWorkload(oc, namespace, linuxWebserverFile, map[string]string{}, true, linuxWorkloads)
+			// Use default Linux image for connected environment
+			createWorkload(oc, namespace, linuxWebserverFile,
+				map[string]string{},
+				true,
+				linuxWorkloads,
+			)
 		}
+
 		// we scale the deployment to 5 windows pods
 		scaleDeployment(oc, windowsWorkloads, 5, namespace)
 		hostIPArray, err := getWorkloadsHostIP(oc, windowsWorkloads, namespace)
