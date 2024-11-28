@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"os"
 	"time"
 
 	o "github.com/onsi/gomega"
@@ -155,10 +157,34 @@ func (clustercatalog *ClusterCatalogDescription) GetContent(oc *exutil.CLI) []by
 		clustercatalog.GetcontentURL(oc)
 	}
 
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
+	var proxy string
+	if os.Getenv("http_proxy") != "" {
+		proxy = os.Getenv("http_proxy")
+	} else if os.Getenv("https_proxy") != "" {
+		proxy = os.Getenv("https_proxy")
+	} else if os.Getenv("HTTP_PROXY") != "" {
+		proxy = os.Getenv("HTTP_PROXY")
+	} else if os.Getenv("HTTPS_PROXY") != "" {
+		proxy = os.Getenv("HTTPS_PROXY")
+	}
+
+	var tr *http.Transport
+	if len(proxy) > 0 {
+		e2e.Logf("take proxy to access cluster")
+		proxyURL, err := url.Parse(proxy)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		tr = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+			Proxy: http.ProxyURL(proxyURL),
+		}
+	} else {
+		tr = &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
 	}
 	client := &http.Client{Transport: tr}
 

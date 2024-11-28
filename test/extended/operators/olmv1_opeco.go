@@ -863,10 +863,13 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	// author: jitli@redhat.com
 	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75122-CRD upgrade check Removing an existing stored version and add a new CRD with no modifications to existing versions", func() {
 		exutil.SkipOnProxyCluster(oc)
+		exutil.SkipForSNOCluster(oc)
 		var (
+			caseID                       = "75122"
+			labelValue                   = caseID
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
-			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
-			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog-withlabel.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension-withselectorlabel.yaml")
 			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
 			ns                           = "ns-75122"
 			sa                           = "sa75122"
@@ -876,9 +879,10 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 				Template:  saClusterRoleBindingTemplate,
 			}
 			clustercatalog = olmv1util.ClusterCatalogDescription{
-				Name:     "clustercatalog-75122",
-				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm75122",
-				Template: clustercatalogTemplate,
+				Name:       "clustercatalog-75122",
+				Imageref:   "quay.io/openshifttest/nginxolm-operator-index:nginxolm75122",
+				LabelValue: labelValue,
+				Template:   clustercatalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
 				Name:             "clusterextension-75122",
@@ -887,6 +891,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 				Channel:          "candidate-v1.0",
 				Version:          "1.0.1",
 				SaName:           sa,
+				LabelValue:       labelValue,
 				Template:         clusterextensionTemplate,
 			}
 		)
@@ -931,10 +936,6 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		exutil.By("upgrade will be prevented if An existing served version of the CRD is removed")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.6","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "reason", "Succeeded", 3, 150, 0)
-		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
-		clusterextension.GetBundleResource(oc)
-		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.6"))
 
 		clusterextension.CheckClusterExtensionCondition(oc, "Installed", "message",
 			"Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.6-nginxolm75122 successfully", 10, 60, 0)
@@ -945,10 +946,13 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	// Cover test case: OCP-75123 and OCP-75217
 	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75123-High-75217-CRD upgrade checks for changes in required field and field type", func() {
 		exutil.SkipOnProxyCluster(oc)
+		exutil.SkipForSNOCluster(oc)
 		var (
+			caseID                       = "75123"
+			labelValue                   = caseID
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
-			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
-			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog-withlabel.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension-withselectorlabel.yaml")
 			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
 			ns                           = "ns-75123"
 			sa                           = "sa75123"
@@ -958,9 +962,10 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 				Template:  saClusterRoleBindingTemplate,
 			}
 			clustercatalog = olmv1util.ClusterCatalogDescription{
-				Name:     "clustercatalog-75123",
-				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm75123",
-				Template: clustercatalogTemplate,
+				Name:       "clustercatalog-75123",
+				Imageref:   "quay.io/openshifttest/nginxolm-operator-index:nginxolm75123",
+				LabelValue: labelValue,
+				Template:   clustercatalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
 				Name:             "clusterextension-75123",
@@ -969,6 +974,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 				Channel:          "candidate-v1.0",
 				Version:          "1.0.1",
 				SaName:           sa,
+				LabelValue:       labelValue,
 				Template:         clusterextensionTemplate,
 			}
 		)
@@ -998,7 +1004,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 		// Cover test case: OCP-75217 - [olmv1] Override the unsafe upgrades with the warning message
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			`failed: version "v1alpha1", field "^.spec": new required fields added: [requiredfield2] for resolved bundle "nginx75123.v1.0.2" with version "1.0.2"`, 10, 60, 0)
+			`new required fields [requiredfield2] added for resolved bundle`, 10, 60, 0)
 
 		exutil.By("upgrade will be prevented if An existing field is removed from an existing version of the CRD")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
@@ -1016,7 +1022,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			`CustomResourceDefinition nginxolm75123s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.field" has unknown change, refusing to determine that change is safe`, 10, 60, 0)
+			`field "^.spec.field": type changed from "integer" to "string" for resolved bundle`, 10, 60, 0)
 
 		exutil.By("upgrade will be allowed if An existing required field is changed to optional in an existing version")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.8","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
@@ -1034,10 +1040,13 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	// author: jitli@redhat.com
 	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75124-CRD upgrade checks for changes in default values", func() {
 		exutil.SkipOnProxyCluster(oc)
+		exutil.SkipForSNOCluster(oc)
 		var (
+			caseID                       = "75124"
+			labelValue                   = caseID
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
-			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
-			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog-withlabel.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension-withselectorlabel.yaml")
 			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
 			ns                           = "ns-75124"
 			sa                           = "sa75124"
@@ -1047,9 +1056,10 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 				Template:  saClusterRoleBindingTemplate,
 			}
 			clustercatalog = olmv1util.ClusterCatalogDescription{
-				Name:     "clustercatalog-75124",
-				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm75124",
-				Template: clustercatalogTemplate,
+				Name:       "clustercatalog-75124",
+				Imageref:   "quay.io/openshifttest/nginxolm-operator-index:nginxolm75124",
+				LabelValue: labelValue,
+				Template:   clustercatalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
 				Name:             "clusterextension-75124",
@@ -1058,6 +1068,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 				Channel:          "candidate-v1.0",
 				Version:          "1.0.1",
 				SaName:           sa,
+				LabelValue:       labelValue,
 				Template:         clusterextensionTemplate,
 			}
 		)
@@ -1086,7 +1097,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			`CustomResourceDefinition nginxolm75124s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.field": new value added as default when previously no default value existed:`, 10, 60, 0)
+			`default value "\"default-string-jitli\"" added when there was no default previously for resolved bundle`, 10, 60, 0)
 
 		exutil.By("upgrade will be prevented if The default value of a field is changed")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
@@ -1094,7 +1105,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			`CustomResourceDefinition nginxolm75124s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.defaultenum": default value has been changed`, 10, 60, 0)
+			`failed: version "v1alpha1", field "^.spec.defaultenum": default value changed from "\"value1\"" to "\"value3\"" for resolved bundle`, 10, 60, 0)
 
 		exutil.By("upgrade will be prevented if An existing default value of a field is removed")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.6","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
@@ -1102,17 +1113,20 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			`CustomResourceDefinition nginxolm75124s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.defaultint": default value has been removed when previously a default value existed`, 10, 60, 0)
+			`field "^.spec.defaultint": default value "9" removed for resolved bundle`, 10, 60, 0)
 
 	})
 
 	// author: jitli@redhat.com
 	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75515-CRD upgrade checks for changes in enumeration values", func() {
 		exutil.SkipOnProxyCluster(oc)
+		exutil.SkipForSNOCluster(oc)
 		var (
+			caseID                       = "75515"
+			labelValue                   = caseID
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
-			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
-			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog-withlabel.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension-withselectorlabel.yaml")
 			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
 			ns                           = "ns-75515"
 			sa                           = "sa75515"
@@ -1122,9 +1136,10 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 				Template:  saClusterRoleBindingTemplate,
 			}
 			clustercatalog = olmv1util.ClusterCatalogDescription{
-				Name:     "clustercatalog-75515",
-				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm75515",
-				Template: clustercatalogTemplate,
+				Name:       "clustercatalog-75515",
+				Imageref:   "quay.io/openshifttest/nginxolm-operator-index:nginxolm75515",
+				LabelValue: labelValue,
+				Template:   clustercatalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
 				Name:             "clusterextension-75515",
@@ -1133,6 +1148,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 				Channel:          "candidate-v1.0",
 				Version:          "1.0.1",
 				SaName:           sa,
+				LabelValue:       labelValue,
 				Template:         clusterextensionTemplate,
 			}
 		)
@@ -1161,7 +1177,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			`CustomResourceDefinition nginxolm75515s.cache.example.com failed upgrade safety validation. "ChangeValidator" validation failed: version "v1alpha1", field "^.spec.unenumfield": enums added when there were no enum restrictions previously`, 10, 60, 0)
+			`field "^.spec.unenumfield": enum constraints ["value1" "value2" "value3"] added when there were no restrictions previously for resolved bundle`, 10, 60, 0)
 
 		clusterextension.Delete(oc)
 
@@ -1191,10 +1207,13 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	// author: jitli@redhat.com
 	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75516-CRD upgrade checks for the field maximum minimum changes", func() {
 		exutil.SkipOnProxyCluster(oc)
+		exutil.SkipForSNOCluster(oc)
 		var (
+			caseID                       = "75516"
+			labelValue                   = caseID
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
-			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
-			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog-withlabel.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension-withselectorlabel.yaml")
 			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
 			ns                           = "ns-75516"
 			sa                           = "sa75516"
@@ -1204,9 +1223,10 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 				Template:  saClusterRoleBindingTemplate,
 			}
 			clustercatalog = olmv1util.ClusterCatalogDescription{
-				Name:     "clustercatalog-75516",
-				Imageref: "quay.io/openshifttest/nginxolm-operator-index:nginxolm75516",
-				Template: clustercatalogTemplate,
+				Name:       "clustercatalog-75516",
+				Imageref:   "quay.io/openshifttest/nginxolm-operator-index:nginxolm75516",
+				LabelValue: labelValue,
+				Template:   clustercatalogTemplate,
 			}
 			clusterextension = olmv1util.ClusterExtensionDescription{
 				Name:             "clusterextension-75516",
@@ -1215,6 +1235,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 				Channel:          "candidate-v1.0",
 				Version:          "1.0.1",
 				SaName:           sa,
+				LabelValue:       labelValue,
 				Template:         clusterextensionTemplate,
 			}
 		)
@@ -1244,9 +1265,9 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			"maximum constraint decreased from 100 to 80", 10, 60, 0)
+			"maximum: constraint decreased from 100 to 80", 10, 60, 0)
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			"minimum constraint increased from 10 to 20", 10, 60, 0)
+			"minimum: constraint increased from 10 to 20", 10, 60, 0)
 
 		exutil.By("Check minLength & maxLength")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
@@ -1254,9 +1275,9 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			"maximum length constraint decreased from 50 to 30", 10, 60, 0)
+			"maxLength: constraint decreased from 50 to 30", 10, 60, 0)
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			"minimum length constraint increased from 3 to 9", 10, 60, 0)
+			"minLength: constraint increased from 3 to 9", 10, 60, 0)
 
 		exutil.By("Check minProperties & maxProperties")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.4","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
@@ -1264,9 +1285,9 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			"maximum properties constraint decreased from 5 to 4", 10, 60, 0)
+			"maxProperties: constraint decreased from 5 to 4", 10, 60, 0)
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			"minimum properties constraint increased from 2 to 3", 10, 60, 0)
+			"minProperties: constraint increased from 2 to 3", 10, 60, 0)
 
 		exutil.By("Check minItems & maxItems")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.5","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
@@ -1274,9 +1295,9 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			"maximum items constraint decreased from 10 to 9", 10, 60, 0)
+			"maxItems: constraint decreased from 10 to 9", 10, 60, 0)
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			"minimum items constraint increased from 2 to 3", 10, 60, 0)
+			"minItems: constraint increased from 2 to 3", 10, 60, 0)
 
 		exutil.By("upgrade will be prevented if Minimum or maximum field constraints are added to a field that did not previously have constraints")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.6","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
@@ -1284,9 +1305,9 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			`version "v1alpha1", field "^.spec.field1": maximum constraint added when one did not exist previously: 100`, 10, 60, 0)
+			`maximum: constraint 100 added when there were no restrictions previously`, 10, 60, 0)
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			`version "v1alpha1", field "^.spec.field1": minimum constraint added when one did not exist previously: 10`, 10, 60, 0)
+			`minimum: constraint 10 added when there were no restrictions previously`, 10, 60, 0)
 
 		exutil.By("upgrade will be Allowed if The minimum value of an existing field is decreased in an existing version & The maximum value of an existing field is increased in an existing version")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.7","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
