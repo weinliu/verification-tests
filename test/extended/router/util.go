@@ -1739,6 +1739,14 @@ func getClientIP(oc *exutil.CLI, clusterType string) string {
 	}
 }
 
+// This function checks the cookie file generated through curl command and confirms that the file contains what is expected
+func checkCookieFile(fileDir string, expectedString string) {
+	output, err := ioutil.ReadFile(fileDir)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("the cookie file content is: %s", output)
+	o.Expect(strings.Contains(string(output), expectedString)).To(o.BeTrue())
+}
+
 func checkIPStackType(oc *exutil.CLI) string {
 	svcNetwork, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("network.operator", "cluster", "-o=jsonpath={.spec.serviceNetwork}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())

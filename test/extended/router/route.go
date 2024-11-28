@@ -20,12 +20,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	var oc = exutil.NewCLI("routes", exutil.KubeConfigPath())
 
 	// bugzilla: 1368525
-	g.It("Author:shudili-ROSA-OSD_CCS-ARO-Medium-10207-NetworkEdge Should use the same cookies for secure and insecure access when insecureEdgeTerminationPolicy set to allow for edge route", func() {
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-Medium-10207-NetworkEdge Should use the same cookies for secure and insecure access when insecureEdgeTerminationPolicy set to allow for edge/reencrypt route", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
 			srvrcInfo           = "web-server-rc"
-			unSecSvcName        = "service-unsecure"
+			unSecSvcName        = "service-unsecure1"
 			fileDir             = "/tmp/OCP-10207-cookie"
 		)
 
@@ -52,17 +52,34 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		expectOutput = []string{"Hello-OpenShift " + srvPodList[1] + " http-8080"}
 		repeatCmdOnExternalClient(curlCmd, expectOutput, 120, 1)
 
-		exutil.By("5.0: Curl the edge route with the cookie, expect forwarding to the second server")
+		exutil.By("5.0: Open the cookie file and check the contents")
+		// access the cookie file and confirm that the output contains false and false
+		checkCookieFile(fileDir+"/cookie-10207", "FALSE\t/\tFALSE")
+
+		exutil.By("6.0: Curl the edge route with the cookie, expect forwarding to the second server")
 		curlCmdWithCookie := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-k -b "+fileDir+"/cookie-10207", "https://"+routehost)
 		expectOutput = []string{"Hello-OpenShift " + srvPodList[0] + " http-8080", "Hello-OpenShift " + srvPodList[1] + " http-8080"}
 		result := repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 120, 6)
 		o.Expect(result[1]).To(o.Equal(6))
 
-		exutil.By("6.0: Patch the edge route with Redirect tls insecureEdgeTerminationPolicy, then curl the edge route with the cookie, expect forwarding to the second server")
-		patchResourceAsAdmin(oc, project1, "route/route-edge10207", "{\"spec\":{\"tls\": {\"insecureEdgeTerminationPolicy\":\"Redirect\"}}}")
+		exutil.By("7.0: Patch the edge route with Redirect tls insecureEdgeTerminationPolicy, then curl the edge route with the cookie, expect forwarding to the second server")
+		patchResourceAsAdmin(oc, project1, "route/route-edge10207", `{"spec":{"tls": {"insecureEdgeTerminationPolicy":"Redirect"}}}`)
 		curlCmdWithCookie = fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, "-kSL -b "+fileDir+"/cookie-10207", "http://"+routehost)
 		result = repeatCmdOnExternalClient(curlCmdWithCookie, expectOutput, 120, 6)
 		o.Expect(result[1]).To(o.Equal(6))
+
+		exutil.By("8.0: Create a reencrypt route with Allow policy")
+		createRoute(oc, project1, "reencrypt", "route-reen10207", "service-secure1", []string{"--insecure-policy=Allow"})
+		waitForOutput(oc, project1, "route/route-reen10207", "{.status.ingress[0].conditions[0].status}", "True")
+		reenhost := "route-reen10207-" + project1 + ".apps." + getBaseDomain(oc)
+
+		exutil.By("9.0: Curl the route and generate a cookie file")
+		waitForOutsideCurlContains("http://"+reenhost, "-k -c "+fileDir+"/reen-cookie", "Hello-OpenShift "+srvPodList[0]+" https-8443")
+
+		exutil.By("10.0: Open the cookie file and check the contents")
+		// access the cookie file and confirm that the output contains false and false
+		checkCookieFile(fileDir+"/reen-cookie", "FALSE\t/\tFALSE")
+
 	})
 
 	// author: iamin@redhat.com
@@ -98,6 +115,172 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		routerpod := getNewRouterPod(oc, "default")
 		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", unSecSvcName)
 		o.Expect(searchOutput).NotTo(o.ContainSubstring(`timeout server  -2s`))
+
+	})
+
+	// author: iamin@redhat.com
+	// combine OCP-9651, OCP-9717
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-11036-NetworkEdge Set insecureEdgeTerminationPolicy to Redirect for passthrough/edge/reencrypt route", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+			SvcName             = "service-secure1"
+			unSecSvc            = "service-unsecure1"
+		)
+
+		exutil.By("1.0: Deploy a project with single pod, service and a passthrough/edge/reencrypt route")
+		project1 := oc.Namespace()
+		srvPodList := createResourceFromWebServerRC(oc, project1, testPodSvc, "web-server-rc")
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		output, err := oc.Run("get").Args("service").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.And(o.ContainSubstring(unSecSvc), o.ContainSubstring(SvcName)))
+		createRoute(oc, project1, "passthrough", "passthrough-route", SvcName, []string{})
+		createRoute(oc, project1, "reencrypt", "reen-route", SvcName, []string{})
+		createRoute(oc, project1, "edge", "edge-route", unSecSvc, []string{})
+		output, err = oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.And(o.ContainSubstring("passthrough-route"), o.ContainSubstring("reen-route"), o.ContainSubstring("edge-route")))
+
+		exutil.By("2.0: Add Redirect in tls")
+		patchResourceAsAdmin(oc, project1, "route/passthrough-route", `{"spec":{"tls": {"insecureEdgeTerminationPolicy":"Redirect"}}}`)
+		output, err = oc.Run("get").Args("route/passthrough-route", "-n", project1, "-o=jsonpath={.spec.tls}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`"insecureEdgeTerminationPolicy":"Redirect"`))
+
+		exutil.By("3.0: Test Route Http request is redirected to https")
+		routehost := "passthrough-route-" + project1 + ".apps." + getBaseDomain(oc)
+		waitForOutsideCurlContains("http://"+routehost, "-I -k", "ocation: https://"+routehost)
+		waitForOutsideCurlContains("http://"+routehost, "-L -k", "Hello-OpenShift "+srvPodList[0]+" https-8443")
+
+		exutil.By("4.0: Attempt to update route policy to Allow")
+		result, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/passthrough-route", "-p", `{"spec":{"tls": {"insecureEdgeTerminationPolicy":"Allow"}}}`, "-n", project1).Output()
+		o.Expect(result).To(o.ContainSubstring("invalid value for InsecureEdgeTerminationPolicy option, acceptable values are None, Redirect, or empty"))
+
+		exutil.By("5.0: Add Redirect in reencrypt tls")
+		patchResourceAsAdmin(oc, project1, "route/reen-route", `{"spec":{"tls": {"insecureEdgeTerminationPolicy":"Redirect"}}}`)
+		output, err = oc.Run("get").Args("route/reen-route", "-n", project1, "-o=jsonpath={.spec.tls}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`"insecureEdgeTerminationPolicy":"Redirect"`))
+
+		exutil.By("6.0: Test Route Http request is redirected to https")
+		reenhost := "reen-route-" + project1 + ".apps." + getBaseDomain(oc)
+		waitForOutsideCurlContains("http://"+reenhost, "-I -k", "ocation: https://"+reenhost)
+		waitForOutsideCurlContains("http://"+reenhost, "-L -k", "Hello-OpenShift "+srvPodList[0]+" https-8443")
+
+		exutil.By("7.0: Add Redirect in edge tls")
+		patchResourceAsAdmin(oc, project1, "route/edge-route", `{"spec":{"tls": {"insecureEdgeTerminationPolicy":"Redirect"}}}`)
+		output, err = oc.Run("get").Args("route/edge-route", "-n", project1, "-o=jsonpath={.spec.tls}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`"insecureEdgeTerminationPolicy":"Redirect"`))
+
+		exutil.By("8.0: Test Route Http request is redirected to https")
+		edgehost := "edge-route-" + project1 + ".apps." + getBaseDomain(oc)
+		waitForOutsideCurlContains("http://"+edgehost, "-I -k", "ocation: https://"+edgehost)
+		waitForOutsideCurlContains("http://"+edgehost, "-L -k", "Hello-OpenShift "+srvPodList[0]+" http-8080")
+
+		exutil.By("9.0: Attempt to update route policy to invalid value")
+		result, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("route/edge-route", "-p", `{"spec":{"tls": {"insecureEdgeTerminationPolicy":"Abc"}}}`, "-n", project1).Output()
+		o.Expect(result).To(o.ContainSubstring("invalid value for InsecureEdgeTerminationPolicy option, acceptable values are None, Allow, Redirect, or empty"))
+
+	})
+
+	// author: iamin@redhat.com
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-13753-NetworkEdge Check the cookie if using secure mode when insecureEdgeTerminationPolicy to Redirect for edge/reencrypt route", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+			srvrcInfo           = "web-server-rc"
+			unSecSvcName        = "service-unsecure1"
+			fileDir             = "/tmp/OCP-13753-cookie"
+		)
+
+		exutil.By("1.0: Prepare file folder and file for testing")
+		defer os.RemoveAll(fileDir)
+		err := os.MkdirAll(fileDir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2.0: Deploy a project with two server pods and the service")
+		project1 := oc.Namespace()
+		srvPodList := createResourceFromWebServerRC(oc, project1, testPodSvc, srvrcInfo)
+
+		exutil.By("3.0: Create an edge and reencrypt route with insecure_policy Redirect")
+		edgehost := "edge-route-" + project1 + ".apps." + getBaseDomain(oc)
+		reenhost := "reen-route-" + project1 + ".apps." + getBaseDomain(oc)
+		createRoute(oc, project1, "edge", "edge-route", unSecSvcName, []string{"--insecure-policy=Redirect"})
+		waitForOutput(oc, project1, "route/edge-route", "{.status.ingress[0].conditions[0].status}", "True")
+		output, err := oc.Run("get").Args("route/edge-route", "-n", project1, "-o=jsonpath={.spec.tls}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`"insecureEdgeTerminationPolicy":"Redirect"`))
+
+		createRoute(oc, project1, "reencrypt", "reen-route", "service-secure1", []string{"--insecure-policy=Redirect"})
+		waitForOutput(oc, project1, "route/reen-route", "{.status.ingress[0].conditions[0].status}", "True")
+		output, err = oc.Run("get").Args("route/reen-route", "-n", project1, "-o=jsonpath={.spec.tls}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`"insecureEdgeTerminationPolicy":"Redirect"`))
+
+		exutil.By("4.0: Curl the edge route and generate a cookie file")
+		waitForOutsideCurlContains("http://"+edgehost, "-v -L -k -c "+fileDir+"/edge-cookie", "Hello-OpenShift "+srvPodList[0]+" http-8080")
+
+		exutil.By("5.0: Open the cookie file and check the contents")
+		// access the cookie file and confirm that the output contains false and true
+		checkCookieFile(fileDir+"/edge-cookie", "FALSE\t/\tTRUE")
+
+		exutil.By("6.0: Curl the reencrypt route and generate a cookie file")
+		waitForOutsideCurlContains("http://"+reenhost, "-v -L -k -c "+fileDir+"/reen-cookie", "Hello-OpenShift "+srvPodList[0]+" https-8443")
+
+		exutil.By("7.0: Open the cookie file and check the contents")
+		// access the cookie file and confirm that the output contains false and true
+		checkCookieFile(fileDir+"/reen-cookie", "FALSE\t/\tTRUE")
+
+	})
+
+	// author: iamin@redhat.com
+	//combine OCP-9650
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-13839-NetworkEdge Set insecureEdgeTerminationPolicy to Allow for reencrypt/edge route", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+			SvcName             = "service-secure1"
+			unSecSvc            = "service-unsecure1"
+		)
+
+		exutil.By("1.0: Deploy a project with single pod, service and reencrypt and edge route")
+		project1 := oc.Namespace()
+		srvPodList := createResourceFromWebServerRC(oc, project1, testPodSvc, "web-server-rc")
+		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		output, err := oc.Run("get").Args("service").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.And(o.ContainSubstring(unSecSvc), o.ContainSubstring(SvcName)))
+		createRoute(oc, project1, "reencrypt", "reen-route", SvcName, []string{})
+		createRoute(oc, project1, "edge", "edge-route", unSecSvc, []string{})
+		output, err = oc.Run("get").Args("route").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.And(o.ContainSubstring("reen-route"), o.ContainSubstring("edge-route")))
+
+		exutil.By("2.0: Add Allow policy in tls")
+		patchResourceAsAdmin(oc, project1, "route/reen-route", `{"spec":{"tls": {"insecureEdgeTerminationPolicy":"Allow"}}}`)
+		output, err = oc.Run("get").Args("route/reen-route", "-n", project1, "-o=jsonpath={.spec.tls}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`"insecureEdgeTerminationPolicy":"Allow"`))
+
+		exutil.By("3.0: Test Route is accessible using http and https")
+		routehost := "reen-route-" + project1 + ".apps." + getBaseDomain(oc)
+		waitForOutsideCurlContains("http://"+routehost, "-k", "Hello-OpenShift "+srvPodList[0]+" https-8443 default")
+		waitForOutsideCurlContains("https://"+routehost, "-k", "Hello-OpenShift "+srvPodList[0]+" https-8443 default")
+
+		exutil.By("4.0: Add Allow in edge tls")
+		patchResourceAsAdmin(oc, project1, "route/edge-route", `{"spec":{"tls": {"insecureEdgeTerminationPolicy":"Allow"}}}`)
+		output, err = oc.Run("get").Args("route/edge-route", "-n", project1, "-o=jsonpath={.spec.tls}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`"insecureEdgeTerminationPolicy":"Allow"`))
+
+		exutil.By("5.0: Test Route is accessible using http and https")
+		edgehost := "edge-route-" + project1 + ".apps." + getBaseDomain(oc)
+		waitForOutsideCurlContains("http://"+edgehost, "-k", "Hello-OpenShift "+srvPodList[0]+" http-8080")
+		waitForOutsideCurlContains("https://"+edgehost, "-k", "Hello-OpenShift "+srvPodList[0]+" http-8080")
 
 	})
 
