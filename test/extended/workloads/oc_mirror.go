@@ -26,17 +26,8 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc                 = exutil.NewCLI("ocmirror", exutil.KubeConfigPath())
-		WORKLOADS_TEST_E2E = "TEST_E2E"
+		oc = exutil.NewCLI("ocmirror", exutil.KubeConfigPath())
 	)
-	g.JustBeforeEach(func() {
-		//temporary workaround for OCPBUGS-43986
-		os.Setenv(WORKLOADS_TEST_E2E, "true")
-	})
-
-	g.JustAfterEach(func() {
-		os.Unsetenv(WORKLOADS_TEST_E2E)
-	})
 
 	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:yinzhou-Medium-46517-List operator content with different options", func() {
 		dirname := "/tmp/case46517"
