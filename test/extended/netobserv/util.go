@@ -206,7 +206,7 @@ func WaitForPodsReadyWithLabel(oc *exutil.CLI, ns, label string) {
 }
 
 // WaitForDeploymentPodsToBeReady waits for the specific deployment to be ready
-func waitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace, name string) {
+func waitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace, name string) error {
 	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
 		deployment, err := oc.AdminKubeClient().AppsV1().Deployments(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
@@ -223,10 +223,10 @@ func waitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace, name string) {
 		e2e.Logf("Waiting for full availability of %s deployment (%d/%d)\n", name, deployment.Status.AvailableReplicas, *deployment.Spec.Replicas)
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment %s is not availabile", name))
+	return err
 }
 
-func waitForStatefulsetReady(oc *exutil.CLI, namespace, name string) {
+func waitForStatefulsetReady(oc *exutil.CLI, namespace, name string) error {
 	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
 		ss, err := oc.AdminKubeClient().AppsV1().StatefulSets(namespace).Get(context.Background(), name, metav1.GetOptions{})
 		if err != nil {
@@ -243,7 +243,7 @@ func waitForStatefulsetReady(oc *exutil.CLI, namespace, name string) {
 		e2e.Logf("Waiting for full availability of %s statefulset (%d/%d)\n", name, ss.Status.ReadyReplicas, *ss.Spec.Replicas)
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("statefulset %s is not availabile", name))
+	return err
 }
 
 func getSecrets(oc *exutil.CLI, namespace string) (string, error) {

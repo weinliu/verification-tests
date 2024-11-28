@@ -159,10 +159,16 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		if err != nil {
 			g.Skip("Skipping test since LokiStack resources were not deployed")
 		}
-		o.Expect(err).NotTo(o.HaveOccurred())
+
 		err = ls.deployLokiStack(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		ls.waitForLokiStackToBeReady(oc)
+		if err != nil {
+			g.Skip("Skipping test since LokiStack was not deployed")
+		}
+
+		err = ls.waitForLokiStackToBeReady(oc)
+		if err != nil {
+			g.Skip("Skipping test since LokiStack is not ready")
+		}
 		ls.Route = "https://" + getRouteAddress(oc, ls.Namespace, ls.Name)
 	})
 

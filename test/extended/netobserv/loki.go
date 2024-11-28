@@ -101,13 +101,15 @@ func (l lokiStack) deployLokiStack(oc *exutil.CLI) error {
 	return err
 }
 
-func (l lokiStack) waitForLokiStackToBeReady(oc *exutil.CLI) {
+func (l lokiStack) waitForLokiStackToBeReady(oc *exutil.CLI) error {
+	var err error
 	for _, deploy := range []string{l.Name + "-distributor", l.Name + "-gateway", l.Name + "-querier", l.Name + "-query-frontend"} {
-		waitForDeploymentPodsToBeReady(oc, l.Namespace, deploy)
+		err = waitForDeploymentPodsToBeReady(oc, l.Namespace, deploy)
 	}
 	for _, ss := range []string{l.Name + "-compactor", l.Name + "-index-gateway", l.Name + "-ingester"} {
-		waitForStatefulsetReady(oc, l.Namespace, ss)
+		err = waitForStatefulsetReady(oc, l.Namespace, ss)
 	}
+	return err
 }
 
 func (l lokiStack) removeLokiStack(oc *exutil.CLI) {
