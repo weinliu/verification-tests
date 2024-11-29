@@ -247,6 +247,32 @@ func (mosc MachineOSConfig) GetCurrentMachineOSBuild() (*MachineOSBuild, error) 
 	return NewMachineOSBuild(mosc.GetOC(), mosbName), nil
 }
 
+// SetRenderedImagePushspec patches the MOSC resource in order to configure a new renderedImagePushspec
+func (mosc MachineOSConfig) SetRenderedImagePushspec(rips string) error {
+	return mosc.Patch("json", `[{"op": "replace", "path": "/spec/buildInputs/renderedImagePushspec", "value":  "`+rips+`"}]`)
+}
+
+// GetRenderedImagePushspec returns the current valude of renderedImagePushspec
+func (mosc MachineOSConfig) GetRenderedImagePushspec() (string, error) {
+	return mosc.Get(`{.spec.buildInputs.renderedImagePushspec}`)
+}
+
+// SetContainerfiles sets the container files used by this MOSC
+func (mosc MachineOSConfig) SetContainerfiles(containerFiles []ContainerFile) error {
+	containerFilesBytes, err := json.Marshal(containerFiles)
+	if err != nil {
+		return err
+	}
+	containerFilesString := string(containerFilesBytes)
+
+	return mosc.Patch("json", `[{"op": "replace", "path": "/spec/buildInputs/containerFile", "value":  `+containerFilesString+`}]`)
+}
+
+// RemoveContainerfiles removes the container files configured in this MOSC
+func (mosc MachineOSConfig) RemoveContainerfiles() error {
+	return mosc.SetContainerfiles([]ContainerFile{})
+}
+
 // GetAll returns a []MachineOSConfig list with all existing pinnedimageset sorted by creation timestamp
 func (moscl *MachineOSConfigList) GetAll() ([]MachineOSConfig, error) {
 	moscl.ResourceList.SortByTimestamp()

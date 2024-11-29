@@ -390,6 +390,121 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		logger.Infof("OK!\n")
 	})
 
+	g.It("Author:sregidor-Longduration-NonPreRelease-High-77498-OCB Trigger new build when renderedImagePushspec is updated [Disruptive]", func() {
+
+		var (
+			infraMcpName = "infra"
+			moscName     = "tc-77498-infra"
+		)
+
+		exutil.By("Create custom infra MCP")
+		// We add no workers to the infra pool, it is not necessary
+		infraMcp, err := CreateCustomMCP(oc.AsAdmin(), infraMcpName, 0)
+		defer infraMcp.delete()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating a new custom pool: %s", infraMcpName)
+		logger.Infof("OK!\n")
+
+		exutil.By("Configure OCB functionality for the new infra MCP")
+		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), MachineConfigNamespace, moscName, infraMcpName, nil)
+		defer mosc.CleanupAndDelete()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
+		logger.Infof("OK!\n")
+
+		ValidateSuccessfulMOSC(mosc, nil)
+
+		exutil.By("Set a new rendered image pull spec")
+		initialMOSB := exutil.OrFail[*MachineOSBuild](mosc.GetCurrentMachineOSBuild())
+		initialRIPS := exutil.OrFail[string](mosc.GetRenderedImagePushspec())
+		o.Expect(
+			mosc.SetRenderedImagePushspec(strings.ReplaceAll(initialRIPS, "ocb-", "ocb77498-")),
+		).NotTo(o.HaveOccurred(), "Error patching %s to set the new renderedImagePullSpec", mosc)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that a new build is triggered")
+		checkNewBuildIsTriggered(mosc, initialMOSB)
+		logger.Infof("OK!\n")
+
+		exutil.By("Set the original rendered image pull spec")
+		o.Expect(
+			mosc.SetRenderedImagePushspec(initialRIPS),
+		).NotTo(o.HaveOccurred(), "Error patching %s to set the new renderedImagePullSpec", mosc)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the initial build is reused")
+		var currentMOSB *MachineOSBuild
+		o.Eventually(func() (string, error) {
+			currentMOSB, err = mosc.GetCurrentMachineOSBuild()
+			return currentMOSB.GetName(), err
+		}, "5m", "20s").Should(o.Equal(initialMOSB.GetName()),
+			"When the containerfiles were removed and initial MOSC configuration was restored, the initial MOSB was not used")
+
+		logger.Infof("OK!\n")
+	})
+
+	g.It("Author:sregidor-Longduration-NonPreRelease-High-77497-OCB Trigger new build when Containerfile is updated [Disruptive]", func() {
+
+		var (
+			infraMcpName     = "infra"
+			moscName         = "tc-77497-infra"
+			containerFile    = ContainerFile{Content: "RUN touch /etc/test-add-containerfile"}
+			containerFileMod = ContainerFile{Content: "RUN touch /etc/test-modified-containerfile"}
+		)
+
+		exutil.By("Create custom infra MCP")
+		// We add no workers to the infra pool, it is not necessary
+		infraMcp, err := CreateCustomMCP(oc.AsAdmin(), infraMcpName, 0)
+		defer infraMcp.delete()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating a new custom pool: %s", infraMcpName)
+		logger.Infof("OK!\n")
+
+		exutil.By("Configure OCB functionality for the new infra MCP")
+		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), MachineConfigNamespace, moscName, infraMcpName, nil)
+		defer mosc.CleanupAndDelete()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
+		logger.Infof("OK!\n")
+
+		ValidateSuccessfulMOSC(mosc, nil)
+
+		exutil.By("Add new container file")
+		initialMOSB := exutil.OrFail[*MachineOSBuild](mosc.GetCurrentMachineOSBuild())
+
+		o.Expect(
+			mosc.SetContainerfiles([]ContainerFile{containerFile}),
+		).NotTo(o.HaveOccurred(), "Error patching %s to add a container file", mosc)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that a new build is triggered when a containerfile is added")
+		checkNewBuildIsTriggered(mosc, initialMOSB)
+		logger.Infof("OK!\n")
+
+		exutil.By("Modify the container file")
+		currentMOSB := exutil.OrFail[*MachineOSBuild](mosc.GetCurrentMachineOSBuild())
+
+		o.Expect(
+			mosc.SetContainerfiles([]ContainerFile{containerFileMod}),
+		).NotTo(o.HaveOccurred(), "Error patching %s to modify an existing container file", mosc)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that a new build is triggered when a containerfile is modified")
+		checkNewBuildIsTriggered(mosc, currentMOSB)
+		logger.Infof("OK!\n")
+
+		exutil.By("Remove the container files")
+		o.Expect(
+			mosc.RemoveContainerfiles(),
+		).NotTo(o.HaveOccurred(), "Error patching %s to remove the configured container files", mosc)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the initial build is reused")
+		o.Eventually(func() (string, error) {
+			currentMOSB, err = mosc.GetCurrentMachineOSBuild()
+			return currentMOSB.GetName(), err
+		}, "5m", "20s").Should(o.Equal(initialMOSB.GetName()),
+			"When the containerfiles were removed and initial MOSC configuration was restored, the initial MOSB was not used")
+
+		logger.Infof("OK!\n")
+	})
+
 })
 
 func testContainerFile(containerFiles []ContainerFile, imageNamespace string, mcp *MachineConfigPool, checkers []Checker) {
@@ -622,4 +737,28 @@ func DisableOCL(mosc *MachineOSConfig) error {
 
 	mcp.WaitImmediateForUpdatedStatus()
 	return nil
+}
+
+// checkNewBuildIsTriggered executes the necessary validations to make sure that a new build was triggered and succeeded. Fails the test case if validaions fail
+func checkNewBuildIsTriggered(mosc *MachineOSConfig, currentMOSB *MachineOSBuild) {
+	var (
+		newMOSB *MachineOSBuild
+		err     error
+	)
+	logger.Infof("Current mosb: %s", currentMOSB)
+	o.Eventually(func() (string, error) {
+		newMOSB, err = mosc.GetCurrentMachineOSBuild()
+		return newMOSB.GetName(), err
+	}, "5m", "20s").ShouldNot(o.Equal(currentMOSB.GetName()),
+		"A new MOSB should be created after the new rendered image pull spec is configured")
+
+	logger.Infof("New mosb: %s", newMOSB)
+
+	o.Eventually(newMOSB, "5m", "20s").Should(HaveConditionField("Building", "status", TrueString),
+		"MachineOSBuild didn't report that the build has begun")
+
+	o.Eventually(newMOSB, "20m", "20s").Should(HaveConditionField("Building", "status", FalseString), "Build was not finished")
+	o.Eventually(newMOSB, "10m", "20s").Should(HaveConditionField("Succeeded", "status", TrueString), "Build didn't succeed")
+	o.Eventually(newMOSB, "2m", "20s").Should(HaveConditionField("Interrupted", "status", FalseString), "Build was interrupted")
+	o.Eventually(newMOSB, "2m", "20s").Should(HaveConditionField("Failed", "status", FalseString), "Build was failed")
 }
