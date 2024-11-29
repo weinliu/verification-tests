@@ -58,6 +58,11 @@ type Resource struct {
 	ocGetter
 }
 
+// GetOC retunrs the oc CLI used to execute commands in the resource
+func (r ocGetter) GetOC() *exutil.CLI {
+	return r.oc
+}
+
 // getCommonParams returns the params that are necessary for all commands involving this object
 // It returns these 3 params (or 2 if the object is not namespaced): {kind} {resourcename} ({-n} {namespace} only if namespaced)
 func (r *ocGetter) getCommonParams() []string {
@@ -163,11 +168,6 @@ func NewResource(oc *exutil.CLI, kind, name string) *Resource {
 // NewNamespacedResource constructs a Resource struct for a namespaced resource
 func NewNamespacedResource(oc *exutil.CLI, kind, namespace, name string) *Resource {
 	return &Resource{ocGetter: ocGetter{oc, kind, namespace, name}}
-}
-
-// GetOC retunrs the oc CLI used to execute commands in the resource
-func (r Resource) GetOC() *exutil.CLI {
-	return r.oc
 }
 
 // Delete removes the resource from openshift cluster

@@ -128,6 +128,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			g.Skip("This test case cannot be executed in SNO or Compact clusters")
 		}
 		exutil.By("get worker node to change the label")
+		wMcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		nodeList := NewNodeList(oc)
 		workerNode := nodeList.GetAllLinuxWorkerNodesOrFail()[0]
 
@@ -160,6 +161,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			if mcp.Exists() {
 				_ = mcp.WaitForMachineCount(0, 5*time.Minute)
 			}
+			wMcp.waitForComplete()
 		}()
 		mcp.create()
 
@@ -648,35 +650,57 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 
 	g.It("Author:mhanss-NonPreRelease-Longduration-Medium-43084-[P2][OnCLayer] shutdown machine config daemon with SIGTERM [Disruptive]", func() {
 		exutil.By("Create new machine config to add additional ssh key")
-		mcName := "add-additional-ssh-authorized-key"
-		mcTemplate := mcName + ".yaml"
-		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker).SetMCOTemplate(mcTemplate)
+		var (
+			mcp        = GetCompactCompatiblePool(oc.AsAdmin())
+			node       = mcp.GetSortedNodesOrFail()[0]
+			mcName     = "add-additional-ssh-authorized-key"
+			mcTemplate = mcName + ".yaml"
+			mc         = NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName()).SetMCOTemplate(mcTemplate)
+		)
+
+		mc.skipWaitForMcp = true
 		defer mc.delete()
 		mc.create()
 
 		exutil.By("Check MCD logs to make sure shutdown machine config daemon with SIGTERM")
-		workerNode := NewNodeList(oc).GetAllLinuxWorkerNodesOrFail()[0]
-		podLogs, err := exutil.WaitAndGetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, workerNode.GetMachineConfigDaemon(), "SIGTERM")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(podLogs).Should(
-			o.And(
-				o.ContainSubstring("Adding SIGTERM protection"),
-				o.ContainSubstring("Removing SIGTERM protection")))
+		if exutil.OrFail[bool](mcp.IsOCL()) {
+			logger.Infof("OCL pool. A reboot will happen, capture MCD logs until reboot")
+			o.Expect(node.CaptureMCDaemonLogsUntilRestartWithTimeout("20m")).To(
+				o.And(
+					o.ContainSubstring("Adding SIGTERM protection"),
+					o.ContainSubstring("Removing SIGTERM protection")),
+				"Node %s MCD logs should contain messages telling that SIGTERM protection was added and removed")
+
+		} else {
+			logger.Infof("NOT OCL pool. No reboot will happen, wait until MCD logs show the expected messages")
+			o.Eventually(node.GetMCDaemonLogs, "20m", "20s").WithArguments("").Should(
+				o.And(
+					o.ContainSubstring("Adding SIGTERM protection"),
+					o.ContainSubstring("Removing SIGTERM protection")),
+				"Node %s MCD logs should contain messages telling that SIGTERM protection was added and removed")
+		}
+		logger.Infof("OK!\n")
+
+		exutil.By("Wait for the configuration to be fully applied")
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
 
 		exutil.By("Kill MCD process")
-		mcdKillLogs, err := workerNode.DebugNodeWithChroot("pgrep", "-f", "machine-config-daemon_")
+		mcdKillLogs, err := node.DebugNodeWithChroot("pgrep", "-f", "machine-config-daemon_")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		mcpPid := regexp.MustCompile("(?m)^[0-9]+").FindString(mcdKillLogs)
-		_, err = workerNode.DebugNodeWithChroot("kill", mcpPid)
+		_, err = node.DebugNodeWithChroot("kill", mcpPid)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		logger.Infof("OK!\n")
 
 		exutil.By("Check MCD logs to make sure machine config daemon without SIGTERM")
-		mcDaemon := workerNode.GetMachineConfigDaemon()
+		mcDaemon := node.GetMachineConfigDaemon()
 
 		exutil.AssertPodToBeReady(oc, mcDaemon, MachineConfigNamespace)
 		mcdLogs, err := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, mcDaemon, "")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(mcdLogs).ShouldNot(o.ContainSubstring("SIGTERM"))
+		logger.Infof("OK!\n")
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-High-42682-change container registry config on ocp 4.6+ [Disruptive]", func() {
@@ -1764,22 +1788,28 @@ nulla pariatur.`
 	})
 
 	g.It("Author:sregidor-Longduration-NonPreRelease-High-49568-[OnCLayer] Check nodes updating order maxUnavailable=1 [Serial]", func() {
-		// Skip if no machinesets
-		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
 
-		exutil.By("Scale machinesets and 1 more replica to make sure we have at least 2 nodes per machineset")
-		platform := exutil.CheckPlatform(oc)
-		logger.Infof("Platform is %s", platform)
-		if platform != "none" && platform != "" {
-			err := AddToAllMachineSets(oc, 1)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			defer func() { o.Expect(AddToAllMachineSets(oc, -1)).NotTo(o.HaveOccurred()) }()
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+
+		// In OCL nodes are scaled up using the original osImage, and then MCO applies an update on them
+		// To avoid problems we do not scale up new nodes if OCL is enabled
+		// Once OCL is able to boot the nodes directly with the right image we can scale up nodes if the pool is OCL
+		if exutil.OrFail[bool](WorkersCanBeScaled(oc.AsAdmin())) && !exutil.OrFail[bool](mcp.IsOCL()) {
+			exutil.By("Scale machinesets and 1 more replica to make sure we have at least 2 nodes per machineset")
+			platform := exutil.CheckPlatform(oc)
+			logger.Infof("Platform is %s", platform)
+			if platform != "none" && platform != "" {
+				err := AddToAllMachineSets(oc, 1)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				defer func() { o.Expect(AddToAllMachineSets(oc, -1)).NotTo(o.HaveOccurred()) }()
+			} else {
+				logger.Infof("Platform is %s, skipping the MachineSets replica configuration", platform)
+			}
 		} else {
-			logger.Infof("Platform is %s, skipping the MachineSets replica configuration", platform)
+			logger.Infof("The worker pool cannot be scaled using machinesets or it is OCL. Skip adding new nodes")
 		}
 
 		exutil.By("Get the nodes in the worker pool sorted by update order")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		workerNodes, errGet := mcp.GetSortedNodes()
 		o.Expect(errGet).NotTo(o.HaveOccurred())
 
@@ -1820,18 +1850,25 @@ nulla pariatur.`
 	})
 
 	g.It("Author:sregidor-Longduration-NonPreRelease-High-49672-[OnCLayer] Check nodes updating order maxUnavailable>1 [Serial]", func() {
-		// Skip if no machinesets
-		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
 
-		exutil.By("Scale machinesets and 1 more replica to make sure we have at least 2 nodes per machineset")
-		platform := exutil.CheckPlatform(oc)
-		logger.Infof("Platform is %s", platform)
-		if platform != "none" && platform != "" {
-			err := AddToAllMachineSets(oc, 1)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			defer func() { o.Expect(AddToAllMachineSets(oc, -1)).NotTo(o.HaveOccurred()) }()
+		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+
+		// In OCL nodes are scaled up using the original osImage, and then MCO applies an update on them
+		// To avoid problems we do not scale up new nodes if OCL is enabled
+		// Once OCL is able to boot the nodes directly with the right image we can scale up nodes if the pool is OCL
+		if exutil.OrFail[bool](WorkersCanBeScaled(oc.AsAdmin())) && !exutil.OrFail[bool](mcp.IsOCL()) {
+			exutil.By("Scale machinesets and 1 more replica to make sure we have at least 2 nodes per machineset")
+			platform := exutil.CheckPlatform(oc)
+			logger.Infof("Platform is %s", platform)
+			if platform != "none" && platform != "" {
+				err := AddToAllMachineSets(oc, 1)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				defer func() { o.Expect(AddToAllMachineSets(oc, -1)).NotTo(o.HaveOccurred()) }()
+			} else {
+				logger.Infof("Platform is %s, skipping the MachineSets replica configuration", platform)
+			}
 		} else {
-			logger.Infof("Platform is %s, skipping the MachineSets replica configuration", platform)
+			logger.Infof("The worker pool cannot be scaled using machinesets or it is OCL. Skip adding new nodes")
 		}
 
 		// If the number of nodes is 2, since we are using maxUnavailable=2, all nodes will be cordoned at
@@ -1843,7 +1880,6 @@ nulla pariatur.`
 		}
 
 		exutil.By("Get the nodes in the worker pool sorted by update order")
-		mcp := NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 		workerNodes, errGet := mcp.GetSortedNodes()
 		o.Expect(errGet).NotTo(o.HaveOccurred())
 

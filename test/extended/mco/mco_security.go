@@ -221,6 +221,10 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 				_ = proxy.Patch("json", `[{ "op": "add", "path": "/spec", "value": `+initProxySpec+`}]`)
 			}()
 			proxy.Patch("merge", fmt.Sprintf(`{"spec": {"trustedCA": {"name": "%s"}}}`, cmName))
+
+			// TODO: remove this when the userCA bundle is handled using a controller and not a MC. It will be implemented in the near future
+			mcp.waitForComplete()
+
 			logger.Infof("OK!\n")
 		} else {
 			logger.Infof("The proxy is already configured to use the CA inside this configmap: %s", proxyConfigMapName)

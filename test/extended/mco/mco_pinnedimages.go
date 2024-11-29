@@ -632,6 +632,7 @@ func DigestMirrorTest(oc *exutil.CLI, mcp *MachineConfigPool, idmsName, idmsMirr
 	var (
 		allNodes      = mcp.GetNodesOrFail()
 		waitForPinned = 10 * time.Minute
+		mcpsList      = NewMachineConfigPoolList(oc.AsAdmin())
 	)
 
 	exutil.By("Remove the image from all nodes in the pool")
@@ -643,11 +644,11 @@ func DigestMirrorTest(oc *exutil.CLI, mcp *MachineConfigPool, idmsName, idmsMirr
 
 	exutil.By("Create new machine config to deploy a ImageDigestMirrorSet configuring a mirror registry")
 	idms := NewImageDigestMirrorSet(oc.AsAdmin(), idmsName, *NewMCOTemplate(oc, "add-image-digest-mirror-set.yaml"))
-	defer mcp.waitForComplete()
+	defer mcpsList.waitForComplete() // An ImageDisgestMirrorSet resource impacts all the pools in the cluster
 	defer idms.Delete()
 
 	idms.Create("-p", "NAME="+idmsName, "IMAGEDIGESTMIRRORS="+idmsMirrors)
-	mcp.waitForComplete()
+	mcpsList.waitForComplete()
 	logger.Infof("OK!\n")
 
 	exutil.By("Pin the mirrored image")

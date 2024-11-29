@@ -45,6 +45,8 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 	g.It("Author:sregidor-NonPreRelease-Longduration-High-59417-[P1][OnCLayer] MCD create/update password with MachineConfig in CoreOS nodes[Disruptive]", func() {
 		var (
 			mcName = "tc-59417-test-core-passwd"
+			mcc    = NewController(oc.AsAdmin()).IgnoreLogsBeforeNowOrFail()
+			isOCL  = exutil.OrFail[bool](mcp.IsOCL())
 		)
 
 		allCoreos := mcp.GetCoreOsNodesOrFail()
@@ -72,23 +74,21 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		mcp.waitForComplete()
 		logger.Infof("OK!\n")
 
-		exutil.By("Check MCD logs to make sure drain and reboot are skipped")
-		podLogs, err := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), `"drain\|reboot"`)
-		o.Expect(err).NotTo(o.HaveOccurred(), "Errot getting the drain and reboot logs: %s", err)
-		logger.Infof("Pod logs to skip node drain and reboot:\n %v", podLogs)
-		o.Expect(podLogs).Should(o.ContainSubstring("Changes do not require drain, skipping"))
-
-		o.Expect(node.GetUptime()).Should(o.BeTemporally("<", startTime),
-			"The node %s must NOT be rebooted, but it was rebooted. Uptime date happened after the start config time.", node.GetName())
-
+		exutil.By("Check MCD logs to make sure drain and reboot are skipped unless OCL")
+		checkDrainAction(isOCL, node, mcc)
+		checkRebootAction(isOCL, node, startTime)
 		logger.Infof("OK!\n")
 
-		exutil.By("Check events to make sure that drain and reboot events were not triggered")
-		nodeEvents, eErr := node.GetEvents()
-		o.Expect(eErr).ShouldNot(o.HaveOccurred(), "Error getting drain events for node %s", node.GetName())
-		o.Expect(nodeEvents).NotTo(HaveEventsSequence("Drain"), "Error, a Drain event was triggered but it shouldn't")
-		o.Expect(nodeEvents).NotTo(HaveEventsSequence("Reboot"), "Error, a Reboot event was triggered but it shouldn't")
-		logger.Infof("OK!\n")
+		if !isOCL {
+			exutil.By("Check events to make sure that drain and reboot events were not triggered")
+			nodeEvents, eErr := node.GetEvents()
+			o.Expect(eErr).ShouldNot(o.HaveOccurred(), "Error getting drain events for node %s", node.GetName())
+			o.Expect(nodeEvents).NotTo(HaveEventsSequence("Drain"), "Error, a Drain event was triggered but it shouldn't")
+			o.Expect(nodeEvents).NotTo(HaveEventsSequence("Reboot"), "Error, a Reboot event was triggered but it shouldn't")
+			logger.Infof("OK!\n")
+		} else {
+			logger.Infof("OCL pool, skipping events checks")
+		}
 
 		exutil.By("Verify that user 'core' can login with the configured password")
 		logger.Infof("verifying node %s", node.GetName())
@@ -274,9 +274,12 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 			key2   = `ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDf7nk9SKloQktDuu0DFDrWv8zRROnxKT04DQdz0RRWXwKyQWFbXi2t7MPkYHb+H7BfuCF8gd3BsfZbGenmRpHrm99bjbZWV6tyyyOWac88RGDXwTeSdcdgZoVDIQfW0S4/y7DP6uo6QGyZEh+s+VTGg8gcqm9L2GkjlA943UWUTyRIVQdex8qbtKdAI0NqYtAzuf1zYDGBob5/BdjT856dF7dDCJG36+d++VRXcyhE+SYxGdEC+OgYwRXjz3+J7XixvTAeY4DdGQOeppjOC/E+0TXh5T0m/+LfCJQCClSYvuxIKPkiMvmNHY4q4lOZUL1/FKIS2pn0P6KsqJ98JvqV mco_test2@redhat.com`
 
 			user = ign32PaswdUser{Name: "core", SSHAuthorizedKeys: []string{key1, key2}}
+
+			node  = mcp.GetCoreOsNodesOrFail()[0]
+			mcc   = NewController(oc.AsAdmin()).IgnoreLogsBeforeNowOrFail()
+			isOCL = exutil.OrFail[bool](mcp.IsOCL())
 		)
 
-		node := mcp.GetCoreOsNodesOrFail()[0]
 		skipTestIfRHELVersion(node, "<", "9.0")
 
 		exutil.By("Get currently configured authorizedkeys in the cluster")
@@ -310,22 +313,21 @@ var _ = g.Describe("[sig-mco] MCO password", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Check that nodes are not drained nor rebooted")
-		log, err := exutil.GetSpecificPodLogs(oc, MachineConfigNamespace, MachineConfigDaemon, node.GetMachineConfigDaemon(), "")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(log).Should(o.ContainSubstring("Changes do not require drain, skipping"))
+		checkDrainAction(isOCL, node, mcc)
 		logger.Infof("OK!\n")
 
 		exutil.By("Verify that the node was NOT rebooted")
-		o.Expect(node.GetUptime()).Should(o.BeTemporally("<", startTime),
-			"The node %s must NOT be rebooted after applying the configuration, but it was rebooted. Uptime date happened after the start config time.", node.GetName())
+		checkRebootAction(isOCL, node, startTime)
 		logger.Infof("OK!\n")
 
-		exutil.By("Check events to make sure that drain and reboot events were not triggered")
-		nodeEvents, eErr := node.GetEvents()
-		o.Expect(eErr).ShouldNot(o.HaveOccurred(), "Error getting drain events for node %s", node.GetName())
-		o.Expect(nodeEvents).NotTo(HaveEventsSequence("Drain"), "Error, a Drain event was triggered but it shouldn't")
-		o.Expect(nodeEvents).NotTo(HaveEventsSequence("Reboot"), "Error, a Reboot event was triggered but it shouldn't")
-		logger.Infof("OK!\n")
+		if !isOCL {
+			exutil.By("Check events to make sure that drain and reboot events were not triggered")
+			nodeEvents, eErr := node.GetEvents()
+			o.Expect(eErr).ShouldNot(o.HaveOccurred(), "Error getting drain events for node %s", node.GetName())
+			o.Expect(nodeEvents).NotTo(HaveEventsSequence("Drain"), "Error, a Drain event was triggered but it shouldn't")
+			o.Expect(nodeEvents).NotTo(HaveEventsSequence("Reboot"), "Error, a Reboot event was triggered but it shouldn't")
+			logger.Infof("OK!\n")
+		}
 
 		exutil.By("Check that all expected keys are present")
 		checkAuthorizedKeyInNode(mcp.GetCoreOsNodesOrFail()[0], append(initialKeys, key1, key2))

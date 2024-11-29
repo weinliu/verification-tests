@@ -686,8 +686,8 @@ func skipTestIfExtensionsAreUsed(oc *exutil.CLI) {
 
 }
 
-// skipTestIfWorkersCannotBeScaled skips the current test if the worker pool cannot be scaled via machineset
-func skipTestIfWorkersCannotBeScaled(oc *exutil.CLI) {
+// WorkersCanBeScaled returns true if worker nodes can be scaled using machinesets
+func WorkersCanBeScaled(oc *exutil.CLI) (bool, error) {
 	logger.Infof("Checking if in this cluster workers can be scaled using machinesets")
 
 	if !IsCapabilityEnabled(oc.AsAdmin(), "MachineAPI") {
@@ -695,16 +695,23 @@ func skipTestIfWorkersCannotBeScaled(oc *exutil.CLI) {
 	}
 
 	msl, err := NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAll()
-	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error getting a list of MachineSet resources")
+	if err != nil {
+		logger.Errorf("Error getting a list of MachineSet resources")
+		return false, err
+	}
 
 	// If there is no machineset then clearly we can't use them to scale the workers
 	if len(msl) == 0 {
-		g.Skip("There is no machineset available in current cluster. This test cannot be execute if workers cannot be scaled via machineset")
+		return false, nil
 	}
 
 	totalworkers := 0
 	for _, ms := range msl {
-		replicas := ms.GetOrFail(`{.spec.replicas}`)
+		replicas, err := ms.Get(`{.spec.replicas}`)
+		if err != nil {
+			logger.Errorf("Error getting the number of replicase in %s", ms)
+			return false, err
+		}
 		if replicas != "" {
 			intReplicas, err := strconv.Atoi(replicas)
 			if err == nil {
@@ -716,7 +723,19 @@ func skipTestIfWorkersCannotBeScaled(oc *exutil.CLI) {
 	// In some UPI/SNO/Compact clusters machineset resources exist, but they are all configured with 0 replicas
 	// If all machinesets have 0 replicas, then it means that we need to skip the test case
 	if totalworkers == 0 {
-		g.Skip("There are machinesets in this cluster, but they are not available to scale workers. This test cannot be execute if workers cannot be scaled via machineset")
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// skipTestIfWorkersCannotBeScaled skips the current test if the worker pool cannot be scaled via machineset
+func skipTestIfWorkersCannotBeScaled(oc *exutil.CLI) {
+	canBeScaled, err := WorkersCanBeScaled(oc)
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error decidign if worker nodes can be scaled using machinesets")
+
+	if !canBeScaled {
+		g.Skip("Worker nodes cannot be scaled using machinesets. This test cannot be execute if workers cannot be scaled via machineset")
 	}
 }
 

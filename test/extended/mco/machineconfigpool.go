@@ -1269,6 +1269,50 @@ func (mcp *MachineConfigPool) WaitForRebooted() error {
 	return mcp.oc.WithoutNamespace().Run("adm").Args("wait-for-node-reboot", "nodes", "-l", "node-role.kubernetes.io/"+mcp.GetName()).Execute()
 }
 
+// GetMOSC returns the MachineOSConfig resource for this pool
+func (mcp MachineConfigPool) GetMOSC() (*MachineOSConfig, error) {
+	moscList := NewMachineOSConfigList(mcp.GetOC())
+	moscList.SetItemsFilter(`?(@.spec.machineConfigPool.name=="` + mcp.GetName() + `")`)
+	moscs, err := moscList.GetAll()
+	if err != nil {
+		return nil, err
+	}
+	if len(moscs) > 1 {
+		moscList.PrintDebugCommand()
+		return nil, fmt.Errorf("There are more than one MOSC for pool %s", mcp.GetName())
+	}
+
+	if len(moscs) == 0 {
+		return nil, nil
+	}
+	return &(moscs[0]), nil
+}
+
+// IsOCL returns true if the pool is using On Cluster Layering functionality
+func (mcp MachineConfigPool) IsOCL() (bool, error) {
+	isOCLEnabled, err := IsFeaturegateEnabled(mcp.GetOC(), "OnClusterBuild")
+	if err != nil {
+		return false, err
+	}
+	if !isOCLEnabled {
+		logger.Infof("IS pool %s OCL: false", mcp.GetName())
+		return false, nil
+	}
+
+	mosc, err := mcp.GetMOSC()
+	if err != nil {
+		return false, err
+	}
+	isOCL := mosc != nil
+	logger.Infof("IS pool %s OCL: %t", mcp.GetName(), isOCL)
+	return isOCL, err
+}
+
+// GetLatestMachineOSBuild returns the latest MachineOSBuild created for this MCP
+func (mcp *MachineConfigPool) GetLatestMachineOSBuildOrFail() *MachineOSBuild {
+	return NewMachineOSBuild(mcp.oc, fmt.Sprintf("%s-%s-builder", mcp.GetName(), mcp.getConfigNameOfSpecOrFail()))
+}
+
 // GetAll returns a []MachineConfigPool list with all existing machine config pools sorted by creation time
 func (mcpl *MachineConfigPoolList) GetAll() ([]MachineConfigPool, error) {
 	mcpl.ResourceList.SortByTimestamp()
@@ -1290,6 +1334,25 @@ func (mcpl *MachineConfigPoolList) GetAllOrFail() []MachineConfigPool {
 	mcps, err := mcpl.GetAll()
 	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error getting the list of existing MCP in the cluster")
 	return mcps
+}
+
+// waitForComplete waits until all MCP in the list are updated
+func (mcpl *MachineConfigPoolList) waitForComplete() {
+	mcps, err := mcpl.GetAll()
+	o.ExpectWithOffset(1, err).NotTo(o.HaveOccurred(), "Error getting the list of existing MCP in the cluster")
+	// We always wait for master first, to make sure that we avoid problems in SNO
+	for _, mcp := range mcps {
+		if mcp.IsMaster() {
+			mcp.waitForComplete()
+			break
+		}
+	}
+
+	for _, mcp := range mcps {
+		if !mcp.IsMaster() {
+			mcp.waitForComplete()
+		}
+	}
 }
 
 // GetCompactCompatiblePool returns worker pool if the cluster is not compact/SNO. Else it will return master pool or custom pool if worker pool is empty.
