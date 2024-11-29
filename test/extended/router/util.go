@@ -1172,6 +1172,14 @@ func createExternalDNSOperator(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("csv %v is not correct status", csvName))
 }
 
+// Skip the test if there is no 'qe-app-registry' or 'redhat-operators' catalogsource in the cluster
+func skipMissingCatalogsource(oc *exutil.CLI) {
+	catalogOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource").Output()
+	if !strings.Contains(catalogOutput, "qe-app-registry") && !strings.Contains(catalogOutput, "redhat-operators") {
+		g.Skip("Skip the test since there is no 'qe-app-registry' nor 'redhat-operators' catalogsource in the cluster")
+	}
+}
+
 func deleteNamespace(oc *exutil.CLI, ns string) {
 	err := oc.AdminKubeClient().CoreV1().Namespaces().Delete(context.Background(), ns, metav1.DeleteOptions{})
 	if err != nil {
@@ -1968,12 +1976,4 @@ func getPublicSubnetList(oc *exutil.CLI) []string {
 	}
 	e2e.Logf("The public subnet list generated from private is: %v", publicSubnetList)
 	return publicSubnetList
-}
-
-// Skip the test if there is no 'qe-app-registry' or 'redhat-operators' catalogsource in the cluster
-func skipMissingCatalogsource(oc *exutil.CLI) {
-	catalogOutput, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource").Output()
-	if !strings.Contains(catalogOutput, "qe-app-registry") && !strings.Contains(catalogOutput, "redhat-operators") {
-		g.Skip("Skip the test since there is no 'qe-app-registry' nor 'redhat-operators' catalogsource in the cluster")
-	}
 }
