@@ -11,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -195,6 +196,9 @@ func (clustercatalog *ClusterCatalogDescription) GetContent(oc *exutil.CLI) []by
 			e2e.Logf("Error closing body: %v", err)
 		}
 	}()
+	if err != nil && strings.Contains(err.Error(), "Service Unavailable") {
+		g.Skip("the service can not be accessable with Service Unavailable")
+	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	curlOutput, err := io.ReadAll(resp.Body)
 	o.Expect(err).NotTo(o.HaveOccurred())

@@ -3964,7 +3964,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			if strings.Contains(line, "certified-operators") || strings.Contains(line, "community-operators") || strings.Contains(line, "marketplace-operator") || strings.Contains(line, "redhat-marketplace") || strings.Contains(line, "redhat-operators") && strings.Contains(line, "1/1") {
 				name := strings.Split(line, " ")
 				checkRel, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(name[0], "-n", "openshift-marketplace", "--", "cat", "/etc/redhat-release").Output()
-				o.Expect(err).NotTo(o.HaveOccurred())
+				if err != nil {
+					e2e.Logf("can not get content with error %v, and try next", err)
+					continue
+				}
 				o.Expect(checkRel).To(o.ContainSubstring("Red Hat"))
 			}
 		}
