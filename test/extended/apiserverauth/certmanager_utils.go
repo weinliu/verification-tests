@@ -772,11 +772,14 @@ func setupVaultServer(oc *exutil.CLI, ns string, release string) (string, string
 		noProxy              = ""
 	)
 
-	// The Vault server requires Unix commands like 'chmod' to initialize operator, but it's not supported natively by Azure Files SMB protocol.
-	// xref: https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/storage/could-not-change-permissions-azure-files
+	// explicitly skip not applicable storage classes for Vault statefulset
+	// 1. The Vault server requires Unix commands like 'chmod' to initialize operator, but it's not supported natively by Azure Files SMB protocol.
+	//    xref: https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/storage/could-not-change-permissions-azure-files
+	// 2. The Vault requests 1G PVC for data storage, but the 'Hyperdisk' type has a minimum disk size requirement of 4G which is expensive and unnecessary for our scenarios.
+	//    xref: https://cloud.google.com/compute/docs/disks/hyperdisks#limits-disk
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("storageclass", `-o=jsonpath={.items[?(@.metadata.annotations.storageclass\.kubernetes\.io/is-default-class=="true")].metadata.name}`).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Contains(output, "azurefile-csi") || len(output) == 0 {
+	if strings.Contains(output, "azurefile-csi") || strings.Contains(output, "hyperdisk") || len(output) == 0 {
 		g.Skip("Skipping as the default storage class is not applicable for the vault server to consume.")
 	}
 
