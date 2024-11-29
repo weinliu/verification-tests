@@ -866,12 +866,12 @@ func uploadBaseImageToCloud(oc *exutil.CLI, platform, baseImageURL, baseImage st
 		logger.Infof("No need to updload images in GCP")
 		return nil
 	case VspherePlatform:
-		server, dataCenter, dataStore, folder, resourcePool, user, password, err := getvSphereCredentials(oc.AsAdmin())
+		server, dataCenter, dataStore, resourcePool, user, password, err := getvSphereCredentials(oc.AsAdmin())
 		if err != nil {
 			return err
 		}
 
-		err = uploadBaseImageToVsphere(baseImageURL, baseImage, server, dataCenter, dataStore, folder, resourcePool, user, password)
+		err = uploadBaseImageToVsphere(baseImageURL, baseImage, server, dataCenter, dataStore, resourcePool, user, password)
 		if err != nil {
 			return err
 		}
@@ -882,7 +882,7 @@ func uploadBaseImageToCloud(oc *exutil.CLI, platform, baseImageURL, baseImage st
 	}
 }
 
-func uploadBaseImageToVsphere(baseImageSrc, baseImageDest, server, dataCenter, dataStore, _, resourcePool, user, password string) error {
+func uploadBaseImageToVsphere(baseImageSrc, baseImageDest, server, dataCenter, dataStore, resourcePool, user, password string) error {
 	var (
 		execBin          = "govc"
 		uploadCommand    = []string{"import.ova", "--debug", "--name", baseImageDest, baseImageSrc}
@@ -922,9 +922,9 @@ func uploadBaseImageToVsphere(baseImageSrc, baseImageDest, server, dataCenter, d
 	if err != nil {
 		if strings.Contains(string(out), "already exists") {
 			logger.Infof("Image %s already exists in the cloud, we don't upload it again", baseImageDest)
-			return nil
+		} else {
+			return err
 		}
-		return err
 	}
 
 	logger.Infof("Upgrading VM's hardware")
@@ -958,7 +958,7 @@ func uploadBaseImageToVsphere(baseImageSrc, baseImageDest, server, dataCenter, d
 	return nil
 }
 
-func getvSphereCredentials(oc *exutil.CLI) (server, dataCenter, dataStore, folder, resourcePool, user, password string, err error) {
+func getvSphereCredentials(oc *exutil.CLI) (server, dataCenter, dataStore, resourcePool, user, password string, err error) {
 	var (
 		configCM    = NewConfigMap(oc.AsAdmin(), "openshift-config", "cloud-provider-config")
 		credsSecret = NewSecret(oc.AsAdmin(), "kube-system", "vsphere-creds")
@@ -969,15 +969,59 @@ func getvSphereCredentials(oc *exutil.CLI) (server, dataCenter, dataStore, folde
 	}
 
 	cfg, err := ini.Load(strings.NewReader(config))
-	if err != nil {
-		return
-	}
+	if err == nil {
+		logger.Infof("%s config info is in ini fomart. Extracting data", configCM)
+		server = cfg.Section("Workspace").Key("server").String()
+		dataCenter = cfg.Section("Workspace").Key("datacenter").String()
+		dataStore = cfg.Section("Workspace").Key("default-datastore").String()
+		resourcePool = cfg.Section("Workspace").Key("resourcepool-path").String()
 
-	server = cfg.Section("Workspace").Key("server").String()
-	dataCenter = cfg.Section("Workspace").Key("datacenter").String()
-	dataStore = cfg.Section("Workspace").Key("default-datastore").String()
-	folder = cfg.Section("Workspace").Key("folder").String()
-	resourcePool = cfg.Section("Workspace").Key("resourcepool-path").String()
+	} else {
+		logger.Infof("%s config info is NOT in ini fomart. Trying to extract the information from the infrastructure resource", configCM)
+		infra := NewResource(oc.AsAdmin(), "infrastructure", "cluster")
+		var failureDomain string
+		failureDomain, err = infra.Get(`{.spec.platformSpec.vsphere.failureDomains[0]}`)
+		if err != nil {
+			logger.Errorf("Cannot get the failureDomain from the infrastructure resource: %s", err)
+			return
+		}
+		if failureDomain == "" {
+			logger.Errorf("Failure domain is empty in the infrastructure resource: %s\n%s", err, infra.PrettyString())
+			err = fmt.Errorf("Empty failure domain in the infrastructure resource")
+			return
+
+		}
+		gserver := gjson.Get(failureDomain, "server")
+		if gserver.Exists() {
+			server = gserver.String()
+		} else {
+			err = fmt.Errorf("Cannot get the server value from failureDomain\n%s", infra.PrettyString())
+			return
+		}
+		gdataCenter := gjson.Get(failureDomain, "topology.datacenter")
+		if gdataCenter.Exists() {
+			dataCenter = gdataCenter.String()
+		} else {
+			err = fmt.Errorf("Cannot get the data center value from failureDomain\n%s", infra.PrettyString())
+			return
+		}
+
+		gdataStore := gjson.Get(failureDomain, "topology.datastore")
+		if gdataStore.Exists() {
+			dataStore = gdataStore.String()
+		} else {
+			err = fmt.Errorf("Cannot get the data store value from failureDomain\n%s", infra.PrettyString())
+			return
+		}
+
+		gresourcePool := gjson.Get(failureDomain, "topology.resourcePool")
+		if gresourcePool.Exists() {
+			resourcePool = gresourcePool.String()
+		} else {
+			err = fmt.Errorf("Cannot get the resourcepool value from failureDomain\n%s", infra.PrettyString())
+			return
+		}
+	}
 
 	decodedData, err := credsSecret.GetDecodedDataMap()
 	if err != nil {
@@ -992,6 +1036,18 @@ func getvSphereCredentials(oc *exutil.CLI) (server, dataCenter, dataStore, folde
 		if strings.Contains(k, "password") {
 			password = item
 		}
+	}
+
+	if user == "" {
+		logger.Errorf("Empty vsphere user")
+		err = fmt.Errorf("The vsphere user is empty")
+		return
+	}
+
+	if password == "" {
+		logger.Errorf("Empty vsphere password")
+		err = fmt.Errorf("The vsphere password is empty")
+		return
 	}
 
 	return
