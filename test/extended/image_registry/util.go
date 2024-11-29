@@ -546,6 +546,10 @@ func saveImageMetadataName(oc *exutil.CLI, image string) string {
 }
 
 func checkRegistryFunctionFine(oc *exutil.CLI, bcname, namespace string) {
+	errTag := oc.AsAdmin().WithoutNamespace().Run("tag").Args("quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "busybox:latest", "--reference-policy=local", "--import-mode=PreserveOriginal", "-n", namespace).Execute()
+	o.Expect(errTag).NotTo(o.HaveOccurred())
+	errTag = waitForAnImageStreamTag(oc, namespace, "busybox", "latest")
+	o.Expect(errTag).NotTo(o.HaveOccurred())
 	// Check if could push images to image registry
 	err := oc.AsAdmin().WithoutNamespace().Run("new-build").Args("-D", "FROM quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f", "--to="+bcname, "-n", namespace).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
