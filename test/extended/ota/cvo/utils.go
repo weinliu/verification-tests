@@ -829,6 +829,41 @@ func unsetCVOverrides(oc *exutil.CLI) {
 	o.Expect(upgStatusOutput).NotTo(o.ContainSubstring("ClusterVersionOverridesSet"))
 }
 
+// Check if a non-namespace resource existed
+func isGlobalResourceExist(oc *exutil.CLI, resourceType string) bool {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(resourceType).Output()
+	o.Expect(err).NotTo(o.HaveOccurred(), "fail to get resource %s", resourceType)
+	if strings.Contains(output, "No resources found") {
+		e2e.Logf("there is no %s in this cluster!", resourceType)
+		return false
+	}
+	return true
+}
+
+// Check ICSP or IDMS to get mirror registry info
+func getMirrorRegistry(oc *exutil.CLI) (registry string, err error) {
+	if isGlobalResourceExist(oc, "ImageContentSourcePolicy") {
+		if registry, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageContentSourcePolicy",
+			"-o", "jsonpath={.items[0].spec.repositoryDigestMirrors[0].mirrors[0]}").Output(); err == nil {
+			registry, _, _ = strings.Cut(registry, "/")
+		} else {
+			err = fmt.Errorf("failed to acquire mirror registry from ICSP: %v", err)
+		}
+		return
+	} else if isGlobalResourceExist(oc, "ImageDigestMirrorSet") {
+		if registry, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ImageDigestMirrorSet",
+			"-o", "jsonpath={.items[0].spec.imageDigestMirrors[0].mirrors[0]}").Output(); err == nil {
+			registry, _, _ = strings.Cut(registry, "/")
+		} else {
+			err = fmt.Errorf("failed to acquire mirror registry from IDMS: %v", err)
+		}
+		return
+	} else {
+		err = fmt.Errorf("no ICSP or IDMS found!")
+		return
+	}
+}
+
 // Run "oc adm release info" cmd to get release info of the current release
 func getReleaseInfo(oc *exutil.CLI) (output string, err error) {
 	tempDataDir := filepath.Join("/tmp/", fmt.Sprintf("ota-%s", getRandomString()))
@@ -851,7 +886,7 @@ func getReleaseInfo(oc *exutil.CLI) (output string, err error) {
 		platform := exutil.CheckPlatform(oc)
 		if strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") {
 			var mirror_registry string
-			mirror_registry, err = exutil.GetMirrorRegistry(oc)
+			mirror_registry, err = getMirrorRegistry(oc)
 			if mirror_registry != "" {
 				if err != nil {
 					err = fmt.Errorf("error out getting mirror registry: %v", err)
