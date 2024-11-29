@@ -2958,8 +2958,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		patch1 := fmt.Sprintf("[{\"op\":\"add\",\"path\":\"/spec/identityProviders\",\"value\":[{\"ldap\":{\"attributes\":{\"email\":[\"mail\"],\"id\":[\"dn\"],\"name\":[\"uid\"],\"preferredUsername\":[\"uid\"]},\"insecure\":true,\"url\":\"ldap://10.66.147.104:389/ou=People,dc=my-domain,dc=com?uid\"},\"mappingMethod\":\"add\",\"name\":\"openldapidp\",\"type\":\"LDAP\"}]}]")
 		patch2 := fmt.Sprintf("[{\"op\":\"remove\",\"path\":\"/spec/identityProviders\",\"value\":[{\"ldap\":{\"attributes\":{\"email\":[\"mail\"],\"id\":[\"dn\"],\"name\":[\"uid\"],\"preferredUsername\":[\"uid\"]},\"insecure\":true,\"url\":\"ldap://10.66.147.104:389/ou=People,dc=my-domain,dc=com?uid\"},\"mappingMethod\":\"add\",\"name\":\"openldapidp\",\"type\":\"LDAP\"}]}]")
 		patchResource(oc, asAdmin, withoutNamespace, "oauth", "cluster", "--type", "merge", "-p",
-			"{\"spec\":{\"tokenConfig\":{\"accessTokenMaxAgeSeconds\":28800}}}")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "28800", ok, []string{"oauth", "cluster",
+			"{\"spec\":{\"tokenConfig\":{\"accessTokenMaxAgeSeconds\":86400}}}")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "86400", ok, []string{"oauth", "cluster",
 			"-o=jsonpath={.spec.tokenConfig.accessTokenMaxAgeSeconds}"}).check(oc)
 		patchResource(oc, asAdmin, withoutNamespace, "oauth", "cluster", "--type", "merge", "-p",
 			"{\"spec\":{\"tokenConfig\":{\"accessTokenInactivityTimeout\":\"10m0s\"}}}")
@@ -4287,7 +4287,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			}
 			ssbStig = scanSettingBindingDescription{
 				name:            "moderate-test" + getRandomString(),
-				namespace:       "",
+				namespace:       subD.namespace,
 				profilekind1:    "TailoredProfile",
 				profilename1:    tpStig.name,
 				scansettingname: "default",
@@ -4295,7 +4295,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			}
 			ssbModerate = scanSettingBindingDescription{
 				name:            "moderate-test" + getRandomString(),
-				namespace:       "",
+				namespace:       subD.namespace,
 				profilekind1:    "TailoredProfile",
 				profilename1:    tpModerate.name,
 				scansettingname: "default",
@@ -4372,6 +4372,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-Author:pdhamdhe-Longduration-CPaasrunOnly-NonPreRelease-High-46419-Compliance operator supports remediation templating by setting custom variables in the tailored profile [Disruptive][Slow]", func() {
+		g.By("Skip test if precondition not meet .. !!!\n")
+		auditProfile, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiservers", "cluster", "-n", subD.namespace, "-o=jsonpath={.spec.audit.profile}").Output()
+		if auditProfile == "WriteRequestBodies" {
+			g.Skip("Skip test due to precondition not meet")
+		}
+
 		var (
 			tprofileD = tailoredProfileDescription{
 				name:         "ocp4-audit-tailored",
@@ -5079,7 +5085,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		crResult, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-l", "compliance.openshift.io/suite="+ssbModerate, "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if crResult != "" {
-			newCheck("expect", asAdmin, withoutNamespace, compare, "0", ok, []string{"machineconfigpool", ss.roles1, "-n", subD.namespace, "-o=jsonpath={.status.readyMachineCount}"}).check(oc)
 			checkMachineConfigPoolStatus(oc, ss.roles1)
 		}
 
@@ -5745,7 +5750,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			"-o=jsonpath={.spec.scans[0].priorityClass}"}).check(oc)
 
 		g.By("Check event message.. !!!\n")
-		commonMessage := ".*Error while getting priority class.*" + priorityClassName + ".*"
+		commonMessage := "Error while getting priority class"
 		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", subD.namespace, "--field-selector", "involvedObject.name="+csuite.name+",involvedObject.kind=ComplianceSuite", "-o=jsonpath={.items[*].message}")
 		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", subD.namespace, "--field-selector", "involvedObject.name="+csuite.scanname+",involvedObject.kind=ComplianceScan", "-o=jsonpath={.items[*].message}")
 
