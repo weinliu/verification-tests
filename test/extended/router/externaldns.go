@@ -31,6 +31,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 	g.BeforeEach(func() {
 		// skip ARM64 arch
 		architecture.SkipNonAmd64SingleArch(oc)
+		// skip if no catalog source
+		skipMissingCatalogsource(oc)
 	})
 
 	// author: hongli@redhat.com
