@@ -36,15 +36,16 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	// })
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-NonHyperShiftHOST-Medium-74638-Apply hypershift cluster-profile for ibm-cloud-managed", func() {
-		ibmCloudManaged, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("olm.operator.openshift.io", "cluster", `-o=jsonpath={.metadata.annotations.include\.release\.openshift\.io/ibm-cloud-managed}`).Output()
-		if err != nil {
-			e2e.Failf("fail to get include.release.openshift.io/ibm-cloud-managed annotation:%v, error:%v", ibmCloudManaged, err)
-		}
-		if ibmCloudManaged != "true" {
-			e2e.Failf("the include.release.openshift.io/ibm-cloud-managed(%s) is not true", ibmCloudManaged)
-		}
-	})
+	// OLMv1 doesn't support Hypershift by now(29.11.2024). More: https://redhat-internal.slack.com/archives/GHMALGJV6/p1731949072094519?thread_ts=1731591485.969199&cid=GHMALGJV6
+	// g.It("Author:jiazha-NonHyperShiftHOST-Medium-74638-Apply hypershift cluster-profile for ibm-cloud-managed", func() {
+	// 	ibmCloudManaged, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("olm.operator.openshift.io", "cluster", `-o=jsonpath={.metadata.annotations.include\.release\.openshift\.io/ibm-cloud-managed}`).Output()
+	// 	if err != nil {
+	// 		e2e.Failf("fail to get include.release.openshift.io/ibm-cloud-managed annotation:%v, error:%v", ibmCloudManaged, err)
+	// 	}
+	// 	if ibmCloudManaged != "true" {
+	// 		e2e.Failf("the include.release.openshift.io/ibm-cloud-managed(%s) is not true", ibmCloudManaged)
+	// 	}
+	// })
 
 	// author: kuiwang@redhat.com
 	g.It("Author:kuiwang-DEPRECATED-ConnectedOnly-NonHyperShiftHOST-Medium-68903-BundleDeployment Health resource unhealthy pod api crd ds", func() {
