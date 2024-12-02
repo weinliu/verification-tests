@@ -2706,6 +2706,18 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		o.Expect(strings.Contains(outputM, "example-11882")).To(o.BeTrue())
 		o.Expect(strings.Contains(outputM, rsName)).To(o.BeTrue())
 	})
+	g.It("Author:yinzhou-ROSA-OSD_CCS-ARO-Low-74099-oc set env should not overrides the apiVersion of routes and deployment configs", func() {
+		oc.SetupProject()
+		config74099BaseDir := exutil.FixturePath("testdata", "workloads")
+		testFile74099 := filepath.Join(config74099BaseDir, "config_74099.yaml")
+
+		output, err := oc.Run("set").Args("env", "-e", "FOO=BAR", "-f", testFile74099, "-o", "yaml", "--local", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "FOO")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "route.openshift.io/v1")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "apps.openshift.io/v1")).To(o.BeTrue())
+
+	})
 })
 
 // ClientVersion ...
