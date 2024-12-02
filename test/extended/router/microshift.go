@@ -10,6 +10,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
@@ -808,5 +809,141 @@ fi
 		o.Expect(lbIPs).To(o.Equal(hostIPs))
 		httpsPort := getByJsonPath(oc, "openshift-ingress", "svc/router-default", `{.spec.ports[?(@.name=="https")].port}`)
 		o.Expect(httpsPort).To(o.Equal("443"))
+	})
+
+	g.It("Author:shudili-MicroShiftOnly-High-77349-introduce ingress controller customization with microshift config.yaml [Disruptive]", func() {
+
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+			unsecsvcName        = "service-unsecure1"
+			e2eTestNamespace    = "e2e-ne-ocp77349-" + getRandomString()
+			httpRouteHost       = unsecsvcName + "-" + "ocp77349." + "apps.example.com"
+
+			// prepare the data for test,  for every slice, the first element is the env name, the second is the expected default env value in the deloyment, the third is the expected custom env value in the deloyment,
+			// the fourth is the expected default haproxy configuration, the last is the expected custom haproxy configuration
+			// https://issues.redhat.com/browse/OCPBUGS-45191 for routerBackendCheckInterval, the haproxy config should be "check inter 5000ms", marked it "skip for none" in the case
+			// for routerSetForwardedHeaders, set expected haproxy config with "skip for none" for the haproxy hasn't such an configuration
+			// for routerEnableCompression, routerCompressionMime and routerDontLogNull, set expected haproxy config with "skip for none" for the default values couldn't be seen in the haproxy.config
+			routerBufSize                 = []string{`ROUTER_BUF_SIZE`, `32768`, `65536`, `tune.bufsize 32768`, `tune.bufsize 65536`}
+			routerMaxRewriteSize          = []string{`ROUTER_MAX_REWRITE_SIZE`, `8192`, `16384`, `tune.maxrewrite 8192`, `tune.maxrewrite 16384`}
+			routerBackendCheckInterval    = []string{`ROUTER_BACKEND_CHECK_INTERVAL`, `5s`, `10s`, `skip for none`, `skip for none`}
+			routerDefaultClientTimeout    = []string{`ROUTER_DEFAULT_CLIENT_TIMEOUT`, `30s`, `1m`, `timeout client 30s`, `timeout client 1m`}
+			routerClientFinTimeout        = []string{`ROUTER_CLIENT_FIN_TIMEOUT`, `1s`, `2s`, `timeout client-fin 1s`, `timeout client-fin 2s`}
+			routerDefaultServerTimeout    = []string{`ROUTER_DEFAULT_SERVER_TIMEOUT`, `30s`, `1m`, `timeout server 30s`, `timeout server 1m`}
+			routerDefaultServerFinTimeout = []string{`ROUTER_DEFAULT_SERVER_FIN_TIMEOUT`, `1s`, `2s`, `timeout server-fin 1s`, `timeout server-fin 2s`}
+			routerDefaultTunnelTimeout    = []string{`ROUTER_DEFAULT_TUNNEL_TIMEOUT`, `1h`, `2h`, `timeout tunnel 1h`, `timeout tunnel 2h`}
+			routerInspectDelay            = []string{`ROUTER_INSPECT_DELAY`, `5s`, `10s`, `tcp-request inspect-delay 5s`, `tcp-request inspect-delay 10s`}
+			routerThreads                 = []string{`ROUTER_THREADS`, `4`, `8`, `nbthread 4`, `nbthread 8`}
+			routerMaxConnections          = []string{`ROUTER_MAX_CONNECTIONS`, `50000`, `100000`, `maxconn 50000`, `maxconn 100000`}
+			routerEnableCompression       = []string{`ROUTER_ENABLE_COMPRESSION`, `false`, `true`, `skip for none`, `compression algo`}
+			routerCompressionMime         = []string{`ROUTER_COMPRESSION_MIME`, ``, `image`, `skip for none`, `compression type image`}
+			routerDontLogNull             = []string{`ROUTER_DONT_LOG_NULL`, `false`, `true`, `skip for none`, `option dontlognull`}
+			routerSetForwardedHeaders     = []string{`ROUTER_SET_FORWARDED_HEADERS`, `Append`, `Replace`, `skip for none`, `skip for none`}
+			allParas                      = [][]string{routerBufSize, routerMaxRewriteSize, routerBackendCheckInterval, routerDefaultClientTimeout, routerClientFinTimeout, routerDefaultServerTimeout, routerDefaultServerFinTimeout, routerDefaultTunnelTimeout, routerInspectDelay, routerThreads, routerMaxConnections, routerEnableCompression, routerCompressionMime, routerDontLogNull, routerSetForwardedHeaders}
+		)
+
+		exutil.By("1.0 Deploy a project with a backend pod and its services resources, then create a route")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
+		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
+		err := waitForPodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
+		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
+		createRoute(oc, e2eTestNamespace, "http", "route-http", unsecsvcName, []string{"--hostname=" + httpRouteHost})
+
+		exutil.By("2.0 check the router-default deployment that all default ENVs of tested parameters are as expected")
+		for _, routerEntry := range allParas {
+			jsonPath := fmt.Sprintf(`{.spec.template.spec.containers[0].env[?(@.name=="%s")].value}`, routerEntry[0])
+			envValue := getByJsonPath(oc, "openshift-ingress", "deployment/router-default", jsonPath)
+			if envValue != routerEntry[1] {
+				e2e.Logf("the retrieved default value of env: %s is not as expected: %s", envValue, routerEntry[1])
+			}
+			o.Expect(envValue == routerEntry[1]).To(o.BeTrue())
+		}
+
+		exutil.By("3.0 check the haproxy.config that all default vaules of tested parameters are set as expected")
+		routerpod := getNewRouterPod(oc, "default")
+		for _, routerEntry := range allParas {
+			if routerEntry[3] != "skip for none" {
+				haCfg := readHaproxyConfig(oc, routerpod, routerEntry[3], "-A0", routerEntry[3])
+				if !strings.Contains(haCfg, routerEntry[3]) {
+					e2e.Logf("the retrieved default value of haproxy: %s is not as expected: %s", haCfg, routerEntry[3])
+				}
+				o.Expect(haCfg).To(o.ContainSubstring(routerEntry[3]))
+			}
+		}
+
+		exutil.By("4.0 debug node to configure the microshift config.yaml")
+		configIngressCmd := fmt.Sprintf(`
+if test -f /etc/microshift/config.yaml ; then
+    cp /etc/microshift/config.yaml /etc/microshift/config.yaml.backup77349
+else
+    touch /etc/microshift/config.yaml.no77349
+fi
+cat >> /etc/microshift/config.yaml << EOF
+ingress:
+    forwardedHeaderPolicy: "Replace"
+    httpCompression:
+        mimeTypes:
+            - "image"
+    logEmptyRequests: "Ignore"
+    tuningOptions:
+        clientFinTimeout: "2s"
+        clientTimeout: "60s"
+        headerBufferBytes: 65536
+        headerBufferMaxRewriteBytes: 16384
+        healthCheckInterval: "10s"
+        maxConnections: 100000
+        serverFinTimeout: "2s"
+        serverTimeout: "60s"
+        threadCount: 8
+        tlsInspectDelay: "10s"
+        tunnelTimeout: "2h"
+EOF`)
+
+		recoverCmd := fmt.Sprintf(`
+if test -f /etc/microshift/config.yaml.no77349; then
+    rm -f /etc/microshift/config.yaml
+    rm -f /etc/microshift/config.yaml.no77349
+elif test -f /etc/microshift/config.yaml.backup77349 ; then
+    rm -f /etc/microshift/config.yaml
+    cp /etc/microshift/config.yaml.backup77349 /etc/microshift/config.yaml
+    rm -f /etc/microshift/config.yaml.backup77349
+fi
+`)
+
+		nodeName := getByJsonPath(oc, "default", "nodes", "{.items[0].metadata.name}")
+		defer func() {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", recoverCmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+		}()
+
+		_, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", configIngressCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+
+		exutil.By("5.0 check the router-default deployment that all updated ENVs of tested parameters are as expected")
+		for _, routerEntry := range allParas {
+			jsonPath := fmt.Sprintf(`{.spec.template.spec.containers[0].env[?(@.name=="%s")].value}`, routerEntry[0])
+			envValue := getByJsonPath(oc, "openshift-ingress", "deployment/router-default", jsonPath)
+			if envValue != routerEntry[2] {
+				e2e.Logf("the retrieved updated value of env: %s is not as expected: %s", envValue, routerEntry[2])
+			}
+			o.Expect(envValue == routerEntry[2]).To(o.BeTrue())
+		}
+
+		exutil.By("6.0 check the haproxy.config that all updated vaules of tested parameters are set as expected")
+		routerpod = getNewRouterPod(oc, "default")
+		for _, routerEntry := range allParas {
+			if routerEntry[4] != "skip for none" {
+				haCfg := readHaproxyConfig(oc, routerpod, routerEntry[4], "-A0", routerEntry[4])
+				if !strings.Contains(haCfg, routerEntry[4]) {
+					e2e.Logf("the retrieved updated value of haproxy: %s is not as expected: %s", haCfg, routerEntry[4])
+				}
+				o.Expect(haCfg).To(o.ContainSubstring(routerEntry[4]))
+			}
+		}
 	})
 })
