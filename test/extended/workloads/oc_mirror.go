@@ -1661,6 +1661,7 @@ mirror:
 		defer registry.deleteregistry(oc)
 		serInfo := registry.createregistry(oc)
 		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "20G", "/var/lib/registry")
 
 		exutil.By("Configure the Registry Certificate as trusted for cincinnati")
 		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
