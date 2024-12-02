@@ -1857,7 +1857,7 @@ spec:
 
 		exutil.By("1.0: Use openssl to create the certification and key")
 		defer os.RemoveAll(dirname)
-		err := os.MkdirAll(dirname, 0755)
+		err := os.MkdirAll(dirname, 0777)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		output := getByJsonPath(oc, "default", "ingresses.config/cluster", "{.spec.domain}")
 		wildcard := "*." + output

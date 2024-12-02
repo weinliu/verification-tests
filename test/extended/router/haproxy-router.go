@@ -84,7 +84,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	// incorporate OCP-34157 and OCP-34163 into one
 	// OCP-34157 [HAProxy-frontend-capture] capture and log specific http Request header via "httpCaptureHeaders" option
 	// OCP-34163 [HAProxy-frontend-capture] capture and log specific http Response headers via "httpCaptureHeaders" option
-	g.It("Author:shudili-ROSA-OSD_CCS-ARO-Critical-34157-NetworkEdge capture and log specific http Request header via httpCaptureHeaders option", func() {
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-ConnectedOnly-Critical-34157-NetworkEdge capture and log specific http Request header via httpCaptureHeaders option", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		testPod := filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
 		unsecsvc := filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
@@ -3344,7 +3344,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: shudili@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:shudili-NonPreRelease-Longduration-Medium-66569-set different type of values for a http header name and its value", func() {
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-NonPreRelease-Longduration-ConnectedOnly-Medium-66569-set different type of values for a http header name and its value", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -3481,7 +3481,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	// [OCPBUGS-40850](https://issues.redhat.com/browse/OCPBUGS-40850)
 	// [OCPBUGS-43095](https://issues.redhat.com/browse/OCPBUGS-43095)
 	// author: shudili@redhat.com
-	g.It("Author:shudili-ROSA-OSD_CCS-ARO--High-77284-http request with duplicated headers should not cause disruption to a router pod", func() {
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-ConnectedOnly-High-77284-http request with duplicated headers should not cause disruption to a router pod", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
