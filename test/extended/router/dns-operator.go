@@ -100,10 +100,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 
 	// author: mjoseph@redhat.com
 	g.It("Author:mjoseph-Critical-41049-DNS controlls pod placement by node selector [Disruptive]", func() {
+		podList := getAllDNSPodsNames(oc)
+		if len(podList) == 1 {
+			g.Skip("Skipping on SNO cluster (just has one dns pod)")
+		}
+
 		var (
 			ns    = "openshift-dns"
 			label = "ne-dns-testing=true"
 		)
+
 		exutil.By("check the default dns nodeSelector is present")
 		nodePlacement := getByJsonPath(oc, ns, "ds/dns-default", "{.spec.template.spec.nodeSelector}")
 		o.Expect(nodePlacement).To(o.BeEquivalentTo(`{"kubernetes.io/os":"linux"}`))
