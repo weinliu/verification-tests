@@ -944,6 +944,42 @@ var _ = g.Describe("[sig-apps] Workloads test kcm works well", func() {
 		checkMetric(oc, `https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="KubeControllerManagerDown"}'`, token, "openshift-kube-controller-manager", 600)
 	})
 
+	g.It("Author:yinzhou-HyperShiftMGMT-Medium-76959-make sure split the route controllers out from OCM for hosted-control-plane", func() {
+		exutil.By("Get the hosted-control-plane ns")
+		_, _, hostedClusterNS := exutil.ValidHypershiftAndGetGuestKubeConf(oc)
+
+		if hostedClusterNS == "" {
+			g.Skip("No hosted control plane found, skip it.")
+		}
+
+		checkMessage := []string{
+			"ingress-to-route",
+			"ingress-ip",
+		}
+
+		routeControllerPodNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", hostedClusterNS, "-l", "app=openshift-route-controller-manager", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		routeControllerPodList := strings.Fields(routeControllerPodNames)
+
+		var routeFlag = false
+		exutil.By("Check the ingress-ip and ingress-to-route are started under openshift-route-controller-manager pods")
+		for _, routeControllerPodName := range routeControllerPodList {
+			out, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", hostedClusterNS, "pod/"+routeControllerPodName).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			for _, v := range checkMessage {
+				if strings.Contains(out, v) {
+					routeFlag = true
+					break
+				}
+			}
+		}
+		if routeFlag {
+			e2e.Logf("Find the expected log under openshift-route-controller-manager")
+		} else {
+			e2e.Failf("Failed to find the expected log under openshift-route-controller-manager")
+		}
+	})
+
 })
 
 var _ = g.Describe("[sig-cli] Workloads kube-controller-manager on Microshift", func() {
