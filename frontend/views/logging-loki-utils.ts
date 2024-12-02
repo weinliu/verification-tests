@@ -22,13 +22,13 @@ export const LokiUtils = {
                   --from-literal=region="${region}" \
                   --from-literal=bucketnames="${lokiBucketName}" \
                   --from-file=access_key_id=${accessKey} \
-                  --from-file=access_key_secret=${secretKey}`, {failOnNonZeroExit: false})
+                  --from-file=access_key_secret=${secretKey} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
                 })
                 cy.exec(`rm -r ${awsTempDir}`)
               })
             })
             break;
-          case 'azure': 
+          case 'azure':
             AzureCreds.getEnv().then((azure_env) => {
               AzureCreds.getStorageContainer().then((azure_storage_azure_container) => {
                 AzureCreds.getStorageAccountName().then((azure_storage_azure_accountname) => {
@@ -39,7 +39,7 @@ export const LokiUtils = {
                       --from-literal=container="${azure_storage_azure_container}" \
                       --from-literal=account_name="${azure_storage_azure_accountname}" \
                       --from-literal=account_key="${azure_storage_account_key}" \
-                      --from-literal=endpoint_suffix="${azure_endpoint_suffix}"`, {failOnNonZeroExit: false})
+                      --from-literal=endpoint_suffix="${azure_endpoint_suffix}" --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
                     })
                   })
 
@@ -56,7 +56,7 @@ export const LokiUtils = {
             cy.get<string>('@GPCSA').then(serviceAccount => {
               cy.exec(`oc -n ${nameSpace} create secret generic ${secretName} \
               --from-literal=bucketname="${lokiBucketName}" \
-              --from-file=key.json=${serviceAccount}`, {failOnNonZeroExit: false})
+              --from-file=key.json=${serviceAccount} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
             })
             cy.exec(`rm -r ${gcpTempDir}`);
             break;
@@ -85,7 +85,7 @@ export const LokiUtils = {
       })
     },
     getPlatform: () => {
-      cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} get infrastructure cluster -o=jsonpath={.status.platformStatus.type}`, {failOnNonZeroExit: false})
+      cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} get infrastructure cluster -o=jsonpath='{.status.platformStatus.type}' --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
       .then((result) => {
         switch (result.stdout) {
           case 'AWS': {
@@ -106,7 +106,7 @@ export const LokiUtils = {
           }
         }
       })
-    },  
+    },
     getStorageClass: () => {
       return cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} get sc --no-headers | awk 'NR==1 {print $1}'`, {failOnNonZeroExit: false})
       .then((result) => {
@@ -114,9 +114,9 @@ export const LokiUtils = {
           return result.stdout;
         }
       })
-    }  
+    }
   };
-  
+
   export const GCPCreds = {
     getProjectID: () => {
       cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} get infrastructure cluster -o jsonpath='{.status.platformStatus.gcp.projectID}'`, {failOnNonZeroExit: false})
@@ -156,7 +156,7 @@ export const LokiUtils = {
       })
     },
     getAWSRegion: () => {
-      cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} get infrastructure cluster -o=jsonpath={.status.platformStatus.aws.region}`, {failOnNonZeroExit: false})
+      cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} get infrastructure cluster -o=jsonpath='{.status.platformStatus.aws.region}'`, {failOnNonZeroExit: false})
       .then((result) => {
         if(!result.stderr.includes('NotFound')) {
           cy.wrap(`${result.stdout}`).as('AWSRegion');
@@ -206,5 +206,5 @@ export const LokiUtils = {
           return "AzureGlobal";
         }
       })
-    },   
+    },
   };

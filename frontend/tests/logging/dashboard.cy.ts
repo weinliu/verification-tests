@@ -1,15 +1,10 @@
 import { catalogSource, logUtils } from "../../views/logging-utils";
-import { dashboard, graphSelector } from "views/dashboards-page"
+import { graphSelector } from "views/dashboards-page"
 describe('Logging related features', () => {
   const CLO = {
     namespace:   "openshift-logging",
     packageName: "cluster-logging",
     operatorName: "Red Hat OpenShift Logging"
-  };
-  const EO = {
-    namespace:   "openshift-operators-redhat",
-    packageName: "elasticsearch-operator",
-    operatorName: "OpenShift Elasticsearch Operator"
   };
   const LO = {
     namespace:   "openshift-operators-redhat",
@@ -18,18 +13,24 @@ describe('Logging related features', () => {
   };
   const Test_NS = "cluster-logging-dashboard-test";
 
-  before(() => {
+  before( function() {
+    cy.exec(`oc get authentication cluster --template={{.spec.serviceAccountIssuer}} --kubeconfig=${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {
+      if (result.stdout!=""){
+        cy.log('sts cluster!!');
+        this.skip();
+      }
+    });
+  })
+
+  beforeEach( function() {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     // Install logging operators if needed
     catalogSource.sourceName(CLO.packageName).then((csName) => {
-      logUtils.installOperator(CLO.namespace, CLO.packageName, csName, catalogSource.channel(CLO.packageName), catalogSource.version(CLO.packageName), true, CLO.operatorName);
-    });
-    catalogSource.sourceName(EO.packageName).then((csName) => {
-      logUtils.installOperator(EO.namespace, EO.packageName, csName, catalogSource.channel(EO.packageName), catalogSource.version(EO.packageName), false, EO.operatorName);
+      logUtils.installOperator(CLO.namespace, CLO.packageName, csName, catalogSource.channel(CLO.packageName), catalogSource.version(CLO.packageName), CLO.operatorName);
     });
     catalogSource.sourceName(LO.packageName).then((csName) => {
-      logUtils.installOperator(LO.namespace, LO.packageName, csName, catalogSource.channel(LO.packageName), catalogSource.version(LO.packageName), false, LO.operatorName);
+      logUtils.installOperator(LO.namespace, LO.packageName, csName, catalogSource.channel(LO.packageName), catalogSource.version(LO.packageName), LO.operatorName);
     });
 
     cy.exec(`oc new-project ${Test_NS} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false});
@@ -38,26 +39,17 @@ describe('Logging related features', () => {
     cy.exec(`oc -n ${Test_NS} policy add-role-to-user --role-namespace=${Test_NS} prometheus-k8s system:serviceaccount:openshift-monitoring:prometheus-k8s --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false});
   });
 
-  after(() => {
+  afterEach(() => {
+    cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} -n ${Test_NS} adm policy remove-cluster-role-from-user collect-application-logs -z test-66825`, {failOnNonZeroExit: false});
+    cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} -n ${Test_NS} adm policy remove-cluster-role-from-user collect-infrastructure-logs -z test-66825`, {failOnNonZeroExit: false});
+    cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} -n ${Test_NS} adm policy remove-cluster-role-from-user collect-audit-logs -z test-66825`, {failOnNonZeroExit: false});
     cy.exec(`oc delete project ${Test_NS} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false});
     cy.exec(`oc delete lfme/instance -n ${CLO.namespace} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false});
-    logUtils.removeClusterLogging(CLO.namespace);
-    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.logout;
+    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`, {failOnNonZeroExit: false});
   });
 
-  it('(OCP-66825,qitang,Logging) Vector - OpenShift Logging Collection Vector metrics dashboard', {tags: ['e2e','admin','@logging']}, () => {
-    // Create Logging instance
-    cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} process -f ./fixtures/logging/cl_default_es.yaml -n ${CLO.namespace} -p COLLECTOR=fluentd | oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} apply -f -`, {failOnNonZeroExit: false})
-    .then(output => {
-      expect(output.stderr).not.contain('Error');
-    })
-    // Create LogFileMetricExporter
-    cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} process -f ./fixtures/logging/lfme.yaml -n ${CLO.namespace} | oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} apply -f -`, {failOnNonZeroExit: false})
-    .then(output => {
-      expect(output.stderr).not.contain('Error');
-    })
 
+  it('(OCP-66825,qitang,Logging) Vector - OpenShift Logging Collection Vector metrics dashboard', {tags: ['e2e','admin','@logging']}, function() {
     // Deploy self-managed loki in a new project
     cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} process -f ./fixtures/logging/loki-configmap.yaml -n ${Test_NS} -p NAME=loki-server -p NAMESPACE=${Test_NS} | oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} apply -f -`, {failOnNonZeroExit: false})
     .then(output => {
@@ -72,7 +64,7 @@ describe('Logging related features', () => {
       expect(output.stderr).not.contain('Error');
     })
 
-    // Create multi CLF
+    // Create CLF
     cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} -n ${Test_NS} create sa test-66825`, {failOnNonZeroExit: false})
     .then(output => {
       expect(output.stderr).not.contain('Error');
@@ -94,44 +86,50 @@ describe('Logging related features', () => {
       expect(output.stderr).not.contain('Error');
     })
 
-    // Wait for logging pods to be ready
-    logUtils.waitforPodReady(CLO.namespace, 'component=elasticsearch');
-    logUtils.waitforPodReady(CLO.namespace, 'component=kibana');
-    logUtils.waitforPodReady(CLO.namespace, 'component=collector');
-    logUtils.waitforPodReady(CLO.namespace, 'component=logfilesmetricexporter');
-    logUtils.waitforPodReady(Test_NS, 'component=collector');
+    // Create LogFileMetricExporter
+    cy.exec(`oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} process -f ./fixtures/logging/lfme.yaml -n ${CLO.namespace} | oc --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} apply -f -`, {failOnNonZeroExit: false})
+    .then(output => {
+      expect(output.stderr).not.contain('Error');
+    })
+
+    cy.wait(180*1000)
 
     // Check Logging/Collection dashboard
-    dashboard.visitDashboard('grafana-dashboard-cluster-logging');
+    cy.visit(`/monitoring/dashboards/grafana-dashboard-cluster-logging`)
+    cy.get('#refresh-interval-dropdown-dropdown').should('exist').then(btn => {
+      cy.wrap(btn).click().then(drop => {
+          cy.contains('15 seconds').should('exist').click()
+      })
+    })
 
     cy.byLegacyTestID('panel-overview').should('exist').within(() => {
-      cy.byTestID('log-bytes-collected-(24h-avg)-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state');
-      cy.byTestID('log-bytes-sent-(24h-avg)-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-      cy.byTestID('log-collection-rate-(5m-avg)-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-      cy.byTestID('log-send-rate-(5m-avg)-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-      cy.byTestID('total-errors-last-60m-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+      cy.byTestID('log-collection-rate-(5m-avg)-chart').should('exist', { timeout: 120000 }).find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state', { timeout: 120000 })
+      cy.byTestID('log-send-rate-(5m-avg)-chart').should('exist', { timeout: 120000 }).find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state', { timeout: 120000 })
+      cy.byTestID('total-errors-last-60m-chart').should('exist', { timeout: 120000 })
     });
 
     cy.byLegacyTestID('panel-outputs').should('exist').within(() => {
-        cy.byTestID('rate-log-bytes-sent-per-output-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+        cy.byTestID('rate-log-bytes-sent-per-output-chart').should('exist', { timeout: 120000 }).find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state', { timeout: 120000 })
     });
 
     cy.byLegacyTestID('panel-produced-logs').should('exist').within(() => {
-        cy.byTestID('top-producing-containers-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-        cy.byTestID('top-producing-containers-in-last-24-hours-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+        cy.byTestID('top-producing-containers-chart').should('exist', { timeout: 120000 }).find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state', { timeout: 120000 })
+        cy.byTestID('top-producing-containers-in-last-24-hours-chart').should('exist', { timeout: 120000 }).find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state', { timeout: 120000 })
     });
 
     cy.byLegacyTestID('panel-collected-logs').should('exist').within(() => {
-      cy.byTestID('top-collected-containers---bytes/second-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-      cy.byTestID('top-collected-containers-in-last-24-hours-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-  });
+      cy.byTestID('top-collected-containers---bytes/second-chart').should('exist', { timeout: 120000 }).find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state', { timeout: 120000 })
+      cy.byTestID('top-collected-containers-in-last-24-hours-chart').should('exist', { timeout: 120000 }).find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state', { timeout: 120000 })
+    });
 
     cy.byLegacyTestID('panel-machine').should('exist').within(() => {
-      cy.byTestID('cpu-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-      cy.byTestID('memory-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-      cy.byTestID('running-containers-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-      cy.byTestID('open-files-for-container-logs-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
-      cy.byTestID('file-descriptors-in-use-chart').find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state')
+      cy.byTestID('cpu-chart').should('exist', { timeout: 120000 }).find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state', { timeout: 120000 })
+      cy.byTestID('memory-chart').should('exist', { timeout: 120000 }).find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state', { timeout: 120000 })
+      cy.byTestID('running-containers-chart').should('exist', { timeout: 120000 }).find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state', { timeout: 120000 })
+      cy.byTestID('open-files-for-container-logs-chart').should('exist', { timeout: 120000 }).find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state', { timeout: 120000 })
+      cy.byTestID('file-descriptors-in-use-chart').should('exist', { timeout: 120000 }).find(graphSelector.graphBody).should('not.have.class', 'graph-empty-state', { timeout: 120000 })
+      cy.byTestID('collector-buffer-consuming-bytes-disk-space-on-node-chart').should('exist', { timeout: 120000 })
+      cy.byTestID('collector-buffer-consuming-%-disk-space-on-node-chart').should('exist', { timeout: 120000 })
     });
   });
 
