@@ -772,6 +772,9 @@ func setupVaultServer(oc *exutil.CLI, ns string, release string) (string, string
 		noProxy              = ""
 	)
 
+	// explicitly skip since image 'hashicorp/vault' doesn't support ppc64le and s390x arches
+	architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
 	// explicitly skip not applicable storage classes for Vault statefulset
 	// 1. The Vault server requires Unix commands like 'chmod' to initialize operator, but it's not supported natively by Azure Files SMB protocol.
 	//    xref: https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/storage/could-not-change-permissions-azure-files

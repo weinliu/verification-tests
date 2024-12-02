@@ -1396,7 +1396,7 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 	g.It("Author:yuewu-NonPreRelease-PstChkUpgrade-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-65134-cert-manager functions should work normally after OCP upgrade", func() {
 		const (
 			selfsignedIssuerName = "default-selfsigned"
-			selfsignedCertName   = "cert-from-" + selfsignedIssuerName
+			selfsignedCertName   = "default-selfsigned-cert"
 			acmeIssuerName       = "letsencrypt-http01"
 			acmeCertName         = "cert-from-" + acmeIssuerName
 			operatorNamespace    = "cert-manager-operator"
