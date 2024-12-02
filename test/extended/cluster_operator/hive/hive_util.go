@@ -109,15 +109,16 @@ type clusterClaim struct {
 }
 
 type installConfig struct {
-	name1      string
-	namespace  string
-	baseDomain string
-	name2      string
-	region     string
-	template   string
-	publish    string
-	vmType     string
-	arch       string
+	name1           string
+	namespace       string
+	baseDomain      string
+	name2           string
+	region          string
+	template        string
+	publish         string
+	vmType          string
+	arch            string
+	credentialsMode string
 }
 
 type clusterDeployment struct {
@@ -154,6 +155,27 @@ type clusterDeploymentAdopt struct {
 	pullSecretRef      string
 	preserveOnDelete   bool
 	template           string
+}
+
+type clusterDeploymentAssumeRole struct {
+	fake                                   string
+	installerType                          string
+	name                                   string
+	namespace                              string
+	baseDomain                             string
+	boundServiceAccountSigningKeySecretRef string
+	roleARN                                string
+	externalID                             string
+	clusterName                            string
+	manageDNS                              bool
+	platformType                           string
+	region                                 string
+	manifestsSecretRef                     string
+	imageSetRef                            string
+	installConfigSecret                    string
+	pullSecretRef                          string
+	installAttemptsLimit                   int
+	template                               string
 }
 
 type clusterDeploymentPrivateLink struct {
@@ -664,7 +686,11 @@ func (config *installConfig) create(oc *exutil.CLI) {
 		config.arch = "amd64"
 	}
 
-	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1="+config.name1, "NAMESPACE="+config.namespace, "BASEDOMAIN="+config.baseDomain, "NAME2="+config.name2, "REGION="+config.region, "PUBLISH="+config.publish, "VMTYPE="+config.vmType, "ARCH="+config.arch)
+	parameters := []string{"--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1=" + config.name1, "NAMESPACE=" + config.namespace, "BASEDOMAIN=" + config.baseDomain, "NAME2=" + config.name2, "REGION=" + config.region, "PUBLISH=" + config.publish, "VMTYPE=" + config.vmType, "ARCH=" + config.arch}
+	if len(config.credentialsMode) > 0 {
+		parameters = append(parameters, "CREDENTIALSMODE="+config.credentialsMode)
+	}
+	err := applyResourceFromTemplate(oc, parameters...)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -680,6 +706,12 @@ func (cluster *clusterDeployment) create(oc *exutil.CLI) {
 	} else {
 		parameters = append(parameters, "CUSTOMIZEDTAG="+AWSDefaultCDTag)
 	}
+	err := applyResourceFromTemplate(oc, parameters...)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (cluster *clusterDeploymentAssumeRole) create(oc *exutil.CLI) {
+	parameters := []string{"--ignore-unknown-parameters=true", "-f", cluster.template, "-p", "FAKE=" + cluster.fake, "INSTALLERTYPE=" + cluster.installerType, "NAME=" + cluster.name, "NAMESPACE=" + cluster.namespace, "BASEDOMAIN=" + cluster.baseDomain, "BOUND_SERVICE_ACCOUNT_SIGNING_KEY_SECRET_REF=" + cluster.boundServiceAccountSigningKeySecretRef, "ROLEARN=" + cluster.roleARN, "EXTERNALID=" + cluster.externalID, "CLUSTERNAME=" + cluster.clusterName, "MANAGEDNS=" + strconv.FormatBool(cluster.manageDNS), "PLATFORMTYPE=" + cluster.platformType, "REGION=" + cluster.region, "MANIFESTS_SECRET_REF=" + cluster.manifestsSecretRef, "IMAGESETREF=" + cluster.imageSetRef, "INSTALLCONFIGSECRET=" + cluster.installConfigSecret, "PULLSECRETREF=" + cluster.pullSecretRef, "INSTALLATTEMPTSLIMIT=" + strconv.Itoa(cluster.installAttemptsLimit)}
 	err := applyResourceFromTemplate(oc, parameters...)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
@@ -1809,7 +1841,7 @@ func getHivecontrollersPod(oc *exutil.CLI, namespace string) string {
 }
 
 func getTestOCPImage() string {
-	testImageVersion := "4.18"
+	testImageVersion := "4.19"
 	testOCPImage, err := exutil.GetLatestNightlyImage(testImageVersion)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if testOCPImage == "" {
@@ -2353,4 +2385,35 @@ are only available locally) when running in non-CI environments.`)
 		e2e.Failf("Unknown test environment")
 	}
 	return credsFilePath
+}
+
+func createAssumeRolePolicyDocument(principalARN, uuid string) (string, error) {
+	policy := map[string]interface{}{
+		"Version": "2012-10-17",
+		"Statement": []map[string]interface{}{
+			{
+				"Effect": "Allow",
+				"Principal": map[string]string{
+					"AWS": principalARN,
+				},
+				"Action": "sts:AssumeRole",
+			},
+		},
+	}
+
+	if uuid != "" {
+		policyStatements := policy["Statement"].([]map[string]interface{})
+		policyStatements[0]["Condition"] = map[string]interface{}{
+			"StringEquals": map[string]string{
+				"sts:ExternalId": uuid,
+			},
+		}
+	}
+
+	policyJSON, err := json.MarshalIndent(policy, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal policy: %v", err)
+	}
+
+	return string(policyJSON), nil
 }

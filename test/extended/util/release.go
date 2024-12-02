@@ -107,7 +107,7 @@ func GetLatest4StableImageByStream(arch string, stream string) (latestImage stri
 func GetLatestNightlyImage(release string) (string, error) {
 	var url string
 	switch release {
-	case "4.18", "4.17", "4.16", "4.15", "4.14", "4.13", "4.12", "4.11", "4.10", "4.9", "4.8", "4.7", "4.6":
+	case "4.19", "4.18", "4.17", "4.16", "4.15", "4.14", "4.13", "4.12", "4.11", "4.10", "4.9", "4.8", "4.7", "4.6":
 		url = "https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/" + release + ".0-0.nightly/latest"
 	default:
 		e2e.Logf("Inputted release version %s is not supported. Only versions from 4.16 to 4.6 are supported.", release)

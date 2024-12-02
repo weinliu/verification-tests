@@ -51,6 +51,7 @@ objects:
         aws:
           region: "${REGION}"
       publish: "${PUBLISH}"
+      credentialsMode: "${CREDENTIALSMODE}"
   type: Opaque
 parameters:
 - name: NAME1
@@ -61,3 +62,4 @@ parameters:
 - name: PUBLISH
 - name: VMTYPE
 - name: ARCH
+- name: CREDENTIALSMODE

@@ -6412,4 +6412,371 @@ spec:
 		e2e.Logf("testInstallerImage: %v", installerImage)
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, installerImage, ok, DefaultTimeout, []string{"clusterdeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.installerImage}"}).check(oc)
 	})
+
+	g.It("Author:mihuang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-High-40825-[HiveSDRosa] [HiveSpec] Support AWS AssumeRole credentials cluster. [Disruptive]", func() {
+		testCaseID := "40825"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+		hiveUserName := "hive_40825user"
+		hiveRoleName := "hive_40825role"
+		customerRoleName := "hive_40825csrole"
+		uuid := "abfgsheb765"
+
+		exutil.By("Prepare the AWS Assume Role needed for the test")
+		dirname := "/tmp/" + oc.Namespace() + "-" + testCaseID
+		err := os.MkdirAll(dirname, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer os.RemoveAll(dirname)
+
+		e2e.Logf("Check if the user and roles exist")
+		cfg := getAWSConfig(oc, AWSRegion)
+		iamClient := iam.NewFromConfig(cfg)
+
+		_, err = iamClient.GetUser(context.Background(), &iam.GetUserInput{
+			UserName: aws.String(hiveUserName),
+		})
+		o.Expect(err).To(o.HaveOccurred())
+
+		roleNameList := []string{hiveRoleName, customerRoleName}
+		for _, roleName := range roleNameList {
+			_, err = iamClient.GetRole(context.Background(), &iam.GetRoleInput{
+				RoleName: aws.String(roleName),
+			})
+			o.Expect(err).To(o.HaveOccurred())
+		}
+
+		e2e.Logf("Create the user for hive testing")
+		defer func() {
+			_, err = iamClient.DeleteUser(context.Background(), &iam.DeleteUserInput{
+				UserName: aws.String(hiveUserName),
+			})
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to delete the user")
+		}()
+		createUserOutput, err := iamClient.CreateUser(context.Background(), &iam.CreateUserInput{
+			UserName: aws.String(hiveUserName),
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		hiveUserARN := createUserOutput.User.Arn
+		e2e.Logf("the user is successfully created: %v, the hiveUserArn is: %v", *createUserOutput.User.UserName, *hiveUserARN)
+		e2e.Logf("Assign the policy to the user")
+		_, err = iamClient.AttachUserPolicy(context.Background(), &iam.AttachUserPolicyInput{
+			PolicyArn: aws.String("arn:aws:iam::aws:policy/AdministratorAccess"),
+			UserName:  aws.String(hiveUserName),
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			attachedPolicyOutput, err := iamClient.ListAttachedUserPolicies(context.Background(), &iam.ListAttachedUserPoliciesInput{
+				UserName: aws.String(hiveUserName),
+			})
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to list the attached policies")
+			for _, policy := range attachedPolicyOutput.AttachedPolicies {
+				_, err = iamClient.DetachUserPolicy(context.Background(), &iam.DetachUserPolicyInput{
+					PolicyArn: policy.PolicyArn,
+					UserName:  aws.String(hiveUserName),
+				})
+				if err != nil {
+					e2e.Logf("failed to detach the policy: %v", err)
+				}
+			}
+		}()
+		time.Sleep(1 * time.Minute)
+
+		e2e.Logf("Create the role for hive user")
+		policyDocument, err := createAssumeRolePolicyDocument(*hiveUserARN, "")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("the policyDocument is: %v", policyDocument)
+
+		defer func() {
+			_, err = iamClient.DeleteRole(context.Background(), &iam.DeleteRoleInput{
+				RoleName: aws.String(hiveRoleName),
+			})
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to delete the hive role")
+		}()
+		createRoleOutput, err := iamClient.CreateRole(context.Background(), &iam.CreateRoleInput{
+			RoleName:                 aws.String(hiveRoleName),
+			AssumeRolePolicyDocument: aws.String(string(policyDocument)),
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		hiveRoleArn := createRoleOutput.Role.Arn
+		e2e.Logf("successfully created the role for hive testing: %v, hiveRoleArn is: %v", *createRoleOutput.Role.RoleName, *hiveRoleArn)
+		e2e.Logf(("Assign the policy to the role"))
+		_, err = iamClient.AttachRolePolicy(context.Background(), &iam.AttachRolePolicyInput{
+			PolicyArn: aws.String("arn:aws:iam::aws:policy/AdministratorAccess"),
+			RoleName:  aws.String(hiveRoleName),
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			attachedPolicies, err := iamClient.ListAttachedRolePolicies(context.Background(), &iam.ListAttachedRolePoliciesInput{
+				RoleName: aws.String(hiveRoleName),
+			})
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to list the attached policies")
+			for _, policy := range attachedPolicies.AttachedPolicies {
+				_, err = iamClient.DetachRolePolicy(context.Background(), &iam.DetachRolePolicyInput{
+					PolicyArn: policy.PolicyArn,
+					RoleName:  aws.String(hiveRoleName),
+				})
+				if err != nil {
+					e2e.Logf("failed to detach the policy: %v", err)
+				}
+			}
+		}()
+		time.Sleep(1 * time.Minute)
+
+		e2e.Logf("Create the customer role for hive role to assume")
+		customerRolePolicyDocument, err := createAssumeRolePolicyDocument(*hiveRoleArn, uuid)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("the customerRolePolicyDocument is: %v", customerRolePolicyDocument)
+		defer func() {
+			_, err := iamClient.DeleteRole(context.Background(), &iam.DeleteRoleInput{
+				RoleName: aws.String(customerRoleName),
+			})
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to delete the customer role")
+		}()
+		createCustomerRoleOutput, err := iamClient.CreateRole(context.Background(), &iam.CreateRoleInput{
+			RoleName:                 aws.String(customerRoleName),
+			AssumeRolePolicyDocument: aws.String(string(customerRolePolicyDocument)),
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		customerRoleArn := createCustomerRoleOutput.Role.Arn
+		e2e.Logf("the created customer rolev %v for hive testing, role arn is: %v", *createCustomerRoleOutput.Role.RoleName, *customerRoleArn)
+
+		e2e.Logf("Attach the customer role to the hive role")
+		_, err = iamClient.AttachRolePolicy(context.Background(), &iam.AttachRolePolicyInput{
+			PolicyArn: aws.String("arn:aws:iam::aws:policy/AdministratorAccess"),
+			RoleName:  aws.String(customerRoleName),
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			attachedPolicies, err := iamClient.ListAttachedRolePolicies(context.Background(), &iam.ListAttachedRolePoliciesInput{
+				RoleName: aws.String(customerRoleName),
+			})
+			o.Expect(err).NotTo(o.HaveOccurred(), "failed to list the attached policies")
+			for _, policy := range attachedPolicies.AttachedPolicies {
+				_, err = iamClient.DetachRolePolicy(context.Background(), &iam.DetachRolePolicyInput{
+					PolicyArn: policy.PolicyArn,
+					RoleName:  aws.String(customerRoleName),
+				})
+				if err != nil {
+					e2e.Logf("failed to detach the policy: %v", err)
+				}
+			}
+		}()
+
+		e2e.Logf("Create access key for hive user")
+		iamCredsOutput, err := iamClient.CreateAccessKey(context.Background(), &iam.CreateAccessKeyInput{
+			UserName: aws.String(hiveUserName),
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		awsAccessKeyId := iamCredsOutput.AccessKey.AccessKeyId
+		awsSecretAccessKey := iamCredsOutput.AccessKey.SecretAccessKey
+		defer func() {
+			_, err = iamClient.DeleteAccessKey(context.Background(), &iam.DeleteAccessKeyInput{
+				AccessKeyId: aws.String(*awsAccessKeyId),
+				UserName:    aws.String(hiveUserName),
+			})
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+
+		e2e.Logf("Create aws-service-provider-config")
+		awsServiceProviderConfig := fmt.Sprintf(`
+[default]
+aws_access_key_id = %s
+aws_secret_access_key = %s
+role_arn = %s
+`, *awsAccessKeyId, *awsSecretAccessKey, *hiveRoleArn)
+		awsServiceProviderConfigFile := filepath.Join(dirname, "aws-service-provider-config")
+		err = os.WriteFile(awsServiceProviderConfigFile, []byte(awsServiceProviderConfig), 0644)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Create aws-service-provider-secret to target namespace")
+		awsServiceProviderSecret := "aws-service-provider-secret"
+		defer oc.AsAdmin().Run("delete").Args("secret", awsServiceProviderSecret, "-n", HiveNamespace).Execute()
+		_, err = oc.AsAdmin().Run("create").Args("secret", "generic", awsServiceProviderSecret, "-n", HiveNamespace, "--from-file=aws_config="+awsServiceProviderConfigFile).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		secretOutput, err := oc.AsAdmin().Run("get").Args("secret", awsServiceProviderSecret, "-n", HiveNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(secretOutput).To(o.ContainSubstring(awsServiceProviderSecret))
+
+		e2e.Logf("Update HiveConfig to use the AWS Service Provider secret")
+		defer func() {
+			e2e.Logf("Restoring serviceProviderCredentialsConfig in HiveConfig")
+			restorePatch := `[{"op": "remove", "path": "/spec/serviceProviderCredentialsConfig"}]`
+			_, err := oc.AsAdmin().Run("patch").Args("hiveconfig", "hive", "--type", "json", "-p", restorePatch).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		patchCmd := fmt.Sprintf("[{\"op\":\"replace\",\"path\":\"/spec/serviceProviderCredentialsConfig\",\"value\":{\"aws\":{\"credentialsSecretRef\":{\"name\":\"%s\"}}}}]", awsServiceProviderSecret)
+		_, err = oc.AsAdmin().Run("patch").Args(
+			"hiveconfig",
+			"hive",
+			"--type=json",
+			"-p="+patchCmd,
+		).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		secretRefOutput, err := oc.AsAdmin().Run("get").Args("hiveconfig", "hive", "-o=jsonpath={.spec.serviceProviderCredentialsConfig.aws.credentialsSecretRef.name}").Output()
+		e2e.Logf("secretRefOutput: %v", secretRefOutput)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(secretRefOutput).To(o.Equal("aws-service-provider-secret"))
+
+		exutil.By("Extract the ccoctl to create STS resources")
+		ccoctlTarget := "ccoctl"
+		ccoctlPath := exutil.ExtractCcoctl(oc, testOCPImage, ccoctlTarget)
+		defer os.Remove(filepath.Dir(ccoctlPath))
+
+		credsDir := filepath.Join(dirname, "creds")
+		e2e.Logf("Extract the credentials requests")
+		pullSecretFile, pullSecretErr := getPullSecret(oc)
+		o.Expect(pullSecretErr).NotTo(o.HaveOccurred())
+		defer os.Remove(pullSecretFile)
+		credsOutput, err := oc.AsAdmin().Run("adm").Args("release", "extract", testOCPImage, "--credentials-requests", "--cloud=aws", "--registry-config", pullSecretFile, "--to="+credsDir).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("credsOutput: %v", credsOutput)
+		e2e.Logf("Create STS resources")
+		ccoctlOutputDir := filepath.Join(dirname, "_output")
+		defer func() {
+			e2e.Logf("Delete the STS resources")
+			deleteManifestsOutput, err := exec.Command("bash", "-c", fmt.Sprintf("%s aws delete --name %s --region %s", ccoctlPath, cdName, AWSRegion)).CombinedOutput()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("deleteManifestsOutput: %v", string(deleteManifestsOutput))
+		}()
+		createManifestsOutput, err := exec.Command("bash", "-c", fmt.Sprintf("%s aws create-all --name %s --region %s --credentials-requests-dir %s --output-dir %s", ccoctlPath, cdName, AWSRegion, credsDir, ccoctlOutputDir)).CombinedOutput()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("createManifestsOutput: %v", string(createManifestsOutput))
+
+		exutil.By("Create a Secret for your private service account signing key created with ccoctl aws create-all above.")
+		privateSAKeyName := "bound-service-account-signing-key"
+		defer func() {
+			e2e.Logf("Delete the Secret for your private service account signing key")
+			_, err := oc.AsAdmin().Run("delete").Args("secret", privateSAKeyName, "-n", oc.Namespace()).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		_, err = oc.AsAdmin().Run("create").Args("secret", "generic", "-n", oc.Namespace(), privateSAKeyName, "--from-file=bound-service-account-signing-key.key="+filepath.Join(ccoctlOutputDir, "serviceaccount-signer.private")).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		boundServiceAccountSigningKeyOutput, err := oc.AsAdmin().Run("get").Args("secret", privateSAKeyName, "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(boundServiceAccountSigningKeyOutput).To(o.ContainSubstring(privateSAKeyName))
+
+		exutil.By("Create a Secret for installer manifests (credential role Secrets, Authentication config)")
+		manifestsSecretName := "cluster-manifests"
+		defer func() {
+			e2e.Logf("Delete the Secret for installer manifests")
+			_, err := oc.AsAdmin().Run("delete").Args("secret", manifestsSecretName, "-n", oc.Namespace()).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		_, err = oc.AsAdmin().Run("create").Args("secret", "generic", manifestsSecretName, "-n", oc.Namespace(), "--from-file="+filepath.Join(ccoctlOutputDir, "manifests")).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterManifestsOutput, err := oc.AsAdmin().Run("get").Args("secret", manifestsSecretName, "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterManifestsOutput).To(o.ContainSubstring(manifestsSecretName))
+
+		exutil.By("Creating ClusterImageSet")
+		clusterImageSetName := cdName + "-imageset"
+		imageSet := clusterImageSet{
+			name:         clusterImageSetName,
+			releaseImage: testOCPImage,
+			template:     filepath.Join(testDataDir, "clusterimageset.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterImageSet", "", clusterImageSetName})
+		imageSet.create(oc)
+
+		exutil.By("Creating install-config Secret")
+		installConfigSecretName := cdName + "-install-config"
+		installConfigSecret := installConfig{
+			name1:           cdName + "-install-config",
+			namespace:       oc.Namespace(),
+			baseDomain:      AWSBaseDomain,
+			name2:           cdName,
+			region:          AWSRegion,
+			credentialsMode: "Manual",
+			template:        filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{"Secret", oc.Namespace(), installConfigSecretName})
+		installConfigSecret.create(oc)
+
+		exutil.By("Copying pull secret")
+		createPullSecret(oc, oc.Namespace())
+
+		exutil.By("Creating ClusterDeployment")
+		clusterDeployment := clusterDeploymentAssumeRole{
+			fake:                                   "false",
+			name:                                   cdName,
+			namespace:                              oc.Namespace(),
+			baseDomain:                             AWSBaseDomain,
+			boundServiceAccountSigningKeySecretRef: privateSAKeyName,
+			clusterName:                            cdName,
+			platformType:                           "aws",
+			roleARN:                                *customerRoleArn,
+			externalID:                             uuid,
+			region:                                 AWSRegion,
+			manifestsSecretRef:                     manifestsSecretName,
+			imageSetRef:                            cdName + "-imageset",
+			installConfigSecret:                    cdName + "-install-config",
+			pullSecretRef:                          PullSecret,
+			installAttemptsLimit:                   1,
+			template:                               filepath.Join(testDataDir, "clusterdeployment-aws-assumerole.yaml"),
+		}
+		defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", oc.Namespace(), cdName})
+		clusterDeployment.create(oc)
+
+		exutil.By("Create worker MachinePool ...")
+		workermachinepoolAWSTemp := filepath.Join(testDataDir, "machinepool-worker-aws.yaml")
+		workermp := machinepool{
+			namespace:   oc.Namespace(),
+			clusterName: cdName,
+			template:    workermachinepoolAWSTemp,
+		}
+		defer cleanupObjects(oc,
+			objectTableRef{"MachinePool", oc.Namespace(), cdName + "-worker"},
+		)
+		workermp.create(oc)
+
+		exutil.By("Check ClusterDeployment installed pod is running")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Running", ok, 3*DefaultTimeout, []string{"pods", "-n", oc.Namespace(), "-l", "hive.openshift.io/job-type=provision", "-o=jsonpath={.items[*].status.phase}"}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		exutil.By("Check the worker machinepool replicas number equals to 3")
+		getClusterKubeconfig(oc, cdName, oc.Namespace(), dirname)
+		e2e.Logf("Check worker machinepool .status.replicas = 3")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "3", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+
+		exutil.By("Patch machinepool static replicas to autoscaler")
+		autoScalingMax := "2"
+		autoScalingMin := "0"
+		removeConfig := "[{\"op\": \"remove\", \"path\": \"/spec/replicas\"}]"
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "--type", "json", "-p", removeConfig}).check(oc)
+		autoscalConfig := fmt.Sprintf("{\"spec\": {\"autoscaling\": {\"maxReplicas\": %s, \"minReplicas\": %s}}}", autoScalingMax, autoScalingMin)
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "--type", "merge", "-p", autoscalConfig}).check(oc)
+
+		e2e.Logf("Login to spoke cluster, check the MachineAutoscaler should be created")
+		kubeconfig := getClusterKubeconfig(oc, cdName, oc.Namespace(), dirname)
+		o.Eventually(func() bool {
+			machineAutoscalerNamesList, err := oc.AsAdmin().Run("get").Args("MachineAutoscaler", "-n", "openshift-machine-api", "-o", "jsonpath={.items[*].metadata.name}", "--kubeconfig="+kubeconfig).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			machineAutoscalerNames := strings.Fields(machineAutoscalerNamesList)
+			for _, machineAutoscalerName := range machineAutoscalerNames {
+				machineAutoscaler, _, err := oc.AsAdmin().Run("get").Args("MachineAutoscaler", machineAutoscalerName, "-n", "openshift-machine-api", "-o", "jsonpath={.spec.maxReplicas} { .spec.minReplicas}", "--kubeconfig="+kubeconfig).Outputs()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				machineAutoscalerMax := "1"
+				machineAutoscalerMin := "0"
+				o.Expect(machineAutoscaler).To(o.Equal(machineAutoscalerMax + " " + machineAutoscalerMin))
+			}
+			return true
+		}).WithTimeout(2*time.Minute).WithPolling(10*time.Second).Should(o.BeTrue(), "MachineAutoscaler successfully created")
+
+		exutil.By("Patch machinepool autoscaler to static replicas")
+		removeConfig2 := "[{\"op\": \"remove\", \"path\": \"/spec/autoscaling\"}]"
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "--type", "json", "-p", removeConfig2}).check(oc)
+		recoverConfig := "{\"spec\": {\"replicas\": 2}}"
+		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "--type", "merge", "-p", recoverConfig}).check(oc)
+
+		e2e.Logf("Login to spoke cluster, check the MachineAutoscaler should be deleted")
+		o.Eventually(func() bool {
+			machineAutoscalerOutput, err := oc.AsAdmin().Run("get").Args("MachineAutoscaler", "-n", "openshift-machine-api", "-o", "jsonpath={.items[*].metadata.name}", "--kubeconfig="+kubeconfig).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(machineAutoscalerOutput).To(o.BeEmpty())
+			return true
+		}).WithTimeout(2*time.Minute).WithPolling(10*time.Second).Should(o.BeTrue(), "MachineAutoscaler successfully deleted")
+
+		e2e.Logf("Check the machinepool replicas number equals to 2")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+	})
 })
