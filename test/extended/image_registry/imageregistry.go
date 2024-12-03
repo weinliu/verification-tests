@@ -5154,4 +5154,64 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="ImageRegistryStorageFull"}'`, token, `"alertstate":"pending"`, time.Duration(2*platformLoadTime))
 
 	})
+
+	g.It("Author:xiuwang-Critical-76802-Configure image registry to use a custom azure storage account located in a different resource group [Disruptive]", func(ctx context.Context) {
+		exutil.SkipIfPlatformTypeNot(oc, "Azure")
+		if exutil.IsWorkloadIdentityCluster(oc) {
+			g.Skip("Skip test for Azure Workload Identity")
+		}
+
+		g.By("Keep the original setting")
+		setting := getAzureImageRegistryStorage(oc)
+		accountNameOriginal := setting.AccountName
+		containerOriginal := setting.Container
+		region := getAzureRegion(oc)
+
+		g.By("Set new resources")
+		newRGName := "byo-" + getRandomString() + "-rg"
+		newAccountName := "byoimageregistry" + getRandomString()
+		newContainer := "byo-imageregistry" + getRandomString()
+
+		g.By("Create new stroage account in a new resource group")
+		azClientSet := exutil.NewAzureClientSetWithRootCreds(oc)
+		defer azClientSet.DeleteResourceGroup(ctx, newRGName)
+		_, err := azClientSet.CreateResourceGroup(ctx, newRGName, region)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer azClientSet.DeleteStorageAccount(ctx, newRGName, newAccountName)
+		keyResult, err := azClientSet.CreateStorageAccount(ctx, newRGName, newAccountName, region)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		accountKey := *keyResult.AccountListKeysResult.Keys[0].Value
+		containerClient, err := exutil.NewAzureContainerClient(oc, newAccountName, accountKey, newContainer)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer exutil.DeleteAzureStorageBlobContainer(containerClient)
+		err = exutil.CreateAzureStorageBlobContainer(containerClient)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Configure image registry with new storage account")
+		expectedStatus1 := map[string]string{"Progressing": "True"}
+		expectedStatus2 := map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
+		defer func() {
+			g.By("Recover registry")
+			err = oc.WithoutNamespace().AsAdmin().Run("delete").Args("secret/image-registry-private-configuration-user", "-n", "openshift-image-registry").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"azure":{"accountName":"`+accountNameOriginal+`","container":"`+containerOriginal+`"}}}}`, "--type=merge").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "image-registry", 100, expectedStatus1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = waitCoBecomes(oc, "image-registry", 100, expectedStatus2)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = oc.WithoutNamespace().AsAdmin().NotShowInfo().Run("create").Args("secret", "generic", "image-registry-private-configuration-user", "-n", "openshift-image-registry", "--from-literal=REGISTRY_STORAGE_AZURE_ACCOUNTKEY="+accountKey).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"azure":{"accountName":"`+newAccountName+`","container":"`+newContainer+`"}}}}`, "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 100, expectedStatus1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCoBecomes(oc, "image-registry", 100, expectedStatus2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Image registry works well with new storage")
+		checkRegistryFunctionFine(oc, "test-76802", oc.Namespace())
+
+	})
 })

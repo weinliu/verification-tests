@@ -1587,3 +1587,29 @@ func checkMetric(oc *exutil.CLI, url, token, metricString string, timeout time.D
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The metrics %s failed to contain %s", metrics, metricString))
 }
+
+type azureStorageSetting struct {
+	AccountName     string `json:"accountName"`
+	CloudName       string `json:"cloudName"`
+	Container       string `json:"container"`
+	ManagementState string `json:"managementState"`
+	NetworkAccess   struct {
+		Type string `json:"type"`
+	} `json:"networkAccess"`
+}
+
+func getAzureImageRegistryStorage(oc *exutil.CLI) azureStorageSetting {
+	var setting azureStorageSetting
+	output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.status.storage.azure}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	json.Unmarshal([]byte(output), &setting)
+	return setting
+}
+
+func getAzureRegion(oc *exutil.CLI) string {
+	regionSec, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/installer-cloud-credentials", "-n", "openshift-image-registry", "-o=jsonpath={.data.azure_region}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	region, err := base64.StdEncoding.DecodeString(regionSec)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return string(region)
+}

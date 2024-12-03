@@ -3,14 +3,17 @@ package util
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
+	azTo "github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/keyvault/armkeyvault"
 	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/storage/armstorage"
 	msgraphsdkgo "github.com/microsoftgraph/msgraph-sdk-go"
 
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -266,4 +269,46 @@ func ProcessAzurePages[T any](ctx context.Context, pager *runtime.Pager[T], hand
 		}
 	}
 	return nil
+}
+
+// Create an Azure resource group.
+func (cs *AzureClientSet) CreateResourceGroup(ctx context.Context, resourceGroupName, region string) (armresources.ResourceGroupsClientCreateOrUpdateResponse, error) {
+	rgClient, _ := armresources.NewResourceGroupsClient(cs.SubscriptionID, cs.tokenCredential, nil)
+	param := armresources.ResourceGroup{
+		Location: azTo.Ptr(region),
+	}
+	return rgClient.CreateOrUpdate(ctx, resourceGroupName, param, nil)
+}
+
+// Creates Azure storage account.
+func (cs *AzureClientSet) CreateStorageAccount(ctx context.Context, resourceGroupName, storageAccountName, region string) (armstorage.AccountsClientListKeysResponse, error) {
+	storageClient, _ := armstorage.NewAccountsClient(cs.SubscriptionID, cs.tokenCredential, nil)
+	result, _ := storageClient.BeginCreate(ctx, resourceGroupName, storageAccountName, armstorage.AccountCreateParameters{
+		Location: azTo.Ptr(region),
+		SKU: &armstorage.SKU{
+			Name: azTo.Ptr(armstorage.SKUNameStandardLRS),
+		},
+		Kind: azTo.Ptr(armstorage.KindStorageV2),
+	}, nil)
+
+	// Poll until the Storage account is ready
+	_, err := result.PollUntilDone(context.Background(), &runtime.PollUntilDoneOptions{
+		Frequency: 10 * time.Second,
+	})
+	AssertWaitPollNoErr(err, "Storage account is not ready...")
+
+	resultKey, err := storageClient.ListKeys(ctx, resourceGroupName, storageAccountName, &armstorage.AccountsClientListKeysOptions{Expand: nil})
+	return resultKey, err
+}
+
+// Delete the created storage account.
+func (cs *AzureClientSet) DeleteStorageAccount(ctx context.Context, resourceGroupName, storageAccountName string) {
+	clientFactory, err := armstorage.NewClientFactory(cs.SubscriptionID, cs.tokenCredential, nil)
+	if err != nil {
+		e2e.Failf("failed to create client: %v", err)
+	}
+	_, err = clientFactory.NewAccountsClient().Delete(ctx, resourceGroupName, storageAccountName, nil)
+	if err != nil {
+		e2e.Failf("failed to finish the request: %v", err)
+	}
 }
