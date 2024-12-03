@@ -76,8 +76,8 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		o.Expect(output).To(o.ContainSubstring("Backup appears corrupted. Aborting!"))
 	})
 
-	// author: yinzhou@redhat.com
-	g.It("Author:yinzhou-LEVEL0-Longduration-NonPreRelease-Critical-23803-Restoring back to a previous cluster state in ocp v4 [Disruptive][Slow]", func() {
+	// author: skundu@redhat.com
+	g.It("Author:skundu-LEVEL0-Longduration-NonPreRelease-Critical-77921-workflow of quorum restoration. [Disruptive][Slow]", func() {
 
 		var (
 			bastionHost    = ""
@@ -137,63 +137,57 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		checkOperator(oc, "etcd")
 		g.By("Check kube-apiserver oprator status")
 		checkOperator(oc, "kube-apiserver")
-
-		g.By("Run the backup on the first master")
-		defer runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo rm -rf /home/core/assets/backup", privateKeyForBastion, userForBastion)
-		err := wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
-			msg, err := runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo /usr/local/bin/cluster-backup.sh /home/core/assets/backup", privateKeyForBastion, userForBastion)
-			if err != nil {
-				e2e.Logf("backup failed with the err:%v, and try next round", err)
-				return false, nil
-			}
-			if o.Expect(msg).To(o.ContainSubstring("snapshot db and kube resources are successfully saved")) {
-				e2e.Logf("backup succeed")
-			}
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("backup is failed with error"))
-
-		g.By("Stop the static pods on any other control plane nodes")
+		g.By("Make the two non-recovery control plane nodes NOT_READY")
 		//if assert err the cluster will be unavailable
 		for i := 1; i < len(masterNodeInternalIPList); i++ {
-			_, err := runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo mv /etc/kubernetes/manifests/etcd-pod.yaml /tmp", privateKeyForBastion, userForBastion)
+			_, err := runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo /usr/local/bin/disable-etcd.sh", privateKeyForBastion, userForBastion)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForContainerDisappear(bastionHost, masterNodeInternalIPList[i], "sudo crictl ps | grep etcd | grep -v operator", privateKeyForBastion, userForBastion)
-
-			_, err = runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo mv /etc/kubernetes/manifests/kube-apiserver-pod.yaml /tmp", privateKeyForBastion, userForBastion)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			waitForContainerDisappear(bastionHost, masterNodeInternalIPList[i], "sudo crictl ps | grep kube-apiserver | grep -v operator", privateKeyForBastion, userForBastion)
-
-			_, err = runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo rm -rf /var/lib/etcd", privateKeyForBastion, userForBastion)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			_, err1 := runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo rm -rf /var/lib/etcd", privateKeyForBastion, userForBastion)
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			_, err2 := runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo systemctl stop kubelet.service", privateKeyForBastion, userForBastion)
+			o.Expect(err2).NotTo(o.HaveOccurred())
 		}
 
-		g.By("Run the restore script on the recovery control plane host")
-		msg, err := runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo -E /usr/local/bin/cluster-restore.sh /home/core/assets/backup", privateKeyForBastion, userForBastion)
+		g.By("Run the quorum-restore script on the recovery control plane host")
+		msg, err := runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo -E /usr/local/bin/quorum-restore.sh", privateKeyForBastion, userForBastion)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(msg).To(o.ContainSubstring("static-pod-resources"))
+		o.Expect(msg).To(o.ContainSubstring("starting restore-etcd static pod"))
 
 		g.By("Wait for the api server to come up after restore operation.")
+		errW := wait.Poll(20*time.Second, 900*time.Second, func() (bool, error) {
+			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Output()
+			if err != nil {
+				e2e.Logf("Fail to get master, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString(masterNodeInternalIPList[0], out); matched {
+				e2e.Logf("Api is back online:")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errW, "the Apiserver has not come up after quorum restore operation")
+
+		g.By("Start the kubelet service on both the non-recovery control plane hosts")
+		for i := 1; i < len(masterNodeList); i++ {
+			_, _ = runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo systemctl start kubelet.service", privateKeyForBastion, userForBastion)
+
+		}
+		g.By("Wait for the nodes to be Ready.")
 		for i := 0; i < len(masterNodeList); i++ {
-			err := wait.Poll(20*time.Second, 900*time.Second, func() (bool, error) {
+			err := wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
 				out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", masterNodeList[i]).Output()
 				if err != nil {
 					e2e.Logf("Fail to get master, error: %s. Trying again", err)
 					return false, nil
 				}
 				if matched, _ := regexp.MatchString(" Ready", out); matched {
-					e2e.Logf("kubelet service on %s is recover to normal:\n%s", masterNodeList[i], out)
+					e2e.Logf("Node %s is back online:\n%s", masterNodeList[i], out)
 					return true, nil
 				}
 				return false, nil
 			})
-			exutil.AssertWaitPollNoErr(err, "the kubelet is not recovered to normal")
-		}
-
-		g.By("Restart the kubelet service on all control plane hosts")
-		for i := 0; i < len(masterNodeList); i++ {
-			_, _ = runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo systemctl restart kubelet.service", privateKeyForBastion, userForBastion)
-
+			exutil.AssertWaitPollNoErr(err, "the kubelet start has not brought the node online and Ready")
 		}
 		defer checkOperator(oc, "etcd")
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"unsupportedConfigOverrides\": null}}")).Execute()
