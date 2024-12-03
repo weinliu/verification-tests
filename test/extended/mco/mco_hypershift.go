@@ -197,7 +197,7 @@ func (ht *HypershiftTest) InstallOnAws() {
 	o.Expect(installErr).NotTo(o.HaveOccurred(), "install hypershift operator via cli failed")
 
 	// check whether pod under ns hypershift is running
-	exutil.AssertAllPodsToBeReady(ht.oc, "hypershift")
+	exutil.AssertAllPodsToBeReadyWithPollerParams(ht.oc, "hypershift", 20*time.Second, 5*time.Minute)
 
 	logger.Infof("hypershift is installed on AWS successfully")
 }
