@@ -551,10 +551,20 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 	// author: juzhao@redhat.com
 	g.It("Author:juzhao-Medium-69924-Set scrape.timestamp tolerance for prometheus", func() {
-		args, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "k8s", `-ojsonpath={.spec.additionalArgs[?(@.name=="scrape.timestamp-tolerance")]}`, "-n", "openshift-monitoring").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("additionalArgs is: %v", args)
-		o.Expect(args).To(o.ContainSubstring(`"value":"15ms"`))
+		exutil.By("confirm in-cluster prometheus is created")
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
+			prometheus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheus", "k8s", "-n", "openshift-monitoring").Output()
+			if err != nil || strings.Contains(prometheus, "not found") {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "in-cluster prometheus is not created")
+
+		exutil.By("check in-cluster prometheus scrape.timestamp tolerance")
+		cmd := `-ojsonpath={.spec.additionalArgs[?(@.name=="scrape.timestamp-tolerance")]}`
+		checkYamlconfig(oc, "openshift-monitoring", "prometheus", "k8s", cmd, `"value":"15ms"`, true)
+
 		//check settings in prometheus pods
 		podNames, err := exutil.GetAllPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/name=prometheus")
 		o.Expect(err).NotTo(o.HaveOccurred())
