@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -1471,5 +1472,74 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 
 		exutil.By("4. Verify pod is healthy and running")
 		waitPodReady(oc, ns, pod.name)
+	})
+
+	// author: meinli@redhat.com
+	g.It("Author:meinli-NonPreRelease-Medium-34674-Ensure ovnkube-master nbdb and sbdb exit properly. [Disruptive]", func() {
+		exutil.By("1. Enable ovnkube-master pod debug log by ovn-appctl")
+		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
+		o.Expect(ovnMasterPodName).NotTo(o.BeEmpty())
+		MasterNodeName, err := exutil.GetPodNodeName(oc, "openshift-ovn-kubernetes", ovnMasterPodName)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		ctls := []string{"ovnnb_db.ctl", "ovnsb_db.ctl"}
+		for _, ctl := range ctls {
+			dbgCmd := fmt.Sprintf("ovn-appctl -t /var/run/ovn/%s vlog/set console:jsonrpc:dbg", ctl)
+			_, err := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnMasterPodName, dbgCmd)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("2. Check ovnkube-master pod debug log enabled successfully and make hard-link(ln) to preserve log")
+		LogsPath := "/var/log/pods/openshift-ovn-kubernetes_ovnkube-node-*"
+		var wg sync.WaitGroup
+		Database := []string{"nbdb", "sbdb"}
+		for _, db := range Database {
+			wg.Add(1)
+			go func() {
+				defer g.GinkgoRecover()
+				defer wg.Done()
+				logPath := filepath.Join(LogsPath, db, "*.log")
+				checkErr := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 20*time.Second, false, func(cxt context.Context) (bool, error) {
+					resultOutput, err := exutil.DebugNodeWithChroot(oc, MasterNodeName, "/bin/bash", "-c", fmt.Sprintf("tail -10 %s", logPath))
+					o.Expect(err).NotTo(o.HaveOccurred())
+					if strings.Contains(resultOutput, "jsonrpc") {
+						e2e.Logf("ovnkube-pod debug log has been successfully enabled!!!")
+						// select the most recent file to do hard-link
+						_, lnErr := exutil.DebugNodeWithChroot(oc, MasterNodeName, "/bin/bash", "-c", fmt.Sprintf("ln -v $(ls -1t %s | head -n 1) /var/log/%s.log", logPath, db))
+						o.Expect(lnErr).NotTo(o.HaveOccurred())
+						return true, nil
+					}
+					e2e.Logf("%v,Waiting for ovnkube-master pod debug log enable, try again ...,", err)
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(checkErr, "Enable ovnkube-master pod debug log timeout.")
+			}()
+		}
+		wg.Wait()
+
+		exutil.By("3. delete the ovnkube-master pod and check log process should be exited")
+		defer checkOVNKState(oc)
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", ovnMasterPodName, "-n", "openshift-ovn-kubernetes").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, db := range Database {
+			wg.Add(1)
+			go func() {
+				defer g.GinkgoRecover()
+				defer wg.Done()
+				defer exutil.DebugNodeWithChroot(oc, MasterNodeName, "/bin/bash", "-c", fmt.Sprintf("rm -f /var/log/%s.log", db))
+				checkErr := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 20*time.Second, false, func(cxt context.Context) (bool, error) {
+					output, err := exutil.DebugNodeWithChroot(oc, MasterNodeName, "/bin/bash", "-c", fmt.Sprintf("tail -10 /var/log/%s.log", db))
+					o.Expect(err).NotTo(o.HaveOccurred())
+					if strings.Contains(output, fmt.Sprintf("Exiting ovn%s_db", strings.Split(db, "db")[0])) {
+						e2e.Logf(fmt.Sprintf("ovnkube-master pod %s exit properly!!!", db))
+						return true, nil
+					}
+					e2e.Logf("%v,Waiting for ovnkube-master pod log sync up, try again ...,", err)
+					return false, nil
+				})
+				exutil.AssertWaitPollNoErr(checkErr, fmt.Sprintf("Check ovnkube-master pod %s debug log timeout.", db))
+			}()
+		}
+		wg.Wait()
 	})
 })
