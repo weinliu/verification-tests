@@ -1603,7 +1603,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-76668-olm v1 Supports MaxOCPVersion field", func() {
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-Medium-77972-olm v1 Supports MaxOCPVersion in properties file", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
@@ -1611,8 +1611,8 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			clusterextensionTemplate = filepath.Join(baseDir, "clusterextensionWithoutChannel.yaml")
 
 			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
-			ns                           = "ns-76668"
-			sa                           = "sa76668"
+			ns                           = "ns-77972"
+			sa                           = "sa77972"
 			saCrb                        = olmv1util.SaCLusterRolebindingDescription{
 				Name:      sa,
 				Namespace: ns,
@@ -1620,16 +1620,16 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			}
 			clustercatalog = olmv1util.ClusterCatalogDescription{
 				LabelKey:   "olmv1-test",
-				LabelValue: "ocp-76668",
-				Name:       "clustercatalog-76668",
-				Imageref:   "quay.io/olmqe/olmtest-operator-index:nginx76668",
+				LabelValue: "ocp-77972",
+				Name:       "clustercatalog-77972",
+				Imageref:   "quay.io/openshifttest/nginxolm-operator-index:nginxolm77972",
 				Template:   clustercatalogTemplate,
 			}
 
 			clusterextension = olmv1util.ClusterExtensionDescription{
-				Name:             "clusterextension-76668",
+				Name:             "clusterextension-77972",
 				InstallNamespace: ns,
-				PackageName:      "nginx76668",
+				PackageName:      "nginx77972",
 				SaName:           sa,
 				Version:          "0.0.1",
 				Template:         clusterextensionTemplate,
@@ -1648,62 +1648,69 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		defer clustercatalog.Delete(oc)
 		clustercatalog.Create(oc)
 
-		exutil.By("2) install clusterextension, version 0.0.1, no olm.maxOpenShiftVersion in annotations")
+		exutil.By("2) install clusterextension, version 0.0.1, without setting olm.maxOpenShiftVersion")
 		defer clusterextension.Delete(oc)
 		clusterextension.Create(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v0.0.1"))
-		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
-			status, _ := olmv1util.GetNoEmpty(oc, "co", "olm", "-o", `jsonpath={.status.conditions[?(@.type=="Upgradeable")].status}`)
-			if strings.Contains(status, "True") {
-				e2e.Logf("status is %s", status)
-				return true, nil
-			}
-			return false, nil
-		})
+		status, _ := olmv1util.GetNoEmpty(oc, "co", "olm", "-o", `jsonpath={.status.conditions[?(@.type=="Upgradeable")].status}`)
+		o.Expect(status).To(o.ContainSubstring("True"))
 		message, _ := olmv1util.GetNoEmpty(oc, "co", "olm", "-o", `jsonpath={.status.conditions[?(@.type=="Upgradeable")].message}`)
 		o.Expect(message).To(o.ContainSubstring("All is well"))
-		if errWait != nil {
-			olmv1util.GetNoEmpty(oc, "co", "olm", "-o=jsonpath-as-json={.status.conditions}")
-		}
-		exutil.AssertWaitPollNoErr(errWait, "the Upgradeable of olm is not True")
 
-		exutil.By("3) upgrade clusterextension to 1.0.1, olm.maxOpenShiftVersion is 4.17")
-		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version":"1.0.1"}}}}`)
-		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
-			status, _ := olmv1util.GetNoEmpty(oc, "co", "olm", "-o", `jsonpath={.status.conditions[?(@.type=="Upgradeable")].status}`)
-			if strings.Contains(status, "False") {
-				e2e.Logf("status is %s", status)
+		exutil.By("3) upgrade clusterextension to 0.1.0, olm.maxOpenShiftVersion is 4.17")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version":"0.1.0"}}}}`)
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
+			message, _ := olmv1util.GetNoEmpty(oc, "co", "olm", "-o", `jsonpath={.status.conditions[?(@.type=="Upgradeable")].message}`)
+			if strings.Contains(message, "InstalledOLMOperatorsUpgradeable") && strings.Contains(message, "nginx77972.v0.1.0") {
+				e2e.Logf("status is %s", message)
 				return true, nil
 			}
 			return false, nil
 		})
-		message, _ = olmv1util.GetNoEmpty(oc, "co", "olm", "-o", `jsonpath={.status.conditions[?(@.type=="Upgradeable")].message}`)
-		o.Expect(message).To(o.ContainSubstring("InstalledOLMOperatorsUpgradeable"))
+		status, _ = olmv1util.GetNoEmpty(oc, "co", "olm", "-o", `jsonpath={.status.conditions[?(@.type=="Upgradeable")].status}`)
+		o.Expect(status).To(o.ContainSubstring("False"))
 		if errWait != nil {
 			olmv1util.GetNoEmpty(oc, "co", "olm", "-o=jsonpath-as-json={.status.conditions}")
 		}
-		exutil.AssertWaitPollNoErr(errWait, "the Upgradeable of olm is not False")
+		exutil.AssertWaitPollNoErr(errWait, "Upgradeable message is not correct")
 
-		exutil.By("4) upgrade clusterextension to 2.0.0, olm.maxOpenShiftVersion is 4.18")
-		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version":"2.0.0"}}}}`)
-		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
-			status, _ := olmv1util.GetNoEmpty(oc, "co", "olm", "-o", `jsonpath={.status.conditions[?(@.type=="Upgradeable")].status}`)
-			if strings.Contains(status, "False") {
-				e2e.Logf("status is %s", status)
+		exutil.By("4) upgrade clusterextension to 1.0.0, olm.maxOpenShiftVersion is 4.18")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version":"1.0.0"}}}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
+			message, _ := olmv1util.GetNoEmpty(oc, "co", "olm", "-o", `jsonpath={.status.conditions[?(@.type=="Upgradeable")].message}`)
+			if strings.Contains(message, "InstalledOLMOperatorsUpgradeable") && strings.Contains(message, "nginx77972.v1.0.0") {
+				e2e.Logf("status is %s", message)
 				return true, nil
 			}
 			return false, nil
 		})
-		message, _ = olmv1util.GetNoEmpty(oc, "co", "olm", "-o", `jsonpath={.status.conditions[?(@.type=="Upgradeable")].message}`)
-		o.Expect(message).To(o.ContainSubstring("InstalledOLMOperatorsUpgradeable"))
+		status, _ = olmv1util.GetNoEmpty(oc, "co", "olm", "-o", `jsonpath={.status.conditions[?(@.type=="Upgradeable")].status}`)
+		o.Expect(status).To(o.ContainSubstring("False"))
 		if errWait != nil {
 			olmv1util.GetNoEmpty(oc, "co", "olm", "-o=jsonpath-as-json={.status.conditions}")
 		}
-		exutil.AssertWaitPollNoErr(errWait, "the Upgradeable of olm is not False")
+		exutil.AssertWaitPollNoErr(errWait, "Upgradeable message is not correct")
 
-		exutil.By("5) upgrade clusterextension to 3.0.0, olm.maxOpenShiftVersion is 4.19")
-		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version":"3.0.0"}}}}`)
-		errWait = wait.PollUntilContextTimeout(context.TODO(), 6*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
+		exutil.By("5) upgrade clusterextension to 1.1.0, olm.maxOpenShiftVersion is 4.19")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version":"1.1.0"}}}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
+			message, _ := olmv1util.GetNoEmpty(oc, "co", "olm", "-o", `jsonpath={.status.conditions[?(@.type=="Upgradeable")].message}`)
+			if strings.Contains(message, "InstalledOLMOperatorsUpgradeable") && strings.Contains(message, "nginx77972.v1.1.0") {
+				e2e.Logf("status is %s", message)
+				return true, nil
+			}
+			return false, nil
+		})
+		status, _ = olmv1util.GetNoEmpty(oc, "co", "olm", "-o", `jsonpath={.status.conditions[?(@.type=="Upgradeable")].status}`)
+		o.Expect(status).To(o.ContainSubstring("False"))
+		if errWait != nil {
+			olmv1util.GetNoEmpty(oc, "co", "olm", "-o=jsonpath-as-json={.status.conditions}")
+		}
+		exutil.AssertWaitPollNoErr(errWait, "Upgradeable message is not correct")
+
+		exutil.By("6) upgrade clusterextension to 1.2.0, olm.maxOpenShiftVersion is 4.20")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version":"1.2.0"}}}}`)
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
 			status, _ := olmv1util.GetNoEmpty(oc, "co", "olm", "-o", `jsonpath={.status.conditions[?(@.type=="Upgradeable")].status}`)
 			if strings.Contains(status, "True") {
 				e2e.Logf("status is %s", status)
@@ -1716,7 +1723,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		if errWait != nil {
 			olmv1util.GetNoEmpty(oc, "co", "olm", "-o=jsonpath-as-json={.status.conditions}")
 		}
-		exutil.AssertWaitPollNoErr(errWait, "the Upgradeable of olm is not True")
+		exutil.AssertWaitPollNoErr(errWait, "Upgradeable is not True")
 
 	})
 
