@@ -727,6 +727,86 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		logger.Infof("OK!\n")
 	})
 
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-75521-[P1] Log details for malformed certificates. No infinite loop [Disruptive]", func() {
+		var (
+			configCM              = NewConfigMap(oc.AsAdmin(), "openshift-config", "cloud-provider-config")
+			bundleKey             = "ca-bundle.pem"
+			malformedCertFilePath = generateTemplateAbsolutePath("malformedcert.pem")
+			mcc                   = NewController(oc.AsAdmin())
+			expectedErrorMsg      = "Malformed certificate 'CloudProviderCAData' detected and is not syncing. Error: x509: malformed certificate, Cert data: -----BEGIN CERTIFICATE---"
+			restoreFunc           func() error
+		)
+
+		if !configCM.Exists() {
+			g.Skip(fmt.Sprintf("%s does not exist, we cannot recofigure it", configCM))
+		}
+
+		currentBundle, hasKey, err := configCM.HasKey(bundleKey)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error checking if key %s exists in %s", bundleKey, configCM)
+		if hasKey {
+			restoreFunc = func() error {
+				logger.Infof("Restoring initial data in %s", configCM)
+				configCM.oc.NotShowInfo()
+				return configCM.SetData(bundleKey + "=" + currentBundle)
+			}
+		} else {
+			restoreFunc = func() error {
+				return configCM.RemoveDataKey(bundleKey)
+			}
+		}
+		defer restoreFunc()
+
+		exutil.By("Configure a malformed certificate")
+		o.Expect(
+			configCM.SetData("--from-file="+bundleKey+"="+malformedCertFilePath),
+		).To(o.Succeed(), "Error configuring the %s value in %s", bundleKey, malformedCertFilePath)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the error is correctly reported")
+		o.Eventually(mcc.GetLogs, "5m", "20s").Should(o.ContainSubstring(expectedErrorMsg),
+			"The malformed certificate is not correctly reported in the controller logs")
+		logger.Infof("OK!\n")
+
+		exutil.By("Restore the initial certificate values")
+		o.Expect(restoreFunc()).To(o.Succeed(),
+			"Error restoring the initial certificate values in %s", configCM)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that no more errors are reported")
+		currentLogs, err := mcc.GetLogs()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting MCC logs")
+		o.Eventually(func() (string, error) {
+			// we return the new recently printed logs only
+			var diffLogs string
+			newLogs, err := mcc.GetLogs()
+			if err != nil {
+				return "", err
+			}
+			diffLogs = strings.ReplaceAll(newLogs, currentLogs, "")
+			currentLogs = newLogs
+			logger.Infof("Checking diff logs: %s", diffLogs)
+			return diffLogs, nil
+
+		}, "5m", "20s").ShouldNot(o.ContainSubstring(expectedErrorMsg),
+			"The certificate was fixed but the controller is still reporting an error")
+
+		o.Consistently(func() (string, error) {
+			// we return the new recently printed logs only
+			var diffLogs string
+			newLogs, err := mcc.GetLogs()
+			if err != nil {
+				return "", err
+			}
+			diffLogs = strings.ReplaceAll(newLogs, currentLogs, "")
+			currentLogs = newLogs
+			logger.Infof("Checking diff logs: %s", diffLogs)
+			return diffLogs, nil
+
+		}, "1m", "20s").ShouldNot(o.ContainSubstring(expectedErrorMsg),
+			"The certificate was fixed but the controller is still reporting an error")
+		logger.Infof("OK!\n")
+
+	})
 })
 
 // EventuallyFileExistsInNode fails the test if the certificate file does not exist in the node after the time specified as parameters
