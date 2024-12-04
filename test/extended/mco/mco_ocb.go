@@ -505,6 +505,69 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		logger.Infof("OK!\n")
 	})
 
+	g.It("Author:sregidor-Longduration-NonPreRelease-High-77576-In OCB. Create a new MC while a build is running [Disruptive]", func() {
+		// Remove this "skip" checks once the functionality to disable OCL is implemented
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
+		SkipIfSNO(oc.AsAdmin())                       // This test makes no sense in SNO
+
+		var (
+			mcp      = GetCompactCompatiblePool(oc.AsAdmin())
+			node     = mcp.GetSortedNodesOrFail()[0]
+			moscName = "test-" + mcp.GetName() + "-" + GetCurrentTestPolarionIDNumber()
+
+			fileMode    = "0644" // decimal 420
+			filePath    = "/etc/test-77576"
+			fileContent = "test file"
+			mcName      = "tc-77576-testfile"
+			fileConfig  = getBase64EncodedFileConfig(filePath, fileContent, fileMode)
+			mc          = NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName())
+		)
+
+		exutil.By("Configure OCB functionality for the new worker MCP")
+		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), MachineConfigNamespace, moscName, mcp.GetName(), nil)
+		defer DisableOCL(mosc)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that a new build has been triggered and is building")
+		var mosb *MachineOSBuild
+		o.Eventually(func() (*MachineOSBuild, error) {
+			var err error
+			mosb, err = mosc.GetCurrentMachineOSBuild()
+			return mosb, err
+		}, "5m", "20s").Should(Exist(),
+			"No build was created when OCB was enabled")
+		o.Eventually(mosb.GetJob).Should(Exist(),
+			"No build job was created when OCB was enabled")
+		o.Eventually(mosb, "5m", "20s").Should(HaveConditionField("Building", "status", TrueString),
+			"MachineOSBuild didn't report that the build has begun")
+		logger.Infof("OK!\n")
+
+		exutil.By("Create a MC to trigger a new build")
+		defer mc.delete()
+		err = mc.Create("-p", "NAME="+mcName, "-p", "POOL="+mcp.GetName(), "-p", fmt.Sprintf("FILES=[%s]", fileConfig))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that a new build is triggered and the old build is removed")
+		checkNewBuildIsTriggered(mosc, mosb)
+		o.Eventually(mosb, "2m", "20s").ShouldNot(Exist(), "The old MOSB %s was not deleted", mosb)
+		logger.Infof("OK!\n")
+
+		exutil.By("Wait for the configuration to be applied")
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the MC was applied")
+		rf := NewRemoteFile(node, filePath)
+		o.Eventually(rf, "2m", "20s").Should(HaveContent(o.Equal(fileContent)),
+			"%s doesn't have the right content", rf)
+		logger.Infof("OK!\n")
+
+		exutil.By("Remove the MachineOSConfig resource")
+		o.Expect(DisableOCL(mosc)).To(o.Succeed(), "Error cleaning up %s", mosc)
+		logger.Infof("OK!\n")
+	})
 })
 
 func testContainerFile(containerFiles []ContainerFile, imageNamespace string, mcp *MachineConfigPool, checkers []Checker) {
