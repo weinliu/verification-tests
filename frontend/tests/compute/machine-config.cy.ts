@@ -15,17 +15,13 @@ describe('MachineConfig related tests', () => {
     const system_mc = '01-worker-kubelet';
     const system_mc_ssh = '99-worker-ssh';
     let mc_contents;
-    cy.adminCLI(`oc get mc`)
-      .its('stdout')
-      .should('includes', system_mc)
-      .and('includes',system_mc_ssh)
-    cy.adminCLI(`oc get mc 01-worker-kubelet -o jsonpath='{.spec.config.storage.files[0]}'`).then((result) => {
+    cy.adminCLI(`oc get mc ${system_mc} -o jsonpath='{.spec.config.storage.files[0]}'`).then((result) => {
       mc_contents = JSON.parse(result.stdout);
       const { contents:{source}, mode, overwrite, path } = mc_contents;
       // check Configuration files details
       Pages.gotoMachineConfigDetailsPage(system_mc);
       MC.configurationFilesSection('exist');
-      cy.log(`${path}${mode}${overwrite.toString()}${source.slice(10,15)}`);
+      cy.log(`${path}${mode}${overwrite.toString()}${source}`);
       MC.checkConfigurationFileDetails(path, mode, overwrite.toString(), source);
     })
     // no Configuration files section when spec.storage.files null

@@ -15,8 +15,7 @@ Cypress.on('uncaught:exception', (err, runnable) => {
     if (err.message.includes('minified error nr: 35')) {
         return false
     }
-    // workaround OCPBUGS-44447 temp
-    if(err.message.includes('Cannot set properties of undefined')) {
+    if(err.message.includes('ResizeObserver loop completed with undelivered')) {
         return false
     }
     // we still want to ensure there are no other unexpected

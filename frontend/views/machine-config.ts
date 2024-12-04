@@ -8,6 +8,9 @@ export const MC = {
     cy.get('button[aria-label="public~Info"]').first().click();
     cy.contains(mode).should('exist');
     cy.contains(overwrite).should('exist');
-    cy.get('code').first().contains(decodeURIComponent(content).replace(/^(data:,)/, '').slice(10,15)).should('exist');
+    cy.get('code').first().should(($code) => {
+      const text = $code.text();
+      expect(text).to.include(decodeURIComponent(content).replace(/^(data:,)/, '').slice(0,5));
+    })
   },
 }
