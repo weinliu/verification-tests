@@ -315,25 +315,56 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 		"sandboxed-containers": {"kata-containers"},
 		"sysstat":              {"sysstat"},
 	} */
-	g.It("Author:sregidor-LEVEL0-Longduration-NonPreRelease-Critical-56131-[P1] Install all extensions [Disruptive]", func() {
+	g.It("Author:sregidor-LEVEL0-Longduration-NonPreRelease-Critical-56131-Low-77354-[P1] Install all extensions [Disruptive]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		var (
-			coreOSMcp                    = GetCoreOsCompatiblePool(oc.AsAdmin())
-			node                         = coreOSMcp.GetCoreOsNodesOrFail()[0]
-			stepText                     = "available extensions"
-			mcName                       = "change-worker-all-extensions"
-			allExtensions                = []string{"usbguard", "kerberos", "kernel-devel", "sandboxed-containers", "ipsec", "wasm", "sysstat"}
+			coreOSMcp = GetCoreOsCompatiblePool(oc.AsAdmin())
+			node      = coreOSMcp.GetCoreOsNodesOrFail()[0]
+
+			query         = `mcd_local_unsupported_packages{node="` + node.GetName() + `"}`
+			valueJSONPath = `data.result.0.value.1`
+
+			mcName     = "change-worker-all-extensions"
+			mcTemplate = "change-worker-all-extensions.yaml"
+
 			expectedRpmInstalledPackages = []string{"usbguard", "krb5-workstation", "libkadm5", "kernel-devel", "kernel-headers",
 				"kata-containers", "NetworkManager-libreswan", "libreswan", "crun-wasm", "sysstat"}
-			textToVerify = TextToVerify{
-				textToVerifyForMC:   "(?s)" + strings.Join(allExtensions, ".*"),
-				textToVerifyForNode: "(?s)" + strings.Join(expectedRpmInstalledPackages, ".*"),
-				needChroot:          true,
-			}
 
-			cmd = append([]string{"rpm", "-q"}, expectedRpmInstalledPackages...)
+			behaviourValidatorApply = UpdateBehaviourValidator{
+				Checkers: []Checker{
+					CommandOutputChecker{
+						Command:  append([]string{"rpm", "-q"}, expectedRpmInstalledPackages...),
+						Matcher:  o.MatchRegexp("(?s)" + strings.Join(expectedRpmInstalledPackages, ".*")),
+						ErrorMsg: "Extensions were not properly installed",
+						Desc:     "Checking that all available extensions were properly installed",
+					},
+				},
+			}
 		)
-		createMcAndVerifyMCValue(oc, stepText, mcName, node, textToVerify, cmd...)
+
+		behaviourValidatorApply.Initialize(coreOSMcp, nil)
+
+		exutil.By("Create a MC to install all available extensions")
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, coreOSMcp.GetName()).SetMCOTemplate(mcTemplate)
+		mc.skipWaitForMcp = true
+
+		defer mc.delete()
+		mc.create()
+		logger.Infof("OK!\n")
+
+		behaviourValidatorApply.Validate()
+
+		exutil.By("Check that no unsupported packages are reported")
+		monitor, err := exutil.NewMonitor(oc.AsAdmin())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the monitor to query the metricts")
+
+		o.Eventually(monitor.SimpleQuery, "10s", "2s").WithArguments(query).Should(HavePathWithValue(valueJSONPath, o.Equal("0")),
+			"There are reported unsupported packages in %s", node)
+		logger.Infof("OK!\n")
+
+		exutil.By("Delete the MC")
+		mc.delete()
+		logger.Infof("OK!\n")
 
 		exutil.By("Verify that extension packages where uninstalled after MC deletion")
 		for _, pkg := range expectedRpmInstalledPackages {
@@ -341,6 +372,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 				o.BeFalse(),
 				"Package %s should be uninstalled when we remove the extensions MC", pkg)
 		}
+		logger.Infof("OK!\n")
 	})
 
 	g.It("Author:mhanss-Longduration-NonPreRelease-Critical-43310-[P2] add kernel arguments, kernel type and extension to the RHCOS and RHEL [Disruptive]", func() {
