@@ -482,7 +482,6 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 	// author: skundu@redhat.com
 	g.It("Longduration-NonPreRelease-Author:skundu-Critical-68658-CEO prevents member deletion during revision rollout. [Disruptive]", func() {
 		g.By("Test for case OCP-68658 - CEO prevents member deletion during revision rollout.")
-		g.Skip("Skipping this test temporarily until the product bug OCPBUGS-17199 gets fixed.")
 
 		var (
 			mhcName      = "control-plane-health-68658"
@@ -498,7 +497,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		exutil.CreateNsResourceFromTemplate(oc, nameSpace, params...)
 
 		g.By("2. Verify MachineHealthCheck")
-		mhcMaxUnhealthy, errStatus := oc.AsAdmin().Run("get").Args("-n", nameSpace, "mhc", "-o", "jsonpath={.spec.maxUnhealthy}").Output()
+		mhcMaxUnhealthy, errStatus := oc.AsAdmin().Run("get").Args("-n", nameSpace, "mhc", mhcName, "-o", "jsonpath={.spec.maxUnhealthy}").Output()
 		o.Expect(errStatus).NotTo(o.HaveOccurred())
 		if mhcMaxUnhealthy != strconv.Itoa(maxUnhealthy) {
 			e2e.Failf("Failed to verify mhc newly created MHC %v", mhcName)
@@ -516,4 +515,150 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		checkOperator(oc, "kube-apiserver")
 	})
 
+	// author: skundu@redhat.com
+	g.It("Author:skundu-Longduration-NonPreRelease-Critical-77922-workflow of point-in-time restoration. [Disruptive][Slow]", func() {
+
+		var (
+			bastionHost    = ""
+			userForBastion = ""
+		)
+		g.By("check the platform is supported or not")
+		supportedList := []string{"aws", "gcp", "azure", "vsphere", "nutanix", "ibmcloud"}
+		platformListWithoutBastion := []string{"vsphere", "nutanix"}
+		support := in(iaasPlatform, supportedList)
+		if support != true {
+			g.Skip("The platform is not supported now, skip the cases!!")
+		}
+		privateKeyForBastion := os.Getenv("SSH_CLOUD_PRIV_KEY")
+		if privateKeyForBastion == "" {
+			g.Skip("Failed to get the private key, skip the cases!!")
+		}
+		withoutBastion := in(iaasPlatform, platformListWithoutBastion)
+		if !withoutBastion {
+			bastionHost = os.Getenv("QE_BASTION_PUBLIC_ADDRESS")
+			if bastionHost == "" {
+				g.Skip("Failed to get the qe bastion public ip, skip the case !!")
+			}
+			userForBastion = getUserNameAndKeyonBationByPlatform(iaasPlatform)
+			if userForBastion == "" {
+				g.Skip("Failed to get the user for bastion host, hence skipping the case!!")
+			}
+		}
+
+		g.By("make sure all the etcd pods are running")
+		podAllRunning := checkEtcdPodStatus(oc)
+		if podAllRunning != true {
+			g.Skip("The ectd pods are not running")
+		}
+		defer o.Expect(checkEtcdPodStatus(oc)).To(o.BeTrue())
+
+		g.By("select all the master node")
+		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
+		masterNodeInternalIPList := getNodeInternalIPListByLabel(oc, "node-role.kubernetes.io/master=")
+
+		e2e.Logf("bastion host is  : %v", bastionHost)
+		e2e.Logf("platform is  : %v", iaasPlatform)
+		e2e.Logf("user on bastion is  : %v", userForBastion)
+
+		g.By("Make sure all the nodes are normal")
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
+		checkMessage := []string{
+			"SchedulingDisabled",
+			"NotReady",
+		}
+		for _, v := range checkMessage {
+			if !o.Expect(out).ShouldNot(o.ContainSubstring(v)) {
+				g.Skip("The cluster nodes is abnormal, skip this case")
+			}
+		}
+
+		g.By("Check etcd oprator status")
+		checkOperator(oc, "etcd")
+		g.By("Check kube-apiserver oprator status")
+		checkOperator(oc, "kube-apiserver")
+
+		g.By("Run the backup on the recovery node.")
+		defer runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo rm -rf /home/core/assets/backup", privateKeyForBastion, userForBastion)
+		err := wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
+			msg, err := runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo /usr/local/bin/cluster-backup.sh /home/core/assets/backup", privateKeyForBastion, userForBastion)
+			if err != nil {
+				e2e.Logf("backup failed with the err:%v, and try next round", err)
+				return false, nil
+			}
+			if o.Expect(msg).To(o.ContainSubstring("snapshot db and kube resources are successfully saved")) {
+				e2e.Logf("backup successfully saved.")
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("backup is failed with error"))
+
+		g.By("Disable the etcd pods on all the control plane nodes")
+		for i := 0; i < len(masterNodeInternalIPList); i++ {
+			_, err := runPSCommand(bastionHost, masterNodeInternalIPList[i], "sudo -E /usr/local/bin/disable-etcd.sh", privateKeyForBastion, userForBastion)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		g.By("Restore the backup on the recovery control plane host")
+		msg, err := runPSCommand(bastionHost, masterNodeInternalIPList[0], "sudo -E /usr/local/bin/cluster-restore.sh /home/core/assets/backup", privateKeyForBastion, userForBastion)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(msg).To(o.ContainSubstring("starting restore-etcd static pod"))
+
+		g.By("Wait for the api server to come up after restore operation.")
+		errW := wait.Poll(20*time.Second, 900*time.Second, func() (bool, error) {
+			out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Output()
+			if err != nil {
+				e2e.Logf("Fail to get master, error: %s. Trying again", err)
+				return false, nil
+			}
+			if matched, _ := regexp.MatchString(masterNodeInternalIPList[0], out); matched {
+				e2e.Logf("Api is back online:")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errW, "the Apiserver has not come up after point-in-time restore operation")
+
+		g.By("Wait for the nodes to be Ready.")
+		for i := 0; i < len(masterNodeList); i++ {
+			err := wait.Poll(20*time.Second, 300*time.Second, func() (bool, error) {
+				out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", masterNodeList[i]).Output()
+				if err != nil {
+					e2e.Logf("Fail to get master, error: %s. Trying again", err)
+					return false, nil
+				}
+				if matched, _ := regexp.MatchString(" Ready", out); matched {
+					e2e.Logf("Node %s is back online:\n%s", masterNodeList[i], out)
+					return true, nil
+				}
+				return false, nil
+			})
+			exutil.AssertWaitPollNoErr(err, "the kubelet start has not brought the node online and Ready")
+		}
+		defer checkOperator(oc, "etcd")
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"unsupportedConfigOverrides\": null}}")).Execute()
+		g.By("Turn off quorum guard to ensure revision rollouts of static pods")
+		errWait := wait.Poll(10*time.Second, 120*time.Second, func() (bool, error) {
+			errGrd := oc.AsAdmin().WithoutNamespace().Run("patch").Args("etcd", "cluster", "--type=merge", "-p", fmt.Sprintf("{\"spec\": {\"unsupportedConfigOverrides\": {\"useUnsupportedUnsafeNonHANonProductionUnstableEtcd\": true}}}")).Execute()
+			if errGrd != nil {
+				e2e.Logf("server is not ready yet, error: %s. Trying again ...", errGrd)
+				return false, nil
+			} else {
+				e2e.Logf("successfully patched.")
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(errWait, "unable to patch the server to turn off the quorum guard.")
+
+		// both etcd and kube-apiserver operators start and end roll out almost simultaneously.
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer g.GinkgoRecover()
+			defer wg.Done()
+			waitForOperatorRestart(oc, "etcd")
+		}()
+		waitForOperatorRestart(oc, "kube-apiserver")
+		wg.Wait()
+	})
 })
