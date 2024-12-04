@@ -4415,6 +4415,7 @@ desiredState:
 		mc.parameters = []string{fmt.Sprintf(`PWDUSERS=[{"name":"%s", "passwordHash": "%s" }]`, "core", "fake-b")}
 		defer mc.delete()
 		mc.create()
+		mMcp.WaitImmediateForUpdatedStatus()
 		logger.Infof("OK!\n")
 
 		wSpecConf, specErr := wMcp.getConfigNameOfSpec() // get worker MCP name
