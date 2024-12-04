@@ -4181,7 +4181,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		authFilePath := filepath.Join(tmpPath, "config", "default", "manager_auth_proxy_patch.yaml")
 		err = copy(filepath.Join(dataPath, "manager_auth_proxy_patch.yaml"), authFilePath)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		replaceContent(authFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy-rhel9:vocpversion", "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
+		replaceContent(authFilePath, "registry.redhat.io/openshift4/ose-kube-rbac-proxy:vocpversion", "quay.io/olmqe/kube-rbac-proxy:v"+ocppreversion)
 		// copy manager.yaml
 		err = copy(filepath.Join(dataPath, "manager.yaml"), filepath.Join(tmpPath, "config", "manager", "manager.yaml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
