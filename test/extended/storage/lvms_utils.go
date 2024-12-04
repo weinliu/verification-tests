@@ -460,9 +460,13 @@ func (lvm *lvmCluster) getCurrentTotalLvmStorageCapacityByStorageClass(oc *exuti
 // Get currently available storage capacity by Worker Node that can be used by LVMS to provision PV
 func (lvm *lvmCluster) getCurrentTotalLvmStorageCapacityByWorkerNode(oc *exutil.CLI, workerNode string) int {
 	var totalCapacity int = 0
-	storageCapacity, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csistoragecapacity", "-n", "openshift-storage",
-		fmt.Sprintf(`-ojsonpath='{.items[?(@.nodeTopology.matchLabels.topology\.topolvm\.io/node=="%s")].capacity}`, workerNode)).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	var storageCapacity string
+	o.Eventually(func() string { // re-try until capacity value is returned in 'Mi'
+		storageCapacity, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("csistoragecapacity", "-n", "openshift-storage",
+			fmt.Sprintf(`-ojsonpath='{.items[?(@.nodeTopology.matchLabels.topology\.topolvm\.io/node=="%s")].capacity}`, workerNode)).Output()
+		return storageCapacity
+	}, 180*time.Second, 5*time.Second).Should(o.ContainSubstring("Mi")) // lvms storage capacity is always returned in 'Mi' unit
+
 	e2e.Logf("Storage capacity object sizes: " + storageCapacity)
 	if len(storageCapacity) != 0 {
 		capacityList := strings.Split(storageCapacity, " ")

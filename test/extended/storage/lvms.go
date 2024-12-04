@@ -8,7 +8,6 @@
 package storage
 
 import (
-	"fmt"
 	"math"
 	"path/filepath"
 	"regexp"
@@ -1490,52 +1489,71 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	g.It("Author:rdeore-High-73363-[LVMS] Check hot reload of lvmd configuration is working [Disruptive]", func() {
 		// Set the resource template for the scenario
 		var (
-			lvmCluster         = newLvmCluster(setLvmClusterName(getCurrentLVMClusterName(oc)))
+			storageCapacity    int
+			lvmsNamespace      = "openshift-storage"
+			lvmClusterTemplate = filepath.Join(storageLvmsBaseDir, "lvmcluster-without-thinpool-device-template.yaml")
+			devicePaths        = getLvmClusterPaths(oc)
 			lvmdConfigFilePath = "/etc/topolvm/lvmd.yaml"
-			modifyLvmdCmd      = `sed -ri 's/^(\s*)(overprovision-ratio\s*:\s*10\s*$)/\1overprovision-ratio: 1/' /etc/topolvm/lvmd.yaml; mv /etc/topolvm/lvmd.yaml /etc/topolvm/tmp-73363.yaml; cat /etc/topolvm/tmp-73363.yaml >> /etc/topolvm/lvmd.yaml`
+			workerNode         = getWorkersList(oc)[0]
+			modifyLvmdCmd      = `sed -ri 's/^(\s*)(spare-gb\s*:\s*0\s*$)/\1spare-gb: 10/' /etc/topolvm/lvmd.yaml; mv /etc/topolvm/lvmd.yaml /etc/topolvm/tmp-73363.yaml; cat /etc/topolvm/tmp-73363.yaml >> /etc/topolvm/lvmd.yaml`
 		)
 
-		exutil.By("#. Get CSIStorageCapacity object capacity value from one of the worker nodes")
-		workerNode := getWorkersList(oc)[0]
-		originalStorageCapacity := lvmCluster.getCurrentTotalLvmStorageCapacityByWorkerNode(oc, workerNode)
-
-		exutil.By("#. Update lvmd.config file from the worker node")
-		_, err := execCommandInSpecificNode(oc, workerNode, modifyLvmdCmd) // Set 'overprovision-ratio: 1' in lvmd.config file
+		exutil.By("#. Copy and save existing LVMCluster configuration in JSON format")
+		lvmClusterName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", "-n", lvmsNamespace, "-o=jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		originLvmCluster := newLvmCluster(setLvmClusterName(lvmClusterName), setLvmClusterNamespace(lvmsNamespace))
+		originLVMJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("lvmcluster", originLvmCluster.name, "-n", lvmsNamespace, "-o", "json").Output()
+		debugLogf(originLVMJSON)
+		o.Expect(err).ShouldNot(o.HaveOccurred())
+		originStorageCapacity := originLvmCluster.getCurrentTotalLvmStorageCapacityByWorkerNode(oc, workerNode)
+
+		exutil.By("#. Delete existing LVMCluster resource")
+		deleteSpecifiedResource(oc.AsAdmin(), "lvmcluster", originLvmCluster.name, lvmsNamespace)
 		defer func() {
-			recoverLvmdConfigCmd := fmt.Sprintf(`test -f "%s" && rm -rf %s || touch %s`, lvmdConfigFilePath, lvmdConfigFilePath, lvmdConfigFilePath)
-			_, recoverErr := execCommandInSpecificNode(oc, workerNode, recoverLvmdConfigCmd)
-			o.Expect(recoverErr).NotTo(o.HaveOccurred())
-			lvmCluster.waitReady(oc)
+			if !isSpecifiedResourceExist(oc, "lvmcluster/"+originLvmCluster.name, lvmsNamespace) {
+				originLvmCluster.createWithExportJSON(oc, originLVMJSON, originLvmCluster.name)
+			}
+			originLvmCluster.waitReady(oc)
 		}()
 
-		exutil.By("#. Check LVMCluster state is consistently 'Ready'")
-		o.Consistently(func() string {
-			lvmClusterState, _ := lvmCluster.getLvmClusterStatus(oc)
-			return lvmClusterState
-		}, 20*time.Second, 5*time.Second).Should(o.Equal("Ready"))
+		exutil.By("#. Create a new LVMCluster resource without thin-pool deviceClass, as 'spare-gb' is only applicable to thick provisioning")
+		lvmCluster := newLvmCluster(setLvmClustertemplate(lvmClusterTemplate), setLvmClusterPaths(devicePaths), setLvmClusterNamespace(lvmsNamespace))
+		lvmCluster.create(oc)
+		defer lvmCluster.deleteLVMClusterSafely(oc) // If new lvmCluster creation fails, need to remove finalizers if any
+		lvmCluster.waitReady(oc)
+		checkLVMClusterAndVGManagerPodReady(oc, &lvmCluster)
 
-		exutil.By("#. Check CSIStorageCapacity object capacity value is updated as per the new 'overprovision-ratio' value")
+		exutil.By("#. Get new CSIStorageCapacity object capacity value from one of the worker nodes")
+		o.Eventually(func() int {
+			storageCapacity = lvmCluster.getCurrentTotalLvmStorageCapacityByWorkerNode(oc, workerNode)
+			return storageCapacity
+		}, 180*time.Second, 5*time.Second).ShouldNot(o.Equal(originStorageCapacity))
+
+		exutil.By("#. Update lvmd.config file from the worker node")
+		_, err = execCommandInSpecificNode(oc, workerNode, modifyLvmdCmd) // Set 'spare-gb: 10' in lvmd.config file
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("#. Check 'vg-manager' resource pod status is 'Running' and LVMCluster state is 'Ready'")
+		checkLVMClusterAndVGManagerPodReady(oc, &lvmCluster)
+
+		exutil.By("#. Check CSIStorageCapacity object capacity value is updated as per the new 'spare-gb' value")
 		o.Eventually(func() int {
 			newStorageCapacity := lvmCluster.getCurrentTotalLvmStorageCapacityByWorkerNode(oc, workerNode)
 			return newStorageCapacity
-		}, 60*time.Second, 5*time.Second).Should(o.Equal((originalStorageCapacity / 10)))
+		}, 120*time.Second, 5*time.Second).Should(o.Equal((storageCapacity - 10240))) // Subtracting 10Gi equivalent from storageCapacity as spare-gb is set to '10Gi'
 
 		exutil.By("#. Remove new config files from worker node")
 		_, err = execCommandInSpecificNode(oc, workerNode, "rm -rf /etc/topolvm/tmp-73363.yaml "+lvmdConfigFilePath) // When lvmd.yaml is deleted, new lvmd.yaml is auto-generated
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("#. Check LVMCluster state is consistently 'Ready'")
-		o.Consistently(func() string {
-			lvmClusterState, _ := lvmCluster.getLvmClusterStatus(oc)
-			return lvmClusterState
-		}, 20*time.Second, 5*time.Second).Should(o.Equal("Ready"))
+		exutil.By("#. Check 'vg-manager' resource pod status is 'Running' and LVMCluster state is 'Ready'")
+		checkLVMClusterAndVGManagerPodReady(oc, &lvmCluster)
 
 		exutil.By("#. Check CSIStorageCapacity object capacity value is updated back to original value")
 		o.Eventually(func() int {
 			newStorageCapacity := lvmCluster.getCurrentTotalLvmStorageCapacityByWorkerNode(oc, workerNode)
 			return newStorageCapacity
-		}, 60*time.Second, 5*time.Second).Should(o.Equal(originalStorageCapacity))
+		}, 120*time.Second, 5*time.Second).Should(o.Equal(storageCapacity))
 	})
 
 	// author: mmakwana@redhat.com
@@ -1969,4 +1987,17 @@ func resizeLvmsVolume(oc *exutil.CLI, pvc persistentVolumeClaim, dep deployment,
 		dep.checkDataBlockType(oc)
 		dep.writeDataBlockType(oc)
 	}
+}
+
+// Check LVMCluster state is 'Ready' and 'vg-manager' resource Pod status is 'Running'
+func checkLVMClusterAndVGManagerPodReady(oc *exutil.CLI, lvmCluster *lvmCluster) {
+	o.Eventually(func() string {
+		podStatus, _ := getPodDetailsByLabel(oc.AsAdmin(), lvmCluster.namespace, "app.kubernetes.io/component=vg-manager")
+		return podStatus
+	}, 180*time.Second, 5*time.Second).Should(o.ContainSubstring("Running"))
+
+	o.Eventually(func() string {
+		lvmClusterState, _ := lvmCluster.getLvmClusterStatus(oc)
+		return lvmClusterState
+	}, 180*time.Second, 5*time.Second).Should(o.Equal("Ready"))
 }
