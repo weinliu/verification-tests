@@ -1757,7 +1757,8 @@ func (ds *daemonset) waitReady(oc *exutil.CLI) {
 	err := wait.Poll(ds.maxWaitReadyTime/defaultIterationTimes, ds.maxWaitReadyTime, func() (bool, error) {
 		dsReady, err := ds.checkReady(oc)
 		if err != nil {
-			return dsReady, err
+			e2e.Logf("Failed to check daemonset %s ready: %v", ds.name, err)
+			return dsReady, nil
 		}
 		if !dsReady {
 			return dsReady, nil
