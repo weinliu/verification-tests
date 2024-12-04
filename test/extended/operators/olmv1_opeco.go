@@ -26,12 +26,9 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		oc = exutil.NewCLI("olmv1-opeco"+getRandomString(), exutil.KubeConfigPath())
 	)
 
-	// it is GA from 4.18, so remove this checking
-	// g.BeforeEach(func() {
-	// 	if !exutil.IsTechPreviewNoUpgrade(oc) {
-	// 		g.Skip("OLMv1 is supported in TP only currently, so skip it")
-	// 	}
-	// })
+	g.BeforeEach(func() {
+		exutil.SkipNoOLMv1Core(oc)
+	})
 
 	// author: jitli@redhat.com
 	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-VMonly-High-69758-Catalogd Polling remote registries for update to images content", func() {

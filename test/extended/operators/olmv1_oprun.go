@@ -28,12 +28,9 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		// if it need temp project, could use oc.SetupProject() in g.It to create it firstly.
 	)
 
-	// it is GA from 4.18, so remove this checking
-	// g.BeforeEach(func() {
-	// 	if !exutil.IsTechPreviewNoUpgrade(oc) {
-	// 		g.Skip("OLMv1 is supported in TP only currently, so skip it")
-	// 	}
-	// })
+	g.BeforeEach(func() {
+		exutil.SkipNoOLMv1Core(oc)
+	})
 
 	// author: jiazha@redhat.com
 	// OLMv1 doesn't support Hypershift by now(29.11.2024). More: https://redhat-internal.slack.com/archives/GHMALGJV6/p1731949072094519?thread_ts=1731591485.969199&cid=GHMALGJV6
