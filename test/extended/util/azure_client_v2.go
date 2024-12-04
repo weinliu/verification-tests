@@ -312,3 +312,14 @@ func (cs *AzureClientSet) DeleteStorageAccount(ctx context.Context, resourceGrou
 		e2e.Failf("failed to finish the request: %v", err)
 	}
 }
+
+func (cs *AzureClientSet) GetStorageAccountProperties(storageAccountName string, resourceGroupName string) armstorage.AccountsClientGetPropertiesResponse {
+	ctx := context.Background()
+	clientFactory, err := armstorage.NewClientFactory(cs.SubscriptionID, cs.tokenCredential, nil)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	res, err := clientFactory.NewAccountsClient().GetProperties(ctx, resourceGroupName, storageAccountName, &armstorage.AccountsClientGetPropertiesOptions{Expand: nil})
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	return res
+}

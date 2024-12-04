@@ -1,6 +1,7 @@
 package util
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -126,6 +127,10 @@ func (ac *AzureCredentialsFromFile) LoadFromFile(filePath string) error {
 	if err != nil {
 		return fmt.Errorf("error reading credentials file: %v", err)
 	}
+	fileData = bytes.ReplaceAll(fileData, []byte("azure_subscription_id"), []byte("subscriptionId"))
+	fileData = bytes.ReplaceAll(fileData, []byte("azure_client_id"), []byte("clientId"))
+	fileData = bytes.ReplaceAll(fileData, []byte("azure_client_secret"), []byte("clientSecret"))
+	fileData = bytes.ReplaceAll(fileData, []byte("azure_tenant_id"), []byte("tenantId"))
 	if err = json.Unmarshal(fileData, ac); err != nil {
 		return fmt.Errorf("error unmarshaling credentials file: %v", err)
 	}

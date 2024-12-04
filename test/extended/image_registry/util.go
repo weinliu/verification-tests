@@ -1613,3 +1613,9 @@ func getAzureRegion(oc *exutil.CLI) string {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return string(region)
 }
+
+func getResourceGroupOnAzure(oc *exutil.CLI) string {
+	resourceGroup, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.platformStatus.azure.resourceGroupName}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return resourceGroup
+}

@@ -5152,7 +5152,27 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		token, err := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="ImageRegistryStorageFull"}'`, token, `"alertstate":"pending"`, time.Duration(2*platformLoadTime))
+	})
 
+	g.It("Author:xiuwang-Low-76929-shared access keys are disabled by default on new installations that use workload identity", func() {
+
+		exutil.SkipIfPlatformTypeNot(oc, "Azure")
+		if !exutil.IsWorkloadIdentityCluster(oc) {
+			g.Skip("This test case is for Azure Workload Identity only, skipping")
+		}
+
+		g.By("Get the resourcegroup and stroage account")
+		resourceGroupName := getResourceGroupOnAzure(oc)
+		accountName, _, err := exutil.GetAzureStorageAccountFromCluster(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Create new creds to get stroage account properties")
+		azClientSet := exutil.NewAzureClientSetWithCredsFromCanonicalFile()
+		res := azClientSet.GetStorageAccountProperties(accountName, resourceGroupName)
+
+		g.By("Check if AllowSharedKeyAccess is disabled in workload identity cluster")
+		allowSharedKeyAccess := *res.Account.Properties.AllowSharedKeyAccess
+		o.Expect(allowSharedKeyAccess).To(o.BeFalse())
 	})
 
 	g.It("Author:xiuwang-Critical-76802-Configure image registry to use a custom azure storage account located in a different resource group [Disruptive]", func(ctx context.Context) {
