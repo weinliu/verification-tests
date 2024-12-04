@@ -1,5 +1,4 @@
 import { Operator, project } from "../../views/netobserv"
-import { catalogSources } from "../../views/catalog-source"
 import { netflowPage } from "../../views/netflow-page"
 
 const [user1, user1Passwd] = Cypress.env('LOGIN_USERS').split(',')[0].split(':');
@@ -12,22 +11,7 @@ describe('(OCP-75874 Network_Observability) NetObserv developer view', { tags: [
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${user1}`)
         cy.uiLogin(Cypress.env('LOGIN_IDP'), user1, user1Passwd)
 
-        // specify --env noo_release=upstream to run tests 
-        // from most recent "main" image
-        let catalogImg
-        let catalogDisplayName = "Production Operators"
-        const catSrc = Cypress.env('noo_catalog_src')
-        if (catSrc == "upstream") {
-            catalogImg = 'quay.io/netobserv/network-observability-operator-catalog:v0.0.0-main'
-            this.catalogSource = "netobserv-test"
-            catalogDisplayName = "NetObserv QE"
-            catalogSources.createCustomCatalog(catalogImg, this.catalogSource, catalogDisplayName)
-        }
-        else {
-            catalogSources.enableQECatalogSource(this.catalogSource, catalogDisplayName)
-        }
-
-        Operator.install(catalogDisplayName)
+        Operator.install()
         Operator.createFlowcollector(project)
     })
 

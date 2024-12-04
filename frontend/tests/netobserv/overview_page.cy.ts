@@ -1,5 +1,4 @@
 import { Operator, project } from "../../views/netobserv"
-import { catalogSources } from "../../views/catalog-source"
 import { netflowPage, genSelectors, querySumSelectors, overviewSelectors } from "../../views/netflow-page"
 
 describe('(OCP-54839 Network_Observability) Netflow Overview page tests', { tags: ['Network_Observability'] }, function () {
@@ -10,21 +9,7 @@ describe('(OCP-54839 Network_Observability) Netflow Overview page tests', { tags
 
         cy.switchPerspective('Administrator');
 
-        // specify --env noo_release=upstream to run tests 
-        // from most recent "main" image
-        let catalogImg
-        let catalogDisplayName = "Production Operators"
-        const catSrc = Cypress.env('noo_catalog_src')
-        if (catSrc == "upstream") {
-            catalogImg = 'quay.io/netobserv/network-observability-operator-catalog:v0.0.0-main'
-            this.catalogSource = "netobserv-test"
-            catalogDisplayName = "NetObserv QE"
-            catalogSources.createCustomCatalog(catalogImg, this.catalogSource, catalogDisplayName)
-        }
-        else {
-            catalogSources.enableQECatalogSource(this.catalogSource, catalogDisplayName)
-        }
-        Operator.install(catalogDisplayName)
+        Operator.install()
         Operator.createFlowcollector(project)
     })
 
@@ -102,7 +87,7 @@ describe('(OCP-54839 Network_Observability) Netflow Overview page tests', { tags
     it("(OCP-54839, aramesha, Network_Observability) should validate panels", { tags: ['@smoke'] }, function () {
         cy.showAdvancedOptions().then(views => {
             cy.contains('Display options').should('exist').click()
-            
+
             // verify single focus graph toggle
             cy.get('#focus-switch').check()
             // verify 'Top 5 average bytes rates' panel is in focus

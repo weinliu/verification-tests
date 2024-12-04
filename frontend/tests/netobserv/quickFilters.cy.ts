@@ -1,5 +1,4 @@
 import { Operator, project } from "../../views/netobserv"
-import { catalogSources } from "../../views/catalog-source"
 import { netflowPage } from "../../views/netflow-page"
 var patch = [{
     "op": "$op",
@@ -25,22 +24,7 @@ describe('(OCP-56222 Network_Observability) Quick Filters test', { tags: ['Netwo
         // create test server and client pods
         cy.adminCLI('oc create -f ./fixtures/netobserv/test-server-client.yaml')
 
-        // specify --env noo_release=upstream to run tests 
-        // from most recent "main" image
-        let catalogImg
-        let catalogDisplayName = "Production Operators"
-        const catSrc = Cypress.env('noo_catalog_src')
-        if (catSrc == "upstream") {
-            catalogImg = 'quay.io/netobserv/network-observability-operator-catalog:v0.0.0-main'
-            this.catalogSource = "netobserv-test"
-            catalogDisplayName = "NetObserv QE"
-            catalogSources.createCustomCatalog(catalogImg, this.catalogSource, catalogDisplayName)
-        }
-        else {
-            catalogSources.enableQECatalogSource(this.catalogSource, catalogDisplayName)
-        }
-
-        Operator.install(catalogDisplayName)
+        Operator.install()
         Operator.createFlowcollector(project)
 
     })

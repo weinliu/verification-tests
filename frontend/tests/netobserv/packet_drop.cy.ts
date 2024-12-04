@@ -1,5 +1,4 @@
 import { Operator, project } from "../../views/netobserv"
-import { catalogSources } from "../../views/catalog-source"
 import { netflowPage, overviewSelectors } from "../../views/netflow-page"
 
 function getPacketDropURL(drop: string): string {
@@ -13,22 +12,7 @@ describe('(OCP-66141 Network_Observability) PacketDrop test', { tags: ['Network_
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
         cy.switchPerspective('Administrator');
 
-        // specify --env noo_release=upstream to run tests 
-        // from most recent "main" image
-        let catalogImg
-        let catalogDisplayName = "Production Operators"
-        const catSrc = Cypress.env('noo_catalog_src')
-        if (catSrc == "upstream") {
-            catalogImg = 'quay.io/netobserv/network-observability-operator-catalog:v0.0.0-main'
-            this.catalogSource = "netobserv-test"
-            catalogDisplayName = "NetObserv QE"
-            catalogSources.createCustomCatalog(catalogImg, this.catalogSource, catalogDisplayName)
-        }
-        else {
-            catalogSources.enableQECatalogSource(this.catalogSource, catalogDisplayName)
-        }
-
-        Operator.install(catalogDisplayName)
+        Operator.install()
         Operator.createFlowcollector(project, "PacketDrop")
     })
 

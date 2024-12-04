@@ -1,10 +1,9 @@
 import { Operator, project } from "../../views/netobserv"
-import { catalogSources } from "../../views/catalog-source"
 import { netflowPage, querySumSelectors } from "../../views/netflow-page"
 import { dashboard, graphSelector } from "views/dashboards-page"
 
 const PacketDropPanels = [
-     // below panel should appear with the 'node_drop_packets_total' metric
+    // below panel should appear with the 'node_drop_packets_total' metric
     "top-drops-per-node-(pps)-chart",
     // below panel should appear with the 'node_drop_bytes_total' metric
     "top-drops-per-node-(bps)-chart",
@@ -24,22 +23,7 @@ describe('(OCP-66141 Network_Observability) PacketDrop dashboards test', { tags:
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
         cy.switchPerspective('Administrator');
 
-        // specify --env noo_release=upstream to run tests
-        // from most recent "main" image
-        let catalogImg
-        let catalogDisplayName = "Production Operators"
-        const catSrc = Cypress.env('noo_catalog_src')
-        if (catSrc == "upstream") {
-            catalogImg = 'quay.io/netobserv/network-observability-operator-catalog:v0.0.0-main'
-            this.catalogSource = "netobserv-test"
-            catalogDisplayName = "NetObserv QE"
-            catalogSources.createCustomCatalog(catalogImg, this.catalogSource, catalogDisplayName)
-        }
-        else {
-            catalogSources.enableQECatalogSource(this.catalogSource, catalogDisplayName)
-        }
-
-        Operator.install(catalogDisplayName)
+        Operator.install()
         Operator.createFlowcollector(project, "PacketDrop")
     })
 

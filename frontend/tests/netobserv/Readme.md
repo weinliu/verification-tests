@@ -21,3 +21,8 @@ To help with memory utilization when cypress tests are run, follow below guideli
 - When topology tests fail with UI error `undefined` for topology view and if tests uses an API fixture data, it may be a sign the API data may need an update.
 - All API data are generated with Query Options `datasource=loki` and filter `Source Namespace="netobserv"` and `bnf=false`
 - Before updating the correctness conditions make sure it's not a actual bug in the code and the new views are actually correct.
+
+## NOO tests env variables
+Currently tests can read 2 environment variables:
+# Set `CYPRESS_NOO_CATALOG_SOURCE=upstream` to install NOO from upstream catalog source image or pass `--env NOO_CATALOG_SOURCE=upstream` with Cypress runner
+# Set `CYPRESS_SKIP_NOO_INSTALL=true` to skip installing catalog source and installing the operator or pass `--env SKIP_NOO_INSTALL=true` with Cypress runner

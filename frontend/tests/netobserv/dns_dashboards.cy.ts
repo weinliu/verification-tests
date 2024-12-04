@@ -1,5 +1,4 @@
 import { Operator, project } from "../../views/netobserv"
-import { catalogSources } from "../../views/catalog-source"
 import { netflowPage, querySumSelectors } from "../../views/netflow-page"
 import { dashboard } from "views/dashboards-page"
 
@@ -34,22 +33,7 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         // create DNS over TCP and UDP pods
         cy.adminCLI('oc apply -f ./fixtures/netobserv/DNS-pods.yaml')
 
-        // specify --env noo_release=upstream to run tests
-        // from most recent "main" image
-        let catalogImg
-        let catalogDisplayName = "Production Operators"
-        const catSrc = Cypress.env('noo_catalog_src')
-        if (catSrc == "upstream") {
-            catalogImg = 'quay.io/netobserv/network-observability-operator-catalog:v0.0.0-main'
-            this.catalogSource = "netobserv-test"
-            catalogDisplayName = "NetObserv QE"
-            catalogSources.createCustomCatalog(catalogImg, this.catalogSource, catalogDisplayName)
-        }
-        else {
-            catalogSources.enableQECatalogSource(this.catalogSource, catalogDisplayName)
-        }
-
-        Operator.install(catalogDisplayName)
+        Operator.install()
         Operator.createFlowcollector(project, "DNSTracking")
     })
 

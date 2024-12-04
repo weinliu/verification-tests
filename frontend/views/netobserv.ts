@@ -1,4 +1,5 @@
 import { operatorHubPage } from "../views/operator-hub-page"
+import { catalogSources } from "../views/catalog-source"
 import { Pages } from "./pages"
 
 export const project = "netobserv"
@@ -12,14 +13,33 @@ export namespace flowcollectorFormSelectors {
 
 export const Operator = {
     name: () => {
-        if (Cypress.env('noo_catalog_src') == "upstream") {
+        if (`${Cypress.env('NOO_CATALOG_SOURCE')}` == "upstream") {
             return "NetObserv Operator"
         }
         else {
             return "Network Observability"
         }
     },
-    install: (catalogSourceDisplayName: string) => {
+    install_catalogsource: () => {
+        var catalogDisplayName = "Production Operators"
+        const catSrc = Cypress.env('NOO_CATALOG_SOURCE')
+        if (catSrc == "upstream") {
+            let catalogImg = 'quay.io/netobserv/network-observability-operator-catalog:v0.0.0-main'
+            let catalogSource = "netobserv-test"
+            catalogDisplayName = "NetObserv QE"
+            catalogSources.createCustomCatalog(catalogImg, catalogSource, catalogDisplayName)
+        }
+        else {
+            catalogSources.enableQECatalogSource()
+        }
+        return catalogDisplayName
+    },
+    install: () => {
+        if (`${Cypress.env('SKIP_NOO_INSTALL')}` == "true") {
+            return null
+        }
+        var catalogSourceDisplayName = Operator.install_catalogsource()
+
         cy.visit(`/k8s/ns/openshift-netobserv-operator/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
         // if user still does not have admin access
         // try few more times
