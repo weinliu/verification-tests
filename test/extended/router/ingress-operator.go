@@ -1857,7 +1857,7 @@ spec:
 
 		exutil.By("1.0: Use openssl to create the certification and key")
 		defer os.RemoveAll(dirname)
-		err := os.MkdirAll(dirname, 0777)
+		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		output := getByJsonPath(oc, "default", "ingresses.config/cluster", "{.spec.domain}")
 		wildcard := "*." + output
@@ -1865,7 +1865,10 @@ spec:
 		exutil.By("1.1: Create a new self-signed sha1 root CA including the ca certification and ca key")
 		opensslCmd := fmt.Sprintf(`openssl req -x509 -sha1 -newkey rsa:2048 -days %d -keyout %s -out %s -nodes -subj '%s'`, validity, caKey, caCrt, caSubj)
 		_, err = exec.Command("bash", "-c", opensslCmd).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil {
+			// The CI OpenSSL 3.0.7 1 Nov 2022 (Library: OpenSSL 3.0.7 1 Nov 2022) under Red Hat Enterprise Linux release doesn't support sha1 certification, skip this case if the error occur
+			g.Skip("Skipping as openssl under the OS doesn't support sha1 certification")
+		}
 
 		exutil.By("1.2: Create the user CSR and the user key")
 		opensslCmd = fmt.Sprintf(`openssl req -newkey rsa:2048 -nodes -keyout %s  -out %s -subj %s`, usrKey, usrCsr, usrSubj)
