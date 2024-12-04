@@ -151,7 +151,7 @@ class TestResult:
                 result="SKIP"
             if failure:
                 result="FAIL"
-            caseids = re.findall(r'\d{5,}-', name)
+            caseids = re.findall(r'\b[A-Z]?\d{5,}-', name)
             authorname = self.getAuthorName(name)
             if len(caseids) == 0:
                 tmpname = name.replace("'","")
@@ -167,7 +167,7 @@ class TestResult:
                 casetitle = self.combineTilteAndDescribe(casetitle, authorname, name, caseids)
 
                 for i in caseids:
-                    id = "OCP-"+i[:-1]
+                    id = self.getFullCaseid(i)
                     if id in testsummary:
                         if "FAIL" in testsummary[id]["result"]: #the case already execute with failure
                             result = testsummary[id]["result"]
@@ -197,7 +197,7 @@ class TestResult:
         #do not support multiple case implementation for one OCP case if we take only CASE ID as name.
         for case in cases:
             name = case.getAttribute("name")
-            caseids = re.findall(r'\d{5,}-', name)
+            caseids = re.findall(r'\b[A-Z]?\d{5,}-', name)
             authorname = self.getAuthorName(name)
             if len(caseids) == 0:
                 # print("No Case ID")
@@ -215,11 +215,11 @@ class TestResult:
                 casetitle = self.combineTilteAndDescribe(casetitle, authorname, name, caseids)
 
                 if len(caseids) == 1:
-                    case.setAttribute("name", "OCP-"+caseids[0][:-1]+":"+authorname+":" + scenario + ":" +casetitle)
+                    case.setAttribute("name", self.getFullCaseid(caseids[0])+":"+authorname+":" + scenario + ":" +casetitle)
                 else:
                     toBeRemove.append(case)
                     for i in caseids:
-                        casename = "OCP-"+i[:-1]+":"+authorname+":" + scenario + ":" +casetitle
+                        casename = self.getFullCaseid(i)+":"+authorname+":" + scenario + ":" +casetitle
                         dupcase = case.cloneNode(True)
                         dupcase.setAttribute("name", casename)
                         toBeAdd.append(dupcase)
@@ -347,7 +347,7 @@ class TestResult:
 
     def getNames(self, name, subteam):
         names = []
-        caseids = re.findall(r'\d{5,}-', name)
+        caseids = re.findall(r'\b[A-Z]?\d{5,}-', name)
         authorname = self.getAuthorName(name)
         if len(caseids) == 0:
             # print("No Case ID")
@@ -365,8 +365,14 @@ class TestResult:
             casetitle = self.combineTilteAndDescribe(casetitle, authorname, name, caseids)
 
             for i in caseids:
-                names.append("OCP-"+i[:-1]+":"+authorname+":" + subteam + ":"+casetitle)
+                names.append(self.getFullCaseid(i)+":"+authorname+":" + subteam + ":"+casetitle)
         return names
+
+    def getFullCaseid(self, caseid):
+        fullName = "OCP-"+caseid[:-1]
+        if caseid[0] == "C":
+            fullName=  "OSC-"+caseid[1:-1]
+        return fullName
 
     def getAuthorName(self, name):
         authors = "unknown"

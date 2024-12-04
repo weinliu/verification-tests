@@ -26,7 +26,7 @@ if not modifedFiles:
     sys.exit(0)
 
 caseList=[]
-patternIt = re.compile('.*\-(\d{5,})\-')
+patternIt = re.compile('.*\-([A-Z]?\d{5,})\-')
 for filename in modifedFiles.decode("utf-8").strip(os.linesep).split():
     print("Search the updated cases for "+filename)
     diffcommands = 'git diff '+commit1 +' ' +commit2 + ' -- ' + filename.strip(os.linesep) +'|grep g.It > /tmp/git_diff.log'

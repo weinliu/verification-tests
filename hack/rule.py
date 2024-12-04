@@ -179,7 +179,7 @@ for des in desContent:
         errList.append("the g.Describe \"{}\" is less than two words\n".format(des))
 
 titlePatten = re.compile(r'\"(.*?)\"')
-importancePatten = re.compile(r'(\w+)-(\d+)(-?)')
+importancePatten = re.compile(r'(\w+)-([A-Z]?\d+)(-?)')
 for it in itContent:
     # print(f"the it:\n{it}")
     it=it.replace("'", "")
@@ -210,7 +210,7 @@ for it in itContent:
                     errList.append("{} \"{}\" has no \"-\" after case id {}\n".format(spec, title, m.group(2)))
                     correctCaseID = False
             if correctCaseID:
-                caseids = re.findall(r'\d{5,}-', title)
+                caseids = re.findall(r'\b[A-Z]?\d{5,}-', title)
                 if len(caseids) == 0:
                     errList.append("{} \"{}\" has no case id\n".format(spec, title))
                 else:
