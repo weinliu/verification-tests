@@ -7,6 +7,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -31,7 +32,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-Author:liqcui-Medium-51417-Verify that static pods are not using CPUs reserved for workload with guaranteed CPUs [Disruptive] [Slow]", func() {
 
 		// currently test is only supported on AWS, GCP, Azure , ibmcloud and alibabacloud
-		if iaasPlatform != "aws" && iaasPlatform != "gcp" && iaasPlatform != "azure" && iaasPlatform != "ibmcloud" && iaasPlatform != "alibabacloud" {
+		if iaasPlatform != "aws" && iaasPlatform != "gcp" && iaasPlatform != "azure" && iaasPlatform != "ibmcloud" && iaasPlatform != "alibabacloud" && architecture.ClusterArchitecture(oc).String() != "ppc64le" {
 			g.Skip("IAAS platform: " + iaasPlatform + " is not automated yet - skipping test ...")
 		}
 
