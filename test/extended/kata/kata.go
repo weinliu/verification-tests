@@ -201,7 +201,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 					err = fmt.Errorf("Cloud Credentials not found") // Generate a custom error
 					e2e.Failf("Cloud Credentials not found. Skipping test suite execution msg: %v , err: %v", msg, err)
 				}
-			} else if semver.Compare("v"+baseVer, "v1.7.0") >= 0 && cloudPlatform == "libvirt" {
+			} else if semver.Compare(baseVer, "v1.7.0") >= 0 && cloudPlatform == "libvirt" {
 				msg, err = createApplyPeerPodsParamLibvirtConfigMap(oc, cloudPlatform, ppParam, opNamespace, ppParamsLibvirtConfigMapName, ppParamsLibvirtConfigMapTemplate)
 				if err != nil {
 					err = fmt.Errorf("Libvirt configs not found") // Generate a custom error
@@ -1775,4 +1775,52 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		g.By("SUCCESS - Podvm with GPU instance type was launched successfully")
 	})
+
+	g.It("Author:Anjana-High-43221-Verify PodVM image creation job completion", func() {
+		if getCloudProvider(oc) != "libvirt" {
+			g.Skip("43221 PodVM image creation job is specific to libvirt")
+		}
+		if !kataconfig.enablePeerPods {
+			g.Skip("43221 PodVM image creation job is only for peer pods")
+		}
+		g.By("Checking the status of the PodVM image creation job")
+		msg, err := verifyImageCreationJobSuccess(oc, opNamespace, ppParam, ppParamsLibvirtConfigMapName, cloudPlatform)
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
+		expMsg := "Uploaded the image successfully"
+		o.Expect(strings.Contains(msg, expMsg)).To(o.BeTrue(), fmt.Sprintf("Expected message: %v not found in the job output.", expMsg))
+		g.By("SUCCESS - PodVM image creation job completed successfully")
+	})
+
+	g.It("Author:Anjana-High-422081-Verify SE-enabled pod deployment", func() {
+		if getCloudProvider(oc) != "libvirt" {
+			g.Skip("422081 SE-enabled pod deployment is specific to libvirt")
+		}
+		oc.SetupProject()
+
+		var (
+			msg            string
+			err            error
+			defaultPodName = "-se-check"
+			podNs          = oc.Namespace()
+		)
+
+		g.By("Deploying pod to verify SE enablement")
+		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName, testrun.workloadImage)
+		defer func() {
+			deleteKataResource(oc, "pod", podNs, newPodName)
+			g.By("Deleted SE-enabled pod")
+		}()
+
+		msg, err = checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
+		if err != nil {
+			e2e.Logf("ERROR: pod %v could not be installed: %v %v", newPodName, msg, err)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		g.By("SUCCESS - Pod installed for SE verification")
+
+		g.By("Checking if pod is SE-enabled")
+		err = checkSEEnabled(oc, newPodName, podNs)
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
+	})
+
 })

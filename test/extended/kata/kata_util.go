@@ -92,6 +92,8 @@ type PeerpodParam struct {
 	LIBVIRT_BASE_OS_VERSION              string
 	LIBVIRT_IMAGE_NAME                   string
 	LIBVIRT_PODVM_TAG                    string
+	LIBVIRT_SE_BOOT                      string
+	LIBVIRT_PODVM_IMAGE_URI              string
 }
 
 type UpgradeCatalogDescription struct {
@@ -105,7 +107,7 @@ type UpgradeCatalogDescription struct {
 
 var (
 	snooze                time.Duration = 2400
-	kataSnooze            time.Duration = 5400 // Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
+	kataSnooze            time.Duration = 7200 // Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
 	podSnooze             time.Duration = 600  // Peer Pods take longer than 2 minutes
 	podRunState                         = "Running"
 	featureLabel                        = "feature.node.kubernetes.io/runtime.kata=true"
@@ -1193,6 +1195,12 @@ func parseLibvirtCIConfigMapData(configmapData string) (PeerpodParam, error) {
 	if gjson.Get(configmapData, "PODVM_TAG").Exists() {
 		ppParam.LIBVIRT_PODVM_TAG = gjson.Get(configmapData, "PODVM_TAG").String()
 	}
+	if gjson.Get(configmapData, "SE_BOOT").Exists() {
+		ppParam.LIBVIRT_SE_BOOT = gjson.Get(configmapData, "SE_BOOT").String()
+	}
+	if gjson.Get(configmapData, "PODVM_IMAGE_URI").Exists() {
+		ppParam.LIBVIRT_PODVM_IMAGE_URI = gjson.Get(configmapData, "PODVM_IMAGE_URI").String()
+	}
 	return ppParam, nil
 }
 
@@ -1268,6 +1276,7 @@ func createLibvirtPeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretN
 		LIBVIRT_VOL_NAME     string
 		ACTIVATION_KEY       string
 		REDHAT_OFFLINE_TOKEN string
+		HOST_KEY_CERTS       string
 	)
 
 	fields := map[string]*string{
@@ -1276,6 +1285,7 @@ func createLibvirtPeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretN
 		"LIBVIRT_VOL_NAME":     &LIBVIRT_VOL_NAME,
 		"ACTIVATION_KEY":       &ACTIVATION_KEY,
 		"REDHAT_OFFLINE_TOKEN": &REDHAT_OFFLINE_TOKEN,
+		"HOST_KEY_CERTS":       &HOST_KEY_CERTS,
 	}
 
 	for key, valuePtr := range fields {
@@ -1314,6 +1324,7 @@ func createLibvirtPeerPodSecrets(oc *exutil.CLI, ppParam PeerpodParam, ciSecretN
 			"LIBVIRT_VOL_NAME":     LIBVIRT_VOL_NAME,
 			"REDHAT_OFFLINE_TOKEN": REDHAT_OFFLINE_TOKEN,
 			"ACTIVATION_KEY":       ACTIVATION_KEY,
+			"HOST_KEY_CERTS":       HOST_KEY_CERTS,
 		},
 	}
 
@@ -1683,7 +1694,7 @@ func createLibvirtPeerPodsParamConfigMap(oc *exutil.CLI, ppParam PeerpodParam, p
 
 	// Processing configmap template and create " <randomstring>peer-pods-cm.json"
 	configFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ppConfigMapTemplate,
-		"-p", "PODVM_DISTRO="+ppParam.LIBVIRT_PODVM_DISTRO, "CAA_SRC="+ppParam.LIBVIRT_CAA_SRC, "CAA_REF="+ppParam.LIBVIRT_CAA_REF, "DOWNLOAD_SOURCES="+ppParam.LIBVIRT_DOWNLOAD_SOURCES, "CONFIDENTIAL_COMPUTE_ENABLED="+ppParam.LIBVIRT_CONFIDENTIAL_COMPUTE_ENABLED, "UPDATE_PEERPODS_CM="+ppParam.LIBVIRT_UPDATE_PEERPODS_CM, "ORG_ID="+ppParam.LIBVIRT_ORG_ID, "BASE_OS_VERSION="+ppParam.LIBVIRT_BASE_OS_VERSION, "IMAGE_NAME="+ppParam.LIBVIRT_IMAGE_NAME, "PODVM_TAG="+ppParam.LIBVIRT_PODVM_TAG).OutputToFile(getRandomString() + "peerpods-param-cm.json")
+		"-p", "PODVM_DISTRO="+ppParam.LIBVIRT_PODVM_DISTRO, "CAA_SRC="+ppParam.LIBVIRT_CAA_SRC, "CAA_REF="+ppParam.LIBVIRT_CAA_REF, "DOWNLOAD_SOURCES="+ppParam.LIBVIRT_DOWNLOAD_SOURCES, "CONFIDENTIAL_COMPUTE_ENABLED="+ppParam.LIBVIRT_CONFIDENTIAL_COMPUTE_ENABLED, "UPDATE_PEERPODS_CM="+ppParam.LIBVIRT_UPDATE_PEERPODS_CM, "ORG_ID="+ppParam.LIBVIRT_ORG_ID, "BASE_OS_VERSION="+ppParam.LIBVIRT_BASE_OS_VERSION, "IMAGE_NAME="+ppParam.LIBVIRT_IMAGE_NAME, "PODVM_TAG="+ppParam.LIBVIRT_PODVM_TAG, "SE_BOOT="+ppParam.LIBVIRT_SE_BOOT, "PODVM_IMAGE_URI="+ppParam.LIBVIRT_PODVM_IMAGE_URI).OutputToFile(getRandomString() + "peerpods-param-cm.json")
 
 	if configFile != "" {
 		osStatMsg, configFileExists := os.Stat(configFile)
@@ -2034,7 +2045,7 @@ func getTestRunConfigmap(oc *exutil.CLI, testrun *TestRunDescription, testrunCon
 		if gjson.Get(configmapData, "trusteeCatalogSourcename").Exists() {
 			testrun.trusteeCatalogSourcename = gjson.Get(configmapData, "trusteeCatalogSourcename").String()
 		} else {
-			testrun.trusteeCatalogSourcename = "redhat-operator"
+			testrun.trusteeCatalogSourcename = "redhat-operators"
 			trusteeErrorMessage = fmt.Sprintf("workload is coco and trusteeCatalogSourcename is missing from data\n%v", trusteeErrorMessage)
 		}
 		if gjson.Get(configmapData, "trusteeUrl").Exists() {
@@ -2248,4 +2259,86 @@ func checkNodesForKataContainerRPM(oc *exutil.CLI, testrun *TestRunDescription, 
 	}
 	return rpmName, err
 
+}
+
+func verifyImageCreationJobSuccess(oc *exutil.CLI, namespace string, ppParam PeerpodParam, ciCmName string, provider string) (msg string, err error) {
+	var jobPodName string
+
+	err = wait.PollImmediate(10*time.Second, 15*time.Minute, func() (bool, error) {
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", namespace, "--field-selector=status.phase=Succeeded", "--selector=job-name=osc-podvm-image-creation", "-o=jsonpath={.items[0].metadata.name}").Output()
+		if err != nil || msg == "" {
+			e2e.Logf("Waiting for PodVM image creation job to complete")
+			return false, nil
+		}
+		jobPodName = msg
+		return true, nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("Image creation job did not succeed within the expected time")
+	}
+
+	logs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(jobPodName, "-n", namespace).Output()
+	if err != nil {
+		return "", fmt.Errorf("Error retrieving logs: %v", err)
+	}
+
+	configmapData, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", ciCmName, "-n", namespace, "-o=jsonpath={.data}").Output()
+	if err != nil {
+		e2e.Failf("%v Configmap created by QE CI has error: %v", ciCmName, err)
+	}
+
+	ppParam, err = parseCIPpConfigMapData(provider, configmapData)
+	if err != nil {
+		e2e.Failf("Error getting ppParam %v", err)
+	}
+
+	if ppParam.LIBVIRT_PODVM_IMAGE_URI != "" {
+		if !strings.Contains(logs, "Checksum of the PodVM image:") {
+			return "", fmt.Errorf("Pulling image from LIBVIRT_PODVM_IMAGE_URI failed")
+		}
+		e2e.Logf("PodVM image pull logs validated successfully")
+	}
+
+	if !strings.Contains(logs, "Uploaded the image successfully") || !strings.Contains(logs, "configmap/peer-pods-cm patched") {
+		logLines := strings.Split(logs, "\n")
+		start := len(logLines) - 30
+		if start < 0 {
+			start = 0
+		}
+		endLogs := logLines[start:]
+		trimmedLogs := strings.Join(endLogs, "\n")
+		e2e.Logf("Job logs do not contain success messages: %v", trimmedLogs)
+		return "", fmt.Errorf("Failed to get expected success message from the job logs")
+	}
+
+	configMapOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "peer-pods-cm", "-n", namespace, "-o=jsonpath={.data.LIBVIRT_IMAGE_ID}").Output()
+	if err != nil {
+		return "", fmt.Errorf("Failed to retrieve LIBVIRT_IMAGE_ID from ConfigMap: %v", err)
+	}
+
+	if !strings.Contains(logs, fmt.Sprintf("vol-upload: found option <vol>: %s", configMapOutput)) {
+		return "", fmt.Errorf("LIBVIRT_IMAGE_ID in ConfigMap does not match the logs")
+	}
+
+	return logs, nil
+}
+
+func checkSEEnabled(oc *exutil.CLI, podName, namespace string) error {
+	var errors []string
+	result, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", namespace, "--", "cat", "/sys/firmware/uv/prot_virt_guest").Output()
+	if err != nil || result != "1" {
+		errors = append(errors, fmt.Sprintf("prot_virt_guest is not 1, got %v", result))
+	}
+
+	result, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args(podName, "-n", namespace, "--", "grep", "facilities", "/proc/cpuinfo").Output()
+	if err != nil || !strings.Contains(result, "158") {
+		errors = append(errors, fmt.Sprintf("'facilities' in /proc/cpuinfo does not contain 158, got %v", result))
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("SE-enabled checks failed: %v", strings.Join(errors, "; "))
+	}
+
+	g.By("SE checks passed for pod " + podName)
+	return nil
 }

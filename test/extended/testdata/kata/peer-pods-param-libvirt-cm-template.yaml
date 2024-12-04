@@ -19,6 +19,9 @@ objects:
       BASE_OS_VERSION: "${BASE_OS_VERSION}"
       IMAGE_NAME: "${IMAGE_NAME}"
       PODVM_TAG: "${PODVM_TAG}"
+      SE_BOOT: "${SE_BOOT}"
+      PODVM_IMAGE_URI: "${PODVM_IMAGE_URI}"
+
       
 
 
@@ -48,4 +51,8 @@ parameters:
     value: "podvm-rhel"
   - name: PODVM_TAG
     value: "v1.0"
-  
+  - name: SE_BOOT
+    value: ""
+  - name: PODVM_IMAGE_URI
+    value: ""
+
