@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -129,11 +130,11 @@ func exactNodeDetails(oc *exutil.CLI) (int, string) {
 		e2e.Logf("Found remote worker nodes and details are:\n%v", remoteWorker)
 	}
 	outpostWorker, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=topology.ebs.csi.aws.com/outpost-id").Output()
-	if !strings.Contains(remoteWorker, "No resources found") {
+	if !strings.Contains(outpostWorker, "No resources found") {
 		e2e.Logf("Found outpost worker nodes and details are:\n%v", outpostWorker)
 	}
 	localZoneWorker, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--selector=node-role.kubernetes.io/edge").Output()
-	if !strings.Contains(remoteWorker, "No resources found") {
+	if !strings.Contains(localZoneWorker, "No resources found") {
 		e2e.Logf("Found local zone worker nodes and details are:\n%v", localZoneWorker)
 	}
 	return nodeCount, linuxWorkerDetails
@@ -226,6 +227,17 @@ func waitForCustomIngressControllerAvailable(oc *exutil.CLI, icname string) erro
 		}
 		return true, nil
 	})
+}
+
+func ensureCustomIngressControllerAvailable(oc *exutil.CLI, icName string) {
+	ns := "openshift-ingress-operator"
+	err := waitForCustomIngressControllerAvailable(oc, icName)
+	// print custom ingresscontroller description for debugging purpose if err
+	if err != nil {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("-n", ns, "ingresscontroller", icName).Output()
+		e2e.Logf("The description of ingresscontroller %v is:\n%v", icName, output)
+	}
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("max time reached but ingresscontroller %v is not available", icName))
 }
 
 func getOnePodNameByLabel(oc *exutil.CLI, ns, label string) string {
@@ -1948,9 +1960,9 @@ func isByoVpcCluster(oc *exutil.CLI) bool {
 	return false
 }
 
-// get all private subnets from machinesets
+// get list of all private subnets from machinesets, it might contains dup subnets or name without "private"
 // this function will not work on Hypershift cluster
-func getPrivateSubnetList(oc *exutil.CLI) []string {
+func getRawPrivateSubnetList(oc *exutil.CLI) []string {
 	var jsonPath string
 	if isByoVpcCluster(oc) {
 		jsonPath = `{.items[*].spec.template.spec.providerSpec.value.subnet.id}`
@@ -1959,19 +1971,29 @@ func getPrivateSubnetList(oc *exutil.CLI) []string {
 	}
 	privateSubnets := getByJsonPath(oc, "openshift-machine-api", "machinesets.machine.openshift.io", jsonPath)
 	privateSubnetList := strings.Split(privateSubnets, " ")
-	e2e.Logf("The private subnet list from machinesets is: %v", privateSubnetList)
+	e2e.Logf("The raw private subnet list from machinesets is: %v", privateSubnetList)
 	return privateSubnetList
 }
 
 // convert private subnet list to public subnet list
+// this func is used by AWS subnets/EIPs feature, ignore uncommon and duplicated subnets
 func getPublicSubnetList(oc *exutil.CLI) []string {
 	var publicSubnetList []string
-	for _, subnet := range getPrivateSubnetList(oc) {
-		if strings.Contains(subnet, "subnet-private") {
-			subnet := strings.Replace(subnet, "subnet-private", "subnet-public", -1)
+	for _, subnet := range getRawPrivateSubnetList(oc) {
+		if !strings.Contains(subnet, "subnet-private") {
+			e2e.Logf("Warning: found subnet without private keyword: %v, ignore it", subnet)
+			continue
+		}
+		// example subnet: ci-op-iip84q8t-3ca97-8fqzp-subnet-private-us-east-1a
+		if matched, _ := regexp.MatchString(".*-private-([a-z]+)-([a-z]+)-([0-9a-z]+)$", subnet); !matched {
+			e2e.Logf("Warning: found uncommon subnet: %v, ignore it", subnet)
+			continue
+		}
+		subnet := strings.Replace(subnet, "subnet-private", "subnet-public", -1)
+		if !slices.Contains(publicSubnetList, subnet) {
 			publicSubnetList = append(publicSubnetList, fmt.Sprintf(`"%s"`, subnet))
 		} else {
-			e2e.Logf("Warning: get one non-private subnets: %v", subnet)
+			e2e.Logf("Warning: found duplicated subnet: %v, ignore it", subnet)
 		}
 	}
 	e2e.Logf("The public subnet list generated from private is: %v", publicSubnetList)

@@ -262,15 +262,14 @@ func clearUpAlbOnStsCluster(oc *exutil.CLI) {
 }
 
 // Create as many as Elatic IPs as number of subnets that are attached to the load balancer
-func allocateElaticIP(oc *exutil.CLI) []string {
+func allocateElaticIP(oc *exutil.CLI, num int) []string {
 	var eipAllocationsList []string
-	// get the aws region and subnet length
-	subnetLen := len(getPrivateSubnetList(oc))
+	// get the aws region
 	clusterinfra.GetAwsCredentialFromCluster(oc)
 	mySession := session.Must(session.NewSession())
 	// Create an EC2 service client.
 	svc := ec2.New(mySession)
-	for i := 0; i < subnetLen; i++ {
+	for i := 0; i < num; i++ {
 		// Attempt to allocate the Elastic IP address.
 		allocRes, err := svc.AllocateAddress(&ec2.AllocateAddressInput{Domain: aws.String("vpc")})
 		o.Expect(err).NotTo(o.HaveOccurred())
