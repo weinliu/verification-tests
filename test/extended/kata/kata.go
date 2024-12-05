@@ -57,6 +57,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		podAnnotatedTemplate             = filepath.Join(testDataDir, "pod-annotations-template.yaml")
 		featureGatesFile                 = filepath.Join(testDataDir, "cc-feature-gates-cm.yaml")
 		kbsClientTemplate                = filepath.Join(testDataDir, "kbs-client-template.yaml")
+		trusteeCosignedPodFile           = filepath.Join(testDataDir, "trustee-cosigned-pod.yaml")
 		testrunConfigmapNs               = "default"
 		testrunConfigmapName             = "osc-config"
 		scratchRpmName                   string
@@ -1733,7 +1734,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		_, _ = checkResourceJsonpath(oc, "csv", csvNameAfter, subscription.namespace, "-o=jsonpath={.status.phase}", "Succeeded", 300*time.Second, 10*time.Second)
 	})
 
-	g.It("Author:vvoronko-High-00210-run [peerpodGPU] cuda-vectoradd", func() {
+	g.It("Author:vvoronko-High-C00210-run [peerpodGPU] cuda-vectoradd", func() {
 
 		oc.SetupProject()
 
@@ -1821,6 +1822,45 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("Checking if pod is SE-enabled")
 		err = checkSEEnabled(oc, newPodName, podNs)
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
+	})
+
+	g.It("Author:tbuskey-High-C00316-run and verify cosigned pod", func() {
+
+		if testrun.workloadToTest != "coco" {
+			g.Skip("Run and verify cosigned pod is only for workloadToTest = 'coco'")
+		}
+		oc.SetupProject()
+
+		var (
+			podName            = "ocp-cc-pod"
+			testNamespace      = oc.Namespace()
+			podLastEventReason string
+			loopCount          int
+			loopMax            = 240
+			countIncrement     = 15
+			sleepTime          = time.Duration(countIncrement) * time.Second
+			outputFromOc       string
+		)
+
+		defer deleteResource(oc, "pod", podName, testNamespace, 90*time.Second, 10*time.Second)
+
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", trusteeCosignedPodFile, "-n", testNamespace).Output()
+		if err != nil {
+			e2e.Logf("Error: applying cosigned pod file %v failed: %v %v", trusteeCosignedPodFile, msg, err)
+		}
+
+		for !strings.Contains(podLastEventReason, "Started") && loopCount < loopMax {
+			loopCount = loopCount + countIncrement
+			outputFromOc, err = oc.AsAdmin().WithoutNamespace().Run("events").Args("-o=jsonpath={.items..reason}", "-n", testNamespace).Output()
+			splitString := strings.Split(outputFromOc, " ")
+			podLastEventReason = splitString[len(splitString)-1]
+			e2e.Logf("%v pod event reason: %v", podName, podLastEventReason)
+			if strings.Contains(outputFromOc, "Failed") || loopCount >= loopMax {
+				err = fmt.Errorf("pod %v failed err: %v timeout: %v of %v\n\n", podName, err, loopCount, loopMax)
+			}
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: %v", err))
+			time.Sleep(sleepTime)
+		}
 	})
 
 })
