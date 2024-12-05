@@ -107,6 +107,15 @@ type testMultusPod struct {
 	template   string
 }
 
+type multinetworkipBlockCIDRsDual struct {
+	name      string
+	namespace string
+	cidrIpv4  string
+	cidrIpv6  string
+	policyfor string
+	template  string
+}
+
 func (nad *multihomingNAD) createMultihomingNAD(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", nad.template, "-p", "NAMESPACE="+nad.namespace, "NADNAME="+nad.nadname, "SUBNETS="+nad.subnets, "NSWITHNADNAME="+nad.nswithnadname, "EXCLUDESUBNETS="+nad.excludeSubnets, "TOPOLOGY="+nad.topology)
@@ -419,4 +428,16 @@ func (pod *testMultusPod) createTestMultusPod(oc *exutil.CLI) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create pod %v", pod.name))
+}
+
+func (multinetworkipBlock_policy *multinetworkipBlockCIDRsDual) createMultinetworkipBlockCIDRDual(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", multinetworkipBlock_policy.template, "-p", "NAME="+multinetworkipBlock_policy.name, "NAMESPACE="+multinetworkipBlock_policy.namespace, "CIDRIPV6="+multinetworkipBlock_policy.cidrIpv6, "CIDRIPV4="+multinetworkipBlock_policy.cidrIpv4, "POLICYFOR="+multinetworkipBlock_policy.policyfor)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create network policy %v", multinetworkipBlock_policy.name))
 }
