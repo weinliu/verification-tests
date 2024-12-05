@@ -1,6 +1,23 @@
 import { helperfuncs } from 'views/utils';
 import { listPage } from "../upstream/views/list-page";
 import { Pages } from "./pages";
+
+const sourceActions = (name: string, action: string) => {
+  cy.get('form[data-test-group-name="source"]', {timeout: 60000})
+  .then($source => {
+    const hasMoreButton = $source.find('button:contains("more")').length > 0;
+    if (hasMoreButton) {
+      cy.wrap($source).find('button').contains('more').click();
+    }
+    if (action === 'check') {
+      cy.wrap($source).find(`[data-test="source-${name}"] input[type="checkbox"]`).check()
+    } else if (action === 'uncheck') {
+      cy.wrap($source).find(`[data-test="source-${name}"] input[type="checkbox"]`).uncheck()
+    } else {
+      cy.wrap($source).find(`[data-test="source-${name}"]`);
+    }
+  })
+};
 export const installedOperators = {
   clickCSVName: (csv_name) => {
     cy.get(`a[data-test-operator-row*="${csv_name}"]`).click();
@@ -12,18 +29,13 @@ export const operatorHubPage = {
     return cy.get('.pf-v5-c-badge')
   },
   checkCustomCatalog: (name: string) => {
-    cy.get('form[data-test-group-name="source"]')
-      .find(`[data-test="source-${name}"]`)
+    sourceActions(name, 'view');
   },
   checkSourceCheckBox: (name: string) => {
-    cy.get('form[data-test-group-name="source"]', {timeout: 60000})
-      .find(`[data-test="source-${name}"]`)
-      .find('[type="checkbox"]').check()
+    sourceActions(name, 'check');
   },
   uncheckSourceCheckBox: (name: string) => {
-    cy.get('form[data-test-group-name="source"]', {timeout: 60000})
-      .find(`[data-test="source-${name}"]`)
-      .find('[type="checkbox"]').uncheck()
+    sourceActions(name, 'uncheck');
   },
   checkInstallStateCheckBox: (state: string) => {
     cy.get('form[data-test-group-name="installState"]')

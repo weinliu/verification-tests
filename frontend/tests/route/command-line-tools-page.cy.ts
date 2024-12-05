@@ -17,7 +17,7 @@ describe('command line tools page', () => {
     cy.adminCLI('oc patch ingress.config cluster --type json -p \'[{"op": "remove", "path": "/spec/componentRoutes"}]\'');
   })
 
-  it('(OCP-64621,yanpzhan,UserInterface)cutomized "downloads" route should be updated and honored in CLI download links',{tags:['@userinterface','@e2e','admin','@rosa','@osd-ccs']}, () => {
+  it('(OCP-64621,yanpzhan,UserInterface)cutomized "downloads" route should be updated and honored in CLI download links',{tags:['@userinterface','@e2e','admin']}, () => {
     cy.adminCLI(`oc patch ingress.config cluster --type merge -p '{"spec":{"componentRoutes":[{"name":"downloads","namespace":"openshift-console","hostname":"${params.customerDomain1}","servingCertKeyPairSecret":{"name":"${params.servingCertKeyPairSecret}"}}]}}'`)
     commandLineToolsPage.goTo();
     commandLineToolsPage.checkDownloadUrl(params.customerDomain1)
