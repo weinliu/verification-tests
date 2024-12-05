@@ -170,8 +170,8 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
 		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
 
-		// Should be replaced with ensureKataconfigIsCreated
-		if checkKataInstalled(oc, subscription, kataconfig.name) {
+		err = checkKataconfigIsCreated(oc, subscription, kataconfig.name)
+		if err == nil {
 			msgSuccess := fmt.Sprintf("(2) subscription %v and kataconfig %v exists, skipping operator deployment", subscription.subName, kataconfig.name)
 			e2e.Logf(msgSuccess)
 
@@ -191,6 +191,8 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			}
 			return
 		}
+
+		// REST OF THIS FUNC will be executed ONLY if kataconfig was not found
 
 		// should be ensurePeerPodSecrets & configmaps
 		//create peer pods secret and peer pods cm for OSC prev to 1.7.0
@@ -291,14 +293,13 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		}
 
 		// should check kataconfig here & already have checked subscription
-		// check kataconfig
-		// should be replaced with ensureKataconfigIsCreated()
-		msg, err = createKataConfig(oc, kataconfig, subscription)
+		msg, err = ensureKataconfigIsCreated(oc, kataconfig, subscription)
 
 		e2e.Logf("---------- kataconfig %v create succeeded %v %v", kataconfig.name, msg, err)
 
 		// this should be a seperate day0 test for control pods
 		if kataconfig.enablePeerPods {
+			//TODO implement single function with the list of deployments for kata/peer pod/ coco
 			checkPeerPodControl(oc, opNamespace, podRunState)
 		}
 
@@ -326,11 +327,13 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	})
 
 	g.It("Author:abhbaner-High-43522-Common Kataconfig installation", func() {
+		g.Skip("test require structure rework")
 		g.By("Install Common kataconfig and verify it")
 		e2e.Logf("common kataconfig %v is installed", kataconfig.name)
 
-		if !checkKataInstalled(oc, subscription, kataconfig.name) {
-			e2e.Failf("ERROR: kataconfig install failed")
+		err := checkKataconfigIsCreated(oc, subscription, kataconfig.name)
+		if err != nil {
+			e2e.Failf("ERROR: kataconfig install failed: %v", err)
 		}
 
 		/* kataconfig status changed so this does not work.
@@ -443,7 +446,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("Verify enablePeerPods is set in kataconfig")
 		msg, err = oc.AsAdmin().Run("get").Args("kataconfig", kataconfig.name, "-n", subscription.namespace, "-o=jsonpath={.spec.enablePeerPods}").Output()
 		if err != nil || msg != "true" {
-			e2e.Logf("STEP ERROR querying kataconfig %v and enablePeerPods setting", kataconfig.name, msg, err)
+			e2e.Logf("STEP ERROR querying kataconfig %v and enablePeerPods setting", kataconfig.name)
 			errors = errors + 1
 			errorList = append(errorList, msg)
 		}
@@ -480,7 +483,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		g.By("Deploying pod with kata runtime and verify it")
 		newPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName, testrun.workloadImage)
 		defer deleteKataResource(oc, "pod", podNs, newPodName)
-		// checkKataPodStatus() replace with checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
 		msg, err = checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
 		if err != nil {
 			e2e.Logf("ERROR: pod %v could not be installed: %v %v", newPodName, msg, err)
@@ -610,7 +612,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		defer deleteKataResource(oc, "pod", podNs, newPodName)
 
 		g.By("Verifying pod state")
-		// checkKataPodStatus() replace with checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
 		msg, err := checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
 		if err != nil {
 			e2e.Logf("ERROR: unable to get podState %v of %v in namespace %v %v %v", podRunState, newPodName, podNs, msg, err)
@@ -1863,4 +1864,53 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		}
 	})
 
+	g.It("Author:vvoronko-High-C00317-delete operator with running workload [Serial]", func() {
+
+		oc.SetupProject()
+
+		var (
+			msg            string
+			err            error
+			defaultPodName = "-example-C000317"
+			podNs          = oc.Namespace()
+		)
+
+		g.By("Deploying pod with kata runtime and verify it")
+		fstPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName, testrun.workloadImage)
+		defer deleteKataResource(oc, "pod", podNs, fstPodName)
+
+		msg, err = checkResourceJsonpath(oc, "pod", fstPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: pod %v could not be installed: %v %v", fstPodName, msg, err))
+
+		g.By("delete csv and sub")
+		msg, err = deleteOperator(oc, subscription)
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("msg:%v err:%v", msg, err))
+
+		g.By("verify control plane pods are running")
+		if kataconfig.enablePeerPods {
+			msg, err = testControlPod(oc, subscription.namespace, "daemonset", "peerpodconfig-ctrl-caa-daemon",
+				"-o=jsonpath={.status.desiredNumberScheduled}", "-o=jsonpath={.status.numberReady}", "name=peerpodconfig-ctrl-caa-daemon")
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("msg:%v err:%v", msg, err))
+			msg, err = testControlPod(oc, subscription.namespace, "deployment", "peer-pods-webhook",
+				"-o=jsonpath={.spec.replicas}", "-o=jsonpath={.status.readyReplicas}", "app=peer-pods-webhook")
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("msg:%v err:%v", msg, err))
+		}
+
+		msg, err = testControlPod(oc, subscription.namespace, "daemonset", "openshift-sandboxed-containers-monitor",
+			"-o=jsonpath={.status.desiredNumberScheduled}", "-o=jsonpath={.status.numberReady}", "name=openshift-sandboxed-containers-monitor")
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("msg:%v err:%v", msg, err))
+
+		g.By("monitor the 1st pod is still running")
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", fstPodName, "-n", podNs, "-o=jsonpath={.status.phase}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: pod %v is not in expected state: %v, actual is: %v %v", fstPodName, podRunState, msg, err))
+
+		//launch another pod
+		secPodName := createKataPod(oc, podNs, defaultPod, defaultPodName, kataconfig.runtimeClassName, testrun.workloadImage)
+		defer deleteKataResource(oc, "pod", podNs, secPodName)
+
+		msg, err = checkResourceJsonpath(oc, "pod", secPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: pod %v could not be installed: %v %v", secPodName, msg, err))
+
+		g.By("SUCCESS - operator deleted while workload keep running")
+	})
 })

@@ -109,6 +109,7 @@ var (
 	snooze                time.Duration = 2400
 	kataSnooze            time.Duration = 7200 // Installing/deleting kataconfig reboots nodes.  AWS BM takes 20 minutes/node
 	podSnooze             time.Duration = 600  // Peer Pods take longer than 2 minutes
+	resSnoose             time.Duration = 300  // to delete csv or sub 5min should be enough
 	podRunState                         = "Running"
 	featureLabel                        = "feature.node.kubernetes.io/runtime.kata=true"
 	workerLabel                         = "node-role.kubernetes.io/worker"
@@ -288,7 +289,7 @@ func ensureTrusteeIsInstalled(oc *exutil.CLI, subscription SubscriptionDescripti
 	return trusteeRouteHost, err
 }
 
-func createKataConfig(oc *exutil.CLI, kataconf KataconfigDescription, sub SubscriptionDescription) (msg string, err error) {
+func ensureKataconfigIsCreated(oc *exutil.CLI, kataconf KataconfigDescription, sub SubscriptionDescription) (msg string, err error) {
 	// If this is used, label the caller with [Disruptive][Serial][Slow]
 	// If kataconfig already exists, this must not error
 	var (
@@ -436,32 +437,29 @@ func deleteKataConfig(oc *exutil.CLI, kcName string) (msg string, err error) {
 	return msg, err
 }
 
-func checkKataInstalled(oc *exutil.CLI, sub SubscriptionDescription, kcName string) bool {
-	msg := ""
-	// check sub
+// this function doesn't care to create kataconfig if it doesn't exist
+func checkKataconfigIsCreated(oc *exutil.CLI, sub SubscriptionDescription, kcName string) (err error) {
 	jsonSubStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status}").Output()
 	if err != nil || gjson.Get(jsonSubStatus, "state").String() != "AtLatestKnown" {
-		e2e.Logf("issue with subscription or state isn't expected: %v, actual: %v error: %v", "AtLatestKnown", jsonSubStatus, err)
-	} else {
-		if !strings.Contains(gjson.Get(jsonSubStatus, "installedCSV").String(), sub.subName) {
-			e2e.Logf("Error: get installedCSV for subscription %v %v", jsonSubStatus, err)
-		} else { // check csv
-			csvName := gjson.Get(jsonSubStatus, "installedCSV").String()
-			jsonCsvStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", sub.namespace, "-o=jsonpath={.status}").Output()
-			if err != nil ||
-				gjson.Get(jsonCsvStatus, "phase").String() != "Succeeded" ||
-				gjson.Get(jsonCsvStatus, "reason").String() != "InstallSucceeded" {
-				e2e.Logf("Error: CSV in wrong state, expected: %v actual:\n%v %v", "InstallSucceeded", jsonCsvStatus, err)
-			} else { // check kataconfig
-				msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-n", sub.namespace, kataconfigStatusQuery).Output()
-				if err == nil && strings.ToLower(msg) == "false" {
-					return true
-				}
-				e2e.Logf("Error: Kataconfig in wrong state, expected: false actual: %v error: %v", msg, err)
-			}
-		}
+		return fmt.Errorf("issue with subscription or state isn't expected: %v, actual: %v error: %v", "AtLatestKnown", jsonSubStatus, err)
 	}
-	return false
+	if !strings.Contains(gjson.Get(jsonSubStatus, "installedCSV").String(), sub.subName) {
+		return fmt.Errorf("Error: get installedCSV for subscription %v %v", jsonSubStatus, err)
+	}
+
+	csvName := gjson.Get(jsonSubStatus, "installedCSV").String()
+	jsonCsvStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", sub.namespace, "-o=jsonpath={.status}").Output()
+	if err != nil ||
+		gjson.Get(jsonCsvStatus, "phase").String() != "Succeeded" ||
+		gjson.Get(jsonCsvStatus, "reason").String() != "InstallSucceeded" {
+		return fmt.Errorf("Error: CSV %v in wrong state, expected: %v actual:\n%v %v", csvName, "InstallSucceeded", jsonCsvStatus, err)
+	}
+	// check kataconfig
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kataconfig", kcName, "-n", sub.namespace, kataconfigStatusQuery).Output()
+	if err == nil && strings.ToLower(msg) == "false" {
+		return nil
+	}
+	return fmt.Errorf("Error: Kataconfig in wrong state, expected: false actual: %v error: %v", msg, err)
 }
 
 func subscriptionIsFinished(oc *exutil.CLI, sub SubscriptionDescription) (msg string, err error) {
@@ -861,6 +859,7 @@ func checkPeerPodConfigMap(oc *exutil.CLI, opNamespace, provider, ppConfigMapNam
 
 func checkPeerPodControl(oc *exutil.CLI, opNamespace, expStatus string) (msg string, err error) {
 	// This would check peer pod webhook pod , peerpodconfig-ctrl-caa pods , webhook service and endpoints attached to the svc
+	//TODO: should add podvm image builder pod completed?
 	var (
 		peerpodconfigCtrlCaaPods []string
 		webhookPods              []string
@@ -1822,7 +1821,7 @@ func checkResourceJsonpathMatch(oc *exutil.CLI, resType, resName, resNs, jsonPat
 		e2e.Failf("ERROR: could not get %v from %v %v: %v %v", jsonPath2, resType, resName, msg, err)
 	}
 	if expectedMatch != msg {
-		e2e.Failf("ERROR: %v (%) does not match %v (%v)", jsonPath1, expectedMatch, jsonPath2, msg)
+		e2e.Failf("ERROR: %v (%v) does not match %v (%v)", jsonPath1, expectedMatch, jsonPath2, msg)
 	}
 	err = nil
 	msg = fmt.Sprintf("%v (%v) == %v (%v)", jsonPath1, expectedMatch, jsonPath2, msg)
@@ -2341,4 +2340,39 @@ func checkSEEnabled(oc *exutil.CLI, podName, namespace string) error {
 
 	g.By("SE checks passed for pod " + podName)
 	return nil
+}
+
+func deleteOperator(oc *exutil.CLI, sub SubscriptionDescription) (msg string, err error) {
+	//get csv from sub
+	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installedCSV}").Output()
+
+	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: cannot get sub %v installedCSV %v %v", sub.subName, csvName, err))
+	o.Expect(csvName).NotTo(o.BeEmpty(), fmt.Sprintf("installedCSV value is empty: %v", csvName))
+
+	//delete csv
+	msg, err = deleteResource(oc, "csv", csvName, sub.namespace, resSnoose*time.Second, 10*time.Second)
+	if err == nil {
+		//delete sub
+		msg, err = deleteResource(oc, "sub", sub.subName, sub.namespace, resSnoose*time.Second, 10*time.Second)
+	}
+	return msg, err
+}
+
+func testControlPod(oc *exutil.CLI, namespace, resType, resName, desiredCountJsonPath, actualCountJsonPath, podLabel string) (msg string, err error) {
+	// Check the resource Type for desired count by looking at the jsonpath
+	// Check the actual count at this jsonpath
+	// Wait until the actual count == desired count then set expectedPods to the actual count
+	// Verify count of "Running" pods with podLabel matches expectedPods
+	expectedPods, msg, err := checkResourceJsonpathMatch(oc, resType, resName, namespace, desiredCountJsonPath, actualCountJsonPath)
+	if err == nil {
+		if msg == "" {
+			return "", fmt.Errorf("%v does not match %v in %v %v %v %v", desiredCountJsonPath, actualCountJsonPath, resName, resType, msg, err)
+		}
+
+		msg, err = checkLabeledPodsExpectedRunning(oc, namespace, podLabel, expectedPods)
+		if msg == "" {
+			return "", fmt.Errorf("Could not find pods labeled %v %v %v", podLabel, msg, err)
+		}
+	}
+	return msg, err
 }
