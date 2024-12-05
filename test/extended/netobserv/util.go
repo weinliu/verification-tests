@@ -138,7 +138,7 @@ func patchResourceAsAdmin(oc *exutil.CLI, ns, resource, rsname, patch string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func (r Resource) waitForResourceToAppear(oc *exutil.CLI) {
+func (r Resource) waitForResourceToAppear(oc *exutil.CLI) error {
 	err := wait.PollUntilContextTimeout(context.Background(), 3*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", r.Namespace, r.Kind, r.Name).Output()
 		if err != nil {
@@ -151,7 +151,7 @@ func (r Resource) waitForResourceToAppear(oc *exutil.CLI) {
 		e2e.Logf("Find %s %s", r.Kind, r.Name)
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %s/%s is not appear", r.Kind, r.Name))
+	return err
 }
 
 // WaitUntilResourceIsGone waits for the resource to be removed cluster

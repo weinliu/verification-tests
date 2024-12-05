@@ -96,8 +96,6 @@ func (l lokiStack) deployLokiStack(oc *exutil.CLI) error {
 	file, err := processTemplate(oc, parameters...)
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Can not process %v", parameters))
 	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", l.Namespace).Execute()
-	ls := Resource{"lokistack", l.Name, l.Namespace}
-	ls.waitForResourceToAppear(oc)
 	return err
 }
 

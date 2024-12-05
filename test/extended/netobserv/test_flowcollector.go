@@ -165,6 +165,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			g.Skip("Skipping test since LokiStack was not deployed")
 		}
 
+		lokiStackResource := Resource{"lokistack", ls.Name, ls.Namespace}
+		err = lokiStackResource.waitForResourceToAppear(oc)
+		if err != nil {
+			g.Skip("Skipping test since LokiStack did not become ready")
+		}
+
 		err = ls.waitForLokiStackToBeReady(oc)
 		if err != nil {
 			g.Skip("Skipping test since LokiStack is not ready")
