@@ -108,7 +108,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator Intra-
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("Author:xiyuan-NonHyperShiftHOST-CPaasrunOnly-NonPreRelease-High-45014-High-45956-precheck and postcheck for compliance operator resources count and MachineConfigPool status[Slow][Serial]", func() {
+	g.It("Author:xiyuan-NonHyperShiftHOST-ConnectedOnly-CPaasrunOnly-NonPreRelease-High-45014-High-45956-precheck and postcheck for compliance operator resources count and MachineConfigPool status[Slow][Serial]", func() {
 		defer uninstallComplianceOperator(oc, subD.namespace)
 
 		g.By("Get installed version and check whether upgradable !!!\n")
@@ -175,7 +175,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator Intra-
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("Author:xiyuan-NonHyperShiftHOST-CPaasrunOnly-NonPreRelease-High-37721-High-56351-precheck and postchck for compliance operator upgrade [Slow][Serial]", func() {
+	g.It("Author:xiyuan-NonHyperShiftHOST-ConnectedOnly-CPaasrunOnly-NonPreRelease-High-37721-High-56351-precheck and postchck for compliance operator upgrade [Slow][Serial]", func() {
 		defer uninstallComplianceOperator(oc, subD.namespace)
 
 		g.By("Get installed version and check whether upgradable !!!\n")
