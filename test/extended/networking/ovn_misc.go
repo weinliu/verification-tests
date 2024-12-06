@@ -1239,7 +1239,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		//vars to patch cluster back to original state
 		patchIPv4original := "{\"spec\":{\"defaultNetwork\":{\"ovnKubernetesConfig\":{\"ipv4\":{\"internalJoinSubnet\": \"" + currentinternalJoinSubnetIPv4Value + "\",\"internalTransitSwitchSubnet\": \"" + currentinternalTransitSwSubnetIPv4Value + "\"}}}}}"
 		patchIPv6original := "{\"spec\":{\"defaultNetwork\":{\"ovnKubernetesConfig\":{\"ipv6\":{\"internalJoinSubnet\": \"" + currentinternalJoinSubnetIPv6Value + "\",\"internalTransitSwitchSubnet\": \"" + currentinternalTransitSwSubnetIPv6Value + "\"}}}}}"
-		patchDualstackoriginal := "{\"spec\":{\"defaultNetwork\":{\"ovnKubernetesConfig\":{\"ipv4\":{\"internalJoinSubnet\": \"" + currentinternalJoinSubnetIPv4Value + "\",\"internalTransitSwitchSubnet\": \"" + currentinternalJoinSubnetIPv4Value + "\"},\"ipv6\": {\"internalJoinSubnet\": \"" + currentinternalJoinSubnetIPv6Value + "\",\"internalTransitSwitchSubnet\": \"" + currentinternalTransitSwSubnetIPv6Value + "\"}}}}}"
+		patchDualstackoriginal := "{\"spec\":{\"defaultNetwork\":{\"ovnKubernetesConfig\":{\"ipv4\":{\"internalJoinSubnet\": \"" + currentinternalJoinSubnetIPv4Value + "\",\"internalTransitSwitchSubnet\": \"" + currentinternalTransitSwSubnetIPv4Value + "\"},\"ipv6\": {\"internalJoinSubnet\": \"" + currentinternalJoinSubnetIPv6Value + "\",\"internalTransitSwitchSubnet\": \"" + currentinternalTransitSwSubnetIPv6Value + "\"}}}}}"
 
 		if ipStackType == "ipv4single" {
 			defer func() {
