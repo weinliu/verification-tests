@@ -3628,4 +3628,62 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		bk3 := readHaproxyConfig(oc, routerpod, backend, "-A27", "pod:"+srvPod3Name)
 		o.Expect(len(bk3Re.FindStringSubmatch(bk3)[0]) > 1).To(o.BeTrue())
 	})
+
+	// Test case creater: shudili@redhat.com
+	g.It("Author:mjoseph-ROSA-OSD_CCS-ARO-High-77862-Check whether required ENV varibales are configured after enabling Dynamic Configuration Manager", func() {
+		// skip the test if featureSet is not there
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test, skipping")
+		}
+
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+		srvrcInfo := "web-server-rc"
+		srvName := "service-unsecure"
+		var (
+			ingctrl = ingressControllerDescription{
+				name:      "ocp77862",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		exutil.By("1. Create a custom ingresscontroller, and get its router name")
+		baseDomain := getBaseDomain(oc)
+		project1 := oc.Namespace()
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
+		podname := getNewRouterPod(oc, ingctrl.name)
+		defaultPodname := getNewRouterPod(oc, "default")
+
+		exutil.By("2. Create an unsecure service and its backend pod")
+		createResourceFromFile(oc, project1, testPodSvc)
+		ensurePodWithLabelReady(oc, project1, "name="+srvrcInfo)
+
+		exutil.By("3. Expose a route with the unsecure service inside the project")
+		createRoute(oc, project1, "http", srvName, srvName, []string{})
+		waitForOutput(oc, project1, "route", "{.items[0].metadata.name}", srvName)
+
+		exutil.By("4. Check the env variable of the default router pod")
+		checkenv := readRouterPodEnv(oc, defaultPodname, "ROUTER")
+		o.Expect(checkenv).To(o.ContainSubstring(`ROUTER_BLUEPRINT_ROUTE_POOL_SIZE=0`))
+		o.Expect(checkenv).To(o.ContainSubstring(`ROUTER_MAX_DYNAMIC_SERVERS=1`))
+		o.Expect(checkenv).To(o.ContainSubstring(`ROUTER_HAPROXY_CONFIG_MANAGER=true`))
+
+		exutil.By("5. Check the env variable of the custom router pod")
+		checkenv2 := readRouterPodEnv(oc, podname, "ROUTER")
+		o.Expect(checkenv2).To(o.ContainSubstring(`ROUTER_BLUEPRINT_ROUTE_POOL_SIZE=0`))
+		o.Expect(checkenv2).To(o.ContainSubstring(`ROUTER_MAX_DYNAMIC_SERVERS=1`))
+		o.Expect(checkenv2).To(o.ContainSubstring(`ROUTER_HAPROXY_CONFIG_MANAGER=true`))
+
+		exutil.By("6. Check the haproxy config on the router pod for dynamic pod config")
+		insecBackend := "be_http:" + project1 + ":service-unsecure"
+		dynamicPod := readHaproxyConfig(oc, podname, insecBackend, "-A20", "dynamic-pod")
+		o.Expect(dynamicPod).To(o.ContainSubstring(`server-template _dynamic-pod- 1-1 172.4.0.4:8765 check disabled`))
+		o.Expect(dynamicPod).To(o.ContainSubstring(`dynamic-cookie-key`))
+	})
 })
