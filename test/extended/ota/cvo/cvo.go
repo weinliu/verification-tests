@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -178,16 +179,28 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 			}()
 		}
 
-		// Important! this two should be updated each version with new capabilities, as they added to openshift.
 		exutil.By("Set invalid baselineCapabilitySet")
 		cmdOut, err := changeCap(oc, true, "Invalid")
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"None\", \"v4.11\", \"v4.12\", \"v4.13\", \"v4.14\", \"v4.15\", \"v4.16\", \"vCurrent\""))
+		clusterVersion, _, err := exutil.GetClusterVersion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		version := strings.Split(clusterVersion, ".")
+		minor_version := version[1]
+		latest_version, err := strconv.Atoi(minor_version)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		var versions []string
+		for i := 11; i <= latest_version; i++ {
+			versions = append(versions, "\"v4."+strconv.Itoa(i)+"\"")
+		}
+		versions = append(versions, "\"vCurrent\"")
+		result := "Unsupported value: \"Invalid\": supported values: \"None\", " + strings.Join(versions, ", ")
+		o.Expect(cmdOut).To(o.ContainSubstring(result))
 
+		// Important! this one should be updated each version with new capabilities, as they added to openshift.
 		exutil.By("Set invalid additionalEnabledCapabilities")
 		cmdOut, err = changeCap(oc, false, []string{"Invalid"})
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"openshift-samples\", \"baremetal\", \"marketplace\", \"Console\", \"Insights\", \"Storage\", \"CSISnapshot\", \"NodeTuning\", \"MachineAPI\", \"Build\", \"DeploymentConfig\", \"ImageRegistry\", \"OperatorLifecycleManager\", \"CloudCredential\", \"Ingress\", \"CloudControllerManager\""))
+		o.Expect(cmdOut).To(o.ContainSubstring("Unsupported value: \"Invalid\": supported values: \"openshift-samples\", \"baremetal\", \"marketplace\", \"Console\", \"Insights\", \"Storage\", \"CSISnapshot\", \"NodeTuning\", \"MachineAPI\", \"Build\", \"DeploymentConfig\", \"ImageRegistry\", \"OperatorLifecycleManager\", \"CloudCredential\", \"Ingress\", \"CloudControllerManager\", \"OperatorLifecycleManagerV1\""))
 	})
 
 	//author: jianl@redhat.com
