@@ -75,9 +75,16 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 		// Skip if running on a non-AWS platform
 		exutil.SkipIfPlatformTypeNot(oc, "aws")
 
-		// Install Hive operator if non-existent
+		// The test data directory is the path to the Hive test files
 		testDataDir = exutil.FixturePath("testdata", "cluster_operator/hive")
-		_, _ = installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
+
+		// Check if MCE is enabled, if not, install Hive operator
+		if !isMCEEnabled(oc) {
+			// Install Hive operator if MCE is not enabled
+			_, _ = installHiveOperator(oc, &ns, &og, &sub, &hc, testDataDir)
+		} else {
+			e2e.Logf("MCE is enabled, skipping Hive operator installation.")
+		}
 
 		// Get OCP Image for Hive testing
 		testOCPImage = getTestOCPImage()
