@@ -1871,7 +1871,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		var (
 			msg            string
 			err            error
-			defaultPodName = "-example-C000317"
+			defaultPodName = "-example-00317"
 			podNs          = oc.Namespace()
 		)
 
