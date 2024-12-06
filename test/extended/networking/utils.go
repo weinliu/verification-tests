@@ -4159,10 +4159,13 @@ func getTcpdumpOnNodeCmdFromPod(oc *exutil.CLI, nodeName, tcpdumpCmd, namespace,
 
 	exutil.By("Curl external host:port from test pods")
 
+	var tcpdumpErr error = nil
 	checkErr := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 60*time.Second, false, func(cxt context.Context) (bool, error) {
 		_, curlErr := e2eoutput.RunHostCmd(namespace, podname, cmdOnPod)
-		tcpdumpErr := cmdTcpdump.Wait()
-		e2e.Logf("The captured tcpdump outout is: \n%s\n", cmdOutput.String())
+		if curlErr == nil {
+			tcpdumpErr = cmdTcpdump.Wait()
+			e2e.Logf("The captured tcpdump outout is: \n%s\n", cmdOutput.String())
+		}
 		if curlErr != nil || tcpdumpErr != nil {
 			e2e.Logf("Getting error at executing curl command: %v or at waiting for tcpdump: %v, try again ...", curlErr, tcpdumpErr)
 			return false, nil
