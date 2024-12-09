@@ -612,7 +612,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-without-scc.yaml")
 
-		indexImages := []string{"quay.io/olmqe/ditto-index:test-xzha-1", "quay.io/olmqe/etcd-index:v1"}
+		indexImages := []string{"quay.io/olmqe/ditto-index:test-xzha-1", "quay.io/olmqe/etcd-index:v1new"}
 		for i, indexImage := range indexImages {
 			cs := catalogSourceDescription{
 				name:        fmt.Sprintf("cs-59416-%d", i),
