@@ -404,7 +404,7 @@ func createWorkload(oc *exutil.CLI, namespace string, workloadFile string, repla
 	}
 
 	// Create the workload
-	_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", tempFileName, "-n", namespace).Output()
+	_, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", tempFileName, "-n", namespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to create "+workloadType+" workload")
 
 	// Wait for the workload to be ready if specified
@@ -943,7 +943,7 @@ func createWindowsAutoscaller(oc *exutil.CLI, machineSetName string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("machineautoscaler", machineAutoscaller, "-n", mcoNamespace, "--ignore-not-found").Execute()
 	defer os.Remove(machineAutoscaller)
-	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", machineAutoscaller, "-n", mcoNamespace).Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", machineAutoscaller, "-n", mcoNamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -1336,7 +1336,7 @@ func installWindowsCSIDriver(oc *exutil.CLI, iaasPlatform string) error {
 	if err != nil {
 		return err
 	}
-	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", tempFileName).Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", tempFileName).Output()
 	if err != nil {
 		return fmt.Errorf("creation of manifest %v failed. Error: %v", tempFileName, err.Error())
 	}
