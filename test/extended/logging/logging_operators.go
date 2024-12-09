@@ -11,6 +11,7 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -841,6 +842,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease rapidast scan"
 	)
 	g.BeforeEach(func() {
 		loggingBaseDir = exutil.FixturePath("testdata", "logging")
+		nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux,kubernetes.io/arch=amd64"})
+		if err != nil || len(nodes.Items) == 0 {
+			g.Skip("Skip for the cluster doesn't have amd64 node")
+		}
 	})
 	// author anli@redhat.com
 	g.It("Author:anli-CPaasrunOnly-Critical-75070-clo operator should pass DAST", func() {
@@ -855,8 +860,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease rapidast scan"
 		proj := oc.Namespace()
 		configFile := filepath.Join(loggingBaseDir, "rapidast/data_rapidastconfig_observability_v1.yaml")
 		policyFile := filepath.Join(loggingBaseDir, "rapidast/customscan.policy")
-		_, err := rapidastScan(oc, proj, configFile, policyFile, "observability.openshift.io_v1")
-		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err1 := rapidastScan(oc, proj, configFile, policyFile, "observability.openshift.io_v1")
+
+		configFile = filepath.Join(loggingBaseDir, "rapidast/data_rapidastconfig_logging_v1.yaml")
+		_, err2 := rapidastScan(oc, proj, configFile, policyFile, "logging.openshift.io_v1")
+
+		configFile = filepath.Join(loggingBaseDir, "rapidast/data_rapidastconfig_logging_v1alpha1.yaml")
+		_, err3 := rapidastScan(oc, proj, configFile, policyFile, "logging.openshift.io_v1alpha1")
+
+		if err1 != nil || err2 != nil || err3 != nil {
+			e2e.Failf("rapidast test failed, please check the result for more detail")
+		}
 	})
 	// author anli@redhat.com
 	g.It("Author:anli-CPaasrunOnly-Critical-67424-Loki Operator should pass DAST test", func() {

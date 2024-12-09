@@ -15,10 +15,11 @@ scanners:
     zap:
         apiScan:
             apis:
-                apiUrl: "https://kubernetes.default.svc/openapi/v3/apis/loki.grafana.com/v1"
-        results: "*stdout"   
+                apiUrl: "https://kubernetes.default.svc/openapi/v3/apis/logging.openshift.io/v1"
         passiveScan:
             disabledRules: "2,10015,10027,10096,10024,10054"
+        activeScan:
+            policy: "API-scan-minimal"
         miscOptions:
           enableUI: False
           updateAddons: False

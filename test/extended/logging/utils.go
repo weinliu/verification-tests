@@ -2414,6 +2414,7 @@ func postDataToHttpserver(oc *exutil.CLI, clfNS string, httpURL string, postJson
 func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, apiGroupName string) (bool, error) {
 	//update the token and create a new config file
 	content, err := os.ReadFile(configFile)
+	jobName := "rapidast-" + getRandomString()
 	if err != nil {
 		e2e.Logf("rapidastScan abort! Open file %s failed", configFile)
 		e2e.Logf("rapidast result: riskHigh=unknown riskMedium=unknown")
@@ -2436,7 +2437,7 @@ func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, 
 	f.WriteString(targetConfig)
 
 	//Create configmap
-	err = oc.WithoutNamespace().Run("create").Args("-n", ns, "configmap", "rapidast-configmap", "--from-file=rapidastconfig.yaml="+newConfigFile, "--from-file=customscan.policy="+scanPolicyFile).Execute()
+	err = oc.WithoutNamespace().Run("create").Args("-n", ns, "configmap", jobName, "--from-file=rapidastconfig.yaml="+newConfigFile, "--from-file=customscan.policy="+scanPolicyFile).Execute()
 	if err != nil {
 		e2e.Logf("rapidastScan abort! create configmap rapidast-configmap failed")
 		e2e.Logf("rapidast result: riskHigh=unknown riskMedium=unknown")
@@ -2446,7 +2447,8 @@ func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, 
 	//Create job
 	loggingBaseDir := exutil.FixturePath("testdata", "logging")
 	jobTemplate := filepath.Join(loggingBaseDir, "rapidast/job_rapidast.yaml")
-	err = oc.WithoutNamespace().Run("create").Args("-n", ns, "-f", jobTemplate).Execute()
+	rapidastJob := resource{"job", jobName, ns}
+	err = rapidastJob.applyFromTemplate(oc, "-f", jobTemplate, "-n", ns, "-p", "NAME="+jobName)
 	if err != nil {
 		e2e.Logf("rapidastScan abort! create rapidast job failed")
 		e2e.Logf("rapidast result: riskHigh=unknown riskMedium=unknown")
@@ -2454,7 +2456,7 @@ func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, 
 	}
 	//Waiting up to 3 minutes until pod Failed or Success
 	wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 3*time.Minute, true, func(context.Context) (done bool, err error) {
-		jobStatus, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "pod", "-l", "job-name=rapidast-job", "-ojsonpath={.items[0].status.phase}").Output()
+		jobStatus, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "pod", "-l", "job-name="+jobName, "-ojsonpath={.items[0].status.phase}").Output()
 		e2e.Logf(" rapidast Job status %s ", jobStatus)
 		if err1 != nil {
 			return false, nil
@@ -2463,7 +2465,7 @@ func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, 
 			return false, nil
 		}
 		if jobStatus == "Failed" {
-			e2e.Logf("rapidast-job failed")
+			e2e.Logf("rapidast-job %s failed", jobName)
 			return true, nil
 		}
 		if jobStatus == "Succeeded" {
@@ -2472,7 +2474,7 @@ func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, 
 		return false, nil
 	})
 	// Get the rapidast pod name
-	jobPods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=rapidast-job"})
+	jobPods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=" + jobName})
 	if err != nil {
 		e2e.Logf("rapidastScan abort! can not find rapidast scan job ")
 		e2e.Logf("rapidast result: riskHigh=unknown riskMedium=unknown")
@@ -2506,7 +2508,7 @@ func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, 
 		if err != nil {
 			e2e.Logf("failed to create %s", rapidastResultsSubDir)
 		}
-		artifactFile := rapidastResultsSubDir + "/" + apiGroupName + "_rapidast.result"
+		artifactFile := rapidastResultsSubDir + "/" + apiGroupName + "_rapidast.result.txt"
 		e2e.Logf("Write report into %s", artifactFile)
 		f1, err := os.Create(artifactFile)
 		if err != nil {
