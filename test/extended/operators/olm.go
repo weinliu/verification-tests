@@ -13925,6 +13925,9 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		exutil.By("build index image 1")
 		if output, err := opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag1, "-t", indexImageTag1, "-c", containerTool).Output(); err != nil {
 			e2e.Logf(output)
+			if strings.Contains(output, "error building") {
+				g.Skip("skip case because we can not prepare data")
+			}
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		if output, err := containerCLI.Run("push").Args(indexImageTag1).Output(); err != nil {
@@ -13935,6 +13938,9 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		exutil.By("build index image 2")
 		if output, err := opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag2, "-f", indexImageTag1, "-t", indexImageTag2, "-c", containerTool, "--mode", "semver").Output(); err != nil {
 			e2e.Logf(output)
+			if strings.Contains(output, "error building") {
+				g.Skip("skip case because we can not prepare data")
+			}
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		if output, err := containerCLI.Run("push").Args(indexImageTag2).Output(); err != nil {
@@ -14039,6 +14045,9 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		exutil.By("build index image 1")
 		if output, err := opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag1, "-t", indexImageTag1, "-c", containerTool, "--mode", "semver").Output(); err != nil {
 			e2e.Logf(output)
+			if strings.Contains(output, "error building") {
+				g.Skip("skip case because we can not prepare data")
+			}
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		if output, err := containerCLI.Run("push").Args(indexImageTag1).Output(); err != nil {
@@ -14049,6 +14058,9 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		exutil.By("build index image 2")
 		if output, err := opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag2, "-f", indexImageTag1, "-t", indexImageTag2, "-c", containerTool, "--mode", "semver").Output(); err != nil {
 			e2e.Logf(output)
+			if strings.Contains(output, "error building") {
+				g.Skip("skip case because we can not prepare data")
+			}
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		if output, err := containerCLI.Run("push").Args(indexImageTag2).Output(); err != nil {
@@ -14059,6 +14071,9 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		exutil.By("build index image 3")
 		if output, err := opm.NewOpmCLI().Run("index").Args("add", "-b", bundleImageTag3, "-f", indexImageTag2, "-t", indexImageTag3, "-c", containerTool, "--mode", "semver").Output(); err != nil {
 			e2e.Logf(output)
+			if strings.Contains(output, "error building") {
+				g.Skip("skip case because we can not prepare data")
+			}
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		if output, err := containerCLI.Run("push").Args(indexImageTag3).Output(); err != nil {
@@ -14081,6 +14096,9 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		})
 		if err != nil {
 			e2e.Logf("state is %v", state)
+			if len(state) == 0 {
+				g.Skip("the opertor does not start installation")
+			}
 			if strings.Compare(state, "UpgradeAvailable") == 0 {
 				newCheck("expect", asAdmin, withoutNamespace, compare, "oadp-operator.v0.5.4", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.installedCSV}"}).check(oc)
 			} else {

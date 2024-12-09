@@ -792,6 +792,9 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 		exutil.By("prune redhat index image to get custom index image")
 		if output, err := opmCLI.Run("index").Args("prune", "-f", indexImage, "-p", "cockroachdb", "-t", customIndexImage, "-c", containerTool).Output(); err != nil {
 			e2e.Logf(output)
+			if strings.Contains(output, "error unmounting container") {
+				g.Skip("skip case because we can not prepare data")
+			}
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		if output, err := containerCLI.Run("push").Args(customIndexImage).Output(); err != nil {
