@@ -36,9 +36,13 @@ func ExtractCcoctl(oc *CLI, releaseImage, ccoctlTarget string) string {
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	e2e.Logf("Extracting the pull secret file")
-	err = GetPullSec(oc, dirname)
-	pullSecretFile := filepath.Join(dirname, ".dockerconfigjson")
-	defer os.Remove(pullSecretFile)
+	pullSecretDirName := "/tmp/" + oc.Namespace() + "-auth"
+	err = os.MkdirAll(pullSecretDirName, 0777)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	defer os.Remove(pullSecretDirName)
+
+	err = GetPullSec(oc, pullSecretDirName)
+	pullSecretFile := filepath.Join(pullSecretDirName, ".dockerconfigjson")
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("Generated pullSecretFile: %s", pullSecretFile)
 
@@ -49,7 +53,7 @@ func ExtractCcoctl(oc *CLI, releaseImage, ccoctlTarget string) string {
 	e2e.Logf("CCO Image: %s", ccoImage)
 
 	e2e.Logf("Extracting ccoctl binary from cco image")
-	_, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("extract", ccoImage, "--registry-config", pullSecretFile, "--path=/usr/bin/"+ccoctlTarget+":"+dirname).Output()
+	_, err = oc.AsAdmin().WithoutNamespace().Run("image").Args("extract", ccoImage, "--registry-config", pullSecretFile, "--path=/usr/bin/"+ccoctlTarget+":"+dirname, "--confirm").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	ccoctlPath := filepath.Join(dirname, ccoctlTarget)
 	err = os.Chmod(ccoctlPath, 0775)
