@@ -2379,7 +2379,7 @@ spec:
 		frontwords := `(\w+?[^0-9a-zA-Z]+?){,3}`
 		afterwords := `(\w+?[^0-9a-zA-Z]+?){,30}`
 		// Add one temporary exception 'merge.go:121] Should not happen: OpenAPI V3 merge'，after related bug 2115634 is fixed, will remove it.
-		exceptions := "SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|merge.go:121] Should|Should not happen: Open|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test-|kernel.*-panic|non-fatal|(ocp|OCP)[0-9]{4,}|managedFields.*(imageregistry|marketplace)|W[0-9]{4}.*fatal|SHOULD NOT HAPPEN.*Kind=BGPPeer.*failed to convert"
+		exceptions := "W[0-9]{4}|SHOULD NOT HAPPEN.*Kind=CertificateSigningRequest|merge.go:121] Should|Should not happen: Open|testsource-user-build-volume|test.tectonic.com|virtualHostedStyle.*{invalid}|Kind=MachineHealthCheck.*smd typed.*spec.unhealthyConditions.*timeout|Kind=MachineHealthCheck.*openshift-machine-api.*mhc-malformed|OpenAPI.*)|panicked: false|e2e-test-|kernel.*-panic|non-fatal|(ocp|OCP)[0-9]{4,}|managedFields.*(imageregistry|marketplace)|W[0-9]{4}.*fatal|SHOULD NOT HAPPEN.*Kind=BGPPeer.*failed to convert"
 		cmd := fmt.Sprintf(`export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig
 		grep -hriE "(%s%s%s)+" /var/log/pods/openshift-kube-apiserver-operator* | grep -Ev "%s" > /tmp/OCP-39601-kaso-errors.log
 		sed -E "s/%s/../g" /tmp/OCP-39601-kaso-errors.log | sort | uniq -c | sort -h | tee /tmp/OCP-39601-kaso-uniq-errors.log | head -10
@@ -2465,7 +2465,7 @@ spec:
 
 		exutil.By("7) On all master nodes, check kas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
 		keywords = "panic|fatal|SHOULD NOT HAPPEN"
-		exceptions = "kernel_config_panic|allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*net/http: abort Handler|stage.*Panic|context deadline exceeded - InternalError)|panicked: false|e2e-test-.*|kernel.*panic|(ocp|OCP)[0-9]{4,}|49167-fatal|LogLevelFatal|log.*FATAL|Force kernel panic|\"Fatal\"|fatal conditions|OCP-38865-audit-errors"
+		exceptions = "W[0-9]{4}|kernel_config_panic|allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*net/http: abort Handler|stage.*Panic|context deadline exceeded - InternalError)|panicked: false|e2e-test-.*|kernel.*panic|(ocp|OCP)[0-9]{4,}|49167-fatal|LogLevelFatal|log.*FATAL|Force kernel panic|\"Fatal\"|fatal conditions|OCP-38865-audit-errors"
 		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/kube-apiserver/audit*.log | grep -Ev '%s' > /tmp/OCP-39601-audit-errors.log
 		echo '%s'
 		while read line; do
@@ -2631,7 +2631,7 @@ spec:
 		format := `[0-9TZ.:]{5,30}`
 		frontwords := `(\w+?[^0-9a-zA-Z]+?){,3}`
 		afterwords := `(\w+?[^0-9a-zA-Z]+?){,30}`
-		exceptions := `panicked: false|e2e-test-|kernel.*-panic|non-fatal|(ocp|OCP)\d{4,}|W\d{4}.*fatal|SHOULD NOT HAPPEN.*(pwomnew|lmnew|pmnew|lwomnew)-(app|build)|SubjectAccessReview|LocalResourceAccessReview|(APIServicesDegraded|ConfigObservationDegraded|APIServerWorkloadDegraded|APIServerDeploymentAvailable|APIServerDeploymentDegraded|APIServicesAvailable|APIServerDeploymentProgressing).*fatal`
+		exceptions := `W[0-9]{4}|panicked: false|e2e-test-|kernel.*-panic|non-fatal|(ocp|OCP)\d{4,}|W\d{4}.*fatal|SHOULD NOT HAPPEN.*(pwomnew|lmnew|pmnew|lwomnew)-(app|build)|SubjectAccessReview|LocalResourceAccessReview|(APIServicesDegraded|ConfigObservationDegraded|APIServerWorkloadDegraded|APIServerDeploymentAvailable|APIServerDeploymentDegraded|APIServicesAvailable|APIServerDeploymentProgressing).*fatal`
 		cmd := fmt.Sprintf(`export KUBECONFIG=/etc/kubernetes/static-pod-resources/kube-apiserver-certs/secrets/node-kubeconfigs/lb-ext.kubeconfig
 		grep -hriE "(%s%s%s)+" /var/log/pods/openshift-apiserver-operator* | grep -Ev "%s" > /tmp/OCP-38865-oaso-errors.log
 		sed -E "s/%s/../g" /tmp/OCP-38865-oaso-errors.log | sort | uniq -c | sort -h | tee /tmp/OCP-38865-oaso-uniq-errors.log | head -10
@@ -2716,12 +2716,13 @@ spec:
 
 		exutil.By("7) On all master nodes, check oas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
 		keywords = "panic|fatal|SHOULD NOT HAPPEN"
-		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/openshift-apiserver/audit*.log > /tmp/OCP-38865-audit-errors.log
+		exceptions = "W[0-9]{4}|kernel_config_panic|APIServer panic.*net/http: abort Handler|LogLevelFatal|log.*FATAL"
+		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/openshift-apiserver/audit*.log | grep -Ev '%s' > /tmp/OCP-38865-audit-errors.log
 		echo '%s'
 		while read line; do
 			grep "$line" /tmp/OCP-38865-audit-errors.log | head -1 | jq .
 		done < <(cat /tmp/OCP-38865-audit-errors.log | jq -r '.responseStatus.status + " - " + .responseStatus.message + " - " + .responseStatus.reason' | uniq | head -5 | cut -d '-' -f2 | awk '{$1=$1;print}')
-		echo '%s'`, keywords, startTag, endTag)
+		echo '%s'`, keywords, exceptions, startTag, endTag)
 
 		for i, masterNode := range masterNodes {
 			exutil.By(fmt.Sprintf("7.%d -> step 1) Get log file from %s", i+1, masterNode))
