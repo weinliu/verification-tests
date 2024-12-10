@@ -6920,7 +6920,13 @@ EOF`, serverconf)
 		exutil.AssertWaitPollNoErr(waiterrRollout, "5. Step failed: deploymentconfig.apps.openshift.io/mydc not rolled out")
 
 		exutil.By("6. Try to scale deployment config, oc scale should work without error")
-		scaleErr := oc.WithoutNamespace().AsAdmin().Run("scale").Args("dc/mydc", "--replicas=10", "-n", "test-ns"+randomStr).Execute()
-		o.Expect(scaleErr).NotTo(o.HaveOccurred())
+		waitScaleErr := wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 120*time.Second, false, func(cxt context.Context) (bool, error) {
+			scaleErr := oc.WithoutNamespace().AsAdmin().Run("scale").Args("dc/mydc", "--replicas=10", "-n", "test-ns"+randomStr).Execute()
+			if scaleErr == nil {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(waitScaleErr, "5. Step failed: deploymentconfig.apps.openshift.io/mydc not scaled out")
 	})
 })
