@@ -379,7 +379,9 @@ func (n Node) GetCurrentBootOSImage() (string, error) {
 		return "", fmt.Errorf("Wrong container-image-reference in deployment:\n%s\n%s", err, deployment)
 	}
 
-	image := imageSplit[lenImageSplit-2] + ":" + imageSplit[lenImageSplit-1]
+	// remove the "ostree-unverified-registry:" part of the image
+	image := strings.Join(imageSplit[1:], ":")
+	logger.Infof("Booted image: %s", image)
 
 	return image, nil
 }

@@ -568,6 +568,56 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		o.Expect(DisableOCL(mosc)).To(o.Succeed(), "Error cleaning up %s", mosc)
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-Longduration-NonPreRelease-High-77781-OCB Rebuild a successful build [Disruptive]", func() {
+		// Remove this "skip" checks once the functionality to disable OCL is implemented
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
+		SkipIfSNO(oc.AsAdmin())                       // This test makes no sense in SNO
+
+		var (
+			mcp      = GetCompactCompatiblePool(oc.AsAdmin())
+			node     = mcp.GetSortedNodesOrFail()[0]
+			moscName = "test-" + mcp.GetName() + "-" + GetCurrentTestPolarionIDNumber()
+		)
+
+		exutil.By("Configure OCB functionality for the new worker MCP")
+		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), MachineConfigNamespace, moscName, mcp.GetName(), nil)
+		defer DisableOCL(mosc)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
+		logger.Infof("OK!\n")
+
+		ValidateSuccessfulMOSC(mosc, nil)
+
+		exutil.By("Rebuild the current image")
+		mosb := exutil.OrFail[*MachineOSBuild](mosc.GetCurrentMachineOSBuild())
+		currentImagePullSpec := exutil.OrFail[string](mosc.GetStatusCurrentImagePullSpec())
+
+		o.Expect(mosc.Rebuild()).To(o.Succeed(),
+			"Error patching %s to rebuild the current image", mosc)
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the existing MOSB is reused and it builds a new image")
+		o.Eventually(mosb.GetJob, "2m", "20s").Should(Exist(), "Rebuild job was not created")
+		o.Eventually(mosb, "20m", "20s").Should(HaveConditionField("Building", "status", FalseString), "Rebuild was not finished")
+		o.Eventually(mosb, "10m", "20s").Should(HaveConditionField("Succeeded", "status", TrueString), "Rebuild didn't succeed")
+		o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Interrupted", "status", FalseString), "Reuild was interrupted")
+		o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Failed", "status", FalseString), "Reuild was failed")
+		logger.Infof("Check that the rebuild job was deleted")
+		o.Eventually(mosb.GetJob, "2m", "20s").ShouldNot(Exist(), "Build job was not cleaned")
+		logger.Infof("OK!\n")
+
+		exutil.By("Wait for the new image to be applied")
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the new image is the one used in the nodes")
+		newImagePullSpec := exutil.OrFail[string](mosc.GetStatusCurrentImagePullSpec())
+		o.Expect(newImagePullSpec).NotTo(o.Equal(currentImagePullSpec),
+			"The new image after the rebuild operation should be different fron the initial image")
+		o.Expect(node.GetCurrentBootOSImage()).To(o.Equal(newImagePullSpec),
+			"The new image is not being used in node %s", node)
+		logger.Infof("OK!\n")
+	})
 })
 
 func testContainerFile(containerFiles []ContainerFile, imageNamespace string, mcp *MachineConfigPool, checkers []Checker) {
@@ -724,6 +774,14 @@ func ValidateSuccessfulMOSC(mosc *MachineOSConfig, checkers []Checker) {
 		logger.Infof("OK!\n")
 
 		node := mcp.GetSortedNodesOrFail()[0]
+		exutil.By("Check that the right image is deployed in the nodes")
+		currentImagePullSpec, err := mosc.GetStatusCurrentImagePullSpec()
+		o.Expect(err).NotTo(o.HaveOccurred(),
+			"Error getting the current image pull spec in %s", mosc)
+		o.Expect(node.GetCurrentBootOSImage()).To(o.Equal(currentImagePullSpec),
+			"The image installed in node %s is not the expected one", mosc)
+		logger.Infof("OK!\n")
+
 		for _, checker := range checkers {
 			checker.Check(node)
 		}

@@ -273,6 +273,16 @@ func (mosc MachineOSConfig) RemoveContainerfiles() error {
 	return mosc.SetContainerfiles([]ContainerFile{})
 }
 
+// GetStatusCurrentImagePullSpec returns the current image pull spec that is applied and reported in the status
+func (mosc MachineOSConfig) GetStatusCurrentImagePullSpec() (string, error) {
+	return mosc.Get(`{.status.currentImagePullspec}`)
+}
+
+// Rebuild forces a rebuild of the current image
+func (mosc MachineOSConfig) Rebuild() error {
+	return mosc.Patch("json", `[{"op": "add", "path": "/metadata/annotations/machineconfiguration.openshift.io~1rebuild", "value":""}]`)
+}
+
 // GetAll returns a []MachineOSConfig list with all existing pinnedimageset sorted by creation timestamp
 func (moscl *MachineOSConfigList) GetAll() ([]MachineOSConfig, error) {
 	moscl.ResourceList.SortByTimestamp()
