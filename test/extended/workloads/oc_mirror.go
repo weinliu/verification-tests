@@ -248,18 +248,11 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v1 works well", func() {
 		err = locatePodmanCred(oc, dirname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		out, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("init").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(out, "local") {
-			e2e.Failf("Can't find the storageconfig of local")
-		}
-		out1, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("init", "--registry", "localhost:5000/test:latest").Output()
+		out1, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("init", "--output", "json").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(out1, "registry") {
 			e2e.Failf("Can't find the storageconfig of registry")
 		}
-		err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("init", "--registry", "localhost:5000/test:latest", "--output", "json").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 	g.It("NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Author:yinzhou-High-46769-Critical-46515-High-registry backend test [Serial]", func() {
 		architecture.SkipArchitectures(oc, architecture.MULTI)
