@@ -12945,7 +12945,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 	})
 
 	// author: xzha@redhat.com, test case OCP-74652
-	g.It("Author:xzha-ConnectedOnly-Medium-74652-InstallPlan should SUCCESS when multiple CRD versions are served [Disruptive][Serial]", func() {
+	g.It("Author:xzha-DEPRECATED-ConnectedOnly-Medium-74652-InstallPlan should SUCCESS when multiple CRD versions are served [Disruptive][Serial]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipIfPlatformTypeNot(oc, "GCP")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
