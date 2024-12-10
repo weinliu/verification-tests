@@ -288,7 +288,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 			expectedAlertName                  = "KubeletHealthState"
 			expectedAlertSeverity              = "warning"
 			expectedAlertAnnotationDescription = "Kubelet health failure threshold reached"
-			expectedAlertAnnotationSummary     = "This keeps track of Kubelet health failures, and tallys them. The warning is triggered if 2 or more failures occur."
+			expectedAlertAnnotationSummary     = "This keeps track of Kubelet health failures, and tallies them. The warning is triggered if 2 or more failures occur."
 		)
 
 		exutil.By("Break kubelet")
