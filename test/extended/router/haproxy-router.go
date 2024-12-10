@@ -3686,4 +3686,113 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(dynamicPod).To(o.ContainSubstring(`server-template _dynamic-pod- 1-1 172.4.0.4:8765 check disabled`))
 		o.Expect(dynamicPod).To(o.ContainSubstring(`dynamic-cookie-key`))
 	})
+
+	// author: shudili@redhat.com
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-High-77906-Enable ALPN for reencrypt routes when DCM is enabled", func() {
+		// skip the test if featureSet is not there
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test, skipping")
+		}
+
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
+			srvdmInfo           = "web-server-deploy"
+			svcName             = "service-secure"
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+			dirname             = "/tmp/OCP-77906-ca"
+			caSubj              = "/CN=NE-Test-Root-CA"
+			caCrt               = dirname + "/77906-ca.crt"
+			caKey               = dirname + "/77906-ca.key"
+			userSubj            = "/CN=example-ne.com"
+			usrCrt              = dirname + "/77906-usr.crt"
+			usrKey              = dirname + "/77906-usr.key"
+			usrCsr              = dirname + "/77906-usr.csr"
+			cmName              = "ocp77906"
+		)
+
+		// enabled mTLS for http/2 traffic testing, if not, the frontend haproxy will use http/1.1
+		baseTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+		extraParas := fmt.Sprintf(`
+    clientTLS:
+      clientCA:
+        name: %s
+      clientCertificatePolicy: Required
+`, cmName)
+		customTemp := addExtraParametersToYamlFile(baseTemp, "spec:", extraParas)
+		defer os.Remove(customTemp)
+
+		var (
+			ingctrl = ingressControllerDescription{
+				name:      "ocp77906",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		exutil.By("1.0 Get the domain info for testing")
+		ingctrl.domain = ingctrl.name + "." + getBaseDomain(oc)
+		routehost := "reen77906" + "." + ingctrl.domain
+
+		exutil.By("2.0: Start to use openssl to create ca certification&key and user certification&key")
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2.1: Create a new self-signed CA including the ca certification and ca key")
+		opensslNewCa(caKey, caCrt, caSubj)
+
+		exutil.By("2.2: Create a user CSR and the user key")
+		opensslNewCsr(usrKey, usrCsr, userSubj)
+
+		exutil.By("2.3: Sign the user CSR and generate the certificate")
+		san := "subjectAltName = DNS:*." + ingctrl.domain
+		opensslSignCsr(san, usrCsr, caCrt, caKey, usrCrt)
+
+		exutil.By("3.0: create a cm with date ca certification, then create the custom ingresscontroller")
+		defer deleteConfigMap(oc, "openshift-config", cmName)
+		createConfigMapFromFile(oc, "openshift-config", cmName, "ca-bundle.pem="+caCrt)
+
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ensureCustomIngressControllerAvailable(oc, ingctrl.name)
+
+		exutil.By("4.0: enable http2 on the custom ingresscontroller by the annotation")
+		setAnnotationAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, `ingress.operator.openshift.io/default-enable-http2=true`)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+
+		exutil.By("5.0 Deploy a project with a deployment and a client pod")
+		project1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, project1)
+		createResourceFromFile(oc, project1, testPodSvc)
+		ensurePodWithLabelReady(oc, project1, "name="+srvdmInfo)
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "-f", clientPod).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, dirname, project1+"/"+cltPodName+":"+dirname).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("6.0 Create a reencrypt route inside the project")
+		createRoute(oc, project1, "reencrypt", "route-reen", svcName, []string{"--hostname=" + routehost, "--ca-cert=" + caCrt, "--cert=" + usrCrt, "--key=" + usrKey})
+		waitForOutput(oc, project1, "route/route-reen", "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("7.0 Check the haproxy.config, make sure alpn is enabled for the reencrypt route's backend endpoint")
+		backend := "be_secure:" + project1 + ":route-reen"
+		routerpod := getNewRouterPod(oc, ingctrl.name)
+		ep := readHaproxyConfig(oc, routerpod, backend, "-A20", "server pod:")
+		o.Expect(ep).To(o.ContainSubstring("ssl alpn h2,http/1.1"))
+
+		exutil.By("8.0 Curl the reencrypt route with specified protocol http2")
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst := routehost + ":443:" + podIP
+		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-sI", "--cacert", caCrt, "--cert", usrCrt, "--key", usrKey, "--http2", "--resolve", toDst, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, curlCmd, "HTTP/2 200", 60, 1)
+
+		exutil.By("9.0 Curl the reencrypt route with specified protocol http1.1")
+		curlCmd = []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-sI", "--cacert", caCrt, "--cert", usrCrt, "--key", usrKey, "--http1.1", "--resolve", toDst, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, curlCmd, "HTTP/1.1 200", 60, 1)
+	})
 })
