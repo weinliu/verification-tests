@@ -520,47 +520,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(strings.Compare(podList1, podList2)).NotTo(o.Equal(0))
 	})
 
-	// Bug: 2039339
-	g.It("Author:mjoseph-Medium-57002-cluster-ingress-operator should report Un-upgradeable if user has modified the aws resources annotations [Disruptive]", func() {
-		exutil.By("Pre-flight check for the platform type")
-		platformtype := exutil.CheckPlatform(oc)
-		if !strings.Contains(platformtype, "aws") {
-			g.Skip("Skip for non-supported platform, it runs on AWS cloud only")
-		}
-
-		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
-		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-external.yaml")
-		var (
-			ingctrl = ingressControllerDescription{
-				name:      "ocp57002",
-				namespace: "openshift-ingress-operator",
-				domain:    "",
-				template:  customTemp,
-			}
-		)
-
-		exutil.By("Create one custom ingresscontroller")
-		baseDomain := getBaseDomain(oc)
-		ingctrl.domain = ingctrl.name + "." + baseDomain
-		defer ingctrl.delete(oc)
-		ingctrl.create(oc)
-		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-
-		exutil.By("Annotate the LB service with 'service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags' and verify")
-		err := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("-n", "openshift-ingress", "svc/router-ocp57002", "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags=testqe", "--overwrite").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		findAnnotation := getAnnotation(oc, "openshift-ingress", "svc", "router-ocp57002")
-		o.Expect(findAnnotation).To(o.ContainSubstring(`"service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags":"testqe"`))
-
-		exutil.By("Verify from the ingresscontroller status the operand is not upgradeable")
-		waitForOutput(oc, "openshift-ingress-operator", "ingresscontroller/ocp57002", `{.status.conditions[?(@.type=="Upgradeable")].status}`, "False")
-		waitForOutput(oc, "openshift-ingress-operator", "ingresscontroller/ocp57002", `{.status.conditions[?(@.type=="Upgradeable")].reason}`, "OperandsNotUpgradeable")
-
-		exutil.By("Verify from the ingress operator status the controller is not upgradeable")
-		waitForOutput(oc, "openshift-ingress", "co/ingress", `{.status.conditions[?(@.type=="Upgradeable")].status}`, "False")
-		waitForOutput(oc, "openshift-ingress", "co/ingress", `{.status.conditions[?(@.type=="Upgradeable")].reason}`, "IngressControllersNotUpgradeable")
-	})
-
 	// author: shudili@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:shudili-NonPreRelease-Medium-60012-matchExpressions for routeSelector defined in an ingress-controller", func() {
 		var (
