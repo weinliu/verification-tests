@@ -127,7 +127,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		exutil.By("Update use the digest image and check it")
 		output, err := oc.AsAdmin().Run("patch").Args("clustercatalog", clustercatalog.Name, "-p", `{"spec":{"source":{"image":{"ref":"quay.io/olmqe/olmtest-operator-index@`+manifestDigestv1+`"}}}}`, "--type=merge").Output()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(string(output)).To(o.ContainSubstring("cannot specify PollInterval while using digest-based"))
+		o.Expect(string(output)).To(o.ContainSubstring("cannot specify pollIntervalMinutes while using digest-based"))
 
 	})
 
