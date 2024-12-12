@@ -486,7 +486,7 @@ func describePodResource(oc *exutil.CLI, podName, namespace string) string {
 func getRouterPod(oc *exutil.CLI, icname string) string {
 	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+icname, "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-ingress").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("the result of podname:%v", podName)
+	e2e.Logf("the result of router pod name: %v", podName)
 	return podName
 }
 
@@ -505,7 +505,7 @@ func readPodEnv(oc *exutil.CLI, routername, ns string, envname string) string {
 	if err != nil {
 		output = "NotFound"
 	}
-	e2e.Logf("the matched Env are: %v", output)
+	e2e.Logf("the matched Env are:\n%v", output)
 	return output
 }
 
@@ -529,7 +529,7 @@ func readHaproxyConfig(oc *exutil.CLI, routerPodName, searchString1, grepOption,
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but config not found"))
 	output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerPodName, "--", "bash", "-c", cmd2).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("the part of haproxy.config that matching \"%s\" is: %v", searchString1, output)
+	e2e.Logf("the part of haproxy.config that matching \"%s\" is:\n%v", searchString1, output)
 	return output
 }
 
@@ -701,7 +701,7 @@ func checkConfigMap(oc *exutil.CLI, ns, configmapName string) error {
 // To Collect ingresscontroller domain name
 func getIngressctlDomain(oc *exutil.CLI, icname string) string {
 	var ingressctldomain string
-	ingressctldomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingresscontroller", icname, "--namespace=openshift-ingress-operator", "-o=jsonpath={.spec.domain}").Output()
+	ingressctldomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingresscontroller", icname, "--namespace=openshift-ingress-operator", "-o=jsonpath={.status.domain}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("the domain for the ingresscontroller is : %v", ingressctldomain)
 	return ingressctldomain
@@ -1572,15 +1572,16 @@ func repeatCmdOnExternalClient(cmd string, expectOutput []string, duration time.
 	for i := 0; i < len(expectOutput); i++ {
 		result = append(result, 0)
 	}
+	e2e.Logf("the command is: %v", cmd)
 	waitErr := wait.Poll(5*time.Second, duration*time.Second, func() (bool, error) {
 		isMatch := false
 		output, err := exec.Command("bash", "-c", cmd).Output()
 		if err != nil {
-			e2e.Logf("failed to execute cmd %v successfully on the external client, retrying...", cmd)
+			e2e.Logf("failed to execute cmd and got err %v, retrying...", err.Error())
 			return false, nil
 		}
 		successCurlCount++
-		e2e.Logf("executed cmd %s for %v times on the external client, attempted to %v times...", cmd, successCurlCount, repeatTimes)
+		e2e.Logf("executed cmd for %v times on the external client and got result: %s", successCurlCount, output)
 		for i := 0; i < len(expectOutput); i++ {
 			searchInfo := regexp.MustCompile(expectOutput[i]).FindStringSubmatch(string(output))
 			if len(searchInfo) > 0 {
@@ -1592,7 +1593,7 @@ func repeatCmdOnExternalClient(cmd string, expectOutput []string, duration time.
 		}
 
 		if isMatch {
-			e2e.Logf("successfully executed cmd %s successfully for %v times on the external client, expect %v times...", cmd, matchedCount, repeatTimes)
+			e2e.Logf("successfully executed cmd for %v times on the external client, expecting %v times", matchedCount, repeatTimes)
 			if matchedCount == repeatTimes {
 				return true, nil
 			} else {
@@ -1601,7 +1602,7 @@ func repeatCmdOnExternalClient(cmd string, expectOutput []string, duration time.
 		} else {
 			// if after executed the cmd, but could not get a output in the expectOutput list, decrease the successfully executed times
 			successCurlCount--
-			e2e.Logf("failed to find a match, checking the outout: %s", string(output))
+			e2e.Logf("failed to find a match in the outout: %s", output)
 			return false, nil
 		}
 	})
