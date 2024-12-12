@@ -812,3 +812,34 @@ var _ = g.Describe("[sig-networking] SDN egressqos", func() {
 	})
 
 })
+
+var _ = g.Describe("[sig-networking] SDN egressqos negative test", func() {
+	defer g.GinkgoRecover()
+	var (
+		oc = exutil.NewCLI("networking-egressqos", exutil.KubeConfigPath())
+	)
+
+	g.It("Author:qiowang-NonHyperShiftHOST-Medium-52365-negative validation for egressqos.", func() {
+		var (
+			networkBaseDir   = exutil.FixturePath("testdata", "networking")
+			egressBaseDir    = filepath.Join(networkBaseDir, "egressqos")
+			egressQosTmpFile = filepath.Join(egressBaseDir, "egressqos-template.yaml")
+			invalideDstCIDR  = []string{"abc/24", "$@#/132", "asd::/64", "1.2.3.4/58", "abc::/158"}
+		)
+
+		ns := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, ns)
+		egressQos := egressQosResource{
+			name:      "default",
+			namespace: ns,
+			kind:      "egressqos",
+			tempfile:  egressQosTmpFile,
+		}
+
+		for _, cidr := range invalideDstCIDR {
+			exutil.By("####### Create egressqos with wrong syntax/value CIDR rules " + cidr + " ##########")
+			output, _ := egressQos.createWithOutput(oc, "NAME="+egressQos.name, "NAMESPACE="+egressQos.namespace, "CIDR1=1.1.1.1/32", "CIDR2="+cidr)
+			o.Expect(output).Should(o.ContainSubstring("Invalid value"))
+		}
+	})
+})
