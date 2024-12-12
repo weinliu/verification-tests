@@ -190,13 +190,16 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		initialCloudCAContent := rfCloudCA.GetTextContent()
 
 		defer func() {
+			wMcp.waitForComplete()
+			mMcp.waitForComplete()
+
 			exutil.By("Checking that the user CA bundle file content was properly restored when the configuration was removed")
-			o.Eventually(rfUserCA, "5m", "20s").Should(exutil.Secure(HaveContent(initialUserCAContent)),
+			o.Eventually(rfUserCA.Read, "5m", "20s").Should(exutil.Secure(HaveContent(initialUserCAContent)),
 				"The user CA bundle file content was not restored after the configuration was removed")
 			logger.Infof("OK!\n")
 
 			exutil.By("Checking that the cloud CA bundle file content was properly restored when the configuration was removed")
-			o.Eventually(rfCloudCA, "5m", "20s").Should(exutil.Secure(HaveContent(initialCloudCAContent)),
+			o.Eventually(rfCloudCA.Read, "5m", "20s").Should(exutil.Secure(HaveContent(initialCloudCAContent)),
 				"The cloud CA bundle file content was not restored after the configuration was removed")
 			logger.Infof("OK!\n")
 		}()
