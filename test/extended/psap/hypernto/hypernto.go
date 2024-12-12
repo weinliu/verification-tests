@@ -9,7 +9,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-node] PSAP should", func() {
+var _ = g.Describe("[sig-tuning-node] PSAP should", func() {
 	defer g.GinkgoRecover()
 
 	var (

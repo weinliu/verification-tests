@@ -34,6 +34,7 @@ sigs = [
     "sig-network-edge",
     "sig-networking",
     "sig-node",
+    "sig-tuning-node",   
     "sig-openshift-logging",
     "sig-operators",
     "sig-perfscale",

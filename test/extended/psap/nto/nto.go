@@ -13,7 +13,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-node] PSAP should", func() {
+var _ = g.Describe("[sig-tuning-node] PSAP should", func() {
 	defer g.GinkgoRecover()
 
 	var (
@@ -1319,7 +1319,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", IPSFile, "-p", "SYSCTLPARM1=kernel.pid_max", "SYSCTLVALUE1=1048575", "SYSCTLPARM2=kernel.pid_max", "SYSCTLVALUE2=1048575")
 
 		exutil.By("Assert recommended profile (ips-host) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `recommended profile \(ips-host\) matches current configuration|\(ips-host\) match|'ips-host' applied`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "15", 180, `recommended profile \(ips-host\) matches current configuration|\(ips-host\) match|'ips-host' applied`)
 
 		exutil.By("Check if new custom profile applied to label node")
 		o.Expect(assertNTOCustomProfileStatus(oc, ntoNamespace, tunedNodeName, "ips-host", "True", "False")).To(o.Equal(true))
@@ -1361,7 +1361,7 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		exutil.ApplyNsResourceFromTemplate(oc, ntoNamespace, "--ignore-unknown-parameters=true", "-f", IPSFile, "-p", "SYSCTLPARM1=fs.mount-max", "SYSCTLVALUE1=868686", "SYSCTLPARM2=kernel.pid_max", "SYSCTLVALUE2=1048575")
 
 		exutil.By("Assert recommended profile (ips-host) matches current configuration in tuned pod log")
-		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "5", 180, `recommended profile \(ips-host\) matches current configuration|\(ips-host\) match|'ips-host' applied`)
+		assertNTOPodLogsLastLines(oc, ntoNamespace, tunedPodName, "15", 180, `recommended profile \(ips-host\) matches current configuration|\(ips-host\) match|'ips-host' applied`)
 
 		exutil.By("Check if new custom profile applied to label node")
 		o.Expect(assertNTOCustomProfileStatus(oc, ntoNamespace, tunedNodeName, "ips-host", "True", "False")).To(o.Equal(true))
@@ -2370,13 +2370,13 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		e2e.Logf("Current profile for each node: \n%v", output)
 
 		exutil.By("Check if stalld service is running ...")
-		stalldStatus, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"-q"}, "", "systemctl", "status", "stalld")
+		stalldStatus, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"-q", "--to-namespace=" + ntoNamespace}, "systemctl", "status", "stalld")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldStatus).NotTo(o.BeEmpty())
 		o.Expect(stalldStatus).To(o.ContainSubstring("active (running)"))
 
 		exutil.By("Get stalld PID on labeled node ...")
-		stalldPIDStatus, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "ps -efZ | grep stalld | grep -v grep")
+		stalldPIDStatus, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"-q", "--to-namespace=" + ntoNamespace}, "/bin/bash", "-c", "ps -efZ | grep stalld | grep -v grep")
 		e2e.Logf("stalldPIDStatus is :\n%v", stalldPIDStatus)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldPIDStatus).NotTo(o.BeEmpty())
@@ -2384,12 +2384,12 @@ var _ = g.Describe("[sig-node] PSAP should", func() {
 		o.Expect(stalldPIDStatus).To(o.ContainSubstring("-t 20"))
 
 		exutil.By("Get stalld PID on labeled node ...")
-		stalldPID, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "ps -efL| grep stalld | grep -v grep | awk '{print $2}'")
+		stalldPID, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"-q", "--to-namespace=" + ntoNamespace}, "/bin/bash", "-c", "ps -efL| grep stalld | grep -v grep | awk '{print $2}'")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(stalldPID).NotTo(o.BeEmpty())
 
 		exutil.By("Get status of chrt -p stalld PID on labeled node ...")
-		chrtStalldPIDOutput, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"-q"}, "/bin/bash", "-c", "chrt -ap "+stalldPID)
+		chrtStalldPIDOutput, _, err := exutil.DebugNodeRetryWithOptionsAndChrootWithStdErr(oc, tunedNodeName, []string{"-q", "--to-namespace=" + ntoNamespace}, "/bin/bash", "-c", "chrt -ap "+stalldPID)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(chrtStalldPIDOutput).NotTo(o.BeEmpty())
 		o.Expect(chrtStalldPIDOutput).To(o.ContainSubstring("SCHED_FIFO"))
