@@ -139,6 +139,12 @@ func NewAwsCreateClusterOptions() *AwsCreateClusterOptions {
 	return opts
 }
 
+// WithArch builder func to define he arch
+func (opt *AwsCreateClusterOptions) WithArch(arch string) *AwsCreateClusterOptions {
+	opt.appendOption("--arch", arch)
+	return opt
+}
+
 // WithName builder func to append option name
 func (opt *AwsCreateClusterOptions) WithName(name string) *AwsCreateClusterOptions {
 	opt.appendOption("--name", name)
@@ -227,6 +233,12 @@ func NewAwsCreateNodePoolOptions() *AwsCreateNodePoolOptions {
 	opts.appendOption("aws", "")
 
 	return opts
+}
+
+// WithArch builder func to define he arch
+func (opt *AwsCreateNodePoolOptions) WithArch(arch string) *AwsCreateNodePoolOptions {
+	opt.appendOption("--arch", arch)
+	return opt
 }
 
 // WithClusterName builder func to append option cluster
@@ -406,6 +418,7 @@ func (np *HypershiftNodePool) WaitUntilConfigIsUpdating() {
 // WaitUntilVersionIsUpdating wait for version update to start
 func (np *HypershiftNodePool) WaitUntilVersionIsUpdating() {
 	logger.Infof("wait condition UpdatingVersion to be true")
+
 	o.Eventually(func() map[string]interface{} {
 		updatingConfig := JSON(np.GetConditionByType("UpdatingVersion"))
 		if updatingConfig.Exists() {

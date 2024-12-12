@@ -283,12 +283,22 @@ func (ht *HypershiftTest) CreateClusterOnAws() {
 	name := fmt.Sprintf("mco-cluster-%s", exutil.GetRandomString())
 	ht.Put(TestCtxKeyCluster, name)
 	awscred := ht.cred.(*AwsCredential)
+	// We will use the same release image that the host cluster is using
+	releaseImage, err := GetClusterDesiredReleaseImage(ht.oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	logger.Infof("Using release image: %s", releaseImage)
 	createClusterOpts := NewAwsCreateClusterOptions().
 		WithAwsCredential(awscred.file).
 		WithBaseDomain(baseDomain).
 		WithPullSecret(secretFile).
 		WithRegion(awscred.region).
+		WithReleaseImage(releaseImage).
 		WithName(name)
+
+	arch := architecture.ClusterArchitecture(ht.oc)
+	if arch == architecture.ARM64 {
+		createClusterOpts = createClusterOpts.WithArch("arm64")
+	}
 
 	_, createClusterErr := ht.cli.CreateCluster(createClusterOpts)
 	o.Expect(createClusterErr).NotTo(o.HaveOccurred(), "create hosted cluster on aws failed")
@@ -336,6 +346,11 @@ func (ht *HypershiftTest) CreateNodePoolOnAws(replica string) {
 		WithNodeCount(replica).
 		WithNamespace(ht.clusterNS).
 		WithRender()
+
+	arch := architecture.ClusterArchitecture(ht.oc)
+	if arch == architecture.ARM64 {
+		renderNodePoolOpts = renderNodePoolOpts.WithArch("arm64")
+	}
 
 	renderedNp, renderNpErr := ht.cli.CreateNodePool(renderNodePoolOpts)
 	o.Expect(renderNpErr).NotTo(o.HaveOccurred(), fmt.Sprintf("create node pool %s failed", name))
@@ -650,12 +665,13 @@ func (ht *HypershiftTest) getHypershiftImage() string {
 	// o.Expect(cvErr).NotTo(o.HaveOccurred(), "Get minor release version error")
 	// Becaseu of https://issues.redhat.com/browse/OCPQE-26256 we will always use the "latest" image
 	imageTag := "latest"
-	arch := architecture.GetControlPlaneArch(ht.oc)
-	if arch == architecture.ARM64 {
-		imageTag = fmt.Sprintf("%s-%s", imageTag, architecture.ARM64.String())
+	repo := "quay.io/hypershift/hypershift-operator"
+	arch := architecture.ClusterArchitecture(ht.oc)
+	if arch == architecture.ARM64 || arch == architecture.MULTI {
+		repo = "quay.io/acm-d/rhtap-hypershift-operator"
 	}
 
-	image := fmt.Sprintf("quay.io/hypershift/hypershift-operator:%s", imageTag)
+	image := fmt.Sprintf("%s:%s", repo, imageTag)
 	logger.Infof("Hypershift image is: %s", image)
 
 	return image

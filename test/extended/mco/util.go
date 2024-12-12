@@ -1497,3 +1497,8 @@ func RemoveDuplicates[T comparable](list []T) []T {
 	}
 	return fileterdList
 }
+
+// GetClusterDesiredReleaseImage returns the desired image reported in the status of the clusterversion resource
+func GetClusterDesiredReleaseImage(oc *exutil.CLI) (string, error) {
+	return oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o", "jsonpath={.status.desired.image}").Output()
+}
