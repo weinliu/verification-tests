@@ -906,16 +906,16 @@ func uploadBaseImageToVsphere(baseImageSrc, baseImageDest, server, dataCenter, d
 
 	// In prow the GOVC_TLS_CA_CERTS is not correctly set and it is making the govc command fail.
 	// we remove this variable from the environment
-	var newEnv []string
+	var execEnv []string
 	for _, envVar := range originalEnv {
 		if strings.HasPrefix(envVar, "GOVC_TLS_CA_CERTS=") {
 			continue
 		}
-		newEnv = append(newEnv, envVar)
+		execEnv = append(execEnv, envVar)
 	}
 
-	uploadCmd.Env = newEnv
-	uploadCmd.Env = append(uploadCmd.Env, govcEnv...)
+	execEnv = append(execEnv, govcEnv...)
+	uploadCmd.Env = execEnv
 
 	out, err := uploadCmd.CombinedOutput()
 	logger.Infof(string(out))
@@ -931,9 +931,7 @@ func uploadBaseImageToVsphere(baseImageSrc, baseImageDest, server, dataCenter, d
 	logger.Infof("%s %s", execBin, upgradeHWCommand)
 
 	upgradeCmd := exec.Command(execBin, upgradeHWCommand...)
-	upgradeCmd.Env = os.Environ()
-
-	upgradeCmd.Env = append(upgradeCmd.Env, govcEnv...)
+	upgradeCmd.Env = execEnv
 
 	out, err = upgradeCmd.CombinedOutput()
 	logger.Infof(string(out))
@@ -945,9 +943,7 @@ func uploadBaseImageToVsphere(baseImageSrc, baseImageDest, server, dataCenter, d
 	logger.Infof("%s %s", execBin, templateCommand)
 
 	templateCmd := exec.Command(execBin, templateCommand...)
-	templateCmd.Env = os.Environ()
-
-	templateCmd.Env = append(templateCmd.Env, govcEnv...)
+	templateCmd.Env = execEnv
 
 	out, err = templateCmd.CombinedOutput()
 	logger.Infof(string(out))
