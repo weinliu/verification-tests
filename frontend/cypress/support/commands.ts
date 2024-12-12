@@ -9,8 +9,10 @@ declare global {
             uiLogout();
             cliLogin(username?, password?, hostapi?);
             cliLogout();
+            configureClusterMonitoringConfig(content, testConfigMap);
             adminCLI(command: string, options?);
             retryTask(condition, expectedoutput, options?);
+            restoreClusterMonitoringConfig();
             checkCommandResult(condition, expectedoutput, options?);
             hasWindowsNode();
             isEdgeCluster();
@@ -31,6 +33,8 @@ declare global {
 
 const kubeconfig = Cypress.env('KUBECONFIG_PATH');
 const DEFAULT_RETRY_OPTIONS = { retries: 3, interval: 10000 };
+let $cmexisting = 0, cm_has_been_updated = false;
+
 
 Cypress.Commands.add("switchPerspective", (perspective: string) => {
 
@@ -102,6 +106,58 @@ Cypress.Commands.add("cliLogout", () => {
     cy.log(result.stderr);
     cy.log(result.stdout);
   });
+});
+
+Cypress.Commands.add("configureClusterMonitoringConfig", (content, testConfigMap) => {
+  const content_key = content.split(':')[0]
+  const serialized_content = content.replaceAll('\\n','\n');
+  let json_outout, to_be_updated;
+  cy.exec(`oc get cm cluster-monitoring-config -n openshift-monitoring --kubeconfig ${kubeconfig} -o json`, { failOnNonZeroExit: false }).then((result) => {
+    const $ret = result.code;
+    if ($ret == 0) {
+      cy.log(`cm/cluster-monitoring-config already exist, its content is ${result.stdout}`);
+      $cmexisting = 1;
+      json_outout = JSON.parse(result.stdout);
+      to_be_updated = JSON.parse(result.stdout);
+      delete json_outout.metadata.uid;
+      delete json_outout.metadata.resourceVersion;
+      // save original data without(uid,resourceVersion) to restore
+      cy.writeFile('./cm-cmc-restore-data.json', json_outout);
+
+      if (JSON.stringify(to_be_updated.data).includes(content) || JSON.stringify(to_be_updated.data).includes(content_key) ) {
+        cy.log('cm/cluster-monitoring-config exist, and has required configurations, nothing to do');
+      } else {
+        cm_has_been_updated = true;
+        cy.log('cm/cluster-monitoring-config exist, but no required configuration, adding');
+        // add required configuration and apply
+        delete to_be_updated.metadata.uid;
+        delete to_be_updated.metadata.resourceVersion;
+        to_be_updated.data['config.yaml'] = `${serialized_content}` + '\n' + to_be_updated.data['config.yaml'];
+        cy.writeFile('./cm-with-user-required-data.json', to_be_updated);
+        cy.exec('cat ./cm-with-user-required-data.json').then((file) => {
+          cy.log(`cm-with-user-required-data.json is ${file.stdout}`);
+        });
+        cy.exec(`oc replace -f ./cm-with-user-required-data.json --kubeconfig ${kubeconfig}`)
+          .its('stdout')
+          .should('contain', 'replaced');
+      }
+    }
+    if($ret == 1){
+      cy.log('cm/cluster-monitoring-config NOT exist, creating');
+      cy.exec(`echo '${JSON.stringify(testConfigMap)}' | oc create -f - --kubeconfig ${kubeconfig}`);
+    }
+  });
+});
+
+Cypress.Commands.add('restoreClusterMonitoringConfig', () => {
+    if ($cmexisting == 1){
+      if(cm_has_been_updated) {
+        cy.adminCLI('oc replace -f ./cm-cmc-restore-data.json').its('stdout').should('contain', 'replaced');
+      }
+    } else {
+      cy.adminCLI(`oc delete cm cluster-monitoring-config -n openshift-monitoring`);
+    }
+    cy.exec('rm ./cm-*.json', {failOnNonZeroExit: false});
 });
 const AzureLoginFlowOnPage = ()=>{
   const sentArgs = {username: Cypress.env('LOGIN_USER'), password: Cypress.env('LOGIN_PASSWD'), email: Cypress.env('LOGIN_USER_EMAIL')};
