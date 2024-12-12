@@ -13964,6 +13964,22 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 	// Test case: OCP-30860, author:kuiwang@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:kuiwang-Medium-30860-complete operator upgrades automatically based on SemVer instead of replaces or skips [Slow]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		node, errNode := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(errNode).NotTo(o.HaveOccurred())
+		errSet := exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		o.Expect(errSet).NotTo(o.HaveOccurred())
+		efips, errFips := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+		if errFips != nil || strings.Contains(efips, "FIPS mode is enabled") {
+			g.Skip("skip it without impacting function")
+		}
+		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipForSNOCluster(oc)
+		platform := exutil.CheckPlatform(oc)
+		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
+		o.Expect(errProxy).NotTo(o.HaveOccurred())
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "none") {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildIndexBaseDir   = exutil.FixturePath("testdata", "olm")

@@ -767,6 +767,22 @@ var _ = g.Describe("[sig-operators] OLM opm with podman", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("Author:kuiwang-ConnectedOnly-VMonly-Medium-40167-bundle image is missed in index db of index image", func() {
+		node, errNode := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(errNode).NotTo(o.HaveOccurred())
+		errSet := exutil.SetNamespacePrivileged(oc, oc.Namespace())
+		o.Expect(errSet).NotTo(o.HaveOccurred())
+		efips, errFips := oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+node, "--to-namespace="+oc.Namespace(), "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+		if errFips != nil || strings.Contains(efips, "FIPS mode is enabled") {
+			g.Skip("skip it without impacting function")
+		}
+		exutil.SkipBaselineCaps(oc, "None")
+		exutil.SkipForSNOCluster(oc)
+		platform := exutil.CheckPlatform(oc)
+		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
+		o.Expect(errProxy).NotTo(o.HaveOccurred())
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") || strings.Contains(platform, "none") {
+			g.Skip("it is not supported")
+		}
 		var (
 			opmBaseDir    = exutil.FixturePath("testdata", "opm")
 			TestDataPath  = filepath.Join(opmBaseDir, "temp")
