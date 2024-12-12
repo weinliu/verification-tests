@@ -2232,8 +2232,8 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 
 		exutil.By("4.3 Verify egress traffic to target nodes from subjectNS to targetNS before applying BANP or ANP\n")
 		for i := 0; i < 4; i++ {
-			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[1], strconv.Itoa(int(hostport)))
-			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[2], strconv.Itoa(int(hostport)))
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], workers[1], strconv.Itoa(int(hostport)))
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], workers[2], strconv.Itoa(int(hostport)))
 		}
 
 		exutil.By("5. Apply BANP with single rule to deny egress traffic to node\n")
@@ -2284,8 +2284,8 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 
 		exutil.By("5.4. With BANP in place, verify egress traffic from subjectNS to node peers as expected\n")
 		for i := 0; i < 4; i++ {
-			CurlPod2NodeFail(oc, subjectNS, hellopods[i], targetNS, workers[1], strconv.Itoa(int(hostport)))
-			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[2], strconv.Itoa(int(hostport)))
+			CurlPod2NodeFail(oc, subjectNS, hellopods[i], workers[1], strconv.Itoa(int(hostport)))
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], workers[2], strconv.Itoa(int(hostport)))
 		}
 
 		exutil.By("6. Apply ANP with two rules for egress traffic to node peer\n")
@@ -2331,8 +2331,8 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 
 		exutil.By("6.2. With BANP/ANP in place, verify egress traffic from subjectNS to each node peer as expected\n")
 		for i := 0; i < 4; i++ {
-			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[1], strconv.Itoa(int(hostport)))
-			CurlPod2NodeFail(oc, subjectNS, hellopods[i], targetNS, workers[2], strconv.Itoa(int(hostport)))
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], workers[1], strconv.Itoa(int(hostport)))
+			CurlPod2NodeFail(oc, subjectNS, hellopods[i], workers[2], strconv.Itoa(int(hostport)))
 		}
 
 		exutil.By("7. Unlabel egress-assignable label from current egressNode (workers[0]) to force egressIP failover to the 2nd egressNode (workers[1])\n")
@@ -2357,8 +2357,8 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 
 		exutil.By("7.3. After egressIP failover, and with BANP/ANP in place, Verify egress traffic from subjectNS to each node peer as expected \n")
 		for i := 0; i < 4; i++ {
-			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[1], strconv.Itoa(int(hostport)))
-			CurlPod2NodeFail(oc, subjectNS, hellopods[i], targetNS, workers[2], strconv.Itoa(int(hostport)))
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], workers[1], strconv.Itoa(int(hostport)))
+			CurlPod2NodeFail(oc, subjectNS, hellopods[i], workers[2], strconv.Itoa(int(hostport)))
 		}
 
 		exutil.By("8. Patch change ANP 2nd rule so that egress traffic to workers[2] with NotIn operator and values:[qe, it]\n")
@@ -2383,8 +2383,8 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 
 		exutil.By("8.2. After egressIP failover, with BANP+ANP in place, and ANP 2nd rule updated, Verify egress traffic from subjectNS to node peers work as expected \n")
 		for i := 0; i < 4; i++ {
-			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[1], strconv.Itoa(int(hostport)))
-			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[2], strconv.Itoa(int(hostport)))
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], workers[1], strconv.Itoa(int(hostport)))
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], workers[2], strconv.Itoa(int(hostport)))
 		}
 
 		exutil.By("9. Flip action in 1st rule in ANP from Allow to Pass, flip action in 2nd rule in ANP from Deny to Allow\n")
@@ -2410,8 +2410,8 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		exutil.By("9.2. Verify egress traffic from subjectNS to node peers as expected after flipping actions in both ANP rules\n")
 		for i := 0; i < 4; i++ {
 			//Curl to nodeB should fail because of Deny rule in BANP after Pass rule in ANP
-			CurlPod2NodeFail(oc, subjectNS, hellopods[i], targetNS, workers[1], strconv.Itoa(int(hostport)))
-			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[2], strconv.Itoa(int(hostport)))
+			CurlPod2NodeFail(oc, subjectNS, hellopods[i], workers[1], strconv.Itoa(int(hostport)))
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], workers[2], strconv.Itoa(int(hostport)))
 		}
 
 		exutil.By("10. Delete ANP and update BANP to use NotIn operator with values:[qe,it]\n")
@@ -2437,8 +2437,8 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 
 		exutil.By("10.2. Verify egress traffic to node peers work as expected after update to BANP\n")
 		for i := 0; i < 4; i++ {
-			CurlPod2NodePass(oc, subjectNS, hellopods[i], targetNS, workers[1], strconv.Itoa(int(hostport)))
-			CurlPod2NodeFail(oc, subjectNS, hellopods[i], targetNS, workers[2], strconv.Itoa(int(hostport)))
+			CurlPod2NodePass(oc, subjectNS, hellopods[i], workers[1], strconv.Itoa(int(hostport)))
+			CurlPod2NodeFail(oc, subjectNS, hellopods[i], workers[2], strconv.Itoa(int(hostport)))
 		}
 	})
 

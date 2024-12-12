@@ -1939,8 +1939,14 @@ func checkParameter(oc *exutil.CLI, namespace string, kind string, kindName stri
 	return output
 }
 
-func patchReplaceResourceAsAdmin(oc *exutil.CLI, ns, resource, rsname, patch string) {
-	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(resource, rsname, "--type=json", "-p", patch, "-n", ns).Execute()
+func patchReplaceResourceAsAdmin(oc *exutil.CLI, resource, patch string, nameSpace ...string) {
+	var cargs []string
+	if len(nameSpace) > 0 {
+		cargs = []string{resource, "-p", patch, "-n", nameSpace[0], "--type=json"}
+	} else {
+		cargs = []string{resource, "-p", patch, "--type=json"}
+	}
+	err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(cargs...).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -2388,6 +2394,14 @@ func excludeSriovNodes(oc *exutil.CLI) []string {
 		}
 	}
 	return workers
+}
+
+func getSriovNodes(oc *exutil.CLI) []string {
+	// In rdu1 and rdu2 clusters, there are two sriov nodes with mlx nic
+	var workers string
+	workers, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/sriov", "--no-headers", "-o=custom-columns=NAME:.metadata.name").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.Split(workers, "\n")
 }
 
 func checkClusterStatus(oc *exutil.CLI, expectedStatus string) {
@@ -3282,6 +3296,18 @@ type apbStaticExternalRoute struct {
 	template   string
 }
 
+type apbDynamicExternalRoute struct {
+	name                string
+	labelKey            string
+	labelValue          string
+	podLabelKey         string
+	podLabelValue       string
+	namespaceLabelKey   string
+	namespaceLabelValue string
+	bfd                 bool
+	template            string
+}
+
 func (sgwpr *apbStaticExternalRoute) deleteAPBExternalRoute(oc *exutil.CLI) {
 	removeResource(oc, true, true, "apbexternalroute", sgwpr.name)
 }
@@ -3296,6 +3322,21 @@ func (sgwpr *apbStaticExternalRoute) createAPBExternalRoute(oc *exutil.CLI) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create apbexternalroute %v", sgwpr.name))
+}
+
+func (sgwpr *apbDynamicExternalRoute) createAPBDynamicExternalRoute(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", sgwpr.template, "-p", "NAME="+sgwpr.name, "LABELKEY="+sgwpr.labelKey, "LABELVALUE="+sgwpr.labelValue,
+			"PODLABELKEY="+sgwpr.podLabelKey, "PODLABELVALUE="+sgwpr.podLabelValue,
+			"NSLABELKEY="+sgwpr.namespaceLabelKey, "NSLABELVALUE="+sgwpr.namespaceLabelValue,
+			"BFD="+strconv.FormatBool(sgwpr.bfd))
+		if err1 != nil {
+			e2e.Logf("Could not create due to err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to create APB External Route %s due to %v", sgwpr.name, err))
 }
 
 func checkAPBExternalRouteStatus(oc *exutil.CLI, gwName string, expectedStatus string) error {
@@ -3936,7 +3977,7 @@ func (pod *httpserverPodResourceNode) createHttpservePodNodeByAdmin(oc *exutil.C
 }
 
 // CurlPod2NodePass checks connectivity from a pod to node that has httpserverPod on it
-func CurlPod2NodePass(oc *exutil.CLI, namespaceSrc, podNameSrc, namespaceDst, nodeNameDst, DstHostPort string) {
+func CurlPod2NodePass(oc *exutil.CLI, namespaceSrc, podNameSrc, nodeNameDst, DstHostPort string) {
 	nodeIP2, nodeIP1 := getNodeIP(oc, nodeNameDst)
 	if nodeIP2 != "" {
 		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -I --connect-timeout 5 -s "+net.JoinHostPort(nodeIP1, DstHostPort))
@@ -3950,7 +3991,7 @@ func CurlPod2NodePass(oc *exutil.CLI, namespaceSrc, podNameSrc, namespaceDst, no
 }
 
 // CurlPod2PodFail ensures no connectivity from pod to node that has httpserverPod on it
-func CurlPod2NodeFail(oc *exutil.CLI, namespaceSrc, podNameSrc, namespaceDst, nodeNameDst, DstHostPort string) {
+func CurlPod2NodeFail(oc *exutil.CLI, namespaceSrc, podNameSrc, nodeNameDst, DstHostPort string) {
 	nodeIP2, nodeIP1 := getNodeIP(oc, nodeNameDst)
 	if nodeIP2 != "" {
 		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl -I --connect-timeout 5 -s "+net.JoinHostPort(nodeIP1, DstHostPort))

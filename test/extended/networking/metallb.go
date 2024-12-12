@@ -3386,7 +3386,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 
 		exutil.By("11. Update BGP peer node selector with node that is labelled")
 		patchBGPPeer = `[{"op": "replace", "path": "/spec/nodeSelectors", "value":[{"matchExpressions": [{"key": "` + metalLBLabel + `", "operator": "Exists"}]}]}]`
-		patchReplaceResourceAsAdmin(oc, opNamespace, "bgppeer", BGPPeerCR.name, patchBGPPeer)
+		patchReplaceResourceAsAdmin(oc, "bgppeer/"+BGPPeerCR.name, patchBGPPeer, opNamespace)
 
 		exutil.By("12. Verify the advertised routes")
 		newExpectedPath = append(newExpectedPath, "1 available", nodeIPs[0])

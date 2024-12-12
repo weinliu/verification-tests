@@ -1814,6 +1814,138 @@ spec:
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 	})
+
+	g.It("Author:asood-ConnectedOnly-High-78162-Egress traffic works with ANP and egress fireall.", func() {
+		ipStackType := checkIPStackType(oc)
+		platform := exutil.CheckPlatform(oc)
+		acceptedPlatform := strings.Contains(platform, "none")
+		if !(ipStackType == "ipv4single" || (acceptedPlatform && ipStackType == "dualstack")) {
+			g.Skip("This case should be run on UPI packet dualstack cluster or IPv4 cluster, skip other platform or network stack type.")
+		}
+
+		var (
+			testID           = "78162"
+			testDataDir      = exutil.FixturePath("testdata", "networking")
+			anpCRTemplate    = filepath.Join(testDataDir, "adminnetworkpolicy", "anp-single-rule-cidr-template.yaml")
+			pingPodTemplate  = filepath.Join(testDataDir, "ping-for-pod-template.yaml")
+			egressFWTemplate = filepath.Join(testDataDir, "egressfirewall2-template.yaml")
+			matchLabelKey    = "kubernetes.io/metadata.name"
+			allowedIPList    = []string{}
+			deniedIPList     = []string{}
+			patchEfw         string
+			patchANP         string
+		)
+
+		exutil.By("1. Obtain the namespace")
+		ns := oc.Namespace()
+
+		exutil.By("2. Create a pod ")
+		pod := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		pod.createPingPod(oc)
+		waitPodReady(oc, pod.namespace, pod.name)
+
+		exutil.By("3. Get an IP address for domain name www.google.com for allow rule and www.facebook.com for deny rule validation")
+		allowedIPv4, allowedIPv6 := getIPFromDnsName("www.google.com")
+		o.Expect(len(allowedIPv4) == 0).NotTo(o.BeTrue())
+		ipv4CIDR := allowedIPv4 + "/32"
+		allowedIPList = append(allowedIPList, allowedIPv4)
+		deniedIPv4, deniedIPv6 := getIPFromDnsName("www.facebook.com")
+		o.Expect(len(deniedIPv4) == 0).NotTo(o.BeTrue())
+		deniedIPList = append(deniedIPList, deniedIPv4)
+
+		// patch payload for egress firewall and ANP
+		patchEfw = "[{\"op\": \"add\", \"path\":\"/spec/egress/1\", \"value\": {\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}}}]"
+		patchANP = "[{\"op\": \"add\", \"path\": \"/spec/egress/1\", \"value\": {\"name\":\"deny egresss\", \"action\": \"Deny\", \"to\": [{\"networks\": [\"0.0.0.0/0\"]}]}}]"
+
+		if ipStackType == "dualstack" {
+			if checkIPv6PublicAccess(oc) {
+				o.Expect(len(allowedIPv6) == 0).NotTo(o.BeTrue())
+				ipv6CIDR := allowedIPv6 + "/128"
+				allowedIPList = append(allowedIPList, allowedIPv6)
+				o.Expect(len(deniedIPv6) == 0).NotTo(o.BeTrue())
+				deniedIPList = append(deniedIPList, deniedIPv6)
+				patchEfw = "[{\"op\": \"add\", \"path\":\"/spec/egress/1\", \"value\": {\"type\":\"Allow\",\"to\":{\"cidrSelector\":\"" + ipv6CIDR + "\"}}}, {\"op\": \"add\", \"path\":\"/spec/egress/2\", \"value\": {\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}}}, {\"op\": \"add\", \"path\":\"/spec/egress/3\", \"value\": {\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"::/0\"}}}]"
+				patchANP = "[{\"op\": \"add\", \"path\": \"/spec/egress/0/to/0/networks/1\", \"value\": \"" + ipv6CIDR + "\"}, {\"op\": \"add\", \"path\": \"/spec/egress/1\", \"value\": {\"name\":\"deny egresss\", \"action\": \"Deny\", \"to\": [{\"networks\": [\"0.0.0.0/0\", \"::/0\"]}]}}]"
+
+			} else {
+				e2e.Logf("Dual stack cluster does not have access to public websites")
+			}
+
+		}
+
+		egressFW := egressFirewall2{
+			name:      "default",
+			namespace: ns,
+			ruletype:  "Allow",
+			cidr:      allowedIPv4 + "/32",
+			template:  egressFWTemplate,
+		}
+
+		anpCR := singleRuleCIDRANPPolicyResource{
+			name:       "anp-network-egress" + testID,
+			subjectKey: matchLabelKey,
+			subjectVal: ns,
+			priority:   10,
+			ruleName:   "allow-to-" + ns,
+			ruleAction: "Allow",
+			cidr:       ipv4CIDR,
+			template:   anpCRTemplate,
+		}
+		exutil.By("5. Verify the intended denied IP is reachable before egress firewall is applied")
+		for i := 0; i < len(deniedIPList); i++ {
+			e2e.Logf("Verify %s is accessible before egress firewall is applied", deniedIPList[i])
+			verifyDstIPAccess(oc, pod.name, ns, deniedIPList[i], true)
+		}
+
+		exutil.By("6. Create egress firewall")
+		egressFW.createEgressFW2Object(oc)
+		err := waitEgressFirewallApplied(oc, egressFW.name, ns)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchReplaceResourceAsAdmin(oc, "egressfirewall/default", patchEfw, ns)
+		efwRules, efwRulesErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "egressfirewall", "default", "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(efwRulesErr).NotTo(o.HaveOccurred())
+		e2e.Logf("\n Egress Firewall Rules after update : %s", efwRules)
+		exutil.By("7. Validate traffic after egress firewall is applied")
+		for i := 0; i < len(allowedIPList); i++ {
+			exutil.By(fmt.Sprintf("Verify %s is accessible with just egress firewall", allowedIPList[i]))
+			verifyDstIPAccess(oc, pod.name, ns, allowedIPList[i], true)
+			exutil.By(fmt.Sprintf("Verify %s is not accessible with just egress firewall", deniedIPList[i]))
+			verifyDstIPAccess(oc, pod.name, ns, deniedIPList[i], false)
+		}
+
+		exutil.By("8. Create ANP with Allow action to an IP and Deny action to all CIDRs")
+		defer removeResource(oc, true, true, "anp", anpCR.name)
+		anpCR.createSingleRuleCIDRANP(oc)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anpCR.name)).To(o.BeTrue())
+		patchReplaceResourceAsAdmin(oc, "anp/"+anpCR.name, patchANP)
+
+		anpRules, rulesErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("adminnetworkpolicy", anpCR.name, "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(rulesErr).NotTo(o.HaveOccurred())
+		e2e.Logf("\n ANP Rules  after update : %s", anpRules)
+		exutil.By("9. Validate traffic with ANP and Egress firewall configured")
+		for i := 0; i < len(allowedIPList); i++ {
+			exutil.By(fmt.Sprintf("Verify %s is accessible after ANP is created", allowedIPList[i]))
+			verifyDstIPAccess(oc, pod.name, ns, allowedIPList[i], true)
+			exutil.By(fmt.Sprintf("Verify %s is not accessible after ANP is created", deniedIPList[i]))
+			verifyDstIPAccess(oc, pod.name, ns, deniedIPList[i], false)
+		}
+		exutil.By("10. Remove Egress Firewall")
+		removeResource(oc, true, true, "egressfirewall", egressFW.name, "-n", egressFW.namespace)
+		exutil.By("11. Validate traffic with just ANP configured")
+		for i := 0; i < len(allowedIPList); i++ {
+			exutil.By(fmt.Sprintf("Verify %s is accessible after egress firewall is removed", allowedIPList[i]))
+			verifyDstIPAccess(oc, pod.name, ns, allowedIPList[i], true)
+			exutil.By(fmt.Sprintf("Verify %s is not accessible after egress firewall is removed", deniedIPList[i]))
+			verifyDstIPAccess(oc, pod.name, ns, deniedIPList[i], false)
+		}
+
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN egressfirewall-techpreview", func() {
