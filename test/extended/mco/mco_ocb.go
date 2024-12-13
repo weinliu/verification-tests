@@ -618,6 +618,56 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 			"The new image is not being used in node %s", node)
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:ptalgulk-ConnectedOnly-Longduration-NonPreRelease-Medium-77977-Install extension after OCB is enabled [Disruptive]", func() {
+		// Remove this "skip" checks once the functionality to disable OCL is implemented
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
+		SkipIfSNO(oc.AsAdmin())                       // This test makes no sense in SNO
+
+		var (
+			moscName = "test-" + GetCurrentTestPolarionIDNumber()
+			mcp      = GetCompactCompatiblePool(oc.AsAdmin())
+			node     = mcp.GetSortedNodesOrFail()[0]
+			mcName   = "test-install-extenstion-" + GetCurrentTestPolarionIDNumber()
+		)
+
+		exutil.By("Configure OCB functionality for the new worker MCP")
+		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), MachineConfigNamespace, moscName, mcp.GetName(), nil)
+		defer DisableOCL(mosc)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
+		logger.Infof("OK!\n")
+
+		ValidateSuccessfulMOSC(mosc, nil)
+
+		exutil.By("Create a MC")
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
+		mc.SetParams(`EXTENSIONS=["usbguard"]`)
+		defer mc.delete()
+		mc.create()
+
+		exutil.By("Wait for the configuration to be applied")
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Verify worker node includes usbguard extenstion")
+		o.Expect(
+			node.DebugNodeWithChroot("rpm", "-q", "usbguard"),
+		).Should(o.ContainSubstring("usbguard-"), "usbguard has not been installed")
+		logger.Infof("OK!\n")
+
+		exutil.By("Delete a MC.")
+		mc.delete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Remove the MachineOSConfig resource")
+		o.Expect(mosc.CleanupAndDelete()).To(o.Succeed(), "Error cleaning up %s", mosc)
+		logger.Infof("OK!\n")
+
+		ValidateMOSCIsGarbageCollected(mosc, mcp)
+
+		o.Expect(DisableOCL(mosc)).To(o.Succeed(), "Error cleaning up %s", mosc)
+		logger.Infof("OK!\n")
+	})
 })
 
 func testContainerFile(containerFiles []ContainerFile, imageNamespace string, mcp *MachineConfigPool, checkers []Checker) {
