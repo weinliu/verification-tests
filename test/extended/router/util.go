@@ -1611,6 +1611,55 @@ func repeatCmdOnExternalClient(cmd string, expectOutput []string, duration time.
 	return result
 }
 
+// used to execute a command for some times in a cluster pod, the return is a list of counters for successfully get the expected output list
+// for example, if one expected item is matched for one time, the mathcing counter will be increased by 1, if the expected list is a deployment's pod list, the return of the function can tell which pods of list are hit
+func repeatCmdOnInternalClient(oc *exutil.CLI, cmd []string, expectOutput []string, duration time.Duration, repeatTimes int) []int {
+	result := []int{}
+	successCurlCount := 0
+	matchedCount := 0
+	for i := 0; i < len(expectOutput); i++ {
+		result = append(result, 0)
+	}
+	e2e.Logf("the command is: %v", cmd)
+	waitErr := wait.Poll(1*time.Second, duration*time.Second, func() (bool, error) {
+		isMatch := false
+		//output, err := exec.Command("bash", "-c", cmd).Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
+		if err != nil {
+			e2e.Logf("failed to execute cmd and got err %v, retrying...", err.Error())
+			return false, nil
+		}
+		successCurlCount++
+		e2e.Logf("executed cmd for %v times on the external client and got result: %s", successCurlCount, output)
+		for i := 0; i < len(expectOutput); i++ {
+			searchInfo := regexp.MustCompile(expectOutput[i]).FindStringSubmatch(output)
+			if len(searchInfo) > 0 {
+				isMatch = true
+				matchedCount++
+				result[i] = result[i] + 1
+				break
+			}
+		}
+
+		if isMatch {
+			e2e.Logf("successfully executed cmd for %v times on the external client, expecting %v times", matchedCount, repeatTimes)
+			if matchedCount == repeatTimes {
+				return true, nil
+			} else {
+				return false, nil
+			}
+		} else {
+			// if after executed the cmd, but could not get a output in the expectOutput list, decrease the successfully executed times
+			successCurlCount--
+			e2e.Logf("failed to find a match in the outout: %s", output)
+			return false, nil
+		}
+	})
+	e2e.Logf("the result is: %v", result)
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but can't execute the cmd successfully for the desired times"))
+	return result
+}
+
 // this function is to check whether given string is present or not in a list
 func checkGivenStringPresentOrNot(shouldContain bool, iterateObject []string, searchString string) {
 	if shouldContain {
@@ -1999,4 +2048,88 @@ func getPublicSubnetList(oc *exutil.CLI) []string {
 	}
 	e2e.Logf("The public subnet list generated from private is: %v", publicSubnetList)
 	return publicSubnetList
+}
+
+// for DCM testing, Check whether a new static endpoint is added to the backend
+func isNewStaticEPAdded(initSrvStates, currentSrvStates string) bool {
+	upEpReg := regexp.MustCompile("([0-9\\.a-zA-Z:]+ UP)")
+	initUpEps := ""
+	for _, entry := range strings.Split(initSrvStates, "\n") {
+		if len(upEpReg.FindStringSubmatch(entry)) > 1 {
+			initUpEps = initUpEps + upEpReg.FindStringSubmatch(entry)[1] + " "
+		}
+	}
+
+	for _, entry := range strings.Split(currentSrvStates, "\n") {
+		if len(upEpReg.FindStringSubmatch(entry)) > 1 && !strings.Contains(entry, "dynamic-pod") {
+			if !strings.Contains(initUpEps, upEpReg.FindStringSubmatch(entry)[1]) {
+				e2e.Logf("new static endpoint %s is added to the backend", upEpReg.FindStringSubmatch(entry)[1])
+				return true
+			}
+		}
+	}
+	e2e.Logf("no new static endpoint is added to the backend")
+	return false
+}
+
+// for DCM testing, scale Deployment
+func scaleDeploy(oc *exutil.CLI, ns, deployName string, num int) []string {
+	expReplicas := strconv.Itoa(num)
+	if num == 0 {
+		expReplicas = ""
+	}
+	_, err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("-n", ns, "deployment/"+deployName, "--replicas="+strconv.Itoa(num)).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	waitForOutput(oc, ns, "deployment/"+deployName, "{.status.availableReplicas}", expReplicas)
+	podList, err := exutil.GetAllPodsWithLabel(oc, ns, "name="+deployName)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return podList
+}
+
+// for DCM testing, check route's backend configuration
+func checkDcmBackendCfg(oc *exutil.CLI, routerpod, backend string) {
+	dynamicPod := `server-template _dynamic-pod- 1-1.+check disabled`
+	if strings.Contains(backend, "be_secure") {
+		dynamicPod = `server-template _dynamic-pod- 1-1.+check disabled.+verifyhost service.+`
+	}
+
+	backendCfg := getBlockConfig(oc, routerpod, backend)
+	o.Expect(backendCfg).Should(o.And(
+		o.MatchRegexp(`server pod:.+`),
+		o.MatchRegexp(dynamicPod),
+		o.MatchRegexp(`dynamic-cookie-key [0-9a-zA-A]+`),
+		o.MatchRegexp(`cookie.+dynamic`)))
+}
+
+// for DCM testing, check UP endpoint of the deployment
+func checkDcmUpEndpoints(oc *exutil.CLI, routerpod, socatCmd string, replicasNum int) string {
+	currentSrvStates, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", socatCmd).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	upEpNum := strings.Count(currentSrvStates, "UP")
+	o.Expect(upEpNum).To(o.Equal(replicasNum))
+	return currentSrvStates
+}
+
+// for DCM testing, check whether there are router reloaded logs as expected
+func checkRouterReloadedLogs(oc *exutil.CLI, routerpod string, initReloadedNum int, initSrvStates, currentSrvStates string) int {
+	isNewEPAdded := isNewStaticEPAdded(initSrvStates, currentSrvStates)
+	log, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress", routerpod).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	currentReloadedNum := strings.Count(log, `"msg"="router reloaded" "logger"="template" "output"=`)
+	if isNewEPAdded {
+		o.Expect(currentReloadedNum > initReloadedNum).To(o.BeTrue())
+	} else {
+		e2e.Logf("initReloadedNum is: %v", initReloadedNum)
+		e2e.Logf("currentReloadedNum is: %v", currentReloadedNum)
+		o.Expect(currentReloadedNum-initReloadedNum <= 1).To(o.BeTrue())
+	}
+	return currentReloadedNum
+}
+
+// for DCM testing, check whether all the deployment pods are accessible or not
+func checkDcmServersAccessible(oc *exutil.CLI, curlCmd, podList []string, duration time.Duration, repeatTimes int) {
+	result := repeatCmdOnInternalClient(oc, curlCmd, podList, duration, repeatTimes)
+	for i := 0; i < len(podList); i++ {
+		o.Expect(result[i] > 0).To(o.BeTrue())
+	}
 }

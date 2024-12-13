@@ -14,6 +14,7 @@ items:
       http {
           server {
               listen		8080;
+              listen       [::]:8080;
               location / {
                   root /data/http;
               }
