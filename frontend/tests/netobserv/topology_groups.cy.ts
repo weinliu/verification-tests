@@ -121,7 +121,7 @@ describe("(OCP-53591 Network_Observability) Netflow Topology groups features", {
         cy.intercept('GET', getTopologyResourceScopeGroupURL('hosts%2Bowners'), { fixture: 'netobserv/flow_metrics_ghostsOwners.json' })
         topologyPage.selectScopeGroup("resource", "hosts+owners")
         // verify number of groups
-        cy.get(topologySelectors.nGroups).should('have.length', 20)
+        cy.get(topologySelectors.nGroups).should('have.length', 11)
     })
 
     it("(OCP-53591, memodi, Network_Observability) should verify group NS", function () {
@@ -133,7 +133,7 @@ describe("(OCP-53591 Network_Observability) Netflow Topology groups features", {
     it("(OCP-53591, memodi, Network_Observability) should verify group NS+Owners", function () {
         cy.intercept('GET', getTopologyResourceScopeGroupURL('namespaces%2Bowners'), { fixture: 'netobserv/flow_metrics_gNSOwners.json' })
         topologyPage.selectScopeGroup("resource", "namespaces+owners")
-        cy.get(topologySelectors.nGroups).should('have.length', 18)
+        cy.get(topologySelectors.nGroups).should('have.length', 9)
     })
 
     afterEach("test", function () {

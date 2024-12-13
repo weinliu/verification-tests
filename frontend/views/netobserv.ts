@@ -122,7 +122,7 @@ export const Operator = {
                 cy.log(`Running command: ${cmd}`)
                 cy.exec(cmd, { failOnNonZeroExit: false })
                 // deploy loki
-                cy.adminCLI(`oc apply -f ./fixtures/netobserv/loki.yaml -n ${namespace}`)
+                cy.adminCLI(`oc apply -f https://raw.githubusercontent.com/netobserv/documents/main/examples/zero-click-loki/2-loki.yaml -n ${namespace}`)
                 cy.byTestID('item-create').should('exist').click()
                 cy.get('#form').click() // bug in console where yaml view is default
                 cy.get('#root_spec_agent_accordion-toggle').click()
