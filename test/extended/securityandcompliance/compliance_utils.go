@@ -1139,8 +1139,11 @@ func assertEventMessageRegexpMatch(oc *exutil.CLI, expected string, parameters .
 	})
 	if err != nil {
 		e2e.Logf("The event %s NOT to contain %s", eventsMessage, expected)
-		exutil.AssertWaitPollNoErr(err, "the expected message is missed")
+		event, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "--field-selector", "type=Warning,reason=PriorityClass", "--sort-by=lastTimestamp", "-n", "openshift-compliance").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The priorityclass related events are: %v", event)
 	}
+	exutil.AssertWaitPollNoErr(err, "the expected message is missed")
 }
 
 // skip cluster when apiserver encryption type is eqauls to aescbc as enable/disable encryption is destructive and time consuming

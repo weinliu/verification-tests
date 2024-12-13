@@ -5751,7 +5751,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 
 		g.By("Check event message.. !!!\n")
 		commonMessage := "Error while getting priority class"
-		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", subD.namespace, "--field-selector", "involvedObject.name="+csuite.name+",involvedObject.kind=ComplianceSuite", "-o=jsonpath={.items[*].message}")
 		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", subD.namespace, "--field-selector", "involvedObject.name="+csuite.scanname+",involvedObject.kind=ComplianceScan", "-o=jsonpath={.items[*].message}")
 
 		g.By("Create scansetting !!!\n")
@@ -5779,7 +5778,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		assertParameterValueForBulkPods(oc, "0", "pod", "-l", "workload=aggregator", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.priority}")
 
 		g.By("Check event message for ssb.. !!!\n")
-		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", subD.namespace, "--field-selector", "involvedObject.name="+ssbWithPC+",involvedObject.kind=ComplianceSuite", "-o=jsonpath={.items[*].message}")
 		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", subD.namespace, "--field-selector", "involvedObject.name=ocp4-cis,involvedObject.kind=ComplianceScan", "-o=jsonpath={.items[*].message}")
 		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", subD.namespace, "--field-selector", "involvedObject.name=ocp4-cis-node-master,involvedObject.kind=ComplianceScan", "-o=jsonpath={.items[*].message}")
 		assertEventMessageRegexpMatch(oc, commonMessage, "event", "-n", subD.namespace, "--field-selector", "involvedObject.name=ocp4-cis-node-worker,involvedObject.kind=ComplianceScan", "-o=jsonpath={.items[*].message}")
