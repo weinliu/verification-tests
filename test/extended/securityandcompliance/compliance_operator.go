@@ -3225,7 +3225,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-Author:pdhamdhe-NonPreRelease-CPaasrunOnly-Medium-40660-Low-42874-Check whether the audit logs are getting forwarded using TLS protocol [Disruptive][Slow]", func() {
+	g.It("Author:pdhamdhe-NonHyperShiftHOST-NonPreRelease-CPaasrunOnly-ConnectedOnly-Medium-40660-Low-42874-Check whether the audit logs are getting forwarded using TLS protocol [Disruptive][Slow]", func() {
 		var (
 			ogL = operatorGroupDescription{
 				name:      "openshift-logging",
@@ -4181,7 +4181,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("Author:xiyuan-NonHyperShiftHOST-NonPreRelease-Medium-76797-Check the variables ocp4-var-x-limit-namespaces-exempt-regex works as expected [Serial][Slow]", func() {
+	g.It("Author:xiyuan-NonHyperShiftHOST-NonPreRelease-ConnectedOnly-Medium-76797-Check the variables ocp4-var-x-limit-namespaces-exempt-regex works as expected [Serial][Slow]", func() {
 		var (
 			tpName  = "tp-variables-" + getRandomString()
 			nsTest1 = "ns-76797-" + getRandomString()
@@ -7072,7 +7072,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("CPaasrunOnly-Author:xiyuan-High-71325-compliance operator should pass DAST test", func() {
+	g.It("Author:xiyuan-CPaasrunOnly-ConnectedOnly-High-71325-compliance operator should pass DAST test", func() {
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 
 		configFile := filepath.Join(buildPruningBaseDir, "rapidast/data_rapidastconfig_compliance_v1alpha1.yaml")
