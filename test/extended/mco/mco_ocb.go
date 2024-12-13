@@ -217,15 +217,13 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		testContainerFile([]ContainerFile{{Content: containerFileContent}}, MachineConfigNamespace, mcp, checkers)
 	})
 
-	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-73436-[P2] OCB Use custom Containerfile with rhel enablement [Disruptive]", func() {
+	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Medium-78001-[P2] The etc-pki-etitlement secret is created automatically for OCB Use custom Containerfile with rhel enablement [Disruptive]", func() {
 		// Remove this "skip" checks once the functionality to disable OCL is implemented
 		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
 
 		SkipIfSNO(oc.AsAdmin()) // We have to skip this test case in SNO until the functionality to disable OCL is ready to work on master nodes
 		var (
-			entitlementSecret = NewSecret(oc.AsAdmin(), "openshift-config-managed", "etc-pki-entitlement")
-			mcp               = GetCompactCompatiblePool(oc.AsAdmin())
-
+			entitlementSecret    = NewSecret(oc.AsAdmin(), "openshift-config-managed", "etc-pki-entitlement")
 			containerFileContent = `
         FROM configs AS final
     
@@ -243,17 +241,13 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 					Desc:     fmt.Sprintf("Check that buildah is installed"),
 				},
 			}
+
+			mcp = GetCompactCompatiblePool(oc.AsAdmin())
 		)
 
 		if !entitlementSecret.Exists() {
 			g.Skip(fmt.Sprintf("There is no entitlement secret available in this cluster %s. This test case cannot be executed", entitlementSecret))
 		}
-
-		exutil.By("Create the entitlement secret in the MCO namespace")
-		mcoEntitlementSecret, err := CloneResource(entitlementSecret, "etc-pki-entitlement", MachineConfigNamespace, nil)
-		defer mcoEntitlementSecret.Delete()
-		o.Expect(err).NotTo(o.HaveOccurred(), "Error copying %s to the %s namespace", mcoEntitlementSecret, MachineConfigNamespace)
-		logger.Infof("OK!\n")
 
 		testContainerFile([]ContainerFile{{Content: containerFileContent}}, MachineConfigNamespace, mcp, checkers)
 	})
@@ -693,6 +687,8 @@ func testContainerFile(containerFiles []ContainerFile, imageNamespace string, mc
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
 	logger.Infof("OK!\n")
 
+	verifyEntitlementSecretIsPresent(oc.AsAdmin(), mcp)
+
 	ValidateSuccessfulMOSC(mosc, checkers)
 
 	exutil.By("Remove the MachineOSConfig resource")
@@ -764,6 +760,13 @@ func ValidateMOSCIsGarbageCollected(mosc *MachineOSConfig, mcp *MachineConfigPoo
 			"%s should have been garbage collected by OCB when the %s was deleted", cm, mosc)
 	}
 	logger.Infof("OK!")
+
+	exutil.By("Verify the etc-pki-entitlement secret is removed")
+	oc := mosc.GetOC()
+	secretName := fmt.Sprintf("etc-pki-entitlement-%s", mcp.GetName())
+	entitlementSecretInMco := NewSecret(oc.AsAdmin(), "openshift-machine-config-operator", secretName)
+	o.Eventually(entitlementSecretInMco.Exists, "5m", "30s").Should(o.BeFalse(), "Error etc-pki-entitlement should not exist")
+	logger.Infof("OK!\n")
 
 }
 
@@ -932,4 +935,20 @@ func checkNewBuildIsTriggered(mosc *MachineOSConfig, currentMOSB *MachineOSBuild
 	o.Eventually(newMOSB, "10m", "20s").Should(HaveConditionField("Succeeded", "status", TrueString), "Build didn't succeed")
 	o.Eventually(newMOSB, "2m", "20s").Should(HaveConditionField("Interrupted", "status", FalseString), "Build was interrupted")
 	o.Eventually(newMOSB, "2m", "20s").Should(HaveConditionField("Failed", "status", FalseString), "Build was failed")
+}
+
+func verifyEntitlementSecretIsPresent(oc *exutil.CLI, mcp *MachineConfigPool) {
+	entitlementSecret := NewSecret(oc.AsAdmin(), "openshift-config-managed", "etc-pki-entitlement")
+	secretName := fmt.Sprintf("etc-pki-entitlement-%s", mcp.GetName())
+	entitlementSecretInMco := NewSecret(oc.AsAdmin(), "openshift-machine-config-operator", secretName)
+
+	exutil.By("Verify the etc-pki-entitlement secret is present in openshift-config-managed namespace ")
+	if entitlementSecret.Exists() {
+		exutil.By("Verify the etc-pki-entitlement secret is present")
+		logger.Infof("%s\n", entitlementSecretInMco)
+		o.Eventually(entitlementSecretInMco.Exists, "5m", "30s").Should(o.BeTrue(), "Error etc-pki-entitlement should exist")
+		logger.Infof("OK!\n")
+	} else {
+		logger.Infof("etc-pki-entitlement does not exist in openshift-config-managed namespace")
+	}
 }
