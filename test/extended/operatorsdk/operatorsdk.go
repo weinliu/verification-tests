@@ -2022,6 +2022,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-VMonly-Author:xzha-High-52371-Enable Micrometer Metrics from java operator plugins", func() {
+
+		g.Skip("OperatorSDK Java plugin unavailable and no plan to fix it, so skip it")
+
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
@@ -2182,6 +2185,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: xzha@redhat.com
 	g.It("ConnectedOnly-VMonly-Author:xzha-High-52377-operatorSDK support java plugin", func() {
+
+		g.Skip("OperatorSDK Java plugin unavailable and no plan to fix it, so skip it")
+
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
@@ -4613,6 +4619,9 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 
 	// author: jfan@redhat.com
 	g.It("VMonly-ConnectedOnly-Author:jfan-Medium-48359-SDK init plugin about hybird helm operator [Slow]", func() {
+
+		g.Skip("OperatorSDK Hybrid Helm plugin unavailable and no plan to fix it, so skip it")
+
 		clusterArchitecture := architecture.SkipNonAmd64SingleArch(oc)
 		tmpBasePath := "/tmp/ocp-48359-" + getRandomString()
 		tmpPath := filepath.Join(tmpBasePath, "memcached-operator-48359")
