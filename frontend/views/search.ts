@@ -6,7 +6,6 @@ export const searchPage = {
   },
   checkNoMachineResources: () => {
     searchPage.navToSearchPage();
-    cy.get('button[class*=c-select__toggle]').click();
     cy.get('[placeholder="Resources"]').type("machine");
     const machineResources = ['MMachine','MAMachineAutoscaler','MCMachineConfig','MCPMachineConfigPool','MHCMachineHealthCheck','MSMachineSet'];
     machineResources.forEach((machineResource) => {
