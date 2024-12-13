@@ -109,16 +109,17 @@ type clusterClaim struct {
 }
 
 type installConfig struct {
-	name1           string
-	namespace       string
-	baseDomain      string
-	name2           string
-	region          string
-	template        string
-	publish         string
-	vmType          string
-	arch            string
-	credentialsMode string
+	name1              string
+	namespace          string
+	baseDomain         string
+	name2              string
+	region             string
+	template           string
+	publish            string
+	vmType             string
+	arch               string
+	credentialsMode    string
+	internalJoinSubnet string
 }
 
 type clusterDeployment struct {
@@ -689,6 +690,9 @@ func (config *installConfig) create(oc *exutil.CLI) {
 	parameters := []string{"--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1=" + config.name1, "NAMESPACE=" + config.namespace, "BASEDOMAIN=" + config.baseDomain, "NAME2=" + config.name2, "REGION=" + config.region, "PUBLISH=" + config.publish, "VMTYPE=" + config.vmType, "ARCH=" + config.arch}
 	if len(config.credentialsMode) > 0 {
 		parameters = append(parameters, "CREDENTIALSMODE="+config.credentialsMode)
+	}
+	if len(config.internalJoinSubnet) > 0 {
+		parameters = append(parameters, "INTERNALJOINSUBNET="+config.internalJoinSubnet)
 	}
 	err := applyResourceFromTemplate(oc, parameters...)
 	o.Expect(err).NotTo(o.HaveOccurred())

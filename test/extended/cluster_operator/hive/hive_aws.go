@@ -10,10 +10,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -6785,5 +6787,77 @@ role_arn = %s
 
 		e2e.Logf("Check the machinepool replicas number equals to 2")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
+	})
+
+	g.It("Author:mihuang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-High-78024-[HiveSDRosa] [HiveSpec] Support install cluster with ovn ipv4 subnet configured. [Serial]", func() {
+		testCaseID := "78024"
+		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
+
+		exutil.By("Config Install-Config Secret...")
+		ipv4InternalJoinSubnet := "101.64.0.0/16"
+		installConfigSecret := installConfig{
+			name1:              cdName + "-install-config",
+			namespace:          oc.Namespace(),
+			baseDomain:         AWSBaseDomain,
+			name2:              cdName,
+			region:             AWSRegion,
+			internalJoinSubnet: ipv4InternalJoinSubnet,
+			template:           filepath.Join(testDataDir, "aws-install-config.yaml"),
+		}
+
+		exutil.By("Config ClusterDeployment...")
+		cluster := clusterDeployment{
+			fake:                 "false",
+			name:                 cdName,
+			namespace:            oc.Namespace(),
+			baseDomain:           AWSBaseDomain,
+			clusterName:          cdName,
+			platformType:         "aws",
+			credRef:              AWSCreds,
+			region:               AWSRegion,
+			imageSetRef:          cdName + "-imageset",
+			installConfigSecret:  cdName + "-install-config",
+			pullSecretRef:        PullSecret,
+			installAttemptsLimit: 1,
+			template:             filepath.Join(testDataDir, "clusterdeployment.yaml"),
+		}
+		defer cleanCD(oc, cluster.name+"-imageset", oc.Namespace(), installConfigSecret.name1, cluster.name)
+		createCD(testDataDir, testOCPImage, oc, oc.Namespace(), installConfigSecret, cluster)
+
+		exutil.By("Check AWS ClusterDeployment installed flag is true")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+
+		exutil.By("Log in to the spoke cluster, check that the OVN IPv4 internal subnet is correctly configured in the running cluster.")
+		e2e.Logf("Extracting kubeconfig ...")
+		tmpDir := "/tmp/" + cdName + "-" + getRandomString()
+		defer os.RemoveAll(tmpDir)
+		err := os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		kubeconfigFilePath := getClusterKubeconfig(oc, cdName, oc.Namespace(), tmpDir)
+
+		ovninternalJoinSubnet, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig="+kubeconfigFilePath, "networks.operator.openshift.io", "cluster", "-o", "jsonpath={.spec.defaultNetwork.ovnKubernetesConfig.ipv4.internalJoinSubnet}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(ovninternalJoinSubnet).To(o.Equal(ipv4InternalJoinSubnet))
+
+		exutil.By("Verify whether the routing interface (LRP) of each node is using an IPv4 address.")
+		nodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig="+kubeconfigFilePath, "nodes", "-o", "jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeList := strings.Split(nodes, " ")
+		for _, node := range nodeList {
+			nodeGatewayRouterLrpIfaddrs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("--kubeconfig="+kubeconfigFilePath, "node", node, "-o", "jsonpath={.metadata.annotations.k8s\\.ovn\\.org/node-gateway-router-lrp-ifaddrs}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(nodeGatewayRouterLrpIfaddrs).To(o.ContainSubstring("ipv4"))
+			re := regexp.MustCompile(`"ipv4":"([0-9\.\/]+)"`)
+			match := re.FindStringSubmatch(nodeGatewayRouterLrpIfaddrs)
+			o.Expect(len(match)).To(o.BeNumerically(">", 1))
+			ipWithCIDR := match[1]
+			ip := strings.Split(ipWithCIDR, "/")[0]
+			e2e.Logf("Node %s has gateway router LRP interface with IPv4 address %s", node, ip)
+			_, ipv4InternalJoinSubnetNet, err := net.ParseCIDR(ipv4InternalJoinSubnet)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			nodeIP := net.ParseIP(ip)
+			o.Expect(nodeIP).NotTo(o.BeNil())
+			o.Expect(ipv4InternalJoinSubnetNet.Contains(nodeIP)).To(o.BeTrue(), fmt.Sprintf("Routing interface (LRP) of node %s has IPv4 address %s, but it is not in the expected subnet %s", node, ip, ipv4InternalJoinSubnet))
+		}
 	})
 })

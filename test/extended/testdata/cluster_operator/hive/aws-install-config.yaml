@@ -47,6 +47,9 @@ objects:
         networkType: OVNKubernetes
         serviceNetwork:
         - 172.30.0.0/16
+        ovnKubernetesConfig:
+          ipv4:
+            internalJoinSubnet: "${INTERNALJOINSUBNET}"
       platform:
         aws:
           region: "${REGION}"
@@ -63,3 +66,4 @@ parameters:
 - name: VMTYPE
 - name: ARCH
 - name: CREDENTIALSMODE
+- name: INTERNALJOINSUBNET
