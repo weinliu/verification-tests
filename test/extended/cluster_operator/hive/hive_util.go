@@ -2426,6 +2426,12 @@ func createAssumeRolePolicyDocument(principalARN, uuid string) (string, error) {
 func isMCEEnabled(oc *exutil.CLI) bool {
 	e2e.Logf("Checking if MCE is enabled in the cluster")
 	checkMCEOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("MultiClusterEngine", "multiclusterengine-sample").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil {
+		if strings.Contains(checkMCEOutput, "the server doesn't have a resource type \"MultiClusterEngine\"") {
+			return false
+		} else {
+			e2e.Failf("Failed to check if MCE is enabled in the cluster: %v", err)
+		}
+	}
 	return strings.Contains(checkMCEOutput, "multiclusterengine-sample")
 }
