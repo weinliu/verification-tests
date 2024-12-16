@@ -2866,6 +2866,41 @@ func CurlNodePortFail(oc *exutil.CLI, nodeNameFrom string, nodeNameTo string, no
 	}
 }
 
+func CurlPod2NodePortPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, nodeNameTo string, nodePort string) {
+	nodeIP1, nodeIP2 := getNodeIP(oc, nodeNameTo)
+	if nodeIP1 != "" {
+		nodev6URL := net.JoinHostPort(nodeIP1, nodePort)
+		nodev4URL := net.JoinHostPort(nodeIP2, nodePort)
+		output, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl "+nodev4URL+" --connect-timeout 5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+		output, err = e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl "+nodev6URL+" --connect-timeout 5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+	} else {
+		nodeURL := net.JoinHostPort(nodeIP2, nodePort)
+		output, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl "+nodeURL+" --connect-timeout 5")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring("Hello OpenShift"))
+	}
+}
+
+func CurlPod2NodePortFail(oc *exutil.CLI, namespaceSrc string, podNameSrc string, nodeNameTo string, nodePort string) {
+	nodeIP1, nodeIP2 := getNodeIP(oc, nodeNameTo)
+	if nodeIP1 != "" {
+		nodev6URL := net.JoinHostPort(nodeIP1, nodePort)
+		nodev4URL := net.JoinHostPort(nodeIP2, nodePort)
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl "+nodev4URL+" --connect-timeout 5")
+		o.Expect(err).To(o.HaveOccurred())
+		_, err = e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl "+nodev6URL+" --connect-timeout 5")
+		o.Expect(err).To(o.HaveOccurred())
+	} else {
+		nodeURL := net.JoinHostPort(nodeIP2, nodePort)
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl "+nodeURL+" --connect-timeout 5")
+		o.Expect(err).To(o.HaveOccurred())
+	}
+}
+
 // get primary NIC interface name
 func getPrimaryNICname(oc *exutil.CLI) string {
 	masterNode, getMasterNodeErr := exutil.GetFirstMasterNode(oc)

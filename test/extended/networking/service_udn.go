@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -849,4 +851,164 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		CurlNodePortFail(oc, masterNode, nodeList.Items[1].Name, nodePort)
 	})
 
+	g.It("Author:meinli-Critical-78238-Validate host/pod to nodeport with externalTrafficPolicy is local/cluster on same/diff workers (UDN layer3 and default network)", func() {
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			udnCRDdualStack        = filepath.Join(buildPruningBaseDir, "udn/udn_crd_dualstack2_template.yaml")
+			udnCRDSingleStack      = filepath.Join(buildPruningBaseDir, "udn/udn_crd_singlestack_template.yaml")
+			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+			ipFamilyPolicy         = "SingleStack"
+		)
+
+		exutil.By("0. Get master and worker node")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+		masterNode, err := exutil.GetFirstMasterNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("1. Create two namespaces and label namespaces")
+		ns1 := oc.Namespace()
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+		ns := []string{ns1, ns2}
+		for _, namespace := range ns {
+			err = exutil.SetNamespacePrivileged(oc, namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("2. Create UDN CRD in ns2")
+		ipStackType := checkIPStackType(oc)
+		var cidr, ipv4cidr, ipv6cidr string
+		var prefix, ipv4prefix, ipv6prefix int32
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+			prefix = 24
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/48"
+				prefix = 64
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv4prefix = 24
+				ipv6cidr = "2010:100:200::0/48"
+				ipv6prefix = 64
+				ipFamilyPolicy = "PreferDualStack"
+			}
+		}
+		var udncrd udnCRDResource
+		if ipStackType == "dualstack" {
+			udncrd = udnCRDResource{
+				crdname:    "udn-network-ds-78238",
+				namespace:  ns2,
+				role:       "Primary",
+				mtu:        1400,
+				IPv4cidr:   ipv4cidr,
+				IPv4prefix: ipv4prefix,
+				IPv6cidr:   ipv6cidr,
+				IPv6prefix: ipv6prefix,
+				template:   udnCRDdualStack,
+			}
+			udncrd.createUdnCRDDualStack(oc)
+		} else {
+			udncrd = udnCRDResource{
+				crdname:   "udn-network-ss-78238",
+				namespace: ns2,
+				role:      "Primary",
+				mtu:       1400,
+				cidr:      cidr,
+				prefix:    prefix,
+				template:  udnCRDSingleStack,
+			}
+			udncrd.createUdnCRDSingleStack(oc)
+		}
+		err = waitUDNCRDApplied(oc, ns2, udncrd.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3. Create two pods and nodeport service with externalTrafficPolicy=Local in ns1 and ns2")
+		nodeportsLocal := []string{}
+		pods := make([]pingPodResourceNode, 2)
+		svcs := make([]genericServiceResource, 2)
+		for i := 0; i < 2; i++ {
+			exutil.By(fmt.Sprintf("3.%d Create pod and nodeport service with externalTrafficPolicy=Local in %s", i, ns[i]))
+			pods[i] = pingPodResourceNode{
+				name:      "hello-pod" + strconv.Itoa(i),
+				namespace: ns[i],
+				nodename:  nodeList.Items[0].Name,
+				template:  pingPodNodeTemplate,
+			}
+			pods[i].createPingPodNode(oc)
+			waitPodReady(oc, ns[i], pods[i].name)
+
+			svcs[i] = genericServiceResource{
+				servicename:           "test-service" + strconv.Itoa(i),
+				namespace:             ns[i],
+				protocol:              "TCP",
+				selector:              "hello-pod",
+				serviceType:           "NodePort",
+				ipFamilyPolicy:        ipFamilyPolicy,
+				internalTrafficPolicy: "Cluster",
+				externalTrafficPolicy: "Local",
+				template:              genericServiceTemplate,
+			}
+			svcs[i].createServiceFromParams(oc)
+			nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns[i], svcs[i].servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			nodeportsLocal = append(nodeportsLocal, nodePort)
+		}
+
+		exutil.By("4. Validate pod/host to nodeport service with externalTrafficPolicy=Local traffic")
+		var wg sync.WaitGroup
+		for i := 0; i < 2; i++ {
+			wg.Add(1)
+			go func() {
+				defer g.GinkgoRecover()
+				defer wg.Done()
+				exutil.By(fmt.Sprintf("4.1.%d Validate pod to nodeport service with externalTrafficPolicy=Local traffic in %s", i, ns[i]))
+				CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[0].Name, nodeportsLocal[i])
+				CurlPod2NodePortFail(oc, ns[i], pods[i].name, nodeList.Items[1].Name, nodeportsLocal[i])
+			}()
+		}
+		wg.Wait()
+		exutil.By("4.2 Validate host to nodeport service with externalTrafficPolicy=Local traffic on default network")
+		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodeportsLocal[0])
+		CurlNodePortFail(oc, masterNode, nodeList.Items[1].Name, nodeportsLocal[0])
+		exutil.By("4.3 Validate UDN pod to default network nodeport service with externalTrafficPolicy=Local traffic")
+		CurlPod2NodePortFail(oc, ns[1], pods[1].name, nodeList.Items[0].Name, nodeportsLocal[0])
+		CurlPod2NodePortFail(oc, ns[1], pods[1].name, nodeList.Items[1].Name, nodeportsLocal[0])
+
+		exutil.By("5. Create nodeport service with externalTrafficPolicy=Cluster in ns1 and ns2")
+		nodeportsCluster := []string{}
+		for i := 0; i < 2; i++ {
+			exutil.By(fmt.Sprintf("5.%d Create pod and nodeport service with externalTrafficPolicy=Cluster in %s", i, ns[i]))
+			removeResource(oc, true, true, "svc", "test-service"+strconv.Itoa(i), "-n", ns[i])
+			svcs[i].externalTrafficPolicy = "Cluster"
+			svcs[i].createServiceFromParams(oc)
+			nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns[i], svcs[i].servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			nodeportsCluster = append(nodeportsCluster, nodePort)
+		}
+
+		exutil.By("6. Validate pod/host to nodeport service with externalTrafficPolicy=Cluster traffic")
+		for i := 0; i < 2; i++ {
+			wg.Add(1)
+			go func() {
+				defer g.GinkgoRecover()
+				defer wg.Done()
+				exutil.By(fmt.Sprintf("6.1.%d Validate pod to nodeport service with externalTrafficPolicy=Cluster traffic in %s", i, ns[i]))
+				CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[0].Name, nodeportsCluster[i])
+				CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[1].Name, nodeportsCluster[i])
+			}()
+		}
+		wg.Wait()
+		exutil.By("6.2 Validate host to nodeport service with externalTrafficPolicy=Cluster traffic on default network")
+		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodeportsCluster[0])
+		CurlNodePortPass(oc, masterNode, nodeList.Items[1].Name, nodeportsCluster[0])
+		exutil.By("6.3 Validate UDN pod to default network nodeport service with externalTrafficPolicy=Cluster traffic")
+		CurlPod2NodePortFail(oc, ns[1], pods[1].name, nodeList.Items[0].Name, nodeportsLocal[0])
+		CurlPod2NodePortFail(oc, ns[1], pods[1].name, nodeList.Items[1].Name, nodeportsLocal[0])
+	})
 })
