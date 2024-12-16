@@ -2345,4 +2345,137 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		CurlMultusPod2PodPass(oc, ns, podNames[2], pod2IPv4, "net1", pods[1].podenvname)
 		CurlMultusPod2PodPass(oc, ns, podNames[2], pod2IPv6, "net1", pods[1].podenvname)
 	})
+
+	g.It("Author:weliang-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-78125-Verify egress-ipblock policy for UDN pod's secondary interface (Layer2). [Disruptive]", func() {
+		var (
+			buildPruningBaseDir                         = exutil.FixturePath("testdata", "networking")
+			udnCRDdualStack                             = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_dualstack_template.yaml")
+			udnPodTemplate                              = filepath.Join(buildPruningBaseDir, "multihoming/multihoming-pod-template.yaml")
+			multinetworkipBlockegressTemplateDual       = filepath.Join(buildPruningBaseDir, "multihoming/multiNetworkPolicy_egress_ipblock_template.yaml")
+			patchSResource                              = "networks.operator.openshift.io/cluster"
+			mtu                                   int32 = 9000
+		)
+		exutil.By("Getting the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("The cluster has no ready node for the testing")
+		}
+
+		exutil.By("Getting the namespace name")
+		ns := oc.Namespace()
+		nadName := "ipblockegress78125"
+		nsWithnad := ns + "/" + nadName
+
+		exutil.By("Enabling useMultiNetworkPolicy in the cluster")
+		patchInfoTrue := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":true}}")
+		patchInfoFalse := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":false}}")
+		defer func() {
+			patchResourceAsAdmin(oc, patchSResource, patchInfoFalse)
+			exutil.By("NetworkOperatorStatus should back to normal after disable useMultiNetworkPolicy")
+			waitForNetworkOperatorState(oc, 10, 5, "True.*True.*False")
+			waitForNetworkOperatorState(oc, 60, 15, "True.*False.*False")
+		}()
+		patchResourceAsAdmin(oc, patchSResource, patchInfoTrue)
+
+		exutil.By("Wait for the NetworkOperator to become functional after enabling useMultiNetworkPolicy")
+		waitForNetworkOperatorState(oc, 10, 5, "True.*True.*False")
+		waitForNetworkOperatorState(oc, 60, 15, "True.*False.*False")
+
+		exutil.By("Creating Layer2 UDN CRD with Secondary role")
+		ipv4cidr := "20.200.200.0/24"
+		ipv6cidr := "2000:200:200::0/64"
+		udncrd := udnCRDResource{
+			crdname:   nadName,
+			namespace: ns,
+			role:      "Secondary",
+			mtu:       mtu,
+			IPv4cidr:  ipv4cidr,
+			IPv6cidr:  ipv6cidr,
+			template:  udnCRDdualStack,
+		}
+		udncrd.createLayer2DualStackUDNCRD(oc)
+		err := waitUDNCRDApplied(oc, udncrd.namespace, udncrd.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Creating three testing pods consuming above network-attach-definition in ns")
+		var podName, podLabel, podenvName string
+		pods := make([]testMultihomingPod, 3)
+		var podNames []string
+		for i := 0; i < 3; i++ {
+			podName = "multihoming-pod-" + strconv.Itoa(i+1)
+			podLabel = "multihoming-pod" + strconv.Itoa(i+1)
+			podenvName = "Hello multihoming-pod-" + strconv.Itoa(i+1)
+			pods[i] = testMultihomingPod{
+				name:       podName,
+				namespace:  ns,
+				podlabel:   podLabel,
+				nadname:    udncrd.crdname,
+				nodename:   "",
+				podenvname: podenvName,
+				template:   udnPodTemplate,
+			}
+			pods[i].createTestMultihomingPod(oc)
+			o.Expect(waitForPodWithLabelReady(oc, ns, fmt.Sprintf("name=%s", pods[i].podlabel))).NotTo(o.HaveOccurred())
+			podNames = append(podNames, getPodName(oc, pods[i].namespace, fmt.Sprintf("name=%s", pods[i].podlabel))[0])
+		}
+
+		exutil.By("Verifying the all pods get dual IPs")
+		pod1IPv4, pod1IPv6 := getPodMultiNetwork(oc, ns, podNames[0])
+		pod2IPv4, pod2IPv6 := getPodMultiNetwork(oc, ns, podNames[1])
+		pod3IPv4, pod3IPv6 := getPodMultiNetwork(oc, ns, podNames[2])
+		pod3IPv4WithCidr := pod3IPv4 + "/32"
+		pod3IPv6WithCidr := pod3IPv6 + "/128"
+
+		exutil.By("Verifying that there is no traffic blocked between pods")
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv4, "net1", pods[1].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv6, "net1", pods[1].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv4, "net1", pods[0].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv6, "net1", pods[0].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv4, "net1", pods[2].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv6, "net1", pods[2].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv4, "net1", pods[2].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv6, "net1", pods[2].podenvname)
+
+		exutil.By("Creating ipBlock egress Dual CIDRs Policy to allow traffic only to pod3")
+		defer removeResource(oc, true, true, "multi-networkpolicy", "multinetworkipblock-dual-cidrs-egress", "-n", ns)
+		IPBlock := multinetworkipBlockCIDRsDual{
+			name:      "multinetworkipblock-dual-cidrs-egress",
+			namespace: ns,
+			cidrIpv4:  pod3IPv4WithCidr,
+			cidrIpv6:  pod3IPv6WithCidr,
+			policyfor: nsWithnad,
+			template:  multinetworkipBlockegressTemplateDual,
+		}
+		IPBlock.createMultinetworkipBlockCIDRDual(oc)
+		policyoutput, policyerr := oc.AsAdmin().Run("get").Args("multi-networkpolicy", "-n", ns).Output()
+		o.Expect(policyerr).NotTo(o.HaveOccurred())
+		o.Expect(policyoutput).To(o.ContainSubstring("multinetworkipblock-dual-cidrs-egress"))
+
+		exutil.By("Verifying the ipBlock egress Dual CIDRs policy ensures that only traffic to pod3 is allowed")
+		CurlMultusPod2PodFail(oc, ns, podNames[0], pod2IPv4, "net1", pods[1].podenvname)
+		CurlMultusPod2PodFail(oc, ns, podNames[0], pod2IPv6, "net1", pods[1].podenvname)
+		CurlMultusPod2PodFail(oc, ns, podNames[1], pod1IPv4, "net1", pods[0].podenvname)
+		CurlMultusPod2PodFail(oc, ns, podNames[1], pod1IPv6, "net1", pods[0].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv4, "net1", pods[2].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv6, "net1", pods[2].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv4, "net1", pods[2].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv6, "net1", pods[2].podenvname)
+
+		exutil.By("Deleting ipBlock egress Dual CIDRs Policy")
+		removeResource(oc, true, true, "multi-networkpolicy", "multinetworkipblock-dual-cidrs-egress", "-n", ns)
+		policyoutput1, policyerr1 := oc.AsAdmin().Run("get").Args("multi-networkpolicy", "-n", ns).Output()
+		o.Expect(policyerr1).NotTo(o.HaveOccurred())
+		o.Expect(policyoutput1).NotTo(o.ContainSubstring("multinetworkipblock-dual-cidrs-egress"))
+
+		exutil.By("Verifying that there is no traffic blocked between pods after deleting policy")
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv4, "net1", pods[1].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv6, "net1", pods[1].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv4, "net1", pods[0].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv6, "net1", pods[0].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv4, "net1", pods[2].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv6, "net1", pods[2].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv4, "net1", pods[2].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv6, "net1", pods[2].podenvname)
+	})
 })
