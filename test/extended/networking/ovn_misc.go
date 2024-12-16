@@ -1542,4 +1542,61 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		}
 		wg.Wait()
 	})
+
+	// author: meinli@redhat.com
+	g.It("Author: meinli-Medium-72506-Traffic with dst ip from service CIDR that doesn't match existing svc ip+port should be dropped", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			testSvcFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+		)
+
+		exutil.By("1. Get namespace and worker node")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("This case requires one node, but the cluster han't one")
+		}
+		workerNode := nodeList.Items[0].Name
+		ns := oc.Namespace()
+
+		exutil.By("2. create a service")
+		createResourceFromFile(oc, ns, testSvcFile)
+		ServiceOutput, serviceErr := oc.WithoutNamespace().Run("get").Args("service", "-n", ns).Output()
+		o.Expect(serviceErr).NotTo(o.HaveOccurred())
+		o.Expect(ServiceOutput).To(o.ContainSubstring("test-service"))
+
+		exutil.By("3. Curl clusterIP svc from node")
+		svcIP1, svcIP2 := getSvcIP(oc, ns, "test-service")
+		if svcIP2 != "" {
+			svc4URL := net.JoinHostPort(svcIP2, "27018")
+			output, _ := exutil.DebugNode(oc, workerNode, "curl", svc4URL, "--connect-timeout", "5")
+			o.Expect(output).To(o.Or(o.ContainSubstring("28"), o.ContainSubstring("Failed")))
+		}
+		svcURL := net.JoinHostPort(svcIP1, "27018")
+		output, _ := exutil.DebugNode(oc, workerNode, "curl", svcURL, "--connect-timeout", "5")
+		o.Expect(output).To(o.Or(o.ContainSubstring("28"), o.ContainSubstring("Failed")))
+
+		exutil.By("4. Validate the drop packets counter is increasing from svc network")
+		ovnkubePodName, err := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", workerNode)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		cmd := "ovs-ofctl dump-flows br-ex | grep -i 'priority=105'"
+		output, err = e2eoutput.RunHostCmd("openshift-ovn-kubernetes", ovnkubePodName, cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		r := regexp.MustCompile(`n_packets=(\d+).*?actions=drop`)
+		matches := r.FindAllStringSubmatch(output, -1)
+		// only compare the latest action drop to make sure won't be influenced by other case
+		o.Expect(len(matches)).ShouldNot(o.Equal(0))
+		o.Expect(len(matches[0])).To(o.Equal(2))
+		o.Expect(strconv.Atoi(matches[0][1])).To(o.BeNumerically(">", 0))
+
+		exutil.By("5. Validate no packet are seen on br-ex from src")
+		if svcIP2 != "" {
+			output, err := e2eoutput.RunHostCmd("openshift-ovn-kubernetes", ovnkubePodName, fmt.Sprintf("ovs-ofctl dump-flows br-ex | grep -i 'src=%s'", svcIP2))
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(output).To(o.BeEmpty())
+		}
+		output, err = e2eoutput.RunHostCmd("openshift-ovn-kubernetes", ovnkubePodName, fmt.Sprintf("ovs-ofctl dump-flows br-ex | grep -i 'src=%s'", svcIP1))
+		o.Expect(err).To(o.HaveOccurred())
+		o.Expect(output).To(o.BeEmpty())
+	})
 })
