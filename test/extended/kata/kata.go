@@ -102,7 +102,18 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		installKataRPM:           false,
 		workloadToTest:           "kata",
 		trusteeCatalogSourcename: "redhat-operators",
-		trusteeUrl:               "https://kbs-service-trustee-operator-system.apps.ik01914t.eastus.aroapp.io",
+		trusteeUrl:               "",
+	}
+
+	trusteeSubscription := SubscriptionDescription{
+		subName:                "trustee-operator",
+		namespace:              "trustee-operator-system",
+		catalogSourceName:      testrun.trusteeCatalogSourcename,
+		catalogSourceNamespace: "openshift-marketplace",
+		channel:                "stable",
+		ipApproval:             "Automatic",
+		operatorPackage:        "trustee-operator",
+		template:               subTemplate,
 	}
 
 	g.BeforeEach(func() {
@@ -133,8 +144,10 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 				e2e.Failf("ERROR: testrun configmap %v errors: %v\n%v %v", testrunConfigmapName, testrun, configmapExists, err)
 			}
 
-			e2e.Logf("\n    Cluster: %v.%v on %v\n    configmapExists %v\n    testrun %v\n    subscription %v\n    kataconfig %v\n\n", ocpMajorVer, ocpMinorVer, cloudPlatform, configmapExists, testrun, subscription, kataconfig)
+			// trusteeSubscription isn't passed into getTestRunParameters()
+			trusteeSubscription.catalogSourceName = testrun.trusteeCatalogSourcename
 
+			e2e.Logf("\n    Cluster: %v.%v on %v\n    configmapExists %v\n    testrun %v\n    subscription %v\n    kataconfig %v\n\n", ocpMajorVer, ocpMinorVer, cloudPlatform, configmapExists, testrun, subscription, kataconfig)
 			testrun.checked = false // only set it true at the end
 
 			if testrun.redirectNeeded {
@@ -263,23 +276,15 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			err = ensureFeatureGateIsApplied(oc, subscription, featureGatesFile)
 			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: could not apply osc-feature-gates cm: %v", err))
 
-			trusteeSubscription := SubscriptionDescription{
-				subName:                "trustee-operator",
-				namespace:              "trustee-operator-system",
-				catalogSourceName:      testrun.trusteeCatalogSourcename,
-				catalogSourceNamespace: "openshift-marketplace",
-				channel:                "stable",
-				ipApproval:             "Automatic",
-				operatorPackage:        "trustee-operator",
-				template:               subTemplate,
-			}
-
 			trusteeRouteHost, err = ensureTrusteeIsInstalled(oc, trusteeSubscription, namespaceTemplate, ogTemplate, subTemplate)
 			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: %v err: %v", trusteeRouteHost, err))
 
-			e2e.Logf("INFO in-cluster TRUSTEE_HOST is %v.  Using %v instead", trusteeRouteHost, testrun.trusteeUrl)
+			msg, err = configureTrustee(oc, trusteeSubscription, testDataDir, testrun.trusteeUrl)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: configuring trustee: %v", err))
+			testrun.trusteeUrl = msg
+			e2e.Logf("INFO in-cluster TRUSTEE_HOST is %v.\nINFO The trusteeUrl to be used is %v", trusteeRouteHost, testrun.trusteeUrl)
 
-			err = ensureTrusteeUrlReturnIsValid(oc, kbsClientTemplate, testrun.trusteeUrl, "cmVzMXZhbDE=")
+			err = ensureTrusteeUrlReturnIsValid(oc, kbsClientTemplate, testrun.trusteeUrl, "cmVzMXZhbDE=", trusteeSubscription.namespace)
 			if err != nil {
 				testrun.checked = false // fail all tests
 			}
@@ -290,6 +295,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			if err != nil {
 				e2e.Logf("WARNING: patching peer-pods-cm: %v %v", msg, err)
 			}
+			// oc set env ds/peerpodconfig-ctrl-caa-daemon -n openshift-sandboxed-containers-operator REBOOT="$(date)"
 		}
 
 		// should check kataconfig here & already have checked subscription

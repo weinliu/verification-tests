@@ -226,7 +226,7 @@ func ensureTrusteeKbsServiceRouteExists(oc *exutil.CLI, namespace, routeType, ro
 
 }
 
-func ensureTrusteeUrlReturnIsValid(oc *exutil.CLI, kbsClientTemplate, trusteeUrl, correctAnswer string) (err error) {
+func ensureTrusteeUrlReturnIsValid(oc *exutil.CLI, kbsClientTemplate, trusteeUrl, correctAnswer, trusteeNamespace string) (err error) {
 	var (
 		podName        = "kbs-client"
 		kbsClientImage = "quay.io/confidential-containers/kbs-client:v0.9.0"
@@ -234,6 +234,15 @@ func ensureTrusteeUrlReturnIsValid(oc *exutil.CLI, kbsClientTemplate, trusteeUrl
 		outputFromOc   string
 		namespace      = "default"
 	)
+
+	// make sure the trustee deployment pod is ready
+	trusteeDeploymentPod, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", trusteeNamespace,
+		"-l", "app=kbs", "-o=jsonpath={.items[0].metadata.name}").Output()
+
+	outputFromOc, err = checkResourceJsonpath(oc, "pod", trusteeDeploymentPod, trusteeNamespace, "-o=jsonpath={.status.phase}", phase, podSnooze*time.Second, 10*time.Second)
+	if outputFromOc == "" || err != nil {
+		return fmt.Errorf("Could not get pod (%v) status %v: %v %v", trusteeDeploymentPod, phase, outputFromOc, err)
+	}
 
 	kbsClientFile, err := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f",
 		kbsClientTemplate, "-p", "NAME="+podName, "IMAGE="+kbsClientImage).OutputToFile(getRandomString() + "kbsClientFile.json")
@@ -287,6 +296,14 @@ func ensureTrusteeIsInstalled(oc *exutil.CLI, subscription SubscriptionDescripti
 		err = fmt.Errorf("trusteeRouteHost was empty. err %v", err)
 	}
 	return trusteeRouteHost, err
+}
+
+func ensureConfigmapIsApplied(oc *exutil.CLI, namespace, configmapFile string) (err error) {
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", configmapFile, "-n", namespace).Output()
+	if err != nil && !strings.Contains(msg, "already exists exit") {
+		err = fmt.Errorf("configmap %v file issue %v %v", configmapFile, msg, err)
+	}
+	return err
 }
 
 func ensureKataconfigIsCreated(oc *exutil.CLI, kataconf KataconfigDescription, sub SubscriptionDescription) (msg string, err error) {
@@ -2048,11 +2065,10 @@ func getTestRunConfigmap(oc *exutil.CLI, testrun *TestRunDescription, testrunCon
 			trusteeErrorMessage = fmt.Sprintf("workload is coco and trusteeCatalogSourcename is missing from data\n%v", trusteeErrorMessage)
 		}
 		if gjson.Get(configmapData, "trusteeUrl").Exists() {
+			// if blank, in-cluster trustee will be used
 			testrun.trusteeUrl = gjson.Get(configmapData, "trusteeUrl").String()
-		} else {
-			testrun.trusteeUrl = "https://kbs-service-trustee-operator-system.apps.ik01914t.eastus.aroapp.io"
-			trusteeErrorMessage = fmt.Sprintf("workload is coco and trusteeUrl is missing from data\n%v", trusteeErrorMessage)
 		}
+
 		if trusteeErrorMessage != "" {
 			e2e.Logf("Some of the trustee data was not in osc-config. Using defaults in those cases:\n%v", trusteeErrorMessage)
 		}
@@ -2375,4 +2391,104 @@ func testControlPod(oc *exutil.CLI, namespace, resType, resName, desiredCountJso
 		}
 	}
 	return msg, err
+}
+
+func configureTrustee(oc *exutil.CLI, trusteeSubscription SubscriptionDescription, testDataDir, startingTrusteeURL string) (trusteeURL string, err error) {
+	var (
+		trusteeKbsconfigTemplate      = filepath.Join(testDataDir, "kbsconfig-template.yaml")
+		rvpsReferenceValuesCMTemplate = filepath.Join(testDataDir, "rvps-reference-values-template.yaml")
+		resourcePolicyCMTemplate      = filepath.Join(testDataDir, "resource-policy-template.yaml")
+		securityPolicyCMTemplate      = filepath.Join(testDataDir, "security-policy-template.json")
+		kbsconfigCMTemplate           = filepath.Join(testDataDir, "kbs-config-cm-template.yaml")
+		trusteeCosignPublicKey        = filepath.Join(testDataDir, "trustee-cosign-publickey.pem")
+		trusteeKbsPublicKey           = filepath.Join(testDataDir, "kbs-auth-public-key")
+	)
+
+	msg, err := oc.AsAdmin().Run("create").Args("secret", "generic", "kbs-auth-public-key",
+		"--from-file=publicKey="+trusteeKbsPublicKey, "-n", trusteeSubscription.namespace).Output()
+	if err != nil {
+		e2e.Logf("TRUSTEE Created kbs-auth-public-key secret: %v %v", msg, err)
+	}
+
+	templateArgs := fmt.Sprintf("NAME=%v INSECUREHTTP=true", trusteeSubscription.namespace)
+	kbsConfigCMFile, _ := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f",
+		kbsconfigCMTemplate, "-p", templateArgs).OutputToFile(getRandomString() + "kbs-config-cm.json")
+	err = ensureConfigmapIsApplied(oc, trusteeSubscription.namespace, kbsConfigCMFile)
+	if err != nil {
+		return trusteeURL, err
+	}
+	e2e.Logf("TRUSTEE Created kbs-config-cm: %v", err)
+
+	templateArgs = fmt.Sprintf("NAMESPACE=%v", trusteeSubscription.namespace)
+	rvpsReferenceValuesCMFile, _ := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f",
+		rvpsReferenceValuesCMTemplate, "-p", templateArgs).OutputToFile(getRandomString() + "rvps-reference-values.json")
+	err = ensureConfigmapIsApplied(oc, trusteeSubscription.namespace, rvpsReferenceValuesCMFile)
+	if err != nil {
+		return trusteeURL, err
+	}
+	e2e.Logf("TRUSTEE Created rvps-reference-values: %v", err)
+
+	msg, err = oc.AsAdmin().Run("create").Args("secret", "generic", "kbsres1", "--from-literal",
+		"key1=res1val1", "--from-literal", "key2=res1val2", "-n", trusteeSubscription.namespace).Output()
+	if err != nil {
+		e2e.Logf("TRUSTEE Created kbres1 secret: %v %v", msg, err)
+	}
+
+	trusteePolicyRego := "package policy default allow = true"
+	resourcePolicyCMFile, _ := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f",
+		resourcePolicyCMTemplate, "-n", trusteeSubscription.namespace, "-p", "NAMESPACE="+trusteeSubscription.namespace,
+		"-p", "POLICYREGO="+trusteePolicyRego).OutputToFile(getRandomString() + "resource-policy.json")
+	err = ensureConfigmapIsApplied(oc, trusteeSubscription.namespace, resourcePolicyCMFile)
+	if err != nil {
+		return trusteeURL, err
+	}
+	e2e.Logf("TRUSTEE Created resource-policy cm: %v", err)
+
+	// Attestation Policy goes here
+
+	// secret security-policy DONE
+	msg, err = oc.AsAdmin().Run("create").Args("secret", "generic", "security-policy",
+		"--from-file=osc="+securityPolicyCMTemplate, "-n", trusteeSubscription.namespace).Output()
+	if err != nil {
+		e2e.Logf("TRUSTEE Created security-policy secret: %v %v", msg, err)
+	}
+
+	// secret cosign-public-key DONE
+	msg, err = oc.AsAdmin().Run("create").Args("secret", "generic", "cosign-public-key",
+		"--from-file=test="+trusteeCosignPublicKey, "-n", trusteeSubscription.namespace).Output()
+	if err != nil {
+		e2e.Logf("TRUSTEE Created cosign-public-key secret: %v %v", msg, err)
+	}
+
+	// need to ensureSecret?
+
+	// kbsconfig
+	kbsSecretResources := `["kbsres1","security-policy", "cosign-public-key"]`
+	kbsconfigFile, _ := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f",
+		trusteeKbsconfigTemplate, "-n", trusteeSubscription.namespace,
+		"-p", "KBSSECRETRESOURCES="+kbsSecretResources).OutputToFile(getRandomString() + "kbsconfig.json")
+
+	msg, err = oc.AsAdmin().Run("apply").Args("-f", kbsconfigFile, "-n", trusteeSubscription.namespace).Output()
+	e2e.Logf("TRUSTEE Applied kbsconfig %v: %v %v", kbsconfigFile, msg, err)
+
+	if startingTrusteeURL == "" { // use internal trustee
+		node, err := exutil.GetFirstWorkerNode(oc)
+		if err != nil || node == "" {
+			return trusteeURL, fmt.Errorf("could not get 1st worker node: %v err: %v", node, err)
+		}
+
+		msg, err = oc.AsAdmin().Run("get").Args("node", node, "-o=jsonpath={.status.addresses..address}").Output()
+		if err != nil || msg == "" {
+			return trusteeURL, fmt.Errorf("Could not get ip of %v: %v %v", node, msg, err)
+		}
+		nodeIP := strings.Fields(msg)[0]
+
+		nodePort, err := oc.AsAdmin().Run("get").Args("-n", trusteeSubscription.namespace,
+			"service", "kbs-service", "-o=jsonpath={.spec.ports..nodePort}").Output()
+		if err != nil {
+			return trusteeURL, fmt.Errorf("Could not retrieve nodePort from kbs-service: %v %v", nodePort, err)
+		}
+		trusteeURL = fmt.Sprintf("http://%v:%v", nodeIP, nodePort)
+	}
+	return trusteeURL, err
 }

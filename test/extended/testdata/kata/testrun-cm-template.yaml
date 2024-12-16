@@ -82,5 +82,5 @@ parameters:
     value: "redhat-operators"
     description: "name of the catalog Trustee subscripton comes from"
   - name: TRUSTEEURL
-    value: "https://kbs-service-trustee-operator-system.apps.ik01914t.eastus.aroapp.io"
-    description: "The full url to trustee to use in peer-pods-cm AA_KBC_PARAMS"
+    value: ""
+    description: "If blank, an in-cluster trustee will be used. Otherwise, this should be the full URL for an external trustee"
