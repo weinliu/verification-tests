@@ -47,7 +47,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	// author: kuiwang@redhat.com
 	g.It("Author:kuiwang-DEPRECATED-ConnectedOnly-NonHyperShiftHOST-Medium-68903-BundleDeployment Health resource unhealthy pod api crd ds", func() {
 		// oc.SetupProject() // it is example if the case need temp project. here it does not need it, so comment it.
-		exutil.SkipOnProxyCluster(oc)
 		var (
 			ns                        = "ns-68903"
 			baseDir                   = exutil.FixturePath("testdata", "olm", "v1")
@@ -122,7 +121,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	// author: kuiwang@redhat.com
 	g.It("Author:kuiwang-ConnectedOnly-NonHyperShiftHOST-Medium-68936-cluster extension can not be installed with insufficient permission sa for operand", func() {
 		e2e.Logf("the rukpak is deprecated, so this case is deprecated, but here use 68936 for case 75492 becasue the duration of 75492 is too long")
-		exutil.SkipOnProxyCluster(oc)
 		exutil.SkipForSNOCluster(oc)
 		var (
 			ns                                  = "ns-68936"
@@ -186,7 +184,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	// author: kuiwang@redhat.com
 	g.It("Author:kuiwang-ConnectedOnly-NonHyperShiftHOST-Medium-68937-cluster extension can not be installed with insufficient permission sa for operand rbac object", func() {
 		e2e.Logf("the rukpak is deprecated, so this case is deprecated, but here use 68937 for case 75492 becasue the duration of 75492 is too long")
-		exutil.SkipOnProxyCluster(oc)
 		exutil.SkipForSNOCluster(oc)
 		var (
 			ns                                  = "ns-68937"
@@ -249,7 +246,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("Author:kuiwang-ConnectedOnly-Medium-75492-cluster extension can not be installed with wrong sa or insufficient permission sa", func() {
-		exutil.SkipOnProxyCluster(oc)
 		exutil.SkipForSNOCluster(oc)
 		var (
 			caseID                       = "75492"
@@ -334,7 +330,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("Author:kuiwang-ConnectedOnly-NonHyperShiftHOST-Medium-75493-cluster extension can be installed with enough permission sa", func() {
-		exutil.SkipOnProxyCluster(oc)
 		exutil.SkipForSNOCluster(oc)
 		var (
 			caseID                       = "75493"
@@ -406,7 +401,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("Author:kuiwang-ConnectedOnly-NonHyperShiftHOST-Medium-74618-ClusterExtension supports simple registry vzero bundles only", func() {
-		exutil.SkipOnProxyCluster(oc)
 		exutil.SkipForSNOCluster(oc)
 		var (
 			ns                           = "ns-74618"
@@ -527,7 +521,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("Author:kuiwang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-76843-support disc with icsp [Disruptive]", func() {
-		exutil.SkipOnProxyCluster(oc)
 		exutil.SkipForSNOCluster(oc)
 		var (
 			caseID                       = "76843"
@@ -699,7 +692,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("Author:kuiwang-ConnectedOnly-NonHyperShiftHOST-Medium-76983-install index and bundle from private image", func() {
-		exutil.SkipOnProxyCluster(oc)
 		exutil.SkipForSNOCluster(oc)
 		// note: 1, it depends the default global secret to access private index and bundle in quay.io
 		var (
@@ -772,7 +764,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("Author:kuiwang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-76985-authfile is updated automatically [Disruptive].", func() {
-		exutil.SkipOnProxyCluster(oc)
 		exutil.SkipForSNOCluster(oc)
 		var (
 			caseID = "76985"
@@ -879,7 +870,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: xzha@redhat.com
 	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-68821-olmv1 Supports Version Ranges during Installation", func() {
-		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                                       = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate                        = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -962,7 +952,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: xzha@redhat.com
 	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-Medium-69196-olmv1 Supports Version Ranges during clusterextension upgrade", func() {
-		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -1043,7 +1032,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: xzha@redhat.com
 	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-74108-olm v1 supports legacy upgrade edges", func() {
-		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -1223,7 +1211,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: xzha@redhat.com
 	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-Medium-74923-no two ClusterExtensions can manage the same underlying object", func() {
-		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -1348,7 +1335,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: xzha@redhat.com
 	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-Medium-75501-the updates of various status fields is orthogonal", func() {
-		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -1467,7 +1453,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: xzha@redhat.com
 	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-76685-olm v1 supports selecting catalogs", func() {
-		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                                  = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate                   = filepath.Join(baseDir, "clustercatalog-withlabel.yaml")
@@ -1601,7 +1586,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: xzha@redhat.com
 	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-Medium-77972-olm v1 Supports MaxOCPVersion in properties file", func() {
-		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate   = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -1726,7 +1710,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("Author:bandrade-ConnectedOnly-NonHyperShiftHOST-High-69193-olmv1 major version zero", func() {
-		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -1849,7 +1832,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("Author:bandrade-ConnectedOnly-NonHyperShiftHOST-High-70719-olmv1 Upgrade non-zero major version", func() {
-		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -1974,7 +1956,6 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: bandrade@redhat.com
 	g.It("Author:bandrade-ConnectedOnly-NonHyperShiftHOST-High-70723-olmv1 downgrade version", func() {
-		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
