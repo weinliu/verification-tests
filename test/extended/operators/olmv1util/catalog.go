@@ -105,6 +105,35 @@ func (clustercatalog *ClusterCatalogDescription) WaitCatalogStatus(oc *exutil.CL
 	}
 }
 
+func (clustercatalog *ClusterCatalogDescription) CheckClusterCatalogCondition(oc *exutil.CLI, conditionType, field, expect string, checkInterval, checkTimeout, consistentTime int) {
+	e2e.Logf("========= check clustercatalog %v %s %s expect is %s =========", clustercatalog.Name, conditionType, field, expect)
+	jsonpath := fmt.Sprintf(`jsonpath={.status.conditions[?(@.type=="%s")].%s}`, conditionType, field)
+	errWait := wait.PollUntilContextTimeout(context.TODO(), time.Duration(checkInterval)*time.Second, time.Duration(checkTimeout)*time.Second, false, func(ctx context.Context) (bool, error) {
+		output, err := GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", jsonpath)
+		if err != nil {
+			e2e.Logf("output is %v, error is %v, and try next", output, err)
+			return false, nil
+		}
+		if !strings.Contains(strings.ToLower(output), strings.ToLower(expect)) {
+			e2e.Logf("got is %v, not %v, and try next", output, expect)
+			return false, nil
+		}
+		return true, nil
+	})
+	if errWait != nil {
+		GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o=jsonpath-as-json={.status}")
+		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("clustercatalog %s expected is not %s in %v seconds", conditionType, expect, checkTimeout))
+	}
+	if consistentTime != 0 {
+		e2e.Logf("make sure clustercatalog %s expect is %s consistently for %ds", conditionType, expect, consistentTime)
+		o.Consistently(func() string {
+			output, _ := GetNoEmpty(oc, "clustercatalog", clustercatalog.Name, "-o", jsonpath)
+			return strings.ToLower(output)
+		}, time.Duration(consistentTime)*time.Second, 5*time.Second).Should(o.ContainSubstring(strings.ToLower(expect)),
+			"clustercatalog %s expected is not %s", conditionType, expect)
+	}
+}
+
 func (clustercatalog *ClusterCatalogDescription) GetcontentURL(oc *exutil.CLI) {
 	e2e.Logf("=========Get clustercatalog %v contentURL =========", clustercatalog.Name)
 	route, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "catalogd-service", "-n", "openshift-catalogd", "-o=jsonpath={.spec.host}").Output()

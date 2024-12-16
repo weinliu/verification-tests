@@ -13,6 +13,7 @@ import (
 	o "github.com/onsi/gomega"
 	olmv1util "github.com/openshift/openshift-tests-private/test/extended/operators/olmv1util"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -687,6 +688,175 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		exutil.By("check ce to be installed")
 		defer ce76844.Delete(oc)
 		ce76844.Create(oc)
+
+	})
+
+	// author: kuiwang@redhat.com
+	g.It("Author:kuiwang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-78193-Runtime validation of container images using sigstore signatures [Disruptive]", func() {
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("it depends on clusterimagepolicy which is in TP, so skip it for non TP.")
+		}
+		architecture.SkipNonAmd64SingleArch(oc)
+		exutil.SkipForSNOCluster(oc)
+		var (
+			caseID                       = "78193"
+			ns                           = "ns-" + caseID
+			sa                           = "sa" + caseID
+			labelValue                   = caseID
+			catalogName                  = "clustercatalog-" + caseID
+			catalog1Name                 = "clustercatalog-" + caseID + "1"
+			ceName                       = "ce-" + caseID
+			cipName                      = "cip-" + caseID
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
+			cipTemplate                  = filepath.Join(baseDir, "cip.yaml")
+			cip                          = olmv1util.CipDescription{
+				Name:     cipName,
+				Repo1:    "quay.io/olmqe/nginx-ok-bundle-sigstore",
+				Repo2:    "quay.io/olmqe/nginx-ok-bundle-sigstore1",
+				Repo3:    "quay.io/olmqe/nginx-ok-index-sigstore",
+				Repo4:    "quay.io/olmqe/nginx-ok-index-sigstore1",
+				Template: cipTemplate,
+			}
+			clustercatalog = olmv1util.ClusterCatalogDescription{
+				Name:     catalogName,
+				Imageref: "quay.io/olmqe/nginx-ok-index-sigstore:vokv78193",
+				Template: clustercatalogTemplate,
+			}
+			clustercatalog1 = olmv1util.ClusterCatalogDescription{
+				Name:     catalog1Name,
+				Imageref: "quay.io/olmqe/nginx-ok-index-sigstore1:vokv781931",
+				Template: clustercatalogTemplate,
+			}
+			saCrb = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			ce = olmv1util.ClusterExtensionDescription{
+				Name:             ceName,
+				PackageName:      "nginx-ok-v78193",
+				Channel:          "alpha",
+				Version:          ">=0.0.1",
+				InstallNamespace: ns,
+				SaName:           sa,
+				LabelValue:       labelValue,
+				Template:         clusterextensionTemplate,
+			}
+		)
+		exutil.By("check if current mcp is healthy")
+		if !olmv1util.HealthyMCP4OLM(oc) {
+			g.Skip("current mcp is not healthy")
+		}
+
+		exutil.By("create cip")
+		defer cip.Delete(oc)
+		cip.Create(oc)
+
+		exutil.By("Create clustercatalog with olmsigkey signed successfully")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
+
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
+
+		exutil.By("Create clusterextension with olmsigkey signed successfully")
+		defer ce.Delete(oc)
+		ce.Create(oc)
+
+		exutil.By("Create clustercatalog with olmsigkey1 signed failed")
+		defer clustercatalog1.Delete(oc)
+		clustercatalog1.CreateWithoutCheck(oc)
+		clustercatalog1.CheckClusterCatalogCondition(oc, "Progressing", "message", "signature verification failed: invalid signature", 10, 90, 0)
+
+	})
+
+	// author: kuiwang@redhat.com
+	g.It("Author:kuiwang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-78300-validation of container images using sigstore signatures with different policy [Disruptive]", func() {
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("it depends on clusterimagepolicy which is in TP, so skip it for non TP.")
+		}
+		exutil.SkipForSNOCluster(oc)
+		var (
+			caseID                       = "781932"
+			ns                           = "ns-" + caseID
+			sa                           = "sa" + caseID
+			imageRef                     = "quay.io/olmqe/nginx-ok-index-sigstore:vokv" + caseID
+			packageName                  = "nginx-ok-v" + caseID
+			labelValue                   = caseID
+			catalogName                  = "clustercatalog-" + caseID
+			ceName                       = "ce-" + caseID
+			cipName                      = "cip-" + caseID
+			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
+			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
+			clusterextensionTemplate     = filepath.Join(baseDir, "clusterextension.yaml")
+			saClusterRoleBindingTemplate = filepath.Join(baseDir, "sa-admin.yaml")
+			cipTemplate                  = filepath.Join(baseDir, "cip.yaml")
+			cip                          = olmv1util.CipDescription{
+				Name:     cipName,
+				Repo1:    "quay.io/olmqe/nginx-ok-bundle-sigstore",
+				Repo2:    "quay.io/olmqe/nginx-ok-bundle-sigstore1",
+				Repo3:    "quay.io/olmqe/nginx-ok-index-sigstore",
+				Repo4:    "quay.io/olmqe/nginx-ok-index-sigstore1",
+				Policy:   "MatchRepository",
+				Template: cipTemplate,
+			}
+			clustercatalog = olmv1util.ClusterCatalogDescription{
+				Name:     catalogName,
+				Imageref: imageRef,
+				Template: clustercatalogTemplate,
+			}
+			saCrb = olmv1util.SaCLusterRolebindingDescription{
+				Name:      sa,
+				Namespace: ns,
+				Template:  saClusterRoleBindingTemplate,
+			}
+			ce = olmv1util.ClusterExtensionDescription{
+				Name:             ceName,
+				PackageName:      packageName,
+				Channel:          "alpha",
+				Version:          ">=0.0.1",
+				InstallNamespace: ns,
+				SaName:           sa,
+				LabelValue:       labelValue,
+				Template:         clusterextensionTemplate,
+			}
+		)
+		exutil.By("check if current mcp is healthy")
+		if !olmv1util.HealthyMCP4OLM(oc) {
+			g.Skip("current mcp is not healthy")
+		}
+
+		exutil.By("create cip")
+		defer cip.Delete(oc)
+		cip.Create(oc)
+
+		exutil.By("Create clustercatalog with olmsigkey signed successfully")
+		defer clustercatalog.Delete(oc)
+		clustercatalog.Create(oc)
+
+		exutil.By("Create namespace")
+		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", ns, "--ignore-not-found").Execute()
+		err := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(olmv1util.Appearance(oc, exutil.Appear, "ns", ns)).To(o.BeTrue())
+
+		exutil.By("Create SA for clusterextension")
+		defer saCrb.Delete(oc)
+		saCrb.Create(oc)
+
+		exutil.By("Create clusterextension with olmsigkey signed successfully")
+		defer ce.Delete(oc)
+		ce.Create(oc)
 
 	})
 
