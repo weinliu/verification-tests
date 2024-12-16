@@ -3,8 +3,10 @@ package monitoring
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 	"reflect"
 
 	"github.com/tidwall/gjson"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -536,4 +539,120 @@ func createExampleApp(oc *exutil.CLI, oboBaseDir, ns string) {
 	exutil.By("Install Example App")
 	createResourceFromYaml(oc, ns, appTemplate)
 	checkExampleAppStatus(oc, ns)
+}
+
+func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, apiGroupName string) (bool, error) {
+	//update the token and create a new config file
+	content, err := os.ReadFile(configFile)
+	if err != nil {
+		return false, err
+	}
+	defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", ns)).Execute()
+	oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", fmt.Sprintf("system:serviceaccount:%s:default", ns)).Execute()
+	token := getSAToken(oc, "default", ns)
+	originConfig := string(content)
+	targetConfig := strings.Replace(originConfig, "Bearer sha256~xxxxxxxx", "Bearer "+token, -1)
+	newConfigFile := "/tmp/coodast" + getRandomString()
+	f, err := os.Create(newConfigFile)
+	defer f.Close()
+	defer exec.Command("rm", newConfigFile).Output()
+	if err != nil {
+		return false, err
+	}
+	f.WriteString(targetConfig)
+
+	//Create configmap
+	err = oc.WithoutNamespace().Run("create").Args("-n", ns, "configmap", "rapidast-configmap", "--from-file=rapidastconfig.yaml="+newConfigFile, "--from-file=customscan.policy="+scanPolicyFile).Execute()
+	if err != nil {
+		return false, err
+	}
+
+	//Create job
+	oboBaseDir := exutil.FixturePath("testdata", "monitoring", "observabilityoperator")
+	jobTemplate := filepath.Join(oboBaseDir, "rapidast-coo-job.yaml")
+	err = oc.WithoutNamespace().Run("create").Args("-n", ns, "-f", jobTemplate).Execute()
+	if err != nil {
+		return false, err
+	}
+	//Waiting up to 10 minutes until pod Failed or Success
+	err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 10*time.Minute, true, func(context.Context) (done bool, err error) {
+		jobStatus, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "pod", "-l", "job-name=rapidast-coo-job", "-ojsonpath={.items[0].status.phase}").Output()
+		e2e.Logf(" rapidast Job status %s ", jobStatus)
+		if err1 != nil {
+			return false, nil
+		}
+		if jobStatus == "Pending" || jobStatus == "Running" {
+			return false, nil
+		}
+		if jobStatus == "Failed" {
+			return true, fmt.Errorf("rapidast-coo-job status failed")
+		}
+		return jobStatus == "Succeeded", nil
+	})
+	//return if the pod status is not Succeeded
+	if err != nil {
+		return false, err
+	}
+	// Get the rapidast pod name
+	jobPods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: "job-name=rapidast-coo-job"})
+	if err != nil {
+		return false, err
+	}
+	podLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", ns, jobPods.Items[0].Name).Output()
+	//return if failed to get logs
+	if err != nil {
+		return false, err
+	}
+
+	// Copy DAST Report into $ARTIFACT_DIR
+	artifactAvaiable := true
+	artifactdirPath := os.Getenv("ARTIFACT_DIR")
+	if artifactdirPath == "" {
+		artifactAvaiable = false
+	}
+	info, err := os.Stat(artifactdirPath)
+	if err != nil {
+		e2e.Logf("%s doesn't exist", artifactdirPath)
+		artifactAvaiable = false
+	} else if !info.IsDir() {
+		e2e.Logf("%s isn't a directory", artifactdirPath)
+		artifactAvaiable = false
+	}
+
+	if artifactAvaiable {
+		rapidastResultsSubDir := artifactdirPath + "/rapiddastresultsCOO"
+		err = os.MkdirAll(rapidastResultsSubDir, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		artifactFile := rapidastResultsSubDir + "/" + apiGroupName + "_rapidast.result"
+		e2e.Logf("Write report into %s", artifactFile)
+		f1, err := os.Create(artifactFile)
+		defer f1.Close()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = f1.WriteString(podLogs)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		// print pod logs if artifactdirPath is not writable
+		e2e.Logf("#oc logs -n %s %s \n %s", jobPods.Items[0].Name, ns, podLogs)
+	}
+
+	//return false, if high risk is reported
+	podLogA := strings.Split(podLogs, "\n")
+	riskHigh := 0
+	riskMedium := 0
+	re1 := regexp.MustCompile(`"riskdesc": .*High`)
+	re2 := regexp.MustCompile(`"riskdesc": .*Medium`)
+	for _, item := range podLogA {
+		if re1.MatchString(item) {
+			riskHigh++
+		}
+		if re2.MatchString(item) {
+			riskMedium++
+		}
+	}
+	e2e.Logf("rapidast result: riskHigh=%v riskMedium=%v", riskHigh, riskMedium)
+
+	if riskHigh > 0 {
+		return false, fmt.Errorf("high risk alert, please check the scan result report")
+	}
+	return true, nil
 }

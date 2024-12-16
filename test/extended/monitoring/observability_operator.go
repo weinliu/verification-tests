@@ -63,7 +63,6 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 		exutil.By("Check monitoringStack has correct clusterID region and status")
 		checkMonitoringStackDetails(oc, msD, "rosa_mc")
 	})
-
 	g.It("Author:Vibhu-LEVEL0-Critical-57440-observability operator uninstall [Serial]", func() {
 		defer deleteOperator(oc)
 		exutil.By("Delete ObservabilityOperator")
@@ -100,5 +99,14 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 		checkExampleAppTarget(oc)
 		exutil.By("Check metric along with value")
 		checkMetricValue(oc, "monitor_example_app")
+	})
+
+	// author: tagao@redhat.com
+	g.It("Author:tagao-Critical-78217-COO should pass DAST test [Serial]", func() {
+		exutil.By("trigger a job to install RapiDAST then scan APIs")
+		configFile := filepath.Join(oboBaseDir, "rapidastconfig_coo.yaml")
+		policyFile := filepath.Join(oboBaseDir, "customscan.policy")
+		_, err := rapidastScan(oc, oc.Namespace(), configFile, policyFile, "coo")
+		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 })
