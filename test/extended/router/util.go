@@ -2090,15 +2090,19 @@ func scaleDeploy(oc *exutil.CLI, ns, deployName string, num int) []string {
 func checkDcmBackendCfg(oc *exutil.CLI, routerpod, backend string) {
 	dynamicPod := `server-template _dynamic-pod- 1-1.+check disabled`
 	if strings.Contains(backend, "be_secure") {
-		dynamicPod = `server-template _dynamic-pod- 1-1.+check disabled.+verifyhost service.+`
+		dynamicPod = `server _dynamic-pod-1.+disabled check.+verifyhost service.+`
 	}
 
 	backendCfg := getBlockConfig(oc, routerpod, backend)
 	o.Expect(backendCfg).Should(o.And(
 		o.MatchRegexp(`server pod:.+`),
 		o.MatchRegexp(dynamicPod),
-		o.MatchRegexp(`dynamic-cookie-key [0-9a-zA-A]+`),
-		o.MatchRegexp(`cookie.+dynamic`)))
+		o.MatchRegexp(`dynamic-cookie-key [0-9a-zA-A]+`)))
+
+	// passthrough route hasn't the dynamic cookie
+	if !strings.Contains(backend, "be_tcp") {
+		o.Expect(backendCfg).To(o.MatchRegexp(`cookie.+dynamic`))
+	}
 }
 
 // for DCM testing, check UP endpoint of the deployment

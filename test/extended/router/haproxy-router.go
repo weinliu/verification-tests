@@ -4000,4 +4000,415 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlCmd = []string{"-n", project1, cltPodName, "--", "curl", "https://" + reenRoutehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
 		checkDcmServersAccessible(oc, curlCmd, podList, 180, desiredReplicas)
 	})
+
+	// author: shudili@redhat.com
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-High-77973-Dynamic Configuration Manager for edge route [Serial]", func() {
+		// skip the test if featureSet is not there
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test, skipping")
+		}
+
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			baseTemp            = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
+			srvdmInfo           = "web-server-deploy"
+			svcName             = "service-unsecure"
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+			desiredReplicas     = 8
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp77973",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  baseTemp,
+			}
+		)
+
+		exutil.By("1.0: Create a custom ingresscontroller")
+		ingctrl.domain = ingctrl.name + "." + getBaseDomain(oc)
+		routehost := "edge77973" + "." + ingctrl.domain
+		defer func() {
+			// added debug info, in case the original router pod was terminated
+			routerpod2 := getNewRouterPod(oc, ingctrl.name)
+			e2e.Logf("Before end of testing, the routerpod is: %s", routerpod2)
+			ingctrl.delete(oc)
+		}()
+		ingctrl.create(oc)
+		ensureCustomIngressControllerAvailable(oc, ingctrl.name)
+
+		exutil.By("2.0 Deploy a project with a deployment, an edge route and a client pod")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		ensurePodWithLabelReady(oc, project1, "name="+srvdmInfo)
+		createRoute(oc, project1, "edge", "edge77973", svcName, []string{"--hostname=" + routehost})
+		waitForOutput(oc, project1, "route/edge77973", "{.status.ingress[0].conditions[0].status}", "True")
+		createResourceFromFile(oc, project1, clientPod)
+		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+
+		exutil.By("3.0 Curl the edge route")
+		routerpod := getRouterPod(oc, ingctrl.name)
+		e2e.Logf("init routerpod is: %s", routerpod)
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst := routehost + ":443:" + podIP
+		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, curlCmd, "Hello-OpenShift", 60, 1)
+
+		exutil.By("4.0 Check the route's backend configuration including server pod, dynamic pool and dynamic cookie")
+		backend := "be_edge_http:" + project1 + ":edge77973"
+		checkDcmBackendCfg(oc, routerpod, backend)
+
+		exutil.By("5.0 Use debug command to check the dynamic server's state")
+		// used the socat command under the router pod to get all the route's endpoints status
+		socatCmd := fmt.Sprintf(`echo "show servers state %s" | socat stdio /var/lib/haproxy/run/haproxy.sock | sed 1d | grep -v '^#' | cut -d ' ' -f2-6 | sed -e 's/0$/STOP/' -e 's/1$/STARTING/' -e 's/2$/UP/' -e 's/3$/SOFTSTOP/'`, backend)
+		initSrvStates := checkDcmUpEndpoints(oc, routerpod, socatCmd, 1)
+		currentSrvStates := ""
+
+		exutil.By("6.0 get the initial router reloaded log")
+		log, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress", routerpod).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		initReloadedNum := strings.Count(log, `"msg"="router reloaded" "logger"="template" "output"=`)
+
+		exutil.By("7.0 keep scaling up the deployment with replicas 1")
+		for i := 1; i < desiredReplicas; i++ {
+			exutil.By("7." + strconv.Itoa(i) + ".1: scale up the deployment with replicas " + strconv.Itoa(i+1))
+			scaleDeploy(oc, project1, srvdmInfo, i+1)
+			waitForOutput(oc, project1, "deployment/"+srvdmInfo, "{.status.availableReplicas}", strconv.Itoa(i+1))
+
+			exutil.By("7." + strconv.Itoa(i) + ".2: Check the route's backend configuration including server pod, dynamic pool, dynamic cookie")
+			checkDcmBackendCfg(oc, routerpod, backend)
+
+			exutil.By("7." + strconv.Itoa(i) + ".3: Use debug command to check the dynamic server's state")
+			currentSrvStates = checkDcmUpEndpoints(oc, routerpod, socatCmd, i+1)
+
+			exutil.By("7." + strconv.Itoa(i) + ".4: check whether got the router reloaded log or not")
+			initReloadedNum = checkRouterReloadedLogs(oc, routerpod, initReloadedNum, initSrvStates, currentSrvStates)
+			initSrvStates = currentSrvStates
+		}
+
+		exutil.By("8.0 keep scaling down the deployment with replicas 1")
+		for i := desiredReplicas - 1; i >= 0; i-- {
+			exutil.By("8." + strconv.Itoa(desiredReplicas-i) + ".1: scale up the deployment with replicas " + strconv.Itoa(i))
+			scaleDeploy(oc, project1, srvdmInfo, i)
+
+			exutil.By("8." + strconv.Itoa(desiredReplicas-i) + ".2: Check the route's backend configuration including server pod, dynamic pool, dynamic cookie")
+			checkDcmBackendCfg(oc, routerpod, backend)
+
+			exutil.By("8." + strconv.Itoa(desiredReplicas-i) + ".3: Use debug command to check the dynamic server's state")
+			currentSrvStates = checkDcmUpEndpoints(oc, routerpod, socatCmd, i)
+
+			exutil.By("8." + strconv.Itoa(desiredReplicas-i) + ".4: check whether got the router reloaded log or not")
+			initReloadedNum = checkRouterReloadedLogs(oc, routerpod, initReloadedNum, initSrvStates, currentSrvStates)
+			initSrvStates = currentSrvStates
+		}
+
+		exutil.By("9.0 keep scaling up the deployment with replicas 2")
+		maxReplicas := 0
+		for i := 2; i <= desiredReplicas-2; i = i + 2 {
+			exutil.By("9." + strconv.Itoa((i+2)/2) + ".1: scale up the deployment with replicas " + strconv.Itoa(i))
+			scaleDeploy(oc, project1, srvdmInfo, i)
+
+			exutil.By("9." + strconv.Itoa(i/2) + ".2: Check the route's backend configuration including server pod, dynamic pool, dynamic cookie")
+			checkDcmBackendCfg(oc, routerpod, backend)
+
+			exutil.By("9." + strconv.Itoa(i/2) + ".3: Use debug command to check the dynamic server's state")
+			currentSrvStates = checkDcmUpEndpoints(oc, routerpod, socatCmd, i)
+
+			exutil.By("9." + strconv.Itoa(i/2) + ".4: check whether got the router reloaded log or not")
+			initReloadedNum = checkRouterReloadedLogs(oc, routerpod, initReloadedNum, initSrvStates, currentSrvStates)
+			initSrvStates = currentSrvStates
+			maxReplicas = i
+		}
+
+		exutil.By("10.0 keep scaling down the deployment with replicas 2")
+		for i := maxReplicas - 2; i >= 0; i = i - 2 {
+			exutil.By("10." + strconv.Itoa((maxReplicas-i)/2) + ".1: scale up the deployment with replicas " + strconv.Itoa(i))
+			scaleDeploy(oc, project1, srvdmInfo, i)
+
+			exutil.By("10." + strconv.Itoa((maxReplicas-i)/2) + ".2: Check the route's backend configuration including server pod, dynamic pool, dynamic cookie")
+			checkDcmBackendCfg(oc, routerpod, backend)
+
+			exutil.By("10." + strconv.Itoa((maxReplicas-i)/2) + ".3: Use debug command to check the dynamic server's state")
+			currentSrvStates = checkDcmUpEndpoints(oc, routerpod, socatCmd, i)
+
+			exutil.By("10." + strconv.Itoa((maxReplicas-i)/2) + ".4: get the router reloaded log")
+			initReloadedNum = checkRouterReloadedLogs(oc, routerpod, initReloadedNum, initSrvStates, currentSrvStates)
+			initSrvStates = currentSrvStates
+		}
+	})
+
+	// author: shudili@redhat.com
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-High-77974-Dynamic Configuration Manager for passthrough route [Serial]", func() {
+		// skip the test if featureSet is not there
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test, skipping")
+		}
+
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			baseTemp            = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
+			srvdmInfo           = "web-server-deploy"
+			svcName             = "service-secure"
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+			desiredReplicas     = 8
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp77974",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  baseTemp,
+			}
+		)
+
+		exutil.By("1.0: Create a custom ingresscontroller")
+		ingctrl.domain = ingctrl.name + "." + getBaseDomain(oc)
+		routehost := "passth77974" + "." + ingctrl.domain
+		defer func() {
+			// added debug info, in case the original router pod was terminated
+			routerpod2 := getNewRouterPod(oc, ingctrl.name)
+			e2e.Logf("Before end of testing, the routerpod is: %s", routerpod2)
+			ingctrl.delete(oc)
+		}()
+		ingctrl.create(oc)
+		ensureCustomIngressControllerAvailable(oc, ingctrl.name)
+
+		exutil.By("2.0 Deploy a project with a deployment, a passthrough route and a client pod")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		ensurePodWithLabelReady(oc, project1, "name="+srvdmInfo)
+		createRoute(oc, project1, "passthrough", "passth77974", svcName, []string{"--hostname=" + routehost})
+		waitForOutput(oc, project1, "route/passth77974", "{.status.ingress[0].conditions[0].status}", "True")
+		createResourceFromFile(oc, project1, clientPod)
+		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+
+		exutil.By("3.0 Curl the passthrough route")
+		routerpod := getRouterPod(oc, ingctrl.name)
+		e2e.Logf("init routerpod is: %s", routerpod)
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst := routehost + ":443:" + podIP
+		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, curlCmd, "Hello-OpenShift", 60, 1)
+
+		exutil.By("4.0 Check the route's backend configuration including server pod and dynamic pool")
+		backend := "be_tcp:" + project1 + ":passth77974"
+		checkDcmBackendCfg(oc, routerpod, backend)
+
+		exutil.By("5.0 Use debug command to check the dynamic server's state")
+		// used the socat command under the router pod to get all the route's endpoints status
+		socatCmd := fmt.Sprintf(`echo "show servers state %s" | socat stdio /var/lib/haproxy/run/haproxy.sock | sed 1d | grep -v '^#' | cut -d ' ' -f2-6 | sed -e 's/0$/STOP/' -e 's/1$/STARTING/' -e 's/2$/UP/' -e 's/3$/SOFTSTOP/'`, backend)
+		initSrvStates := checkDcmUpEndpoints(oc, routerpod, socatCmd, 1)
+		currentSrvStates := ""
+
+		exutil.By("6.0 get the initial router reloaded log")
+		log, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress", routerpod).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		initReloadedNum := strings.Count(log, `"msg"="router reloaded" "logger"="template" "output"=`)
+
+		exutil.By("7.0 keep scaling up the deployment with replicas 1")
+		for i := 1; i < desiredReplicas; i++ {
+			exutil.By("7." + strconv.Itoa(i) + ".1: scale up the deployment with replicas " + strconv.Itoa(i+1))
+			scaleDeploy(oc, project1, srvdmInfo, i+1)
+			waitForOutput(oc, project1, "deployment/"+srvdmInfo, "{.status.availableReplicas}", strconv.Itoa(i+1))
+
+			exutil.By("7." + strconv.Itoa(i) + ".2: Check the route's backend configuration including server pod, dynamic pool, dynamic cookie")
+			checkDcmBackendCfg(oc, routerpod, backend)
+
+			exutil.By("7." + strconv.Itoa(i) + ".3: Use debug command to check the dynamic server's state")
+			currentSrvStates = checkDcmUpEndpoints(oc, routerpod, socatCmd, i+1)
+
+			exutil.By("7." + strconv.Itoa(i) + ".4: check whether got the router reloaded log or not")
+			initReloadedNum = checkRouterReloadedLogs(oc, routerpod, initReloadedNum, initSrvStates, currentSrvStates)
+			initSrvStates = currentSrvStates
+		}
+
+		exutil.By("8.0 keep scaling down the deployment with replicas 1")
+		for i := desiredReplicas - 1; i >= 0; i-- {
+			exutil.By("8." + strconv.Itoa(desiredReplicas-i) + ".1: scale up the deployment with replicas " + strconv.Itoa(i))
+			scaleDeploy(oc, project1, srvdmInfo, i)
+
+			exutil.By("8." + strconv.Itoa(desiredReplicas-i) + ".2: Check the route's backend configuration including server pod, dynamic pool, dynamic cookie")
+			checkDcmBackendCfg(oc, routerpod, backend)
+
+			exutil.By("8." + strconv.Itoa(desiredReplicas-i) + ".3: Use debug command to check the dynamic server's state")
+			currentSrvStates = checkDcmUpEndpoints(oc, routerpod, socatCmd, i)
+
+			exutil.By("8." + strconv.Itoa(desiredReplicas-i) + ".4: check whether got the router reloaded log or not")
+			initReloadedNum = checkRouterReloadedLogs(oc, routerpod, initReloadedNum, initSrvStates, currentSrvStates)
+			initSrvStates = currentSrvStates
+		}
+
+		exutil.By("9.0 keep scaling up the deployment with replicas 2")
+		maxReplicas := 0
+		for i := 2; i <= desiredReplicas-2; i = i + 2 {
+			exutil.By("9." + strconv.Itoa((i+2)/2) + ".1: scale up the deployment with replicas " + strconv.Itoa(i))
+			scaleDeploy(oc, project1, srvdmInfo, i)
+
+			exutil.By("9." + strconv.Itoa(i/2) + ".2: Check the route's backend configuration including server pod, dynamic pool, dynamic cookie")
+			checkDcmBackendCfg(oc, routerpod, backend)
+
+			exutil.By("9." + strconv.Itoa(i/2) + ".3: Use debug command to check the dynamic server's state")
+			currentSrvStates = checkDcmUpEndpoints(oc, routerpod, socatCmd, i)
+
+			exutil.By("9." + strconv.Itoa(i/2) + ".4: check whether got the router reloaded log or not")
+			initReloadedNum = checkRouterReloadedLogs(oc, routerpod, initReloadedNum, initSrvStates, currentSrvStates)
+			initSrvStates = currentSrvStates
+			maxReplicas = i
+		}
+
+		exutil.By("10.0 keep scaling down the deployment with replicas 2")
+		for i := maxReplicas - 2; i >= 0; i = i - 2 {
+			exutil.By("10." + strconv.Itoa((maxReplicas-i)/2) + ".1: scale up the deployment with replicas " + strconv.Itoa(i))
+			scaleDeploy(oc, project1, srvdmInfo, i)
+
+			exutil.By("10." + strconv.Itoa((maxReplicas-i)/2) + ".2: Check the route's backend configuration including server pod, dynamic pool, dynamic cookie")
+			checkDcmBackendCfg(oc, routerpod, backend)
+
+			exutil.By("10." + strconv.Itoa((maxReplicas-i)/2) + ".3: Use debug command to check the dynamic server's state")
+			currentSrvStates = checkDcmUpEndpoints(oc, routerpod, socatCmd, i)
+
+			exutil.By("10." + strconv.Itoa((maxReplicas-i)/2) + ".4: get the router reloaded log")
+			initReloadedNum = checkRouterReloadedLogs(oc, routerpod, initReloadedNum, initSrvStates, currentSrvStates)
+			initSrvStates = currentSrvStates
+		}
+	})
+
+	// author: shudili@redhat.com
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-High-77975-Dynamic Configuration Manager for reencrypt route [Serial]", func() {
+		// skip the test if featureSet is not there
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test, skipping")
+		}
+
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			baseTemp            = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
+			srvdmInfo           = "web-server-deploy"
+			svcName             = "service-secure"
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
+			cltPodName          = "hello-pod"
+			cltPodLabel         = "app=hello-pod"
+			desiredReplicas     = 8
+			ingctrl             = ingressControllerDescription{
+				name:      "ocp77975",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  baseTemp,
+			}
+		)
+
+		exutil.By("1.0: Create a custom ingresscontroller")
+		ingctrl.domain = ingctrl.name + "." + getBaseDomain(oc)
+		routehost := "reen77975" + "." + ingctrl.domain
+		defer func() {
+			// added debug info, in case the original router pod was terminated
+			routerpod2 := getNewRouterPod(oc, ingctrl.name)
+			e2e.Logf("Before end of testing, the routerpod is: %s", routerpod2)
+			ingctrl.delete(oc)
+		}()
+		ingctrl.create(oc)
+		ensureCustomIngressControllerAvailable(oc, ingctrl.name)
+
+		exutil.By("2.0 Deploy a project with a deployment, a reencrypt route and a client pod")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		ensurePodWithLabelReady(oc, project1, "name="+srvdmInfo)
+		createRoute(oc, project1, "reencrypt", "reen77975", svcName, []string{"--hostname=" + routehost})
+		waitForOutput(oc, project1, "route/reen77975", "{.status.ingress[0].conditions[0].status}", "True")
+		createResourceFromFile(oc, project1, clientPod)
+		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+
+		exutil.By("3.0 Curl the reencrypt route")
+		routerpod := getRouterPod(oc, ingctrl.name)
+		e2e.Logf("init routerpod is: %s", routerpod)
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst := routehost + ":443:" + podIP
+		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
+		adminRepeatCmd(oc, curlCmd, "Hello-OpenShift", 60, 1)
+
+		exutil.By("4.0 Check the route's backend configuration including server pod, dynamic pool, dynamic cookie")
+		backend := "be_secure:" + project1 + ":reen77975"
+		checkDcmBackendCfg(oc, routerpod, backend)
+
+		exutil.By("5.0 Use debug command to check the dynamic server's state")
+		// used the socat command under the router pod to get all the route's endpoints status
+		socatCmd := fmt.Sprintf(`echo "show servers state %s" | socat stdio /var/lib/haproxy/run/haproxy.sock | sed 1d | grep -v '^#' | cut -d ' ' -f2-6 | sed -e 's/0$/STOP/' -e 's/1$/STARTING/' -e 's/2$/UP/' -e 's/3$/SOFTSTOP/'`, backend)
+		initSrvStates := checkDcmUpEndpoints(oc, routerpod, socatCmd, 1)
+		currentSrvStates := ""
+
+		exutil.By("6.0 get the initial router reloaded log")
+		log, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress", routerpod).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		initReloadedNum := strings.Count(log, `"msg"="router reloaded" "logger"="template" "output"=`)
+
+		exutil.By("7.0 keep scaling up the deployment with replicas 1")
+		for i := 1; i < desiredReplicas; i++ {
+			exutil.By("7." + strconv.Itoa(i) + ".1: scale up the deployment with replicas " + strconv.Itoa(i+1))
+			scaleDeploy(oc, project1, srvdmInfo, i+1)
+			waitForOutput(oc, project1, "deployment/"+srvdmInfo, "{.status.availableReplicas}", strconv.Itoa(i+1))
+
+			exutil.By("7." + strconv.Itoa(i) + ".2: Check the route's backend configuration including server pod, dynamic pool, dynamic cookie")
+			checkDcmBackendCfg(oc, routerpod, backend)
+
+			exutil.By("7." + strconv.Itoa(i) + ".3: Use debug command to check the dynamic server's state")
+			currentSrvStates = checkDcmUpEndpoints(oc, routerpod, socatCmd, i+1)
+
+			exutil.By("7." + strconv.Itoa(i) + ".4: check whether got the router reloaded log or not")
+			initReloadedNum = checkRouterReloadedLogs(oc, routerpod, initReloadedNum, initSrvStates, currentSrvStates)
+			initSrvStates = currentSrvStates
+		}
+
+		exutil.By("8.0 keep scaling down the deployment with replicas 1")
+		for i := desiredReplicas - 1; i >= 0; i-- {
+			exutil.By("8." + strconv.Itoa(desiredReplicas-i) + ".1: scale up the deployment with replicas " + strconv.Itoa(i))
+			scaleDeploy(oc, project1, srvdmInfo, i)
+
+			exutil.By("8." + strconv.Itoa(desiredReplicas-i) + ".2: Check the route's backend configuration including server pod, dynamic pool and dynamic cookie")
+			checkDcmBackendCfg(oc, routerpod, backend)
+
+			exutil.By("8." + strconv.Itoa(desiredReplicas-i) + ".3: Use debug command to check the dynamic server's state")
+			currentSrvStates = checkDcmUpEndpoints(oc, routerpod, socatCmd, i)
+
+			exutil.By("8." + strconv.Itoa(desiredReplicas-i) + ".4: check whether got the router reloaded log or not")
+			initReloadedNum = checkRouterReloadedLogs(oc, routerpod, initReloadedNum, initSrvStates, currentSrvStates)
+			initSrvStates = currentSrvStates
+		}
+
+		exutil.By("9.0 keep scaling up the deployment with replicas 2")
+		maxReplicas := 0
+		for i := 2; i <= desiredReplicas-2; i = i + 2 {
+			exutil.By("9." + strconv.Itoa((i+2)/2) + ".1: scale up the deployment with replicas " + strconv.Itoa(i))
+			scaleDeploy(oc, project1, srvdmInfo, i)
+
+			exutil.By("9." + strconv.Itoa(i/2) + ".2: Check the route's backend configuration including server pod, dynamic pool, dynamic cookie")
+			checkDcmBackendCfg(oc, routerpod, backend)
+
+			exutil.By("9." + strconv.Itoa(i/2) + ".3: Use debug command to check the dynamic server's state")
+			currentSrvStates = checkDcmUpEndpoints(oc, routerpod, socatCmd, i)
+
+			exutil.By("9." + strconv.Itoa(i/2) + ".4: check whether got the router reloaded log or not")
+			initReloadedNum = checkRouterReloadedLogs(oc, routerpod, initReloadedNum, initSrvStates, currentSrvStates)
+			initSrvStates = currentSrvStates
+			maxReplicas = i
+		}
+
+		exutil.By("10.0 keep scaling down the deployment with replicas 2")
+		for i := maxReplicas - 2; i >= 0; i = i - 2 {
+			exutil.By("10." + strconv.Itoa((maxReplicas-i)/2) + ".1: scale up the deployment with replicas " + strconv.Itoa(i))
+			scaleDeploy(oc, project1, srvdmInfo, i)
+
+			exutil.By("10." + strconv.Itoa((maxReplicas-i)/2) + ".2: Check the route's backend configuration including server pod, dynamic pool, dynamic cookie")
+			checkDcmBackendCfg(oc, routerpod, backend)
+
+			exutil.By("10." + strconv.Itoa((maxReplicas-i)/2) + ".3: Use debug command to check the dynamic server's state")
+			currentSrvStates = checkDcmUpEndpoints(oc, routerpod, socatCmd, i)
+
+			exutil.By("10." + strconv.Itoa((maxReplicas-i)/2) + ".4: get the router reloaded log")
+			initReloadedNum = checkRouterReloadedLogs(oc, routerpod, initReloadedNum, initSrvStates, currentSrvStates)
+			initSrvStates = currentSrvStates
+		}
+	})
 })
