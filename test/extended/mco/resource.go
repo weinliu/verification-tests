@@ -6,6 +6,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"time"
 
 	o "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
@@ -213,7 +214,11 @@ func (r Resource) HasOwner() (bool, error) {
 
 // Logs exeucte the logs subcommand with using this resource
 func (r Resource) Logs(args ...string) (string, error) {
-	params := []string{}
+	var (
+		params         = []string{}
+		stdout, stderr string
+		err            error
+	)
 
 	if r.namespace != "" {
 		params = append([]string{"-n", r.namespace}, params...)
@@ -222,7 +227,11 @@ func (r Resource) Logs(args ...string) (string, error) {
 	params = append(params, args...)
 	params = append(params, r.kind+"/"+r.name)
 
-	stdout, stderr, err := r.oc.WithoutNamespace().Run("logs").Args(params...).Outputs()
+	err = Retry(5, 10*time.Second, func() error {
+		stdout, stderr, err = r.oc.WithoutNamespace().Run("logs").Args(params...).Outputs()
+		return err
+	})
+
 	if err != nil {
 		logger.Errorf("Error getting %s logs.\nStdout:%s\nStderr:%s\nErr:%s", r, stdout, stderr, err)
 		return stdout + stderr, err
