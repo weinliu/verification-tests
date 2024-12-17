@@ -107,8 +107,7 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		CurlPod2SvcFail(oc, ns2, ns1, "hello-pod3", "test-service")
 
 		g.By("Curl from node0 to service:port")
-		//Due to bug 2078691,skip below step for now.
-		//CurlNode2SvcPass(oc, pod1.nodename, ns1,"test-service")
+		CurlNode2SvcPass(oc, pod1.nodename, ns1, "test-service")
 		g.By("Curl from node1 to service:port")
 		CurlNode2SvcFail(oc, nodeList.Items[1].Name, ns1, "test-service")
 
@@ -215,6 +214,9 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 
 		g.By("Curl from node1 to service:port")
 		CurlNode2SvcFail(oc, nodeList.Items[1].Name, ns1, "test-service")
+
+		g.By("Curl from node0 to service:port")
+		CurlNode2SvcPass(oc, nodeList.Items[0].Name, ns1, "test-service")
 
 		ipStackType := checkIPStackType(oc)
 
