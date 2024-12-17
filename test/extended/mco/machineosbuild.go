@@ -31,7 +31,7 @@ func (mosb MachineOSBuild) GetMachineOSConfig() (string, error) {
 }
 
 // GetJob returns the pod used to build this build
-func (mosb MachineOSBuild) GetJob() (*Resource, error) {
+func (mosb MachineOSBuild) GetJob() (*Job, error) {
 	jobName, err := mosb.Get(`{.status.builderReference.buildPod.name}`)
 	if err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func (mosb MachineOSBuild) GetJob() (*Resource, error) {
 		return nil, err
 	}
 
-	return NewNamespacedResource(mosb.oc, "job", jobNamespace, jobName), nil
+	return NewJob(mosb.GetOC(), jobNamespace, jobName), nil
 }
 
 // GetAll returns a []MachineOSBuild list with all existing pinnedimageset sorted by creation timestamp

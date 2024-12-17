@@ -153,7 +153,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 			"No build was created when OCB was enabled")
 		mosb, err := mosc.GetCurrentMachineOSBuild()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting MOSB from MOSC")
-		o.Eventually(mosb.GetJob).Should(Exist(),
+		o.Eventually(mosb.GetJob, "5m", "20s").Should(Exist(),
 			"No build pod was created when OCB was enabled")
 		o.Eventually(mosb, "5m", "20s").Should(HaveConditionField("Building", "status", TrueString),
 			"MachineOSBuild didn't report that the build has begun")
@@ -531,7 +531,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 			return mosb, err
 		}, "5m", "20s").Should(Exist(),
 			"No build was created when OCB was enabled")
-		o.Eventually(mosb.GetJob).Should(Exist(),
+		o.Eventually(mosb.GetJob, "5m", "20s").Should(Exist(),
 			"No build job was created when OCB was enabled")
 		o.Eventually(mosb, "5m", "20s").Should(HaveConditionField("Building", "status", TrueString),
 			"MachineOSBuild didn't report that the build has begun")
@@ -570,7 +570,6 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 
 		var (
 			mcp      = GetCompactCompatiblePool(oc.AsAdmin())
-			node     = mcp.GetSortedNodesOrFail()[0]
 			moscName = "test-" + mcp.GetName() + "-" + GetCurrentTestPolarionIDNumber()
 		)
 
@@ -582,35 +581,53 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 
 		ValidateSuccessfulMOSC(mosc, nil)
 
-		exutil.By("Rebuild the current image")
-		mosb := exutil.OrFail[*MachineOSBuild](mosc.GetCurrentMachineOSBuild())
-		currentImagePullSpec := exutil.OrFail[string](mosc.GetStatusCurrentImagePullSpec())
+		// rebuild the image and check that the image is properly applied in the nodes
+		RebuildImageAndCheck(mosc)
+	})
 
-		o.Expect(mosc.Rebuild()).To(o.Succeed(),
-			"Error patching %s to rebuild the current image", mosc)
+	g.It("Author:sregidor-Longduration-NonPreRelease-High-77782-[P2] OCB Rebuild an interrupted build [Disruptive]", func() {
+
+		var (
+			mcp      = GetCompactCompatiblePool(oc.AsAdmin())
+			moscName = "test-" + mcp.GetName() + "-" + GetCurrentTestPolarionIDNumber()
+		)
+
+		exutil.By("Configure OCB functionality for the new worker MCP")
+		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), MachineConfigNamespace, moscName, mcp.GetName(), nil)
+		defer DisableOCL(mosc)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
 		logger.Infof("OK!\n")
 
-		exutil.By("Check that the existing MOSB is reused and it builds a new image")
-		o.Eventually(mosb.GetJob, "2m", "20s").Should(Exist(), "Rebuild job was not created")
-		o.Eventually(mosb, "20m", "20s").Should(HaveConditionField("Building", "status", FalseString), "Rebuild was not finished")
-		o.Eventually(mosb, "10m", "20s").Should(HaveConditionField("Succeeded", "status", TrueString), "Rebuild didn't succeed")
-		o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Interrupted", "status", FalseString), "Reuild was interrupted")
-		o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Failed", "status", FalseString), "Reuild was failed")
-		logger.Infof("Check that the rebuild job was deleted")
-		o.Eventually(mosb.GetJob, "2m", "20s").ShouldNot(Exist(), "Build job was not cleaned")
+		exutil.By("Wait until MOSB starts building")
+		var mosb *MachineOSBuild
+		var job *Job
+		o.Eventually(func() (*MachineOSBuild, error) {
+			var err error
+			mosb, err = mosc.GetCurrentMachineOSBuild()
+			return mosb, err
+		}, "5m", "20s").Should(Exist(),
+			"No build was created when OCB was enabled")
+		o.Eventually(func() (*Job, error) {
+			var err error
+			job, err = mosb.GetJob()
+			return job, err
+		}, "5m", "20s").Should(Exist(),
+			"No build job was created when OCB was enabled")
+		o.Eventually(mosb, "5m", "20s").Should(HaveConditionField("Building", "status", TrueString),
+			"MachineOSBuild didn't report that the build has begun")
 		logger.Infof("OK!\n")
 
-		exutil.By("Wait for the new image to be applied")
-		mcp.waitForComplete()
+		exutil.By("Interrupt the build")
+		o.Expect(job.Delete()).To(o.Succeed(),
+			"Error deleting %s", job)
+		o.Eventually(mosb, "5m", "20s").Should(HaveConditionField("Interrupted", "status", TrueString),
+			"MachineOSBuild didn't report that the build has begun")
 		logger.Infof("OK!\n")
 
-		exutil.By("Check that the new image is the one used in the nodes")
-		newImagePullSpec := exutil.OrFail[string](mosc.GetStatusCurrentImagePullSpec())
-		o.Expect(newImagePullSpec).NotTo(o.Equal(currentImagePullSpec),
-			"The new image after the rebuild operation should be different fron the initial image")
-		o.Expect(node.GetCurrentBootOSImage()).To(o.Equal(newImagePullSpec),
-			"The new image is not being used in node %s", node)
-		logger.Infof("OK!\n")
+		// TODO: what's the intended MCP status when a build is interrupted? We need to check this status here
+
+		// rebuild the image and check that the image is properly applied in the nodes
+		RebuildImageAndCheck(mosc)
 	})
 
 	g.It("Author:ptalgulk-ConnectedOnly-Longduration-NonPreRelease-Medium-77977-Install extension after OCB is enabled [Disruptive]", func() {
@@ -804,7 +821,7 @@ func ValidateSuccessfulMOSC(mosc *MachineOSConfig, checkers []Checker) {
 		"No build was created when OCB was enabled")
 	mosb, err := mosc.GetCurrentMachineOSBuild()
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting MOSB from MOSC")
-	o.Eventually(mosb.GetJob).Should(Exist(),
+	o.Eventually(mosb.GetJob, "2m", "20s").Should(Exist(),
 		"No build job was created when OCB was enabled")
 	o.Eventually(mosb, "5m", "20s").Should(HaveConditionField("Building", "status", TrueString),
 		"MachineOSBuild didn't report that the build has begun")
@@ -950,5 +967,51 @@ func verifyEntitlementSecretIsPresent(oc *exutil.CLI, mcp *MachineConfigPool) {
 		logger.Infof("OK!\n")
 	} else {
 		logger.Infof("etc-pki-entitlement does not exist in openshift-config-managed namespace")
+	}
+}
+
+// RebuildImageAndCheck rebuild the latest image of the MachineOSConfig resource and checks that it is properly built and applied
+func RebuildImageAndCheck(mosc *MachineOSConfig) {
+	exutil.By("Rebuild the current image")
+
+	var (
+		mcp                  = exutil.OrFail[*MachineConfigPool](mosc.GetMachineConfigPool())
+		mosb                 = exutil.OrFail[*MachineOSBuild](mosc.GetCurrentMachineOSBuild())
+		currentImagePullSpec = exutil.OrFail[string](mosc.GetStatusCurrentImagePullSpec())
+	)
+
+	o.Expect(mosc.Rebuild()).To(o.Succeed(),
+		"Error patching %s to rebuild the current image", mosc)
+	logger.Infof("OK!\n")
+
+	exutil.By("Check that the existing MOSB is reused and it builds a new image")
+	o.Eventually(mosb.GetJob, "2m", "20s").Should(Exist(), "Rebuild job was not created")
+	o.Eventually(mosb, "20m", "20s").Should(HaveConditionField("Building", "status", FalseString), "Rebuild was not finished")
+	o.Eventually(mosb, "10m", "20s").Should(HaveConditionField("Succeeded", "status", TrueString), "Rebuild didn't succeed")
+	o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Interrupted", "status", FalseString), "Reuild was interrupted")
+	o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Failed", "status", FalseString), "Reuild was failed")
+	logger.Infof("Check that the rebuild job was deleted")
+	o.Eventually(mosb.GetJob, "2m", "20s").ShouldNot(Exist(), "Build job was not cleaned")
+	logger.Infof("OK!\n")
+
+	exutil.By("Wait for the new image to be applied")
+	nodes, err := mcp.GetCoreOsNodes()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting coreos nodes from %s", mcp)
+	if len(nodes) > 0 {
+		node := nodes[0]
+
+		mcp.waitForComplete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that the new image is the one used in the nodes")
+		newImagePullSpec := exutil.OrFail[string](mosc.GetStatusCurrentImagePullSpec())
+		o.Expect(newImagePullSpec).NotTo(o.Equal(currentImagePullSpec),
+			"The new image after the rebuild operation should be different fron the initial image")
+		o.Expect(node.GetCurrentBootOSImage()).To(o.Equal(newImagePullSpec),
+			"The new image is not being used in node %s", node)
+		logger.Infof("OK!\n")
+	} else {
+		logger.Infof("There is no coreos node configured in %s. We don't wait for the configuration to be applied and we don't execute any verification on the nodes", mcp)
+		logger.Infof("OK!\n")
 	}
 }
