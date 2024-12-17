@@ -329,3 +329,60 @@ func checkPodCIDRsOverlap(oc *exutil.CLI, namespace string, ipStack string, Pods
 		return subnets[0].Contains(subnets[1].IP) || subnets[1].Contains(subnets[0].IP)
 	}
 }
+
+func applyL3UDNtoNamespace(oc *exutil.CLI, namespace string, udnSelector int) error {
+
+	udnCRDSingleStack := exutil.FixturePath("testdata", "networking", "udn", "udn_crd_singlestack_template.yaml")
+	udnCRDdualStack := exutil.FixturePath("testdata", "networking", "udn", "udn_crd_dualstack2_template.yaml")
+
+	SkipIfNoFeatureGate(oc, "NetworkSegmentation")
+
+	ipStackType := checkIPStackType(oc)
+	var mtu int32 = 1300
+	var cidr, ipv4cidr, ipv6cidr []string
+	var prefix, ipv4prefix, ipv6prefix int32
+	if ipStackType == "ipv4single" {
+		cidr = []string{"10.150.0.0/16", "10.151.0.0/16", "10.151.0.0/16"}
+		prefix = 24
+	} else {
+		if ipStackType == "ipv6single" {
+			cidr = []string{"2010:100:200::0/60", "2011:100:200::0/60", "2011:100:200::0/60"}
+			prefix = 64
+		} else {
+			ipv4cidr = []string{"10.150.0.0/16", "10.151.0.0/16", "10.151.0.0/16"}
+			ipv4prefix = 24
+			ipv6cidr = []string{"2010:100:200::0/60", "2011:100:200::0/60", "2011:100:200::0/60"}
+			ipv6prefix = 64
+		}
+	}
+
+	var udncrd udnCRDResource
+	if ipStackType == "dualstack" {
+		udncrd = udnCRDResource{
+			crdname:    "l3-network-" + namespace,
+			namespace:  namespace,
+			role:       "Primary",
+			mtu:        mtu,
+			IPv4cidr:   ipv4cidr[udnSelector],
+			IPv4prefix: ipv4prefix,
+			IPv6cidr:   ipv6cidr[udnSelector],
+			IPv6prefix: ipv6prefix,
+			template:   udnCRDdualStack,
+		}
+		udncrd.createUdnCRDDualStack(oc)
+	} else {
+		udncrd = udnCRDResource{
+			crdname:   "l3-network-" + namespace,
+			namespace: namespace,
+			role:      "Primary",
+			mtu:       mtu,
+			cidr:      cidr[udnSelector],
+			prefix:    prefix,
+			template:  udnCRDSingleStack,
+		}
+		udncrd.createUdnCRDSingleStack(oc)
+	}
+	err := waitUDNCRDApplied(oc, namespace, udncrd.crdname)
+	return err
+
+}
