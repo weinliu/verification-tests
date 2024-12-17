@@ -257,7 +257,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		skipForCAPINotExist(oc)
 
 		g.By("Create capi machineset")
-		cluster.createCluster(oc)
+		/*create cluster no longer necessary - OCPCLOUD-2202
+		cluster.createCluster(oc)*/
 		defer awsMachineTemplate.deleteAWSMachineTemplate(oc)
 		awsMachineTemplate.createAWSMachineTemplate(oc)
 
@@ -277,7 +278,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		skipForCAPINotExist(oc)
 
 		g.By("Create capi machineset")
-		cluster.createCluster(oc)
+		/*create cluster no longer necessary - OCPCLOUD-2202
+		cluster.createCluster(oc)*/
 
 		// rootDeviceTypes included to cover multiple cases
 		rootDeviceTypes := map[string]string{
@@ -357,9 +359,10 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		skipForCAPINotExist(oc)
 
 		g.By("Create cluster, awscluster, awsmachinetemplate")
+		/*create cluster no longer necessary - OCPCLOUD-2202
 		cluster.createCluster(oc)
 		//OCPCLOUD-2204
-		/*	defer awscluster.deleteAWSCluster(oc)
+		defer awscluster.deleteAWSCluster(oc)
 			awscluster.createAWSCluster(oc)*/
 		defer awsMachineTemplate.deleteAWSMachineTemplate(oc)
 		awsMachineTemplate.createAWSMachineTemplate(oc)
@@ -384,7 +387,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		skipForCAPINotExist(oc)
 
 		g.By("Create capi machineset")
-		cluster.createCluster(oc)
+		/*create cluster no longer necessary - OCPCLOUD-2202
+		cluster.createCluster(oc)*/
 
 		defer vsphereMachineTemplate.deletevsphereMachineTemplate(oc)
 		vsphereMachineTemplate.createvsphereMachineTemplate(oc)
@@ -412,7 +416,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		}
 
 		g.By("Create capi machineset")
-		cluster.createCluster(oc)
+		/*create cluster no longer necessary - OCPCLOUD-2202
+		cluster.createCluster(oc)*/
 		awsMachineTemplate.placementGroupName = "pgpartition3"
 		awsMachineTemplate.placementGroupPartition = 3
 		defer awsMachineTemplate.deleteAWSMachineTemplate(oc)
@@ -467,7 +472,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create capi machineset")
-		cluster.createCluster(oc)
+		/*create cluster no longer necessary - OCPCLOUD-2202
+		cluster.createCluster(oc)*/
 		defer awsMachineTemplate.deleteAWSMachineTemplate(oc)
 		awsMachineTemplate.createAWSMachineTemplate(oc)
 
