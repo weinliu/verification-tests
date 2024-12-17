@@ -276,13 +276,13 @@ retry_max_duration_secs = 20`,
 		exutil.By("remove the tech-preview annotation from CLF")
 		patch := `[{"op": "remove", "path": "/metadata/annotations"}]`
 		clf.update(oc, "", patch, "--type=json")
-		checkResource(oc, true, false, `output type "otlp" is missing tech-preview annotation`, []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.outputConditions[*].message}"})
+		checkResource(oc, true, false, `output "otlp" requires a valid tech-preview annotation`, []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.outputConditions[*].message}"})
 
 		exutil.By("Add back the annotations, then set the value to disabled")
 		clf.update(oc, "", `{"metadata": {"annotations": {"observability.openshift.io/tech-preview-otlp-output": "enabled"}}}`, "--type=merge")
-		checkResource(oc, false, false, `output type "otlp" is missing tech-preview annotation`, []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.outputConditions[*].message}"})
+		checkResource(oc, false, false, `output "otlp" requires a valid tech-preview annotation`, []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.outputConditions[*].message}"})
 
 		clf.update(oc, "", `{"metadata": {"annotations": {"observability.openshift.io/tech-preview-otlp-output": "disabled"}}}`, "--type=merge")
-		checkResource(oc, true, false, `output type "otlp" is missing tech-preview annotation`, []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.outputConditions[*].message}"})
+		checkResource(oc, true, false, `output "otlp" requires a valid tech-preview annotation`, []string{"clusterlogforwarder.observability.openshift.io", clf.name, "-n", clf.namespace, "-ojsonpath={.status.outputConditions[*].message}"})
 	})
 })
