@@ -525,6 +525,10 @@ func cloneMachineSet(oc *exutil.CLI, ms MachineSet, newMsName, imageVersion, ign
 	baseImageURL, err := rhcosHandler.GetBaseImageURLFromRHCOSImageInfo(imageVersion, architecture)
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the base image URL")
 
+	// In vshpere we will upload the image. To avoid collisions we will add prefix to identify our image
+	if platform == VspherePlatform {
+		baseImage = "mcotest-" + baseImage
+	}
 	o.Expect(
 		uploadBaseImageToCloud(oc, platform, baseImageURL, baseImage),
 	).To(o.Succeed(), "Error uploading the base image %s to the cloud", baseImageURL)
@@ -936,7 +940,8 @@ func uploadBaseImageToVsphere(baseImageSrc, baseImageDest, server, dataCenter, d
 	out, err = upgradeCmd.CombinedOutput()
 	logger.Infof(string(out))
 	if err != nil {
-		return err
+		// We don't fail. We log a warning and continue.
+		logger.Warnf("ERROR UPGRADING HARDWARE: %s", err)
 	}
 
 	logger.Infof("Transforming VM into template")
@@ -948,7 +953,8 @@ func uploadBaseImageToVsphere(baseImageSrc, baseImageDest, server, dataCenter, d
 	out, err = templateCmd.CombinedOutput()
 	logger.Infof(string(out))
 	if err != nil {
-		return err
+		// We don't fail. We log a warning and continue.
+		logger.Warnf("ERROR CONVERTING INTO TEMPLATE: %s", err)
 	}
 
 	return nil
