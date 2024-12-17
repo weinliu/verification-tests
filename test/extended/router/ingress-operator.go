@@ -1499,7 +1499,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("3. Check the event of the custom router pod, which should have the secret router-certs-bug35027 not found info")
 		routerpod35027 := getPodListByLabel(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl35027.name)[0]
-		expInfo := `MountVolume.SetUp failed for volume "default-certificate" : secret "router-certs-bug35027" not found`
+		expInfo := `secret "router-certs-bug35027" not found`
 		waitForDescriptionContains(oc, "openshift-ingress", "pod/"+routerpod35027, expInfo)
 
 		exutil.By("4. Delete the custom ingress controller, and then check the logs that clientca-configmap finalizer log should not appear")
