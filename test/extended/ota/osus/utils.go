@@ -151,7 +151,6 @@ func waitForPodReady(oc *exutil.CLI, pod string, ns string) {
 		}
 		return true, nil
 	})
-
 	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("pod with name=%s is not found", pod))
 
 	e2e.Logf("Waiting for %s pod ready and running...", pod)
@@ -346,7 +345,7 @@ func verifyOSUS(oc *exutil.CLI) (err error) {
 	e2e.Logf("Verify the OSUS works")
 	instance, err := getOSUSApp(oc)
 	if err != nil {
-		return
+		return fmt.Errorf("get OSUS app failed: %v", err)
 	}
 	PEURI, err := oc.AsAdmin().Run("get").Args("-o", "jsonpath={.status.policyEngineURI}", "updateservice", instance).Output()
 	if err != nil {
@@ -364,14 +363,38 @@ func verifyOSUS(oc *exutil.CLI) (err error) {
 	// Any channel is available, we just check whether osus working properly and don't care about the channel itself.
 	uri := PEURI + "/api/upgrades_info/v1/graph?channel=stable-4.13"
 	e2e.Logf("check if osus update service available or not through graph URI: " + uri)
-	response, err := client.Get(uri)
-	if err != nil {
-		return fmt.Errorf("reach graph URI failed: %v", err)
-	}
+	waitErr := wait.Poll(20*time.Second, 5*time.Minute, func() (bool, error) {
+		response, err := client.Get(uri)
+		if err != nil {
+			msg := fmt.Sprintf("reach graph URI failed: %v", err)
+			e2e.Logf(msg)
+			return false, nil
+		}
+		if response.StatusCode != 200 {
+			msg := fmt.Sprintf("graph URI is not active, response code is %v", response.StatusCode)
+			e2e.Logf(msg)
+			return false, nil
+		}
+		return true, nil
+	})
 
-	if response.StatusCode != 200 {
-		return fmt.Errorf("graph URI is not active, response code is %v", response.StatusCode)
+	if waitErr != nil {
+		// Get OSUS pod logs when OSUS returns non-200
+		allOSUSPods, _ := oc.AsAdmin().Run("get").Args("pod").Output()
+		e2e.Logf("All OSUS pods: \n", allOSUSPods)
+		osusPod, _ := oc.AsAdmin().Run("get").Args("pod", "--selector=app="+instance, "-o=jsonpath={.items[].metadata.name}").Output()
+		podLogs, _ := oc.AsAdmin().Run("logs").Args(osusPod, "-c", "graph-builder").Output()
+		failLogs, _ := exec.Command("bash", "-c", "echo \""+podLogs+"\" | grep -Ei 'error|fail'").Output()
+		// Hardcode the max log lines
+		if len(failLogs) <= 1024 {
+			e2e.Logf("OSUS Pod Logs with error or fail info are: \n %s", failLogs)
+		} else {
+			e2e.Logf("OSUS Pod Logs with error or fail info are: \n %s", failLogs[len(failLogs)-1024:])
+		}
+		describePod, _ := oc.AsAdmin().Run("describe").Args("pod", osusPod).Output()
+		e2e.Logf("Describe the OSUS pod: \n %s", describePod)
 	}
+	exutil.AssertWaitPollNoErr(waitErr, "graph URI is not active")
 	return
 }
 
