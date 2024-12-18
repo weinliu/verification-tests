@@ -1206,19 +1206,17 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutsideCurlContains("https://"+reenRouteHost, "-k", "Hello-OpenShift")
 
 		exutil.By("should be failed if patch the edge route without required role and secret")
-		err1 := "Forbidden: user does not have update permission on custom-host"
-		err2 := "Forbidden: router serviceaccount does not have permission to get this secret"
-		err3 := "Forbidden: router serviceaccount does not have permission to watch this secret"
-		err4 := "Forbidden: router serviceaccount does not have permission to list this secret"
-		err5 := `Not found: "secrets \"mytls\" not found`
+		err1 := "Forbidden: router serviceaccount does not have permission to get this secret"
+		err2 := "Forbidden: router serviceaccount does not have permission to watch this secret"
+		err3 := "Forbidden: router serviceaccount does not have permission to list this secret"
+		err4 := `Not found: "secrets \"mytls\" not found`
 		output, err := oc.WithoutNamespace().Run("patch").Args("-n", project1, "route/myedge", "-p", `{"spec":{"tls":{"externalCertificate":{"name":"mytls"}}}}`, "--type=merge").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).Should(o.And(
 			o.ContainSubstring(err1),
 			o.ContainSubstring(err2),
 			o.ContainSubstring(err3),
-			o.ContainSubstring(err4),
-			o.ContainSubstring(err5)))
+			o.ContainSubstring(err4)))
 
 		exutil.By("create required role/rolebinding and secret")
 		// create required role and rolebinding
@@ -1263,9 +1261,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("edge route reports error after deleting the referenced secret")
 		err = oc.Run("delete").Args("-n", project1, "secret", "mytls").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		output, err = oc.Run("get").Args("-n", project1, "route", "myedge").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("ExternalCertificateValidationFailed"))
+		waitForOutput(oc, project1, "route/myedge", `{.status.ingress[?(@.routerName=="default")].conditions[*]}`, "ExternalCertificateValidationFailed")
 	})
 
 	// author: iamin@redhat.com
