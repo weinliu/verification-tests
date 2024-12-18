@@ -4492,6 +4492,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		workerNodeName := getOneRhcosWorkerNodeName(oc)
 		setLabelToOneWorkerNode(oc, workerNodeName)
 
+		g.By("Cleanup before starting with testcase")
+		cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"ssb", subD.namespace, "--all"},
+			objectTableRef{"suite", subD.namespace, "--all"},
+			objectTableRef{"scan", subD.namespace, "--all"})
+
 		defer func() {
 			g.By("Remove scansettingbinding, machineconfig, machineconfigpool objects.. !!!\n")
 			removeLabelFromWorkerNode(oc, workerNodeName)
@@ -4718,6 +4724,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		g.By("Label one rhcos worker node as wrscan.. !!!\n")
 		workerNodeName := getOneRhcosWorkerNodeName(oc)
 		setLabelToOneWorkerNode(oc, workerNodeName)
+
+		g.By("Cleanup before starting with testcase")
+		cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"ssb", subD.namespace, "--all"},
+			objectTableRef{"suite", subD.namespace, "--all"},
+			objectTableRef{"scan", subD.namespace, "--all"})
+
 		defer func() {
 			g.By("Remove scansettingbinding, machineconfig, machineconfigpool objects.. !!!\n")
 			removeLabelFromWorkerNode(oc, workerNodeName)
@@ -4870,6 +4883,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		g.By("Label one rhcos worker node as wrscan.. !!!\n")
 		workerNodeName := getOneRhcosWorkerNodeName(oc)
 		setLabelToOneWorkerNode(oc, workerNodeName)
+
+		g.By("Cleanup before starting with testcase")
+		cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"ssb", subD.namespace, "--all"},
+			objectTableRef{"suite", subD.namespace, "--all"},
+			objectTableRef{"scan", subD.namespace, "--all"})
+
 		defer func() {
 			g.By("Remove scansettingbinding, machineconfig, machineconfigpool objects.. !!!\n")
 			removeLabelFromWorkerNode(oc, workerNodeName)
@@ -5025,6 +5045,12 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		g.By("Label one rhcos worker node as wrscan.. !!!\n")
 		workerNodeName := getOneRhcosWorkerNodeName(oc)
 		setLabelToOneWorkerNode(oc, workerNodeName)
+
+		g.By("Cleanup before starting with testcase")
+		cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"ssb", subD.namespace, "--all"},
+			objectTableRef{"suite", subD.namespace, "--all"},
+			objectTableRef{"scan", subD.namespace, "--all"})
 
 		defer func() {
 			g.By("Remove scansettingbinding, machineconfig, machineconfigpool objects.. !!!\n")
