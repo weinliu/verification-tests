@@ -92,7 +92,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 	})
 
 	// It will cover test case: OCP-34388 & OCP-27760 , author: xiyuan@redhat.com
-	g.It("Author:xiyuan-LEVEL0-NonHyperShiftHOST-ConnectedOnly-ROSA-ARO-OSD_CCS-WRS-Critical-34388-High-27760-V-EST.01-check file-integrity-operator could report failure and persist the failure logs on to a ConfigMap [Serial]", func() {
+	g.It("Author:xiyuan-NonHyperShiftHOST-ConnectedOnly-ROSA-ARO-OSD_CCS-WRS-Critical-34388-High-27760-V-EST.01-check file-integrity-operator could report failure and persist the failure logs on to a ConfigMap [Serial]", func() {
 		g.By("Create fileintegrity")
 		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
 		fi1.debug = true
@@ -241,7 +241,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("Author:xiyuan-StagerunBoth-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-WRS-Medium-31873-V-EST.01-check the gracePeriod is configurable [Serial]", func() {
+	g.It("Author:xiyuan-LEVEL0-StagerunBoth-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-WRS-Medium-31873-V-EST.01-check the gracePeriod is configurable [Serial]", func() {
 		fi1.debug = false
 
 		g.By("Create fileintegrity without gracePeriod")
