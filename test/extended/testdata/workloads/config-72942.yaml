@@ -11,8 +11,6 @@ mirror:
   - catalog: registry.redhat.io/redhat/redhat-operator-index:v4.15
     packages:
     - name: local-storage-operator
-      channels:
-      - name: release-2.9
   additionalImages:
   - name: registry.redhat.io/ubi8/ubi:latest
   - name: quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83

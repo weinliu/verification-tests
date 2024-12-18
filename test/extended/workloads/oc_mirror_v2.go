@@ -1064,7 +1064,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		imageSetYamlFileT := filepath.Join(ocmirrorBaseDir, "config-73421-1.yaml")
 
 		exutil.By("Start mirrro2disk with bundles and min/max filtering")
-		mirrorToDiskOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+		_, mirrorToDiskOutput, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Outputs()
 		if err != nil {
 			if strings.Contains(mirrorToDiskOutput, "mixing both filtering by bundles and filtering by channels or minVersion/maxVersion is not allowed") {
 				e2e.Logf("Error related to mixing both bundles, min & max version allowed is seen")
@@ -1074,9 +1074,10 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		}
 
 		exutil.By("Start mirror2disk with bundles & filtering with full true")
-		mirrorToDiskOutputFT, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileT, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Output()
+		mirrorToDiskOutputFT, _, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileT, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Outputs()
+		e2e.Logf("mirrorToDiskOutputFT %v: ", mirrorToDiskOutputFT)
 		if err != nil {
-			if strings.Contains(mirrorToDiskOutputFT, "cannot use filtering by bundle selection and full the same time") {
+			if strings.Contains(mirrorToDiskOutputFT, "true cannot be mixed with filtering by bundle selection") {
 				e2e.Logf("Error related to cannot use filtering by bundle selection and full at the same time is seen")
 			} else {
 				e2e.Failf("Error related to cannot use filtering by bundle selection and full at the same time is not seen")

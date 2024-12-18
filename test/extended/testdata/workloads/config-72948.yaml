@@ -9,13 +9,15 @@ mirror:
       - name: stable-4.15
         maxVersion: 4.15.0-rhodf
     - name: devworkspace-operator
-      minVersion: "0.27.0"
+      minVersion: "0.31.1"
     - name: quay-operator
+      defaultChannel: stable-3.12
       channels:
-      - name: stable-3.9
-        minVersion: "3.9.3"
-        maxVersion: "3.9.4"
+      - name: stable-3.12
+        minVersion: "3.12.3"
+        maxVersion: "3.12.4"
     - name: compliance-operator
     - name: multicluster-engine
+      defaultChannel: stable-2.6
       channels:
-      - name: stable-2.4
+      - name: stable-2.6

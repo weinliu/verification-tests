@@ -11,4 +11,4 @@ mirror:
     packages:
     - name: cluster-kube-descheduler-operator
       bundles:
-      - name: clusterkubedescheduleroperator.v5.0.1
+      - name: clusterkubedescheduleroperator.v5.0.2
