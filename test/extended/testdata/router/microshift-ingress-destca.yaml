@@ -7,12 +7,12 @@ metadata:
     route.openshift.io/termination: reencrypt
 spec:
   rules:
-  - host: service-secure1-test.example.com
+  - host: service-secure-test.example.com
     http:
       paths:
       - backend:
           service:
-            name: service-secure1
+            name: service-secure
             port:
               number: 27443
         path: "/"

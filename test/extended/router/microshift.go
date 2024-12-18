@@ -22,7 +22,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		var (
 			e2eTestNamespace    = "e2e-ne-ocp60136-" + getRandomString()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
 			ingressFile         = filepath.Join(buildPruningBaseDir, "microshift-ingress-destca.yaml")
 		)
 
@@ -30,12 +30,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
-		exutil.By("create a web-server-rc pod and its services")
+		exutil.By("create a web-server-deploy pod and its services")
 		defer operateResourceFromFile(oc, "delete", e2eTestNamespace, testPodSvc)
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
-		err := waitForPodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-deploy")
+		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-deploy")
 		ingressPod := getRouterPod(oc, "default")
 
 		exutil.By("create ingress using the file and get the route details")
@@ -47,12 +46,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("check whether route details are present")
 		waitForOutput(oc, e2eTestNamespace, "route/"+routeNames[0], "{.status.ingress[0].conditions[0].type}", "Admitted")
-		waitForOutput(oc, e2eTestNamespace, "route/"+routeNames[0], "{.status.ingress[0].host}", "service-secure1-test.example.com")
+		waitForOutput(oc, e2eTestNamespace, "route/"+routeNames[0], "{.status.ingress[0].host}", "service-secure-test.example.com")
 		waitForOutput(oc, e2eTestNamespace, "route/"+routeNames[0], "{.spec.tls.termination}", "reencrypt")
 
 		exutil.By("check the reachability of the host in test pod")
 		routerPodIP := getPodv4Address(oc, ingressPod, "openshift-ingress")
-		curlCmd := []string{"-n", e2eTestNamespace, podName[0], "--", "curl", "https://service-secure1-test.example.com:443", "-k", "-I", "--resolve", "service-secure1-test.example.com:443:" + routerPodIP, "--connect-timeout", "10"}
+		curlCmd := []string{"-n", e2eTestNamespace, podName[0], "--", "curl", "https://service-secure-test.example.com:443", "-k", "-I", "--resolve", "service-secure-test.example.com:443:" + routerPodIP, "--connect-timeout", "10"}
 		adminRepeatCmd(oc, curlCmd, "200", 30, 1)
 
 		exutil.By("check the router pod and ensure the routes are loaded in haproxy.config")
@@ -123,7 +122,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		var (
 			e2eTestNamespace    = "e2e-ne-ocp60283-" + getRandomString()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
 			httpRouteHost       = "route-http-" + e2eTestNamespace + ".apps.example.com"
 			reenRouteHost       = "route-reen-" + e2eTestNamespace + ".apps.example.com"
 		)
@@ -132,16 +131,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
-		exutil.By("create a signed web-server-rc pod and its services")
+		exutil.By("create a signed web-server-deploy pod and its services")
 		defer operateResourceFromFile(oc, "delete", e2eTestNamespace, testPodSvc)
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
-		err := waitForPodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-deploy")
+		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-deploy")
 		ingressPod := getRouterPod(oc, "default")
 
 		exutil.By("create a http route")
-		_, err = oc.WithoutNamespace().Run("expose").Args("-n", e2eTestNamespace, "--name=ms-http", "service", "service-unsecure1", "--hostname="+httpRouteHost).Output()
+		_, err := oc.WithoutNamespace().Run("expose").Args("-n", e2eTestNamespace, "--name=ms-http", "service", "service-unsecure", "--hostname="+httpRouteHost).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		getRoutes(oc, e2eTestNamespace)
 
@@ -161,7 +159,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_http:" + e2eTestNamespace + ":ms-http"))
 
 		exutil.By("create a reen route")
-		createRoute(oc, e2eTestNamespace, "reencrypt", "ms-reen", "service-secure1", []string{"--hostname=" + reenRouteHost})
+		createRoute(oc, e2eTestNamespace, "reencrypt", "ms-reen", "service-secure", []string{"--hostname=" + reenRouteHost})
 		getRoutes(oc, e2eTestNamespace)
 
 		exutil.By("check whether reen route details are present")
@@ -448,13 +446,13 @@ fi
 		waitForOutput(oc, e2eTestNamespace2, "route/route-http", jpath, "True")
 	})
 
-	g.It("MicroShiftOnly-Author:shudili-High-73152-Expose router as load balancer service type", func() {
+	g.It("Author:shudili-MicroShiftOnly-High-73152-Expose router as load balancer service type", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			unsecsvcName        = "service-unsecure1"
-			secsvcName          = "service-secure1"
+			unsecsvcName        = "service-unsecure"
+			secsvcName          = "service-secure"
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
 			e2eTestNamespace    = "e2e-ne-ocp73152-" + getRandomString()
@@ -471,11 +469,9 @@ fi
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
 		createResourceFromFile(oc, e2eTestNamespace, clientPod)
-		err := waitForPodWithLabelReady(oc, e2eTestNamespace, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, e2eTestNamespace, cltPodLabel)
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
-		err = waitForPodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
+		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-deploy")
 
 		exutil.By("Create a HTTP/Edge/Passthrough/REEN route")
 		httpRouteHost := unsecsvcName + "-" + "ocp73152." + "apps.example.com"
@@ -516,13 +512,13 @@ fi
 		adminRepeatCmd(oc, routeReq, "200", 30, 1)
 	})
 
-	g.It("MicroShiftOnly-Author:shudili-High-73202-Add configurable listening IP addresses and listening ports", func() {
+	g.It("Author:shudili-MicroShiftOnly-High-73202-Add configurable listening IP addresses and listening ports", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			unsecsvcName        = "service-unsecure1"
-			secsvcName          = "service-secure1"
+			unsecsvcName        = "service-unsecure"
+			secsvcName          = "service-secure"
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
 			e2eTestNamespace    = "e2e-ne-ocp73202-" + getRandomString()
@@ -551,11 +547,9 @@ fi
 
 		exutil.By("Deploy a backend pod and its services resources in the created ns")
 		createResourceFromFile(oc, e2eTestNamespace, clientPod)
-		err = waitForPodWithLabelReady(oc, e2eTestNamespace, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, e2eTestNamespace, cltPodLabel)
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
-		err = waitForPodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
+		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-deploy")
 
 		exutil.By("Create a HTTP/Edge/Passthrough/REEN route")
 		httpRouteHost := unsecsvcName + "-" + "ocp73202." + "apps.example.com"
@@ -599,13 +593,13 @@ fi
 		}
 	})
 
-	g.It("MicroShiftOnly-Author:shudili-NonPreRelease-Longduration-High-73203-configuring listening IP addresses and listening Ports [Disruptive]", func() {
+	g.It("Author:shudili-MicroShiftOnly-NonPreRelease-Longduration-High-73203-configuring listening IP addresses and listening Ports [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			unsecsvcName        = "service-unsecure1"
-			secsvcName          = "service-secure1"
+			unsecsvcName        = "service-unsecure"
+			secsvcName          = "service-secure"
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
 			e2eTestNamespace    = "e2e-ne-ocp73203-" + getRandomString()
@@ -690,11 +684,9 @@ fi
 
 		exutil.By("Deploy a client pod, a backend pod and its services resources")
 		createResourceFromFile(oc, e2eTestNamespace, clientPod)
-		err = waitForPodWithLabelReady(oc, e2eTestNamespace, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, e2eTestNamespace, cltPodLabel)
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
-		err = waitForPodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
+		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-deploy")
 
 		exutil.By("Create a HTTP/Edge/Passthrough/REEN route")
 		httpRouteHost := unsecsvcName + "-" + "ocp73203." + "apps.example.com"
@@ -815,8 +807,8 @@ fi
 
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
-			unsecsvcName        = "service-unsecure1"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
+			unsecsvcName        = "service-unsecure"
 			e2eTestNamespace    = "e2e-ne-ocp77349-" + getRandomString()
 			httpRouteHost       = unsecsvcName + "-" + "ocp77349." + "apps.example.com"
 
@@ -848,8 +840,7 @@ fi
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
-		err := waitForPodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
+		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-deploy")
 		createRoute(oc, e2eTestNamespace, "http", "route-http", unsecsvcName, []string{"--hostname=" + httpRouteHost})
 
 		exutil.By("2.0 check the router-default deployment that all default ENVs of tested parameters are as expected")
@@ -920,7 +911,7 @@ fi
 			restartMicroshiftService(oc, e2eTestNamespace, nodeName)
 		}()
 
-		_, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", configIngressCmd).Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", configIngressCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		restartMicroshiftService(oc, e2eTestNamespace, nodeName)
 

@@ -23,9 +23,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	g.It("Author:shudili-ROSA-OSD_CCS-ARO-Medium-10207-NetworkEdge Should use the same cookies for secure and insecure access when insecureEdgeTerminationPolicy set to allow for edge/reencrypt route", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
-			srvrcInfo           = "web-server-rc"
-			unSecSvcName        = "service-unsecure1"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
+			unSecSvcName        = "service-unsecure"
+			secSvcName          = "service-secure"
 			fileDir             = "/tmp/OCP-10207-cookie"
 		)
 
@@ -37,7 +38,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("2.0: Deploy a project with two server pods and the service")
 		project1 := oc.Namespace()
-		srvPodList := createResourceFromWebServerRC(oc, project1, testPodSvc, srvrcInfo)
+		srvPodList := createResourceFromWebServer(oc, project1, testPodSvc, srvrcInfo)
 
 		exutil.By("3.0: Create an edge route with insecure_policy Allow")
 		routehost := "edge10207" + ".apps." + getBaseDomain(oc)
@@ -69,7 +70,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(result[1]).To(o.Equal(6))
 
 		exutil.By("8.0: Create a reencrypt route with Allow policy")
-		createRoute(oc, project1, "reencrypt", "route-reen10207", "service-secure1", []string{"--insecure-policy=Allow"})
+		createRoute(oc, project1, "reencrypt", "route-reen10207", secSvcName, []string{"--insecure-policy=Allow"})
 		waitForOutput(oc, project1, "route/route-reen10207", "{.status.ingress[0].conditions[0].status}", "True")
 		reenhost := "route-reen10207-" + project1 + ".apps." + getBaseDomain(oc)
 
@@ -79,7 +80,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("10.0: Open the cookie file and check the contents")
 		// access the cookie file and confirm that the output contains false and false
 		checkCookieFile(fileDir+"/reen-cookie", "FALSE\t/\tFALSE")
-
 	})
 
 	// author: iamin@redhat.com
@@ -123,16 +123,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-11036-NetworkEdge Set insecureEdgeTerminationPolicy to Redirect for passthrough/edge/reencrypt route", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
-			SvcName             = "service-secure1"
-			unSecSvc            = "service-unsecure1"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
+			SvcName             = "service-secure"
+			unSecSvc            = "service-unsecure"
 		)
 
 		exutil.By("1.0: Deploy a project with single pod, service and a passthrough/edge/reencrypt route")
 		project1 := oc.Namespace()
-		srvPodList := createResourceFromWebServerRC(oc, project1, testPodSvc, "web-server-rc")
-		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		srvPodList := createResourceFromWebServer(oc, project1, testPodSvc, "web-server-deploy")
 		output, err := oc.Run("get").Args("service").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.And(o.ContainSubstring(unSecSvc), o.ContainSubstring(SvcName)))
@@ -190,9 +188,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-13753-NetworkEdge Check the cookie if using secure mode when insecureEdgeTerminationPolicy to Redirect for edge/reencrypt route", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
-			srvrcInfo           = "web-server-rc"
-			unSecSvcName        = "service-unsecure1"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
+			unSecSvcName        = "service-unsecure"
+			SvcName             = "service-secure"
 			fileDir             = "/tmp/OCP-13753-cookie"
 		)
 
@@ -203,7 +202,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("2.0: Deploy a project with two server pods and the service")
 		project1 := oc.Namespace()
-		srvPodList := createResourceFromWebServerRC(oc, project1, testPodSvc, srvrcInfo)
+		srvPodList := createResourceFromWebServer(oc, project1, testPodSvc, srvrcInfo)
 
 		exutil.By("3.0: Create an edge and reencrypt route with insecure_policy Redirect")
 		edgehost := "edge-route-" + project1 + ".apps." + getBaseDomain(oc)
@@ -214,7 +213,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(`"insecureEdgeTerminationPolicy":"Redirect"`))
 
-		createRoute(oc, project1, "reencrypt", "reen-route", "service-secure1", []string{"--insecure-policy=Redirect"})
+		createRoute(oc, project1, "reencrypt", "reen-route", SvcName, []string{"--insecure-policy=Redirect"})
 		waitForOutput(oc, project1, "route/reen-route", "{.status.ingress[0].conditions[0].status}", "True")
 		output, err = oc.Run("get").Args("route/reen-route", "-n", project1, "-o=jsonpath={.spec.tls}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -241,16 +240,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-13839-NetworkEdge Set insecureEdgeTerminationPolicy to Allow for reencrypt/edge route", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
-			SvcName             = "service-secure1"
-			unSecSvc            = "service-unsecure1"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
+			SvcName             = "service-secure"
+			unSecSvc            = "service-unsecure"
 		)
 
 		exutil.By("1.0: Deploy a project with single pod, service and reencrypt and edge route")
 		project1 := oc.Namespace()
-		srvPodList := createResourceFromWebServerRC(oc, project1, testPodSvc, "web-server-rc")
-		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		srvPodList := createResourceFromWebServer(oc, project1, testPodSvc, "web-server-deploy")
 		output, err := oc.Run("get").Args("service").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.And(o.ContainSubstring(unSecSvc), o.ContainSubstring(SvcName)))
@@ -302,7 +299,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("2.0: Deploy a project with two server pods and the service")
 		project1 := oc.Namespace()
-		srvPodList := createResourceFromWebServerRC(oc, project1, testPodSvc, srvrcInfo)
+		srvPodList := createResourceFromWebServer(oc, project1, testPodSvc, srvrcInfo)
 
 		exutil.By("3.0: Create an edge route")
 		routehost := "edge11130" + ".apps." + getBaseDomain(oc)
@@ -506,15 +503,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-14678-NetworkEdge Only the host in whitelist could access unsecure/edge/reencrypt/passthrough routes", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			unSecSvcName        = "service-unsecure1"
-			signedPod           = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+			unSecSvcName        = "service-unsecure"
+			signedPod           = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
 		)
 
 		exutil.By("1.0: Deploy a project with Pod and Services")
 		project1 := oc.Namespace()
 		routerpod := getRouterPod(oc, "default")
 		createResourceFromFile(oc, project1, signedPod)
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
 
 		exutil.By("2.0: Create an unsecure, edge, reencrypt and passthrough route")
 		domain := getIngressctlDomain(oc, "default")
@@ -531,9 +528,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, project1, "route/route-unsecure", "{.status.ingress[0].conditions[0].status}", "True")
 		createRoute(oc, project1, "edge", edgeRoute, unSecSvcName, []string{})
 		waitForOutput(oc, project1, "route/route-edge", "{.status.ingress[0].conditions[0].status}", "True")
-		createRoute(oc, project1, "passthrough", passthroughRoute, "service-secure1", []string{})
+		createRoute(oc, project1, "passthrough", passthroughRoute, "service-secure", []string{})
 		waitForOutput(oc, project1, "route/route-passthrough", "{.status.ingress[0].conditions[0].status}", "True")
-		createRoute(oc, project1, "reencrypt", reenRoute, "service-secure1", []string{})
+		createRoute(oc, project1, "reencrypt", reenRoute, "service-secure", []string{})
 		waitForOutput(oc, project1, "route/route-reen", "{.status.ingress[0].conditions[0].status}", "True")
 
 		exutil.By("3.0: Annotate unsecure, edge, reencrypt and passthrough route")
@@ -551,10 +548,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"0.0.0.0/0 ::/0`))
 
 		exutil.By("4.0: access the routes using the IP from the whitelist")
-		waitForOutsideCurlContains("http://"+unsecureHost, "", `Hello-OpenShift web-server-rc`)
-		waitForOutsideCurlContains("https://"+edgeHost, "-k", `Hello-OpenShift web-server-rc`)
-		waitForOutsideCurlContains("https://"+passthroughHost, "-k", `Hello-OpenShift web-server-rc`)
-		waitForOutsideCurlContains("https://"+reenHost, "-k", `Hello-OpenShift web-server-rc`)
+		waitForOutsideCurlContains("http://"+unsecureHost, "", `Hello-OpenShift web-server-deploy`)
+		waitForOutsideCurlContains("https://"+edgeHost, "-k", `Hello-OpenShift web-server-deploy`)
+		waitForOutsideCurlContains("https://"+passthroughHost, "-k", `Hello-OpenShift web-server-deploy`)
+		waitForOutsideCurlContains("https://"+reenHost, "-k", `Hello-OpenShift web-server-deploy`)
 
 		exutil.By("5.0: re-annotate routes with a random IP")
 		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_whitelist=5.6.7.8`)
@@ -592,6 +589,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(searchOutput).To(o.ContainSubstring(`acl allowlist src 5.6.7.8`))
 		searchOutput = readHaproxyConfig(oc, routerpod, project1+":"+reenRoute, "-A8", "acl")
 		o.Expect(searchOutput).To(o.ContainSubstring(`acl allowlist src 5.6.7.8`))
+
 	})
 
 	// author: iamin@redhat.com
@@ -642,10 +640,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	g.It("Author:shudili-ROSA-OSD_CCS-ARO-Critical-15873-NetworkEdge can set cookie name for edge/reen routes by annotation", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
-			srvrcInfo           = "web-server-rc"
-			unSecSvcName        = "service-unsecure1"
-			secSvcName          = "service-secure1"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
+			unSecSvcName        = "service-unsecure"
+			secSvcName          = "service-secure"
 			fileDir             = "/tmp/OCP-15873-cookie"
 		)
 
@@ -657,7 +655,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("2.0: Deploy a project with two server pods and the service")
 		project1 := oc.Namespace()
-		srvPodList := createResourceFromWebServerRC(oc, project1, testPodSvc, srvrcInfo)
+		srvPodList := createResourceFromWebServer(oc, project1, testPodSvc, srvrcInfo)
 
 		exutil.By("3.0: Create an edge route")
 		routehost := "edge15873" + ".apps." + getBaseDomain(oc)
@@ -1170,7 +1168,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: hongli@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:hongli-High-73771-router can load secret", func() {
+	g.It("Author:hongli-ROSA-OSD_CCS-ARO-High-73771-router can load secret", func() {
 		// skip the test if featureSet is not there
 		if !exutil.IsTechPreviewNoUpgrade(oc) {
 			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test, skipping")
@@ -1178,10 +1176,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
 			requiredRole        = filepath.Join(buildPruningBaseDir, "ocp73771-role.yaml")
-			unsecsvcName        = "service-unsecure1"
-			secsvcName          = "service-secure1"
+			unsecsvcName        = "service-unsecure"
+			secsvcName          = "service-secure"
 			tmpdir              = "/tmp/OCP-73771-CA/"
 			caKey               = tmpdir + "ca.key"
 			caCrt               = tmpdir + "ca.crt"
@@ -1191,18 +1189,18 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 			multiServerCrt      = tmpdir + "multiserver.crt"
 		)
 		exutil.By("create project, pod, svc resources")
-		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
 
 		exutil.By("Create edge/passthrough/reencrypt routes and all should be reachable")
 		extraParas := []string{}
-		createRoute(oc, oc.Namespace(), "edge", "myedge", unsecsvcName, extraParas)
-		createRoute(oc, oc.Namespace(), "passthrough", "mypass", secsvcName, extraParas)
-		createRoute(oc, oc.Namespace(), "reencrypt", "myreen", secsvcName, extraParas)
-		edgeRouteHost := getRouteHost(oc, oc.Namespace(), "myedge")
-		passRouteHost := getRouteHost(oc, oc.Namespace(), "mypass")
-		reenRouteHost := getRouteHost(oc, oc.Namespace(), "myreen")
+		createRoute(oc, project1, "edge", "myedge", unsecsvcName, extraParas)
+		createRoute(oc, project1, "passthrough", "mypass", secsvcName, extraParas)
+		createRoute(oc, project1, "reencrypt", "myreen", secsvcName, extraParas)
+		edgeRouteHost := getRouteHost(oc, project1, "myedge")
+		passRouteHost := getRouteHost(oc, project1, "mypass")
+		reenRouteHost := getRouteHost(oc, project1, "myreen")
 		waitForOutsideCurlContains("https://"+edgeRouteHost, "-k", "Hello-OpenShift")
 		waitForOutsideCurlContains("https://"+passRouteHost, "-k", "Hello-OpenShift")
 		waitForOutsideCurlContains("https://"+reenRouteHost, "-k", "Hello-OpenShift")
@@ -1213,7 +1211,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		err3 := "Forbidden: router serviceaccount does not have permission to watch this secret"
 		err4 := "Forbidden: router serviceaccount does not have permission to list this secret"
 		err5 := `Not found: "secrets \"mytls\" not found`
-		output, err := oc.WithoutNamespace().Run("patch").Args("-n", oc.Namespace(), "route/myedge", "-p", `{"spec":{"tls":{"externalCertificate":{"name":"mytls"}}}}`, "--type=merge").Output()
+		output, err := oc.WithoutNamespace().Run("patch").Args("-n", project1, "route/myedge", "-p", `{"spec":{"tls":{"externalCertificate":{"name":"mytls"}}}}`, "--type=merge").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).Should(o.And(
 			o.ContainSubstring(err1),
@@ -1224,7 +1222,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("create required role/rolebinding and secret")
 		// create required role and rolebinding
-		createResourceFromFile(oc, oc.Namespace(), requiredRole)
+		createResourceFromFile(oc, project1, requiredRole)
 		// prepare the tmp folder and create self-signed cerfitcate
 		defer os.RemoveAll(tmpdir)
 		err = os.MkdirAll(tmpdir, 0755)
@@ -1234,12 +1232,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		// san just contains edge route host but not reen route host
 		san := "subjectAltName=DNS:" + edgeRouteHost
 		opensslSignCsr(san, serverCsr, caCrt, caKey, serverCrt)
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", oc.Namespace(), "secret", "tls", "mytls", "--cert="+serverCrt, "--key="+serverKey).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "secret", "tls", "mytls", "--cert="+serverCrt, "--key="+serverKey).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("patch the edge and reen route, but only edge route should be reachable")
-		patchResourceAsAdmin(oc, oc.Namespace(), "route/myedge", `{"spec":{"tls":{"externalCertificate":{"name":"mytls"}}}}`)
-		patchResourceAsAdmin(oc, oc.Namespace(), "route/myreen", `{"spec":{"tls":{"externalCertificate":{"name":"mytls"}}}}`)
+		patchResourceAsAdmin(oc, project1, "route/myedge", `{"spec":{"tls":{"externalCertificate":{"name":"mytls"}}}}`)
+		patchResourceAsAdmin(oc, project1, "route/myreen", `{"spec":{"tls":{"externalCertificate":{"name":"mytls"}}}}`)
 		curlOptions := fmt.Sprintf("--cacert %v", caCrt)
 		waitForOutsideCurlContains("https://"+edgeRouteHost, curlOptions, "Hello-OpenShift")
 		waitForOutsideCurlContains("https://"+reenRouteHost, curlOptions, "exit status 60")
@@ -1248,7 +1246,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		// multiSan contains both edge and reen route host
 		multiSan := san + ", DNS:" + reenRouteHost
 		opensslSignCsr(multiSan, serverCsr, caCrt, caKey, multiServerCrt)
-		newSecretYaml, err := oc.Run("create").Args("-n", oc.Namespace(), "secret", "tls", "mytls", "--cert="+multiServerCrt, "--key="+serverKey, "--dry-run=client", "-o=yaml").OutputToFile("ocp73771-newsecret.yaml")
+		newSecretYaml, err := oc.Run("create").Args("-n", project1, "secret", "tls", "mytls", "--cert="+multiServerCrt, "--key="+serverKey, "--dry-run=client", "-o=yaml").OutputToFile("ocp73771-newsecret.yaml")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.WithoutNamespace().Run("apply").Args("-f", newSecretYaml).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1258,14 +1256,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutsideCurlContains("https://"+reenRouteHost, curlOptions, "Hello-OpenShift")
 
 		exutil.By("should failed to patch passthrough route with externalCertificate")
-		output, err = oc.WithoutNamespace().Run("patch").Args("-n", oc.Namespace(), "route/mypass", "-p", `{"spec":{"tls":{"externalCertificate":{"name":"mytls"}}}}`, "--type=merge").Output()
+		output, err = oc.WithoutNamespace().Run("patch").Args("-n", project1, "route/mypass", "-p", `{"spec":{"tls":{"externalCertificate":{"name":"mytls"}}}}`, "--type=merge").Output()
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("passthrough termination does not support certificate"))
 
 		exutil.By("edge route reports error after deleting the referenced secret")
-		err = oc.Run("delete").Args("-n", oc.Namespace(), "secret", "mytls").Execute()
+		err = oc.Run("delete").Args("-n", project1, "secret", "mytls").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		output, err = oc.Run("get").Args("-n", oc.Namespace(), "route", "myedge").Output()
+		output, err = oc.Run("get").Args("-n", project1, "route", "myedge").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("ExternalCertificateValidationFailed"))
 	})
@@ -1274,15 +1272,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-77080-NetworkEdge Only host in allowlist can access unsecure/edge/reencrypt/passthrough routes", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			unSecSvcName        = "service-unsecure1"
-			signedPod           = filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+			unSecSvcName        = "service-unsecure"
+			secSvcName          = "service-secure"
+			signedPod           = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
 		)
 
 		exutil.By("1.0: Deploy a project with Pod and Services")
 		project1 := oc.Namespace()
 		routerpod := getRouterPod(oc, "default")
-		srvPodList := createResourceFromWebServerRC(oc, project1, signedPod, "web-server-rc")
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		srvPodList := createResourceFromWebServer(oc, project1, signedPod, "web-server-deploy")
 
 		exutil.By("2.0: Create an unsecure, edge, reencrypt and passthrough route")
 		domain := getIngressctlDomain(oc, "default")
@@ -1299,9 +1297,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, project1, "route/route-unsecure", "{.status.ingress[0].conditions[0].status}", "True")
 		createRoute(oc, project1, "edge", edgeRoute, unSecSvcName, []string{})
 		waitForOutput(oc, project1, "route/route-edge", "{.status.ingress[0].conditions[0].status}", "True")
-		createRoute(oc, project1, "passthrough", passthroughRoute, "service-secure1", []string{})
+		createRoute(oc, project1, "passthrough", passthroughRoute, secSvcName, []string{})
 		waitForOutput(oc, project1, "route/route-passthrough", "{.status.ingress[0].conditions[0].status}", "True")
-		createRoute(oc, project1, "reencrypt", reenRoute, "service-secure1", []string{})
+		createRoute(oc, project1, "reencrypt", reenRoute, secSvcName, []string{})
 		waitForOutput(oc, project1, "route/route-reen", "{.status.ingress[0].conditions[0].status}", "True")
 
 		exutil.By("3.0: Annotate unsecure, edge, reencrypt and passthrough route")
@@ -1373,7 +1371,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("1.0: Deploy a project with Pod and Services")
 		project1 := oc.Namespace()
 		routerpod := getNewRouterPod(oc, "default")
-		srvPodList := createResourceFromWebServerRC(oc, project1, testPod, "web-server-rc")
+		srvPodList := createResourceFromWebServer(oc, project1, testPod, "web-server-rc")
 		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
 
@@ -1420,6 +1418,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("8.0: Check HaProxy if the allowlist annotation exists and tcp request exist")
 		searchOutput := readHaproxyConfig(oc, routerpod, project1+":"+unsecureRoute, "-A8", "acl")
 		o.Expect(searchOutput).To(o.And(o.ContainSubstring(`acl allowlist src`), o.ContainSubstring(`tcp-request content reject if !allowlist`)))
+
 	})
 
 	// author: iamin@redhat.com
@@ -1434,7 +1433,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("1.0: Deploy a project with Pod and Services")
 		project1 := oc.Namespace()
 		routerpod := getNewRouterPod(oc, "default")
-		srvPodList := createResourceFromWebServerRC(oc, project1, testPod, "web-server-rc")
+		srvPodList := createResourceFromWebServer(oc, project1, testPod, "web-server-rc")
 		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
 		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
 

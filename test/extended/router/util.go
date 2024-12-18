@@ -361,8 +361,8 @@ func createResourceFromFile(oc *exutil.CLI, ns, file string) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-// to use createResourceFromFile function to create resources from files like web-server-rc.yaml and web-server-signed-rc.yaml
-func createResourceFromWebServerRC(oc *exutil.CLI, ns, file, srvrcInfo string) []string {
+// to use createResourceFromFile function to create resources from files like web-server-rc.yaml and web-server-signed-deploy.yaml
+func createResourceFromWebServer(oc *exutil.CLI, ns, file, srvrcInfo string) []string {
 	createResourceFromFile(oc, ns, file)
 	err := waitForPodWithLabelReady(oc, ns, "name="+srvrcInfo)
 	exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")

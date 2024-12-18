@@ -255,7 +255,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	// author: mjoseph@redhat.com
 	g.It("Author:mjoseph-Critical-51980-destination-ca-certificate-secret annotation for destination CA TLS certifcate", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
-		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-signed-rc.yaml")
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
 		ingressTemp := filepath.Join(buildPruningBaseDir, "ingress-destCA.yaml")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
@@ -269,17 +269,17 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 				name:        "ingress-dca-tls",
 				namespace:   "",
 				domain:      "",
-				serviceName: "service-secure1",
+				serviceName: "service-secure",
 				template:    ingressTemp,
 			}
 		)
 
 		exutil.By("create project and a pod")
 		baseDomain := getBaseDomain(oc)
-		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		podName := getPodListByLabel(oc, oc.Namespace(), "name=web-server-rc")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
+		podName := getPodListByLabel(oc, project1, "name=web-server-deploy")
 
 		exutil.By("create custom ingresscontroller")
 		ingctrl.domain = ingctrl.name + "." + baseDomain
@@ -290,26 +290,26 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("create ingress and get the details")
 		ing.domain = ingctrl.name + "." + baseDomain
-		ing.namespace = oc.Namespace()
+		ing.namespace = project1
 		ing.create(oc)
-		getIngress(oc, oc.Namespace())
-		getRoutes(oc, oc.Namespace())
-		routeNames := getResourceName(oc, oc.Namespace(), "route")
+		getIngress(oc, project1)
+		getRoutes(oc, project1)
+		routeNames := getResourceName(oc, project1, "route")
 
 		exutil.By("check whether route details are present in custom controller domain")
-		output := getByJsonPath(oc, oc.Namespace(), "route/"+routeNames[0], "{.metadata.annotations}")
+		output := getByJsonPath(oc, project1, "route/"+routeNames[0], "{.metadata.annotations}")
 		o.Expect(output).Should(o.ContainSubstring(`"route.openshift.io/destination-ca-certificate-secret":"service-secret"`))
-		output = getByJsonPath(oc, oc.Namespace(), "route/"+routeNames[0], "{.spec.host}")
-		o.Expect(output).Should(o.ContainSubstring(`service-secure1-%s.ocp51980.%s`, oc.Namespace(), baseDomain))
+		output = getByJsonPath(oc, project1, "route/"+routeNames[0], "{.spec.host}")
+		o.Expect(output).Should(o.ContainSubstring(`service-secure-%s.ocp51980.%s`, project1, baseDomain))
 
 		exutil.By("check the router pod and ensure the routes are loaded in haproxy.config of custom controller")
 		searchOutput := pollReadPodData(oc, "openshift-ingress", custContPod, "cat haproxy.config", "ingress-dca-tls")
-		o.Expect(searchOutput).To(o.ContainSubstring("backend be_secure:" + oc.Namespace() + ":" + routeNames[0]))
+		o.Expect(searchOutput).To(o.ContainSubstring("backend be_secure:" + project1 + ":" + routeNames[0]))
 
 		exutil.By("check the reachability of the host in custom controller")
 		controlerIP := getPodv4Address(oc, custContPod, "openshift-ingress")
-		curlCmd := []string{"-n", oc.Namespace(), podName[0], "--", "curl", "https://service-secure1-" + oc.Namespace() +
-			".ocp51980." + baseDomain + ":443", "-k", "-I", "--resolve", "service-secure1-" + oc.Namespace() + ".ocp51980." +
+		curlCmd := []string{"-n", project1, podName[0], "--", "curl", "https://service-secure-" + project1 +
+			".ocp51980." + baseDomain + ":443", "-k", "-I", "--resolve", "service-secure-" + project1 + ".ocp51980." +
 			baseDomain + ":443:" + controlerIP, "--connect-timeout", "10"}
 		adminRepeatCmd(oc, curlCmd, "200", 30, 1)
 	})
