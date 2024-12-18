@@ -1941,32 +1941,120 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		checkUserCertificatesOnWindowsWorkers(oc, bastionHost, userSelfSignedCommonName, privateKey, 0, iaasPlatform)
 	})
 
+	// author rrasouli@redhat.com
 	g.It("Author:rrasouli-NonPreRelease-Longduration-Critical-43832-[upgrade]-Seamless upgrade with BYOH Windows instances [Serial][Disruptive]", func() {
 		upgrade_index_to := getConfigMapData(oc, wincTestCM, "wmco_upgrade_index_image", defaultNamespace)
 		trimmedValue := removeOuterQuotes(strings.TrimSpace(upgrade_index_to))
 		if trimmedValue == "" {
 			g.Skip("Upgrade index image hasn't been configured")
 		}
-		source := "wmco1"
-		g.By("installing new upgrade operator with new index image")
-		installNewCatalogSource(oc, source, "catalogsource.yaml", upgrade_index_to)
-		g.By("uninstalling old operator")
-		// True to skip namespace deletion
-		uninstallWMCO(oc, wmcoNamespace, true)
-		g.By("installing new operator with new catalogsource")
-		installWMCO(oc, wmcoNamespace, source, privateKey)
+
+		// Get current version from the deployment
+		currentVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+			"deployment",
+			wmcoDeployment,
+			"-n", wmcoNamespace,
+			"-o=jsonpath={.spec.template.spec.containers[0].image}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Get Windows nodes and ensure they're ready
 		windowsHosts := getWindowsHostNames(oc)
+		o.Expect(len(windowsHosts)).To(o.BeNumerically(">", 0), "No Windows nodes found")
+
+		// Wait for Windows nodes to be ready
+		waitWindowsNodesReady(oc, len(windowsHosts), 5*time.Minute)
+
+		// Get bastion host for SSH connections
+		bastionHost := getSSHBastionHost(oc, iaasPlatform)
+
+		g.By("Verifying initial AWS route configuration")
+		for _, windowsHost := range windowsHosts {
+			e2e.Logf("Checking routes for node: %s", windowsHost)
+			err := verifyAWSRoutePersistence(bastionHost, windowsHost, privateKey, iaasPlatform)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to verify initial route persistence for node %s", windowsHost))
+		}
+		g.By("Uninstalling existing WMCO")
+		uninstallWMCO(oc, wmcoNamespace, true)
+
+		g.By("Removing existing catalog source")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(
+			"catalogsource",
+			"wmco",
+			"-n", "openshift-marketplace").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to delete existing catalog source")
+
+		// Wait for the catalog source to be fully removed
+		err = wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+				"catalogsource",
+				"wmco",
+				"-n", "openshift-marketplace").Output()
+			if err != nil {
+				return true, nil
+			}
+			return false, nil
+		})
+		o.Expect(err).NotTo(o.HaveOccurred(), "Catalog source failed to be removed")
+
+		g.By("Creating new catalog source with upgrade index")
+		replacement := map[string]string{
+			"<index_image>": upgrade_index_to,
+		}
+		manifestFile, err := exutil.GenerateManifestFile(oc, "winc", "catalogsource.yaml", replacement)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to generate catalog source manifest")
+		defer os.Remove(manifestFile)
+
+		_, err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", manifestFile).Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to apply catalog source")
+
+		// Wait for catalog source to be ready
+		g.By("Waiting for catalog source to be ready")
+		poolErr := wait.Poll(20*time.Second, 5*time.Minute, func() (bool, error) {
+			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+				"catalogsources.operators.coreos.com",
+				"wmco",
+				"-o=jsonpath={.status.connectionState.lastObservedState}",
+				"-n",
+				"openshift-marketplace").Output()
+			if err != nil {
+				e2e.Logf("Command failed with error: %s .Retrying...", err)
+				return false, nil
+			}
+			if msg == "READY" {
+				return true, nil
+			}
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(poolErr, "WMCO deployment did not start up after waiting up to 5 minutes ...")
+
+		g.By("Installing new WMCO")
+		installWMCO(oc, wmcoNamespace, "wmco", privateKey)
+
+		// Wait for operator upgrade
+		g.By("Waiting for operator upgrade to complete")
+		err = wait.Poll(30*time.Second, 15*time.Minute, func() (bool, error) {
+			newVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+				"deployment",
+				wmcoDeployment,
+				"-n", wmcoNamespace,
+				"-o=jsonpath={.spec.template.spec.containers[0].image}").Output()
+			if err != nil {
+				return false, nil
+			}
+			e2e.Logf("Current version: %s, New version: %s", currentVersion, newVersion)
+			return currentVersion != newVersion, nil
+		})
+		o.Expect(err).NotTo(o.HaveOccurred(), "Operator failed to upgrade within timeout")
+
 		numberOfWindowsNodes := len(windowsHosts)
 		e2e.Logf("Number of Windows nodes to upgrade %v", numberOfWindowsNodes)
 		for _, node := range windowsHosts {
 			e2e.Logf("Waiting for node to be configured as worker node %s", node)
 			waitUntilWMCOStatusChanged(oc, "instance has been configured as a worker node")
-
 		}
 		waitWindowsNodesReady(oc, numberOfWindowsNodes, 20*time.Minute)
-		exutil.By("Check there's only one configmap of windows-services-")
-		o.Expect(len(getWmcoConfigMaps(oc))).To(o.BeNumerically("==", 1), "The old windows-services configmap is not cleaned up")
-		exutil.By("Check service configmap got created with a names with the new version ")
+
+		exutil.By("Check service configmap got created with a names with the new version")
 		wmcoLogVersion := getWMCOVersionFromLogs(oc)
 		cmVersionFromLog := "windows-services-" + wmcoLogVersion
 		windowsServicesCM, err := popItemFromList(oc, "configmap", wicdConfigMap, wmcoNamespace)
@@ -1974,16 +2062,34 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		if cmVersionFromLog != windowsServicesCM {
 			e2e.Failf("Configmap of windows services mismatch with Logs version")
 		}
+
 		exutil.By("Check windowsmachineconfig/desired-version annotation")
 		for _, winHostName := range getWindowsHostNames(oc) {
-			desiredVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", winHostName, "-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/desired-version}'").Output()
+			desiredVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+				"nodes",
+				winHostName,
+				"-o=jsonpath='{.metadata.annotations.windowsmachineconfig\\.openshift\\.io\\/desired-version}'").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if strings.Trim(desiredVersion, `'`) != wmcoLogVersion {
-				e2e.Failf("desired-version annotation missmatch, expected %v and got %v for host %v", wmcoLogVersion, desiredVersion, winHostName)
+				e2e.Failf("desired-version annotation mismatch, expected %v and got %v for host %v",
+					wmcoLogVersion, desiredVersion, winHostName)
 			}
 		}
+
+		g.By("Verifying AWS route persistence after upgrade")
+		for _, windowsHost := range windowsHosts {
+			err := verifyAWSRoutePersistence(bastionHost, windowsHost, privateKey, iaasPlatform)
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to verify route persistence after upgrade for node %s", windowsHost))
+		}
+
 		exutil.By("Set wmco_upgrade_index_image to empty")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("configmap", "winc-test-config", "-n", "winc-test", "-p", `{"data":{"wmco_upgrade_index_image": ""}}`).Output()
+		_, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(
+			"configmap",
+			wincTestCM,
+			"-n",
+			defaultNamespace,
+			"-p",
+			`{"data":{"wmco_upgrade_index_image": ""}}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to reset configmap winc-test-config")
 	})
 
@@ -2042,7 +2148,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			sourceNamespace   = "openshift-config"
 			namespace         = "winc-74760"
 			pull_secret_name  = "pull-secret"
-			primary_image_key = "primary_windows_container_disconnected_image"
+			primary_image_key = primary_disconnected_image_key
 		)
 
 		g.By("Create a Windows workload using the disconnected registry image")

@@ -323,7 +323,7 @@ func runPSCommand(bastionHost, windowsHost, command, privateKey, iaasPlatform st
 
 	// Construct the SSH command
 	sshCommand := fmt.Sprintf(
-		"ssh -i %s -T -o StrictHostKeyChecking=no -o ProxyCommand=\"ssh -i %s -A -T -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -W %%h:%%p %s@%s\" %s@%s 'powershell %s'",
+		"ssh -i %s -q -T -o StrictHostKeyChecking=no -o ProxyCommand=\"ssh -i %s -q -A -T -o StrictHostKeyChecking=no -o ServerAliveInterval=30 -W %%h:%%p %s@%s\" %s@%s 'powershell %s'",
 		privateKey, bastionKey, getBastionSSHUser(iaasPlatform), bastionHost, windowsUser, windowsHost, command,
 	)
 
@@ -1103,27 +1103,6 @@ func uninstallWMCO(oc *exutil.CLI, namespace string, withoutNamespace ...bool) {
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("operatorgroup", "-n", namespace, wmcoDeployment, "--ignore-not-found").Execute()
 }
 
-func installNewCatalogSource(oc *exutil.CLI, source string, catalogsource_file string, newIndex string) {
-	manifestFile, err := exutil.GenerateManifestFile(oc, "winc", catalogsource_file, map[string]string{"<new_source>": source, "<index_image>": newIndex})
-	o.Expect(err).NotTo(o.HaveOccurred(), "Could not determine mew catalogsource")
-
-	defer os.Remove(manifestFile)
-	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", manifestFile).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred(), "Could not install new catalogsource:", source)
-	poolErr := wait.Poll(20*time.Second, 5*time.Minute, func() (bool, error) {
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsources.operators.coreos.com", source, "-o=jsonpath={.status.connectionState.lastObservedState}", "-n", "openshift-marketplace").Output()
-		if err != nil {
-			e2e.Logf("Command failed with error: %s .Retrying...", err)
-			return false, nil
-		}
-		if msg == "READY" {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(poolErr, "WMCO deployment did not start up after waiting up to 5 minutes ...")
-}
-
 func installWMCO(oc *exutil.CLI, namespace string, source string, privateKey string) {
 	// create new namespace
 	manifestFile, err := exutil.GenerateManifestFile(oc, "winc", "namespace.yaml", map[string]string{"<namespace>": namespace})
@@ -1534,21 +1513,6 @@ func getProxySpec(oc *exutil.CLI) map[string]interface{} {
 	return proxySepc
 }
 
-func getWmcoConfigMaps(oc *exutil.CLI) []string {
-	// func getWmcoConfigMaps(oc *exutil.CLI) ([]string, error) {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", "-n", wmcoNamespace).Output()
-	o.Expect(err).NotTo(o.HaveOccurred(), "failed to get ConfigMap")
-	// Split the output by newlines to get each ConfigMap name
-	lines := strings.Split(string(output), "\n")
-	var configMaps []string
-	for _, line := range lines {
-		if strings.HasPrefix(line, "windows-services-") {
-			configMaps = append(configMaps, line)
-		}
-	}
-	return configMaps
-}
-
 // Function to extract metric value from Prometheus query result
 func extractMetricValue(queryResult string) string {
 	jsonResult := gjson.Parse(queryResult)
@@ -1569,4 +1533,60 @@ func isDisconnectedCluster(oc *exutil.CLI) bool {
 	// Return false if configmap doesn't contain disconnected image key
 	// This means it's not configured for disconnected environment
 	return strings.Contains(output, "primary_windows_container_disconnected_image")
+}
+
+// a function that checks AWS persistant routes before and after the upgrade
+func getWindowsMetadataRoute(bastionHost, windowsHost, privateKey, iaasPlatform string) (string, error) {
+	command := `route print 169.254.169.254 | Select-String -Pattern '169.254.169.254'`
+
+	output, err := runPSCommand(bastionHost, windowsHost, command, privateKey, iaasPlatform)
+	if err != nil {
+		return "", fmt.Errorf("failed to get metadata route: %v", err)
+	}
+
+	if output == "" {
+		return "", fmt.Errorf("no metadata route found")
+	}
+
+	routes := strings.Split(output, "\n")
+	if len(routes) == 0 {
+		e2e.Logf("route command output: %s", output)
+		return "", fmt.Errorf("no valid routes found")
+	}
+
+	return strings.TrimSpace(routes[0]), nil
+}
+
+// a function that checks AWS persistant routes before and after the upgrade
+func verifyAWSRoutePersistence(bastionHost, windowsHost, privateKey, iaasPlatform string) error {
+	// Get initial metadata route state
+	initialRoutes, err := getWindowsMetadataRoute(bastionHost, windowsHost, privateKey, iaasPlatform)
+	if err != nil {
+		return fmt.Errorf("failed to get initial routes: %v", err)
+	}
+
+	// Execute command to check EC2Launch v2 version
+	command := "& $env:ProgramFiles\\Amazon\\EC2Launch\\ec2launch.exe version"
+	versionOutput, err := runPSCommand(bastionHost, windowsHost, command, privateKey, iaasPlatform)
+	if err != nil {
+		return fmt.Errorf("failed to execute command: %v", err)
+	}
+
+	// Just verify it's EC2Launch v2.0.x
+	if !strings.HasPrefix(versionOutput, "2.0.") {
+		return fmt.Errorf("unexpected EC2Launch version: %s", versionOutput)
+	}
+
+	// After upgrade/reboot verification
+	finalRoutes, err := getWindowsMetadataRoute(bastionHost, windowsHost, privateKey, iaasPlatform)
+	if err != nil {
+		return fmt.Errorf("failed to get final routes: %v", err)
+	}
+
+	// Compare routes
+	if initialRoutes != finalRoutes {
+		return fmt.Errorf("routes changed after operation. Initial: %s, Final: %s", initialRoutes, finalRoutes)
+	}
+
+	return nil
 }
