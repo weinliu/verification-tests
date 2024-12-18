@@ -116,9 +116,6 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 	})
 
 	g.It("Author:ptalgulk-ConnectedOnly-Longduration-NonPreRelease-Critical-74645-Panic Condition for Non-Matching MOSC Resources [Disruptive]", func() {
-
-		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
-
 		var (
 			infraMcpName = "infra"
 			moscName     = "tc-74645"
@@ -175,10 +172,6 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 	})
 
 	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Critical-73496-[P1] OCB use custom Containerfile. New 4.16 OCB API[Disruptive]", func() {
-		// Remove this "skip" checks once the functionality to disable OCL is implemented
-		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
-
-		SkipIfSNO(oc.AsAdmin()) // We have to skip this test case in SNO until the functionality to disable OCL is ready to work on master nodes
 		var (
 			mcp = GetCompactCompatiblePool(oc.AsAdmin())
 
@@ -218,10 +211,6 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 	})
 
 	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Medium-78001-[P2] The etc-pki-etitlement secret is created automatically for OCB Use custom Containerfile with rhel enablement [Disruptive]", func() {
-		// Remove this "skip" checks once the functionality to disable OCL is implemented
-		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
-
-		SkipIfSNO(oc.AsAdmin()) // We have to skip this test case in SNO until the functionality to disable OCL is ready to work on master nodes
 		var (
 			entitlementSecret    = NewSecret(oc.AsAdmin(), "openshift-config-managed", "etc-pki-entitlement")
 			containerFileContent = `
@@ -253,10 +242,6 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 	})
 
 	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-73947-OCB use OutputImage CurrentImagePullSecret [Disruptive]", func() {
-		// Remove this "skip" checks once the functionality to disable OCL is implemented
-		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
-
-		SkipIfSNO(oc.AsAdmin()) // We have to skip this test case in SNO until the functionality to disable OCL is ready to work on master nodes
 		var (
 			mcp              = GetCompactCompatiblePool(oc.AsAdmin())
 			tmpNamespaceName = "tc-73947-mco-ocl-images"
@@ -274,9 +259,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 	})
 
 	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-72003-[P1] OCB Opting into on-cluster builds must respect maxUnavailable setting. Workers.[Disruptive]", func() {
-		// Remove this "skip" checks once the functionality to disable OCL is implemented
-		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
-		SkipIfSNO(oc.AsAdmin())                       // This test makes no sense in SNO
+		SkipIfSNO(oc.AsAdmin()) // This test makes no sense in SNO
 
 		var (
 			moscName    = "test-" + GetCurrentTestPolarionIDNumber()
@@ -325,8 +308,9 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		o.Expect(DisableOCL(mosc)).To(o.Succeed(), "Error cleaning up %s", mosc)
 		logger.Infof("OK!\n")
 	})
+
 	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-73497-[P2] OCB build images in many MCPs at the same time [Disruptive]", func() {
-		SkipIfSNO(oc.AsAdmin()) // This test makes no sense in SNO
+		SkipIfCompactOrSNO(oc.AsAdmin()) // This test makes no sense in SNO or compact
 
 		var (
 			customMCPNames = "infra"
@@ -500,9 +484,6 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 	})
 
 	g.It("Author:sregidor-Longduration-NonPreRelease-High-77576-In OCB. Create a new MC while a build is running [Disruptive]", func() {
-		// Remove this "skip" checks once the functionality to disable OCL is implemented
-		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
-		SkipIfSNO(oc.AsAdmin())                       // This test makes no sense in SNO
 
 		var (
 			mcp      = GetCompactCompatiblePool(oc.AsAdmin())
@@ -564,9 +545,6 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 	})
 
 	g.It("Author:sregidor-Longduration-NonPreRelease-High-77781-OCB Rebuild a successful build [Disruptive]", func() {
-		// Remove this "skip" checks once the functionality to disable OCL is implemented
-		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
-		SkipIfSNO(oc.AsAdmin())                       // This test makes no sense in SNO
 
 		var (
 			mcp      = GetCompactCompatiblePool(oc.AsAdmin())
@@ -583,6 +561,10 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 
 		// rebuild the image and check that the image is properly applied in the nodes
 		RebuildImageAndCheck(mosc)
+
+		exutil.By("Remove the MachineOSConfig resource")
+		o.Expect(DisableOCL(mosc)).To(o.Succeed(), "Error cleaning up %s", mosc)
+		logger.Infof("OK!\n")
 	})
 
 	g.It("Author:sregidor-Longduration-NonPreRelease-High-77782-[P2] OCB Rebuild an interrupted build [Disruptive]", func() {
@@ -628,12 +610,13 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 
 		// rebuild the image and check that the image is properly applied in the nodes
 		RebuildImageAndCheck(mosc)
+
+		exutil.By("Remove the MachineOSConfig resource")
+		o.Expect(DisableOCL(mosc)).To(o.Succeed(), "Error cleaning up %s", mosc)
+		logger.Infof("OK!\n")
 	})
 
 	g.It("Author:ptalgulk-ConnectedOnly-Longduration-NonPreRelease-Medium-77977-Install extension after OCB is enabled [Disruptive]", func() {
-		// Remove this "skip" checks once the functionality to disable OCL is implemented
-		skipTestIfWorkersCannotBeScaled(oc.AsAdmin()) // Right now the only way to disable OCL in a pool is to delete all pods and recreate them from scratch.
-		SkipIfSNO(oc.AsAdmin())                       // This test makes no sense in SNO
 
 		var (
 			moscName = "test-" + GetCurrentTestPolarionIDNumber()
@@ -671,12 +654,8 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Remove the MachineOSConfig resource")
-		o.Expect(mosc.CleanupAndDelete()).To(o.Succeed(), "Error cleaning up %s", mosc)
-		logger.Infof("OK!\n")
-
-		ValidateMOSCIsGarbageCollected(mosc, mcp)
-
 		o.Expect(DisableOCL(mosc)).To(o.Succeed(), "Error cleaning up %s", mosc)
+		ValidateMOSCIsGarbageCollected(mosc, mcp)
 		logger.Infof("OK!\n")
 	})
 })
@@ -860,9 +839,7 @@ func ValidateSuccessfulMOSC(mosc *MachineOSConfig, checkers []Checker) {
 	}
 }
 
-// DisableOCL this function disables OCL. There is no way to disable it in a controlled way, it needs to be implemented.
-// The only way to disable OCL in a pool is to delete all nodes and recreate them from scratch.
-// Hence, we cant automate OCL tests using master pool
+// DisableOCL this function disables OCL.
 func DisableOCL(mosc *MachineOSConfig) error {
 	if !mosc.Exists() {
 		logger.Infof("%s does not exist. No need to remove/disable it", mosc)
@@ -872,7 +849,11 @@ func DisableOCL(mosc *MachineOSConfig) error {
 	mcp, err := mosc.GetMachineConfigPool()
 	if err != nil {
 		return err
+	}
 
+	currentOSImageSpec, err := mosc.GetStatusCurrentImagePullSpec()
+	if err != nil {
+		return err
 	}
 
 	err = mosc.CleanupAndDelete()
@@ -880,53 +861,22 @@ func DisableOCL(mosc *MachineOSConfig) error {
 		return err
 	}
 
-	allNodes, err := mcp.GetNodes()
+	nodes, err := mcp.GetCoreOsNodes()
 	if err != nil {
 		return err
 	}
 
-	logger.Infof("Removing all machines in pool %s to recreate the nodes", mcp.GetName())
+	if len(nodes) > 0 {
+		node := nodes[0]
 
-	for _, node := range allNodes {
-		machine, err := node.GetMachine()
-		if err != nil {
-			return err
-		}
+		mcp.waitForComplete()
 
-		if !machine.Exists() {
-			return fmt.Errorf("%s was created using %s, but %s does not exist. Something went wrong", node, machine, machine)
-		}
-
-		err = machine.Delete("--wait=false")
-		if err != nil {
-			return err
-		}
+		o.Expect(node.GetCurrentBootOSImage()).NotTo(o.Equal(currentOSImageSpec),
+			"OCL was disabled in %s but the OCL image is still used in %s", node)
+	} else {
+		logger.Infof("There is no coreos node configured in %s. We don't wait for the configuration to be applied and we don't execute any verification on the nodes", mcp)
 	}
 
-	logger.Infof("Waiting for all Machinesets to be ready")
-
-	allMachineSets, err := NewMachineSetList(mosc.GetOC(), "openshift-machine-api").GetAll()
-	if err != nil {
-		return err
-	}
-
-	for _, machineSet := range allMachineSets {
-		err := machineSet.WaitUntilReady("15m")
-		if err != nil {
-			return err
-		}
-	}
-
-	logger.Infof("Manually remove all nodes to make things faster")
-
-	for _, node := range allNodes {
-		err := node.Delete("--ignore-not-found=true")
-		if err != nil {
-			return err
-		}
-	}
-
-	mcp.WaitImmediateForUpdatedStatus()
 	return nil
 }
 
