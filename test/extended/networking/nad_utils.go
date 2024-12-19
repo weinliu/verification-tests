@@ -194,6 +194,19 @@ func CurlPod2PodFailUDN(oc *exutil.CLI, namespaceSrc string, podNameSrc string, 
 	}
 }
 
+func CurlNode2PodFailUDN(oc *exutil.CLI, nodeName string, namespaceDst string, podNameDst string) {
+	//getPodIPUDN returns IPv6 and IPv4 in order on dual stack in PodIP1 and PodIP2 respectively and main IP in case of single stack (v4 or v6) in PodIP1, and nil in PodIP2
+	podIP1, podIP2 := getPodIPUDN(oc, namespaceDst, podNameDst, "ovn-udn1")
+	if podIP2 != "" {
+		podv4URL := net.JoinHostPort(podIP2, "8080")
+		_, err := exutil.DebugNode(oc, nodeName, "curl", podv4URL, "-s", "--connect-timeout", "5")
+		o.Expect(err).To(o.HaveOccurred())
+	}
+	podURL := net.JoinHostPort(podIP1, "8080")
+	_, err := exutil.DebugNode(oc, nodeName, "curl", podURL, "-s", "--connect-timeout", "5")
+	o.Expect(err).To(o.HaveOccurred())
+}
+
 func CurlUDNPod2PodPassMultiNetwork(oc *exutil.CLI, namespaceSrc string, namespaceDst string, podNameSrc string, netNameInterface string, podNameDst string, netNameDst string) {
 	podIP1, podIP2 := getPodIPUDN(oc, namespaceDst, podNameDst, netNameDst)
 	if podIP2 != "" {

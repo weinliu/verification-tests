@@ -2478,4 +2478,42 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv4, "net1", pods[2].podenvname)
 		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv6, "net1", pods[2].podenvname)
 	})
+
+	g.It("Author:meinli-Medium-78329-Validate pod2pod on diff workers and host2pod on same/diff workers (UDN Layer3 with Primary role)", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		)
+		exutil.By("1. Get worker node and namespace")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+		ns := oc.Namespace()
+
+		exutil.By("2. Create UDN CRD Layer3 with Primary role")
+		err = applyL3UDNtoNamespace(oc, ns, 0)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3. Create two pods on diff workers in ns")
+		pods := make([]pingPodResourceNode, 2)
+		for i := 0; i < 2; i++ {
+			pods[i] = pingPodResourceNode{
+				name:      "hello-pod" + strconv.Itoa(i),
+				namespace: ns,
+				nodename:  nodeList.Items[i].Name,
+				template:  pingPodNodeTemplate,
+			}
+			pods[i].createPingPodNode(oc)
+			waitPodReady(oc, ns, pods[i].name)
+		}
+
+		exutil.By("4. Validate pod to pod on different workers")
+		CurlPod2PodPassUDN(oc, ns, pods[0].name, ns, pods[1].name)
+
+		exutil.By("5. validate host to pod on same and diff workers")
+		CurlNode2PodFailUDN(oc, nodeList.Items[0].Name, ns, pods[0].name)
+		CurlNode2PodFailUDN(oc, nodeList.Items[0].Name, ns, pods[1].name)
+	})
 })
