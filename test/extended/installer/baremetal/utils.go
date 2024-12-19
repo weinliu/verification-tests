@@ -350,8 +350,8 @@ func checkNodeStatus(oc *exutil.CLI, pollIntervalSec time.Duration, pollDuration
 func buildFirmwareURL(vendor, currentVersion string) (string, string) {
 	var url, fileName string
 
-	iDRAC_7060 := "https://dl.dell.com/FOLDER10774694M/1/iDRAC_7.00.60.00_A00.exe"
-	iDRAC_7030 := "https://dl.dell.com/FOLDER10452580M/1/iDRAC_7.00.30.00_A00.exe"
+	iDRAC_71070 := "https://dl.dell.com/FOLDER11965413M/1/iDRAC_7.10.70.00_A00.exe"
+	iDRAC_71030 := "https://dl.dell.com/FOLDER11319105M/1/iDRAC_7.10.30.00_A00.exe"
 	ilo5_305 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p991377599/v247527/ilo5_305.fwpkg"
 	ilo5_302 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p991377599/v243854/ilo5_302.fwpkg"
 	ilo6_157 := "https://downloads.hpe.com/pub/softlib2/software1/fwpkg-ilo/p788720876/v247531/ilo6_160.fwpkg"
@@ -360,12 +360,12 @@ func buildFirmwareURL(vendor, currentVersion string) (string, string) {
 	switch vendor {
 	case "Dell Inc.":
 		fileName = "firmimgFIT.d9"
-		if currentVersion == "7.00.30.00" {
-			url = iDRAC_7060
-		} else if currentVersion == "7.00.60.00" {
-			url = iDRAC_7030
+		if currentVersion == "7.10.70.00" {
+			url = iDRAC_71030
+		} else if currentVersion == "7.10.30.00" {
+			url = iDRAC_71070
 		} else {
-			url = iDRAC_7060 // Default to 7.00.60.00
+			url = iDRAC_71070 // Default to 7.10.70.00
 		}
 	case "HPE":
 		// Extract the iLO version and assign the file name accordingly
