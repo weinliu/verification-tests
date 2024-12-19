@@ -174,9 +174,9 @@ func in(target string, strArray []string) bool {
 }
 
 // make sure all the ectd pods are running
-func checkEtcdPodStatus(oc *exutil.CLI) bool {
+func checkEtcdPodStatus(oc *exutil.CLI, ns string) bool {
 	err := wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
-		output, errp := oc.AsAdmin().Run("get").Args("pods", "-l", "app=etcd", "-n", "openshift-etcd", "-o=jsonpath='{.items[*].status.phase}'").Output()
+		output, errp := oc.AsAdmin().Run("get").Args("pods", "-l", "app=etcd", "-n", ns, "-o=jsonpath='{.items[*].status.phase}'").Output()
 		if errp != nil {
 			e2e.Logf("Failed to get etcd pod status, error: %s. Trying again", errp)
 			return false, nil
@@ -365,7 +365,7 @@ func IsCOHealthy(oc *exutil.CLI, operatorName string) bool {
 // Checks cluster operator is healthy
 func healthyCheck(oc *exutil.CLI) bool {
 	e2e.Logf("make sure all the etcd pods are running")
-	podAllRunning := checkEtcdPodStatus(oc)
+	podAllRunning := checkEtcdPodStatus(oc, "openshift-etcd")
 	if podAllRunning != true {
 		e2e.Logf("The ectd pods are not running")
 		return false
@@ -386,4 +386,63 @@ func healthyCheck(oc *exutil.CLI) bool {
 		}
 	}
 	return true
+}
+
+// Read  .../testdata/disaster_recovery/xx and replace keywords with var then write new file
+func fileReplaceKeyword(oldFileName string, newFileName string, keyWords string, varValue string) bool {
+	if newFileName == "" || newFileName == "" || keyWords == "" {
+		e2e.Failf("newFileName/newFileName/keyWords is null before replace.")
+		return false
+	}
+	oldFileStr, err := exec.Command("bash", "-c", "cat "+oldFileName).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	newFileStr := strings.Replace(string(oldFileStr), keyWords, varValue, -1)
+	pf, errp := os.Create(newFileName)
+	o.Expect(errp).NotTo(o.HaveOccurred())
+	defer pf.Close()
+	w2 := bufio.NewWriter(pf)
+	_, perr := w2.WriteString(newFileStr)
+	w2.Flush()
+	o.Expect(perr).NotTo(o.HaveOccurred())
+	return true
+}
+
+// Wait for pod(ns, label) ready
+func waitForPodReady(oc *exutil.CLI, ns string, labelStr string, waitSecond int32) {
+	err := wait.Poll(20*time.Second, time.Duration(waitSecond)*time.Second, func() (bool, error) {
+		output1, err := oc.AsAdmin().Run("get").Args("pods", "-l", labelStr, "-n", ns, "-o=jsonpath='{.items[*].status.phase}'").Output()
+		if err != nil {
+			e2e.Logf("Failed to get pod status, error: %s. Trying again", err)
+			return false, nil
+		}
+		statusList := strings.Fields(output1)
+		for _, podStatus := range statusList {
+			if match, _ := regexp.MatchString("Running", podStatus); !match {
+				e2e.Logf("Found etcd pod is not running")
+				return false, nil
+			}
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "pod with label "+labelStr+"is not Running.")
+}
+
+// get hosted cluster namespace and hc name
+func getHostedClusterName(oc *exutil.CLI) (string, string) {
+	var clusterNs string
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("project", "-o=custom-columns=NAME:.metadata.name", "--no-headers").Output()
+	if err != nil || len(output) <= 0 {
+		e2e.Failf("Fail to get project name list.")
+	}
+	projectNameList := strings.Fields(output)
+	for i := 0; i < len(projectNameList); i++ {
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", projectNameList[i], "hc", "-ojsonpath={.items[*].metadata.name}").Output()
+		if len(output) > 0 {
+			e2e.Logf("hypershift hosted cluster namespace is: %s, hc name is %s", projectNameList[i], output)
+			clusterNs = projectNameList[i]
+			break
+		}
+	}
+	return clusterNs, output
 }

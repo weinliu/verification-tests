@@ -107,11 +107,11 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		}
 
 		g.By("make sure all the etcd pods are running")
-		podAllRunning := checkEtcdPodStatus(oc)
+		podAllRunning := checkEtcdPodStatus(oc, "openshift-etcd")
 		if podAllRunning != true {
 			g.Skip("The ectd pods are not running")
 		}
-		defer o.Expect(checkEtcdPodStatus(oc)).To(o.BeTrue())
+		defer o.Expect(checkEtcdPodStatus(oc, "openshift-etcd")).To(o.BeTrue())
 
 		g.By("select all the master node")
 		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
@@ -225,8 +225,8 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		masterNodeCount := len(masterNodeList)
 
 		g.By("make sure all the etcd pods are running")
-		defer o.Expect(checkEtcdPodStatus(oc)).To(o.BeTrue())
-		podAllRunning := checkEtcdPodStatus(oc)
+		defer o.Expect(checkEtcdPodStatus(oc, "openshift-etcd")).To(o.BeTrue())
+		podAllRunning := checkEtcdPodStatus(oc, "openshift-etcd")
 		if podAllRunning != true {
 			g.Skip("The ectd pods are not running")
 		}
@@ -276,8 +276,8 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		)
 
 		g.By("Make sure all the etcd pods are running")
-		defer o.Expect(checkEtcdPodStatus(oc)).To(o.BeTrue())
-		podAllRunning := checkEtcdPodStatus(oc)
+		defer o.Expect(checkEtcdPodStatus(oc, "openshift-etcd")).To(o.BeTrue())
+		podAllRunning := checkEtcdPodStatus(oc, "openshift-etcd")
 		if podAllRunning != true {
 			g.Skip("The ectd pods are not running")
 		}
@@ -353,8 +353,8 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		)
 
 		g.By("Make sure all the etcd pods are running")
-		defer o.Expect(checkEtcdPodStatus(oc)).To(o.BeTrue())
-		podAllRunning := checkEtcdPodStatus(oc)
+		defer o.Expect(checkEtcdPodStatus(oc, "openshift-etcd")).To(o.BeTrue())
+		podAllRunning := checkEtcdPodStatus(oc, "openshift-etcd")
 		if podAllRunning != true {
 			g.Skip("The ectd pods are not running")
 		}
@@ -546,11 +546,11 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 		}
 
 		g.By("make sure all the etcd pods are running")
-		podAllRunning := checkEtcdPodStatus(oc)
+		podAllRunning := checkEtcdPodStatus(oc, "openshift-etcd")
 		if podAllRunning != true {
 			g.Skip("The ectd pods are not running")
 		}
-		defer o.Expect(checkEtcdPodStatus(oc)).To(o.BeTrue())
+		defer o.Expect(checkEtcdPodStatus(oc, "openshift-etcd")).To(o.BeTrue())
 
 		g.By("select all the master node")
 		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
