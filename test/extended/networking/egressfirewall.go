@@ -806,13 +806,33 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			statefulSetHelloPod = filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
 			egressFWTemplate    = filepath.Join(buildPruningBaseDir, "egressfirewall2-template.yaml")
 			ns                  = "62056-upgrade-ns"
+			allowedIPList       = []string{}
+			ipv6CIDR            string
+			ipv4CIDR            string
 		)
 
-		exutil.By("create new namespace")
+		exutil.By("1. create new namespace")
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Create an EgressFirewall object with rule deny.")
+		exutil.By("2. Get an IP address for domain name www.redhat.com for allow rule ")
+		allowedIPv4, allowedIPv6 := getIPFromDnsName("www.redhat.com")
+		o.Expect(len(allowedIPv4) == 0).NotTo(o.BeTrue())
+		ipv4CIDR = allowedIPv4 + "/32"
+		allowedIPList = append(allowedIPList, allowedIPv4)
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" {
+			if checkIPv6PublicAccess(oc) {
+				o.Expect(len(allowedIPv6) == 0).NotTo(o.BeTrue())
+				ipv6CIDR = allowedIPv6 + "/128"
+				allowedIPList = append(allowedIPList, allowedIPv6)
+			} else {
+				e2e.Logf("Dual stack cluster does not have access to public websites for IPv6 address.")
+			}
+
+		}
+
+		exutil.By("3. Create an EgressFirewall object with rule deny.")
 		egressFW2 := egressFirewall2{
 			name:      "default",
 			namespace: ns,
@@ -821,27 +841,30 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			template:  egressFWTemplate,
 		}
 		egressFW2.createEgressFW2Object(oc)
-		ipStackType := checkIPStackType(oc)
-		if ipStackType == "dualstack" {
-			errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Allow\",\"to\":{\"dnsName\":\"www.redhat.com\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"::/0\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}}]}}", "--type=merge").Execute()
+
+		exutil.By("4. Update EgressFirewall object with rule specific allow rule.")
+		if ipStackType == "dualstack" && checkIPv6PublicAccess(oc) {
+			errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Allow\",\"to\":{\"cidrSelector\":\""+ipv4CIDR+"\"}},{\"type\":\"Allow\",\"to\":{\"cidrSelector\":\""+ipv6CIDR+"\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"::/0\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}}]}}", "--type=merge").Execute()
 			o.Expect(errPatch).NotTo(o.HaveOccurred())
 		} else {
-			errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Allow\",\"to\":{\"dnsName\":\"www.redhat.com\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}}]}}", "--type=merge").Execute()
+			errPatch := oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressfirewall.k8s.ovn.org/default", "-n", ns, "-p", "{\"spec\":{\"egress\":[{\"type\":\"Allow\",\"to\":{\"cidrSelector\":\""+ipv4CIDR+"\"}},{\"type\":\"Deny\",\"to\":{\"cidrSelector\":\"0.0.0.0/0\"}}]}}", "--type=merge").Execute()
 			o.Expect(errPatch).NotTo(o.HaveOccurred())
 		}
 		efErr := waitEgressFirewallApplied(oc, egressFW2.name, ns)
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 
-		exutil.By("Create a pod in the namespace")
+		exutil.By("5. Create a pod in the namespace")
 		createResourceFromFile(oc, ns, statefulSetHelloPod)
 		podErr := waitForPodWithLabelReady(oc, ns, "app=hello")
 		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
 		helloPodname := getPodName(oc, ns, "app=hello")[0]
 
-		exutil.By("Check the allowed website can be accessed!")
-		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl www.redhat.com --connect-timeout 5 -I")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.By("Check the other website can be blocked!")
+		exutil.By("6. Check the allowed destination can be accessed!")
+		for i := 0; i < len(allowedIPList); i++ {
+			exutil.By(fmt.Sprintf("Verify %s is accessible with just egress firewall", allowedIPList[i]))
+			verifyDstIPAccess(oc, helloPodname, ns, allowedIPList[i], true)
+		}
+		exutil.By("7.Check the other website can be blocked!")
 		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl yahoo.com --connect-timeout 5 -I")
 		o.Expect(err).To(o.HaveOccurred())
 	})
@@ -860,16 +883,34 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		efErr := waitEgressFirewallApplied(oc, "default", ns)
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 
+		exutil.By("Get allow IP list ")
+		cidrList, cidrErr := oc.AsAdmin().Run("get").Args("-n", ns, "egressfirewall.k8s.ovn.org/default", "-o=jsonpath={.spec.egress[?(@.type==\"Allow\")].to.cidrSelector}").Output()
+		o.Expect(cidrErr).NotTo(o.HaveOccurred())
+		o.Expect(cidrList == "").NotTo(o.BeTrue())
+		e2e.Logf("The allowed destination IPs are: %s", cidrList)
+		// Regular expression to match IPv4 and IPv6 addresses with CIDR notation
+		ipRegex := `(?:\d{1,3}\.){3}\d{1,3}\/\d{1,2}|[0-9a-fA-F:]+(?::[0-9a-fA-F]{1,4}){1,7}\/\d{1,3}`
+		re := regexp.MustCompile(ipRegex)
+		matches := re.FindAllString(cidrList, -1)
+		var allowedIPList []string
+		for _, match := range matches {
+			// Split the match on the '/' character and take only the IP part
+			ip := strings.Split(match, "/")[0]
+			allowedIPList = append(allowedIPList, ip)
+		}
+
 		exutil.By("Get the pod in the namespace")
 		podErr := waitForPodWithLabelReady(oc, ns, "app=hello")
 		exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
 		helloPodname := getPodName(oc, ns, "app=hello")[0]
 
-		exutil.By("Check the allowed website can be accessed!")
-		_, err := e2eoutput.RunHostCmd(ns, helloPodname, "curl www.redhat.com --connect-timeout 5 -I")
-		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Check the allowed destination can be accessed!")
+		for i := 0; i < len(allowedIPList); i++ {
+			exutil.By(fmt.Sprintf("Verify %s is accessible with just egress firewall", allowedIPList[i]))
+			verifyDstIPAccess(oc, helloPodname, ns, allowedIPList[i], true)
+		}
 		exutil.By("Check the other website can be blocked!")
-		_, err = e2eoutput.RunHostCmd(ns, helloPodname, "curl yahoo.com --connect-timeout 5 -I")
+		_, err := e2eoutput.RunHostCmd(ns, helloPodname, "curl yahoo.com --connect-timeout 5 -I")
 		o.Expect(err).To(o.HaveOccurred())
 	})
 
