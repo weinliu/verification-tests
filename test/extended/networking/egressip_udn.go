@@ -783,6 +783,93 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		}
 	})
 
+	// author: jechen@redhat.com
+	g.It("Author:jechen-ConnectedOnly-Longduration-NonPreRelease-High-78293-After reboot egress node EgressIP on UDN still work (layer3 and IPv4). [Disruptive]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			egressIP2Template   = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+			pingPodTemplate     = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+		)
+
+		exutil.By("1. Get node list, apply EgressLabel Key to one node to make it egressNode")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("Need at least 1 node for the test, the prerequirement was not fullfilled, skip the case!!")
+		}
+		egressNode := nodeList.Items[0].Name
+
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
+
+		exutil.By("2. Get 1 unused IPs from the same subnet of the egressNode,create an egressIP object")
+		freeIPs := findFreeIPs(oc, egressNode, 1)
+		o.Expect(len(freeIPs)).Should(o.Equal(1))
+
+		egressip := egressIPResource1{
+			name:          "egressip-78293",
+			template:      egressIP2Template,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		egressip.createEgressIPObject2(oc)
+		defer egressip.deleteEgressIPObject1(oc)
+		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip.name)
+		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
+
+		exutil.By("3. Get a namespace and apply UDN CRD to it")
+		ns := oc.Namespace()
+		oc.SetupProject()
+
+		exutil.By("4. Apply UDN CRD to each namespace,apply to each namespace with label that matches namespaceSelector definied in egressIP object")
+		err = applyL3UDNtoNamespace(oc, ns, 0)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5. In the namespace, create a test pod, apply to test pod with label that matches podSelector definied in egressIP object")
+		testpod := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		testpod.createPingPod(oc)
+		waitPodReady(oc, testpod.namespace, testpod.name)
+		defer exutil.LabelPod(oc, ns, testpod.name, "color-")
+		err = exutil.LabelPod(oc, ns, testpod.name, "color=pink")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("6. Verify that egress traffic from pod use egressIP as its sourceIP")
+		primaryInf, infErr := getSnifPhyInf(oc, egressNode)
+		o.Expect(infErr).NotTo(o.HaveOccurred())
+		dstHost := nslookDomainName("ifconfig.me")
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s host %s", primaryInf, dstHost)
+		_, cmdOnPod := getRequestURL(dstHost)
+		tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, ns, testpod.name, cmdOnPod)
+		o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+
+		exutil.By("7.Reboot egress node.\n")
+		defer checkNodeStatus(oc, egressNode, "Ready")
+		rebootNode(oc, egressNode)
+		checkNodeStatus(oc, egressNode, "NotReady")
+		checkNodeStatus(oc, egressNode, "Ready")
+		waitPodReady(oc, testpod.namespace, testpod.name)
+		err = exutil.LabelPod(oc, ns, testpod.name, "color=pink")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("8. Check EgressIP is assigned again after reboot.\n")
+		verifyExpectedEIPNumInEIPObject(oc, egressip.name, 1)
+
+		exutil.By("8. Validate egressIP after node reboot \n")
+		tcpdumOutput = getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, ns, testpod.name, cmdOnPod)
+		o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+
+	})
+
 })
 
 var _ = g.Describe("[sig-networking] SDN udn EgressIP IPv6", func() {
