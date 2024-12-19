@@ -1746,4 +1746,111 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 
 	})
 
+	g.It("Author:meinli-Critical-78262-Validate pod/host to hostnetwork pod/nodeport with hostnetwork pod backend on same/diff workers", func() {
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			hostNetworkPodTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-hostnetwork-specific-node-template.yaml")
+			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+			ipFamilyPolicy         = "SingleStack"
+		)
+
+		platform := exutil.CheckPlatform(oc)
+		if !(strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none")) {
+			g.Skip("These cases can only be run on networking team's private RDU BM cluster, vSphere and IPI/UPI BM, skip for other platforms!!!")
+		}
+
+		exutil.By("1. Get namespace, master and worker node")
+		ns := oc.Namespace()
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+		masterNode, err := exutil.GetFirstMasterNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		//Required for hostnetwork pod
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-group", "privileged", "system:serviceaccounts:"+ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2. Create hostnetwork pod in ns")
+		hostpod := pingPodResourceNode{
+			name:      "hostnetwork-pod",
+			namespace: ns,
+			nodename:  nodeList.Items[0].Name,
+			template:  hostNetworkPodTemplate,
+		}
+		hostpod.createPingPodNode(oc)
+		waitPodReady(oc, ns, hostpod.name)
+
+		exutil.By("3. Create nodeport service with hostnetwork pod backend when externalTrafficPolicy=Local")
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" {
+			ipFamilyPolicy = "PreferDualStack"
+		}
+		svc := genericServiceResource{
+			servicename:           "test-service",
+			namespace:             ns,
+			protocol:              "TCP",
+			selector:              "hello-pod",
+			serviceType:           "NodePort",
+			ipFamilyPolicy:        ipFamilyPolicy,
+			internalTrafficPolicy: "Cluster",
+			externalTrafficPolicy: "Local",
+			template:              genericServiceTemplate,
+		}
+		svc.createServiceFromParams(oc)
+		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4. Create two normal pods on diff workers")
+		pods := make([]pingPodResourceNode, 2)
+		for i := 0; i < 2; i++ {
+			pods[i] = pingPodResourceNode{
+				name:      "hello-pod" + strconv.Itoa(i),
+				namespace: ns,
+				nodename:  nodeList.Items[i].Name,
+				template:  pingPodNodeTemplate,
+			}
+			pods[i].createPingPodNode(oc)
+			waitPodReady(oc, ns, pods[i].name)
+
+			defer exutil.LabelPod(oc, ns, pods[i].name, "name-")
+			err = exutil.LabelPod(oc, ns, pods[i].name, fmt.Sprintf("name=hello-pod-%d", i))
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("5. Validate host to pod on same/diff workers")
+		CurlNode2PodPass(oc, pods[0].nodename, ns, pods[0].name)
+		CurlNode2PodPass(oc, pods[1].nodename, ns, pods[0].name)
+
+		exutil.By("6. Validate pod to host network pod on same/diff workers")
+		CurlPod2PodPass(oc, ns, pods[0].name, ns, hostpod.name)
+		CurlPod2PodPass(oc, ns, pods[1].name, ns, hostpod.name)
+
+		exutil.By("7. Validate pod to nodePort with hostnetwork pod backend on same/diff workers when externalTrafficPolicy=Local")
+		CurlPod2NodePortPass(oc, ns, pods[0].name, nodeList.Items[0].Name, nodePort)
+		CurlPod2NodePortFail(oc, ns, pods[0].name, nodeList.Items[1].Name, nodePort)
+
+		exutil.By("8. Validate host to nodePort with hostnetwork pod backend on same/diff workers when externalTrafficPolicy=Local")
+		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodePort)
+		CurlNodePortFail(oc, masterNode, nodeList.Items[1].Name, nodePort)
+
+		exutil.By("9. Validate pod to nodeport with hostnetwork pod backend on diff workers when externalTrafficPolicy=Cluster")
+		exutil.By("9.1 Create nodeport service with externalTrafficPolicy=Cluster in ns1 and ns2")
+		removeResource(oc, true, true, "svc", "test-service", "-n", ns)
+		svc.externalTrafficPolicy = "Cluster"
+		svc.createServiceFromParams(oc)
+		nodePort, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("9.2 Validate pod to nodePort with hostnetwork pod backend on same/diff workers when externalTrafficPolicy=Cluster")
+		CurlPod2NodePortPass(oc, ns, pods[0].name, nodeList.Items[0].Name, nodePort)
+		CurlPod2NodePortPass(oc, ns, pods[0].name, nodeList.Items[1].Name, nodePort)
+
+		exutil.By("10. Validate host to nodePort with hostnetwork pod backend on same/diff workers when externalTrafficPolicy=Cluster")
+		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodePort)
+		CurlNodePortPass(oc, masterNode, nodeList.Items[1].Name, nodePort)
+	})
+
 })
