@@ -32,7 +32,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator installation", func() 
 		installNMstateOperator(oc)
 	})
 
-	g.It("LEVEL0-NonHyperShiftHOST-StagerunBoth-Author:qiowang-Critical-47088-NMState Operator installation ", func() {
+	g.It("Author:qiowang-LEVEL0-StagerunBoth-Critical-47088-NMState Operator installation ", func() {
 		g.By("Checking nmstate operator installation")
 		e2e.Logf("Operator install check successfull as part of setup !!!!!")
 		e2e.Logf("SUCCESS - NMState operator installed")
@@ -56,7 +56,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 		installNMstateOperator(oc)
 	})
 
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:qiowang-High-46380-High-46382-High-46379-Create/Disable/Remove interface on node [Disruptive] [Slow]", func() {
+	g.It("Author:qiowang-NonPreRelease-Longduration-High-46380-High-46382-High-46379-Create/Disable/Remove interface on node [Disruptive] [Slow]", func() {
 		g.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
 		nmstateCR := nmstateCRResource{
@@ -204,7 +204,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 		e2e.Logf("SUCCESS - interface is removed from the node")
 	})
 
-	g.It("LEVEL0-NonHyperShiftHOST-Author:qiowang-Critical-46329-Configure bond on node [Disruptive]", func() {
+	g.It("Author:qiowang-LEVEL0-Critical-46329-Configure bond on node [Disruptive]", func() {
 		g.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
 		nmstateCR := nmstateCRResource{
@@ -314,7 +314,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 		e2e.Logf("SUCCESS - bond is removed from the node")
 	})
 
-	g.It("NonHyperShiftHOST-Author:qiowang-Medium-46383-VLAN [Disruptive]", func() {
+	g.It("Author:qiowang-Medium-46383-VLAN [Disruptive]", func() {
 		g.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
 		nmstateCR := nmstateCRResource{
@@ -422,7 +422,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 		e2e.Logf("SUCCESS - vlan is removed from the node")
 	})
 
-	g.It("NonHyperShiftHOST-Author:qiowang-Medium-53346-Verify that it is able to reset linux-bridge vlan-filtering with vlan is empty [Disruptive]", func() {
+	g.It("Author:qiowang-Medium-53346-Verify that it is able to reset linux-bridge vlan-filtering with vlan is empty [Disruptive]", func() {
 		g.By("1. Create NMState CR")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
 		nmstateCR := nmstateCRResource{
@@ -576,7 +576,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 		e2e.Logf("SUCCESS - linux-bridge is removed from the node")
 	})
 
-	g.It("Author:qiowang-NonHyperShiftHOST-NonPreRelease-Medium-46327-Medium-46795-Medium-64854-Static IP and Route can be applied [Disruptive]", func() {
+	g.It("Author:qiowang-NonPreRelease-Medium-46327-Medium-46795-Medium-64854-Static IP and Route can be applied [Disruptive]", func() {
 		var (
 			ipAddrV4      = "192.0.2.251"
 			destAddrV4    = "198.51.100.0/24"
@@ -771,7 +771,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 		e2e.Logf("SUCCESS - static ip and route are removed from the node")
 	})
 
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:qiowang-Medium-66174-Verify knmstate operator support for IPv6 single stack - ipv6 default route [Disruptive]", func() {
+	g.It("Author:qiowang-NonPreRelease-Medium-66174-Verify knmstate operator support for IPv6 single stack - ipv6 default route [Disruptive]", func() {
 		exutil.By("Check the platform if it is suitable for running the test")
 		platform := checkPlatform(oc)
 		ipStackType := checkIPStackType(oc)
@@ -933,7 +933,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 		e2e.Logf("SUCCESS - default routes are removed from the node")
 	})
 
-	g.It("NonHyperShiftHOST-NonPreRelease-Author:qiowang-Medium-71145-configure bond interface and 70 vlans based on the bond then reboot node, check the boot time [Disruptive] [Slow]", func() {
+	g.It("Author:qiowang-NonPreRelease-Medium-71145-configure bond interface and 70 vlans based on the bond then reboot node, check the boot time [Disruptive] [Slow]", func() {
 		e2e.Logf("It is for OCPBUGS-22771, OCPBUGS-25753, OCPBUGS-26026")
 
 		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
@@ -1051,7 +1051,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 		o.Expect(strings.Contains(logs, "configure-ovs exited with error")).ShouldNot(o.BeTrue())
 	})
 
-	g.It("NonHyperShiftHOST-Author:qiowang-Medium-73027-Verify vlan of bond will get autoconnect when bond ports link revived [Disruptive]", func() {
+	g.It("Author:qiowang-Medium-73027-Verify vlan of bond will get autoconnect when bond ports link revived [Disruptive]", func() {
 		e2e.Logf("It is for OCPBUGS-11300, OCPBUGS-23023")
 
 		var (
@@ -1188,7 +1188,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 		exutil.AssertWaitPollNoErr(vlanInfo2, "Fail to reactive vlan with the original ip addresses")
 	})
 
-	g.It("Author:meinli-NonHyperShiftHOST-High-76212-Validate Metrics collection for kubernetes-nmstate [Disruptive]", func() {
+	g.It("Author:meinli-High-76212-Validate Metrics collection for kubernetes-nmstate [Disruptive]", func() {
 		nodeName, getNodeErr := exutil.GetFirstWorkerNode(oc)
 		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
 		o.Expect(nodeName).NotTo(o.BeEmpty())
@@ -1271,7 +1271,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator functional", func() {
 		}, 10*time.Second, 2*time.Second).Should(o.BeTrue(), "Metric does not match the expected value!!")
 	})
 
-	g.It("Author:meinli-NonHyperShiftHOST-High-76372-Check NMstate Features Metrics Value collection [Disruptive]", func() {
+	g.It("Author:meinli-High-76372-Check NMstate Features Metrics Value collection [Disruptive]", func() {
 		var (
 			buildPruningBaseDir          = exutil.FixturePath("testdata", "networking/nmstate")
 			nmstateCRTemplate            = filepath.Join(buildPruningBaseDir, "nmstate-cr-template.yaml")
@@ -1495,7 +1495,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator upgrade", func() {
 		}
 	})
 
-	g.It("Author:qiowang-NonHyperShiftHOST-PreChkUpgrade-NonPreRelease-Medium-54077-Verify that the knmstate operator works as expected after the cluster upgrade [Disruptive]", func() {
+	g.It("Author:qiowang-PreChkUpgrade-NonPreRelease-Medium-54077-Verify that the knmstate operator works as expected after the cluster upgrade [Disruptive]", func() {
 		nodeList, getNodeErr := exutil.GetClusterNodesBy(oc, "worker")
 		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
 		nodeName := nodeList[0]
@@ -1549,7 +1549,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator upgrade", func() {
 		o.Expect(strings.Contains(ifaceState, "up")).Should(o.BeTrue())
 	})
 
-	g.It("Author:qiowang-NonHyperShiftHOST-PstChkUpgrade-NonPreRelease-Medium-54077-Verify that the knmstate operator works as expected after the cluster upgrade [Disruptive]", func() {
+	g.It("Author:qiowang-PstChkUpgrade-NonPreRelease-Medium-54077-Verify that the knmstate operator works as expected after the cluster upgrade [Disruptive]", func() {
 		nodeList, getNodeErr := exutil.GetClusterNodesBy(oc, "worker")
 		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
 		nodeName := nodeList[0]
@@ -1665,7 +1665,7 @@ var _ = g.Describe("[sig-networking] SDN nmstate-operator testing on plateforms 
 		installNMstateOperator(oc)
 	})
 
-	g.It("Author:yingwang-NonHyperShiftHOST-NonPreRelease-Medium-75671-Verify global DNS via NMstate [Disruptive]", func() {
+	g.It("Author:yingwang-NonPreRelease-Medium-75671-Verify global DNS via NMstate [Disruptive]", func() {
 		var (
 			nmstateCRTemplate = generateTemplateAbsolutePath("nmstate-cr-template.yaml")
 			dnsNncpTemplate   = generateTemplateAbsolutePath("global-dns-nncp-template.yaml")
