@@ -2718,6 +2718,31 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		o.Expect(strings.Contains(output, "apps.openshift.io/v1")).To(o.BeTrue())
 
 	})
+
+	g.It("Author:yinzhou-ROSA-OSD_CCS-ARO-High-76287-make sure tools imagestream contains sosreport", func() {
+		// Skip the case if cluster doest not have the imageRegistry installed
+		if !isEnabledCapability(oc, "ImageRegistry") {
+			g.Skip("Skipped: cluster does not have imageRegistry installed")
+		}
+		oc.SetupProject()
+		project76287 := oc.Namespace()
+
+		exutil.By("Set namespace as privileged namespace")
+		exutil.SetNamespacePrivileged(oc, project76287)
+
+		exutil.By("Get all the node name list")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeList := strings.Fields(out)
+
+		exutil.By("Check tools imagestream  with sos command")
+		err = oc.Run("run").Args("testsos76287", "-n", project76287, "--image", "image-registry.openshift-image-registry.svc:5000/openshift/tools", "--restart", "Never", "--", "sos", "help").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Run debug node with sos command")
+		err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("node/"+nodeList[0], "-n", project76287, "--", "sos", "help").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
 })
 
 // ClientVersion ...
