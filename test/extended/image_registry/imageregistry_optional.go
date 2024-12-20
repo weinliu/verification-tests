@@ -77,6 +77,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	g.It("NonHyperShiftHOST-Author:wewang-High-66667-Install Image Registry operator after cluster install successfully", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 		g.By("Check image registry operator installed optionally")
 		if !checkOptionalOperatorInstalled(oc, "ImageRegistry") {
 			g.Skip("Skip for the test due to image registry not installed")

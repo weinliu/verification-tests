@@ -25,6 +25,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:wewang-VMonly-ConnectedOnly-High-36291-OCI image is supported by API server and image registry", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 		var containerCLI = container.NewPodmanCLI()
 		oc.SetupProject()
 		g.By("Import an OCI image to internal registry")
@@ -64,6 +67,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 	)
 	// author: wewang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:wewang-ConnectedOnly-VMonly-High-37498-Push image with OCI format directly to the internal registry", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 		var podmanCLI = container.NewPodmanCLI()
 		containerCLI := podmanCLI
 		ociImage := "quay.io/openshifttest/ociimage:multiarch"
@@ -114,6 +120,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry Vmonly", func() {
 
 	// author: wewang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:wewang-ConnectedOnly-VMonly-Critical-35998-OCI images layers configs can be pruned completely", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 		var podmanCLI = container.NewPodmanCLI()
 		containerCLI := podmanCLI
 		ociImage := "quay.io/openshifttest/ociimage:multiarch"

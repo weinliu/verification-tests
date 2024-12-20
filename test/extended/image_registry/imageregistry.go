@@ -411,6 +411,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:wewang-High-41414-There are 2 replicas for image registry on HighAvailable workers S3/Azure/GCS/Swift storage", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
+
 		g.By("Check image registry pod")
 		// We set registry use pv on openstack&disconnect cluster, the case will fail on this scenario.
 		// Skip all the fs volume test, only run on object storage backend.
@@ -648,6 +652,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: wewang@redhat.com
 	g.It("ARO-Author:wewang-Medium-23583-Registry should not try to pullthrough himself by any name ", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 		g.By("Get server host")
 		routeName1 := getRandomString()
 		routeName2 := getRandomString()
@@ -697,6 +704,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: jitli@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:jitli-ConnectedOnly-Medium-33051-Images can be imported from an insecure registry without 'insecure: true' if it is in insecureRegistries in image.config/cluster [Disruptive]", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 		SkipDnsFailure(oc)
 		var (
 			expectedStatus1 = map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"}
@@ -1798,6 +1808,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Critical-49455-disableRedirect should work when image registry configured object storage", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
+
 		// Skip Hypershift external OIDC clusters against which all test cases run as the same (external) user
 		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2133,6 +2147,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			operationData   prometheusImageregistryOperations
 			storageTypeData prometheusImageregistryStorageType
 		)
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
+
 		// This alert is added back in https://github.com/openshift/cluster-image-registry-operator/pull/1147
 		// g.By("Check no PrometheusRule/image-registry-operator-alerts in registry project")
 		// out, outErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheusrules", "-n", "openshift-image-registry").Output()
@@ -2624,6 +2642,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Low-18994-Copy internal image to another tag via 'oc image mirror'", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 
 		g.By("Get external registry host")
 		routeName := getRandomString()
@@ -2650,6 +2671,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: xiuwang@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-18998-Mirror multiple images to another registry", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 
 		g.By("Check the cluster using architecture")
 		// https://issues.redhat.com/browse/IR-192
@@ -2804,6 +2828,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-High-12958-Read and write image signatures with registry endpoint", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
+
 		// Skip Hypershift external OIDC clusters against which all test cases run as the same (external) user
 		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2909,6 +2937,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Medium-10909-Add/update/remove signatures to the images", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 		// Skip Hypershift external OIDC clusters against which all test cases run as the same (external) user
 		isExternalOIDCCluster, err := exutil.IsExternalOIDCCluster(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -3365,6 +3396,9 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:xiuwang-High-21482-Medium-21926-Set default externalRegistryHostname in image policy config globally[Disruptive]", func() {
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
 		SkipDnsFailure(oc)
 		// OCP-21926: Check function of oc registry info command
 		g.By("Check options for oc registry info")
@@ -3824,6 +3858,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			expectInfo1      = `Successfully pulled image "` + subMan
 			expectInfo2      = `Successfully pulled image "` + internalRegistry + "/" + oc.Namespace() + "/push59415@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f"
 		)
+		if !checkOptionalOperatorInstalled(oc, "Build") {
+			g.Skip("Skip for the test due to Build not installed")
+		}
+
 		// https://docs.openshift.com/container-platform/4.13/networking/enable-cluster-wide-proxy.html#prerequisites
 		// System-wide proxy affects system components only, not user workloads
 		// In proxy cluster, there is no proxy set inside pod, so can't access quay.io inside pod, this causes next steps failed in the case
