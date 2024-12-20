@@ -693,8 +693,9 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("Author:kuiwang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-78193-Runtime validation of container images using sigstore signatures [Disruptive]", func() {
-		if !exutil.IsTechPreviewNoUpgrade(oc) {
-			g.Skip("it depends on clusterimagepolicy which is in TP, so skip it for non TP.")
+		if !exutil.CheckAppearance(oc, 1*time.Second, 1*time.Second, exutil.Immediately,
+			exutil.AsAdmin, exutil.WithoutNamespace, exutil.Appear, "crd", "clusterimagepolicies.config.openshift.io") {
+			g.Skip("skip it because there is no ClusterImagePolicy")
 		}
 		architecture.SkipNonAmd64SingleArch(oc)
 		exutil.SkipForSNOCluster(oc)
@@ -782,8 +783,9 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	// author: kuiwang@redhat.com
 	g.It("Author:kuiwang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-78300-validation of container images using sigstore signatures with different policy [Disruptive]", func() {
-		if !exutil.IsTechPreviewNoUpgrade(oc) {
-			g.Skip("it depends on clusterimagepolicy which is in TP, so skip it for non TP.")
+		if !exutil.CheckAppearance(oc, 1*time.Second, 1*time.Second, exutil.Immediately,
+			exutil.AsAdmin, exutil.WithoutNamespace, exutil.Appear, "crd", "clusterimagepolicies.config.openshift.io") {
+			g.Skip("skip it because there is no ClusterImagePolicy")
 		}
 		exutil.SkipForSNOCluster(oc)
 		var (
