@@ -999,11 +999,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		o.Expect(placementGroupName).Should(o.Equal("pgcluster"))
 	})
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-NonHyperShiftHOST-LEVEL0-Critical-25436-Scale up/scale down the cluster by changing the replicas of the machineSet [Disruptive][Slow]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-LEVEL0-Critical-25436-Scale up/scale down the cluster by changing the replicas of the machineSet [Disruptive][Slow]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.VSphere, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud, clusterinfra.Nutanix, clusterinfra.OpenStack, clusterinfra.Ovirt)
 		g.By("Create a new machineset")
-		machinesetName := infrastructureName + "-25436"
+		machinesetName := infrastructureName + "-25436g"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
 		defer clusterinfra.WaitForMachinesDisapper(oc, machinesetName)
 		defer ms.DeleteMachineSet(oc)
