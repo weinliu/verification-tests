@@ -877,3 +877,13 @@ func compareVersion(version1 string, version2 string) int {
 	}
 	return 0
 }
+
+func getMachineSetNameForOneSepecificNode(oc *exutil.CLI, nodeName string) string {
+	machineNameAnnotation, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.annotations.machine\\.openshift\\.io/machine}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	machineName := strings.Split(machineNameAnnotation, "/")[1]
+	machinesetName, errGet := oc.AsAdmin().WithoutNamespace().Run("get").Args("machine/"+machineName, "-n", "openshift-machine-api", "-o=jsonpath={.metadata.labels.machine\\.openshift\\.io/cluster-api-machineset}").Output()
+	o.Expect(errGet).NotTo(o.HaveOccurred())
+	o.Expect(machinesetName).NotTo(o.Equal(""))
+	return machinesetName
+}

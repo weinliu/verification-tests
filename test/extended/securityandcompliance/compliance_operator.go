@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -5016,9 +5017,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("Author:xiyuan-NonHyperShiftHOST-Longduration-CPaasrunOnly-NonPreRelease-High-71274-High-41010-Verify the autoremediations works for ocp4-moderate ocp4-moderate-node and rhcos4-moderate profiles [Disruptive][Slow]", func() {
-		g.By("Check if cluster is Etcd Encryption On")
+	g.It("Author:xiyuan-NonHyperShiftHOST-Longduration-CPaasrunOnly-NonPreRelease-High-71274-High-41010-High-40296-Verify the autoremediations works for ocp4-moderate ocp4-moderate-node and rhcos4-moderate profiles, and scaleup nodes works[Disruptive][Slow]", func() {
+		g.By("Skip test if precondition not matched")
 		skipEtcdEncryptionOff(oc)
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.VSphere, clusterinfra.IBMCloud, clusterinfra.AlibabaCloud, clusterinfra.Nutanix, clusterinfra.OpenStack, clusterinfra.Ovirt)
 
 		var (
 			ss = scanSettingDescription{
@@ -5167,6 +5170,27 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		if !strings.Contains(result, "No resources found") {
 			e2e.Failf("%s is NOT expected result for the final result", result)
 		}
+
+		g.By("Find the machineset for the node and set ther deletePolicy to Newest")
+		nodeName := getOneWorkerNodeName(oc)
+		machinesetName := getMachineSetNameForOneSepecificNode(oc, nodeName)
+		defer func() {
+			g.By("Recover the default daemonResourceRequirements.. !!!\n")
+			patchRecover := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/deletePolicy\"}]")
+			patchResource(oc, asAdmin, withoutNamespace, "machineset", machinesetName, "--type", "json", "--patch", patchRecover, "-n", "openshift-machine-api")
+		}()
+		patch := fmt.Sprintf("{\"spec\":{\"deletePolicy\":\"Newest\"}}")
+		patchResource(oc, asAdmin, withoutNamespace, "machineset", machinesetName, "--type", "merge", "--patch", patch, "-n", "openshift-machine-api")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Newest", ok, []string{"machineset", machinesetName, "-n", "openshift-machine-api",
+			"-o=jsonpath={.spec.deletePolicy}"}).check(oc)
+
+		g.By("Scale up the machineset")
+		readyReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("machineset", machinesetName, "-o=jsonpath={.status.readyReplicas}", "-n", "openshift-machine-api").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		readyReplicasInt, err := strconv.Atoi(string(readyReplicas))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer clusterinfra.ScaleMachineSet(oc, machinesetName, readyReplicasInt)
+		clusterinfra.ScaleMachineSet(oc, machinesetName, readyReplicasInt+1)
 	})
 
 	// author: pdhamdhe@redhat.com
