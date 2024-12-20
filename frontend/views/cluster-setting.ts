@@ -7,7 +7,7 @@ export const ClusterSettingPage = {
   goToClusterSettingConfiguration: () => cy.visit('/settings/cluster/globalconfig'),
   goToConsolePlugins: () => {
     cy.visit('/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins');
-    cy.wait(30000);
+    cy.wait(10000);
     cy.get('tbody tr', {timeout: 30000});
   },
   clickToClustSettingDetailTab: () => cy.get('[data-test-id="horizontal-link-Details"]').click(),
@@ -56,7 +56,7 @@ export const ClusterSettingPage = {
     cy.get(`a[data-test="${plugin_name}"]`).parent().parent().parent('tr').within(() => {
       cy.get('button[data-test="edit-console-plugin"]').click({force: true});
     });
-    cy.get(`input[data-test="${toggle_action}-radio-input"]`).click({force: true});
-    cy.get('button[data-test="confirm-action"]').click({force: true});
+    cy.get(`form input[data-test="${toggle_action}-radio-input"]`).click({force: true});
+    cy.get('form button[data-test="confirm-action"]').click({force: true});
   }
 }

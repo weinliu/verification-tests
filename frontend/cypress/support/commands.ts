@@ -27,6 +27,9 @@ declare global {
             cliLoginAzureExternalOIDC();
             uiLoginAzureExternalOIDC();
             uiLogoutAzureExternalOIDC();
+            consoleBeforeUpdate();
+            retryQueryConsole();
+            waitNewConsoleReady();
         }
     }
 }
@@ -34,7 +37,7 @@ declare global {
 const kubeconfig = Cypress.env('KUBECONFIG_PATH');
 const DEFAULT_RETRY_OPTIONS = { retries: 3, interval: 10000 };
 let $cmexisting = 0, cm_has_been_updated = false;
-
+var console_generation_before_update;
 
 Cypress.Commands.add("switchPerspective", (perspective: string) => {
 
@@ -431,4 +434,44 @@ Cypress.Commands.add("isIPICluster", () => {
       return cy.wrap(false);
     }
   });
+});
+
+Cypress.Commands.add("consoleBeforeUpdate", () => {
+  return cy.exec(`oc get deployment console -n openshift-console -o jsonpath='{.metadata.generation}' --kubeconfig ${kubeconfig}`).then((result) => {
+    console_generation_before_update = result.stdout;
+    cy.log(`generation before update is ${console_generation_before_update}`);
+    return;
+  });
+});
+
+Cypress.Commands.add('retryQueryConsole', () => {
+  const [ retries, retry_interval] = [6, 15000];
+  const command = `oc get deployment console -n openshift-console -o jsonpath='{.metadata.generation},{.spec.replicas},{.status.readyReplicas}' --kubeconfig ${kubeconfig}`;
+  const retryTaskFn = (currentRetries) => {
+    return cy.exec(command)
+      .then(result => {
+        const [ current_generation, replicas, ready_replicas ] = result.stdout.split(',');
+        cy.log(`3 vars ${current_generation} ${replicas} ${ready_replicas}`);
+        if (current_generation > console_generation_before_update && replicas == ready_replicas) {
+          return cy.wrap(true);
+        } else if (currentRetries < retries) {
+          return cy.wait(retry_interval).then(() => retryTaskFn(currentRetries + 1));
+        } else {
+          return cy.wrap(false);
+        }
+      });
+  };
+  return retryTaskFn(0);
+});
+
+Cypress.Commands.add("waitNewConsoleReady", () => {
+  return cy.retryQueryConsole()
+    .then(conditionMet =>{
+      if (conditionMet) {
+        return;
+      } else {
+        throw new Error(`new console not ready`);
+      }
+    })
+
 });

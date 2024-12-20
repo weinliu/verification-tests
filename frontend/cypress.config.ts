@@ -109,6 +109,7 @@ export default defineConfig({
     testIsolation: false,
     experimentalModifyObstructiveThirdPartyCode: true,
     experimentalOriginDependencies: true,
-    experimentalMemoryManagement: true
+    experimentalMemoryManagement: true,
+    experimentalCspAllowList: ['default-src', 'script-src']
   },
 })
