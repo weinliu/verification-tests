@@ -330,7 +330,9 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			expectedRpmInstalledPackages = []string{"usbguard", "krb5-workstation", "libkadm5", "kernel-devel", "kernel-headers",
 				"kata-containers", "NetworkManager-libreswan", "libreswan", "crun-wasm", "sysstat"}
 
+			skipDrainChecks         = IsSNO(oc.AsAdmin()) // SNO clusters should NOT drain the nodes before rebooting them. The validator is not prepared for that.
 			behaviourValidatorApply = UpdateBehaviourValidator{
+				SkipDrainNodesValidation: skipDrainChecks,
 				Checkers: []Checker{
 					CommandOutputChecker{
 						Command:  append([]string{"rpm", "-q"}, expectedRpmInstalledPackages...),
@@ -342,6 +344,7 @@ var _ = g.Describe("[sig-mco] MCO", func() {
 			}
 		)
 
+		coreOSMcp.SetWaitingTimeForExtensionsChange()
 		behaviourValidatorApply.Initialize(coreOSMcp, nil)
 
 		exutil.By("Create a MC to install all available extensions")
