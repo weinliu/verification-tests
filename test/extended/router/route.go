@@ -93,8 +93,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("1.0: Deploy a project with single pod and the service")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
 		output, err := oc.Run("get").Args("service").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(unSecSvcName))
@@ -358,11 +357,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		baseDomain := getBaseDomain(oc)
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
 		createResourceFromFile(oc, project1, clientPod)
-		err1 := waitForPodWithLabelReady(oc, project1, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err1, "A client pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 
 		exutil.By("2. Create a passthrough route in the project")
 		createRoute(oc, project1, "passthrough", "mypass", "service-secure", []string{})
@@ -432,8 +429,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("1.0: Deploy a project with single pod and the service")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project1, "name=httpbin-pod")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=httpbin-pod Ready status not met")
+		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
 
 		exutil.By("2.0: Create a passthrough route")
 		routeName := "route-passthrough11635"
@@ -468,8 +464,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("1.0: Deploy a project with single pod and the service")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project1, "name=httpbin-pod")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=httpbin-pod Ready status not met")
+		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
 		output, err := oc.Run("get").Args("service").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(insecureSvcName))
@@ -604,8 +599,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		project1 := oc.Namespace()
 		routerpod := getNewRouterPod(oc, "default")
 		createResourceFromFile(oc, project1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
 
 		exutil.By("2.0: Create an unsecure, route")
 		unsecureRoute := "route-unsecure"
@@ -721,8 +715,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("1.0: Deploy a project with single pod and the service")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		ensurePodWithLabelReady(oc, project1, "name="+srvrcInfo)
 		output, err := oc.Run("get").Args("service").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(unSecSvcName))
@@ -767,8 +760,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("1.0: Deploy a project with single pod and 3 services")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		ensurePodWithLabelReady(oc, project1, "name="+srvrcInfo)
 		output, err := oc.Run("get").Args("service").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.And(o.ContainSubstring(unSecSvcName), o.ContainSubstring("service-secure")))
@@ -833,7 +825,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: aiyengar@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:aiyengar-Medium-42230-route can be configured to whitelist more than 61 ips/CIDRs", func() {
+	g.It("Author:aiyengar-ROSA-OSD_CCS-ARO-Medium-42230-route can be configured to whitelist more than 61 ips/CIDRs", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			output              string
@@ -842,12 +834,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("create project, pod, svc resources")
 		oc.SetupProject()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
 
 		exutil.By("expose a service in the project")
 		createRoute(oc, oc.Namespace(), "http", "service-unsecure", "service-unsecure", []string{})
-		output, err = oc.Run("get").Args("route").Output()
+		output, err := oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("service-unsecure"))
 
@@ -880,7 +871,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-High-45399-ingress controller continue to function normally with unexpected high timeout value", func() {
+	g.It("Author:mjoseph-ROSA-OSD_CCS-ARO-High-45399-ingress controller continue to function normally with unexpected high timeout value", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			output              string
@@ -889,12 +880,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("create project, pod, svc resources")
 		oc.SetupProject()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		err := waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
 
 		exutil.By("expose a service in the project")
 		createRoute(oc, oc.Namespace(), "http", "service-secure", "service-secure", []string{})
-		output, err = oc.Run("get").Args("route").Output()
+		output, err := oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("service-secure"))
 
@@ -929,7 +919,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-High-49802-HTTPS redirect happens even if there is a more specific http-only", func() {
+	g.It("Author:mjoseph-ROSA-OSD_CCS-ARO-High-49802-HTTPS redirect happens even if there is a more specific http-only", func() {
 		// curling through default controller will not work for proxy cluster.
 		if checkProxy(oc) {
 			g.Skip("This is proxy cluster, skip the test.")
@@ -948,8 +938,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		baseDomain := getBaseDomain(oc)
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=hello-pod, Ready status not met")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
 		podName := getPodListByLabel(oc, project1, "name=web-server-rc")
 		defaultContPod := getNewRouterPod(oc, "default")
 
@@ -1135,7 +1124,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		searchInDescribeResource(oc, "node", infraNode, "canary")
 	})
 
-	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-Medium-63004-Ipv6 addresses are also acceptable for whitelisting", func() {
+	g.It("Author:mjoseph-ROSA-OSD_CCS-ARO-Medium-63004-Ipv6 addresses are also acceptable for whitelisting", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			output              string
@@ -1145,12 +1134,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("Create a server pod")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
 
 		exutil.By("expose a service in the project")
 		createRoute(oc, project1, "http", "service-unsecure", "service-unsecure", []string{})
-		output, err = oc.Run("get").Args("route").Output()
+		output, err := oc.Run("get").Args("route").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("service-unsecure"))
 
@@ -1368,8 +1356,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		project1 := oc.Namespace()
 		routerpod := getNewRouterPod(oc, "default")
 		srvPodList := createResourceFromWebServer(oc, project1, testPod, "web-server-rc")
-		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
 
 		exutil.By("2.0: Create an unsecure route")
 		unsecureRoute := "route-unsecure"
@@ -1430,8 +1417,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		project1 := oc.Namespace()
 		routerpod := getNewRouterPod(oc, "default")
 		srvPodList := createResourceFromWebServer(oc, project1, testPod, "web-server-rc")
-		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc Ready status not met")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
 
 		exutil.By("2.0: Create an edge route")
 		edgeRoute := "route-edge"

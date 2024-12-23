@@ -370,8 +370,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		replaceCoreDnsImage(oc, coreDNSSrvPod)
 		err := oc.AsAdmin().Run("create").Args("-f", coreDNSSrvPod, "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitForPodWithLabelReady(oc, project1, srvPodLabel)
-		exutil.AssertWaitPollNoErr(err, "The user coreDNS pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, srvPodLabel)
 
 		exutil.By("get the user's dns server pod's IP")
 		srvPodIP := getPodv4Address(oc, srvPodName, project1)
@@ -388,8 +387,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 
 		exutil.By("create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
-		err = waitForPodWithLabelReady(oc, project1, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 
 		exutil.By("Let client send out SERVFAIL nslookup to the dns server, and check the desired SERVFAIL logs from a coredns pod")
 		output := nslookupsAndWaitForDNSlog(oc, cltPodName, failedDNSReq, podList, failedDNSReq+".")
@@ -413,7 +411,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 	})
 
 	// Bug: 1949361, 1884053, 1756344
-	g.It("NonHyperShiftHOST-Author:mjoseph-High-55821-Check CoreDNS default bufsize, readinessProbe path and policy", func() {
+	g.It("Author:mjoseph-NonHyperShiftHOST-High-55821-Check CoreDNS default bufsize, readinessProbe path and policy", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
@@ -433,8 +431,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 
 		exutil.By("Create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
-		err1 := waitForPodWithLabelReady(oc, project1, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err1, "A client pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 
 		exutil.By("Client send out a dig for google.com to check response")
 		digOutput, err2 := oc.Run("exec").Args(cltPodName, "--", "dig", "google.com").Output()
@@ -534,8 +531,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		exutil.By("deploy a project, a backend pod and its services resources")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project1, "name=web-server-v4v6rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-v4v6rc, Ready status not met")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-v4v6rc")
 		srvPod := getPodListByLabel(oc, project1, "name=web-server-v4v6rc")[0]
 
 		exutil.By("check the services v4v6 addresses")
@@ -679,8 +675,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 
 		exutil.By("Create a pod with 32 DNS search list")
 		createResourceFromFile(oc, project1, clientPod)
-		err1 := waitForPodWithLabelReady(oc, project1, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err1, "A client pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 
 		exutil.By("Check the pod event logs and confirm there is no Search Line limits")
 		checkPodEvent := describePodResource(oc, cltPodName, project1)
@@ -703,8 +698,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 
 		exutil.By("Create a pod with a single search path with 253 characters")
 		createResourceFromFile(oc, project1, clientPod)
-		err1 := waitForPodWithLabelReady(oc, project1, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err1, "A client pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 
 		exutil.By("Check the pod event logs and confirm there is no Search Line limits")
 		checkPodEvent := describePodResource(oc, cltPodName, project1)
@@ -716,7 +710,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(execOutput).To(o.ContainSubstring("t47x6d4lzz1zxm1bakrmiceb0tljzl9n8r19kqu9s3731ectkllp9mezn7cldozt25nlenyh5jus5b9rr687u2icimakjpyf4rsux3c66giulc0d2ipsa6bpa6dykgd0mc25r1m89hvzjcix73sdwfbu5q67t0c131i1fqne0o7we20ve2emh1046h9m854wfxo0spb2gv5d65v9x2ibuiti7rhr2y8u72hil5cutp63sbhi832kf3v4vuxa0"))
 	})
 
-	g.It("NonHyperShiftHOST-Author:mjoseph-Critical-51536-Support CoreDNS forwarding DNS requests over TLS using ForwardPlugin [Disruptive]", func() {
+	g.It("Author:mjoseph-NonHyperShiftHOST-Critical-51536-Support CoreDNS forwarding DNS requests over TLS using ForwardPlugin [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			cmFile              = filepath.Join(buildPruningBaseDir, "ca-bundle.pem")
@@ -737,8 +731,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		replaceCoreDnsImage(oc, coreDNSSrvPod)
 		err := oc.AsAdmin().Run("create").Args("-f", coreDNSSrvPod, "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitForPodWithLabelReady(oc, project1, srvPodLabel)
-		exutil.AssertWaitPollNoErr(err, "The user coreDNS pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, srvPodLabel)
 
 		exutil.By("3.Get the user's dns server pod's IP")
 		srvPodIP := getPodv4Address(oc, srvPodName, project1)
@@ -765,7 +758,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(podLogs).To(o.ContainSubstring(`msg="reconciling request: /default"`))
 	})
 
-	g.It("NonHyperShiftHOST-Author:mjoseph-Low-51857-Support CoreDNS forwarding DNS requests over TLS - non existing CA bundle [Disruptive]", func() {
+	g.It("Author:mjoseph-NonHyperShiftHOST-Low-51857-Support CoreDNS forwarding DNS requests over TLS - non existing CA bundle [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			coreDNSSrvPod       = filepath.Join(buildPruningBaseDir, "coreDNS-pod.yaml")
@@ -785,8 +778,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		replaceCoreDnsImage(oc, coreDNSSrvPod)
 		err := oc.AsAdmin().Run("create").Args("-f", coreDNSSrvPod, "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitForPodWithLabelReady(oc, project1, srvPodLabel)
-		exutil.AssertWaitPollNoErr(err, "The user coreDNS pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, srvPodLabel)
 
 		exutil.By("3.Get the user's dns server pod's IP")
 		srvPodIP := getPodv4Address(oc, srvPodName, project1)
@@ -811,7 +803,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(podLogs1).To(o.ContainSubstring(`level=warning msg="failed to get destination ca bundle configmap ca-ca-51857-bundle: configmaps \"ca-ca-51857-bundle\" not found"`))
 	})
 
-	g.It("NonHyperShiftHOST-Author:mjoseph-Critical-51946-Support CoreDNS forwarding DNS requests over TLS using UpstreamResolvers [Disruptive]", func() {
+	g.It("Author:mjoseph-NonHyperShiftHOST-Critical-51946-Support CoreDNS forwarding DNS requests over TLS using UpstreamResolvers [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			coreDNSSrvPod       = filepath.Join(buildPruningBaseDir, "coreDNS-pod.yaml")
@@ -837,8 +829,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		replaceCoreDnsImage(oc, coreDNSSrvPod)
 		err := oc.AsAdmin().Run("create").Args("-f", coreDNSSrvPod, "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitForPodWithLabelReady(oc, project1, srvPodLabel)
-		exutil.AssertWaitPollNoErr(err, "The user coreDNS pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, srvPodLabel)
 		srvPodIP := getPodv4Address(oc, srvPodName, project1)
 
 		exutil.By("3.Generate a new self-signed CA")
@@ -872,8 +863,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		// since new configmap is mounted so dns pod is restarted
 		waitErr := waitForResourceToDisappear(oc, ns, "pod/"+oneDnsPod)
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but pod %s is not terminated", oneDnsPod))
-		waitErr = waitForPodWithLabelReady(oc, ns, dnsPodLabel)
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but no dns pod ready"))
+		ensurePodWithLabelReady(oc, ns, dnsPodLabel)
 		newDnsPod := getDNSPodName(oc)
 		upstreams := readDNSCorefile(oc, newDnsPod, srvPodIP, "-A4")
 		o.Expect(upstreams).To(o.ContainSubstring("forward . tls://" + srvPodIP + ":853"))
@@ -887,7 +877,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(podLogs).To(o.ContainSubstring(`msg="reconciling request: /default"`))
 	})
 
-	g.It("NonHyperShiftHOST-Author:mjoseph-High-52077-CoreDNS forwarding DNS requests over TLS with CLEAR TEXT [Disruptive]", func() {
+	g.It("Author:mjoseph-NonHyperShiftHOST-High-52077-CoreDNS forwarding DNS requests over TLS with CLEAR TEXT [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			coreDNSSrvPod       = filepath.Join(buildPruningBaseDir, "coreDNS-pod.yaml")
@@ -907,8 +897,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		replaceCoreDnsImage(oc, coreDNSSrvPod)
 		err := oc.AsAdmin().Run("create").Args("-f", coreDNSSrvPod, "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitForPodWithLabelReady(oc, project1, srvPodLabel)
-		exutil.AssertWaitPollNoErr(err, "The user coreDNS pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, srvPodLabel)
 
 		exutil.By("3.Get the user's dns server pod's IP")
 		srvPodIP := getPodv4Address(oc, srvPodName, project1)
@@ -950,7 +939,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(podLogs).To(o.ContainSubstring(`msg="reconciling request: /default"`))
 	})
 
-	g.It("NonHyperShiftHOST-Author:mjoseph-High-52497-Support CoreDNS forwarding DNS requests over TLS - using system CA [Disruptive]", func() {
+	g.It("Author:mjoseph-NonHyperShiftHOST-High-52497-Support CoreDNS forwarding DNS requests over TLS - using system CA [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			coreDNSSrvPod       = filepath.Join(buildPruningBaseDir, "coreDNS-pod.yaml")
@@ -970,8 +959,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		replaceCoreDnsImage(oc, coreDNSSrvPod)
 		err := oc.AsAdmin().Run("create").Args("-f", coreDNSSrvPod, "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitForPodWithLabelReady(oc, project1, srvPodLabel)
-		exutil.AssertWaitPollNoErr(err, "The user coreDNS pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, srvPodLabel)
 
 		exutil.By("3.Get the user's dns server pod's IP")
 		srvPodIP := getPodv4Address(oc, srvPodName, project1)
@@ -1086,8 +1074,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 
 		exutil.By("2. Create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
-		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 
 		exutil.By("3. Verify the record created with the dns name in the DNSNameResolver CR")
 		wildcardDnsName := getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..spec.name}")
@@ -1134,8 +1121,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 			exutil.SetNamespacePrivileged(oc, project[i])
 			operateResourceFromFile(oc, "create", project[i], clientPod)
 			operateResourceFromFile(oc, "create", project[i], egressFirewall)
-			err := waitForPodWithLabelReady(oc, project[i], cltPodLabel)
-			exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+			ensurePodWithLabelReady(oc, project[i], cltPodLabel)
 			waitEgressFirewallApplied(oc, "default", project[i])
 			oc.SetupProject()
 		}
@@ -1200,8 +1186,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		operateResourceFromFile(oc, "create", project5, egressFirewall2)
 		waitEgressFirewallApplied(oc, "default", project5)
 		operateResourceFromFile(oc, "create", project5, clientPod)
-		err := waitForPodWithLabelReady(oc, project5, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project5, cltPodLabel)
 
 		exutil.By("8. Verify the  three dnsnameresolver records created in DNSNameResolver CR")
 		wildcardDnsNames := getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..spec.name}")

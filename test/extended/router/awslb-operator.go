@@ -1,7 +1,6 @@
 package router
 
 import (
-	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -59,8 +58,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ALBO should", func
 		)
 
 		g.By("Ensure the operartor pod is ready")
-		waitErr := waitForPodWithLabelReady(oc, operatorNamespace, operatorPodLabel)
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the aws-load-balancer-operator pod is not ready"))
+		ensurePodWithLabelReady(oc, operatorNamespace, operatorPodLabel)
 
 		g.By("Create CR AWSLoadBalancerController")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("awsloadbalancercontroller", operandCRName).Output()
@@ -69,8 +67,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ALBO should", func
 		if exutil.IsSTSCluster(oc) {
 			patchAlbControllerWithRoleArn(oc, operatorNamespace)
 		}
-		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandPodLabel)
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the aws-load-balancer controller pod is not ready"))
+		ensurePodWithLabelReady(oc, operatorNamespace, operandPodLabel)
 	})
 
 	// author: hongli@redhat.com
@@ -85,8 +82,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ALBO should", func
 		)
 
 		g.By("Ensure the operartor pod is ready")
-		waitErr := waitForPodWithLabelReady(oc, operatorNamespace, operatorPodLabel)
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the aws-load-balancer-operator pod is not ready"))
+		ensurePodWithLabelReady(oc, operatorNamespace, operatorPodLabel)
 
 		g.By("Create CR AWSLoadBalancerController")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("awsloadbalancercontroller", operandCRName).Output()
@@ -95,14 +91,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ALBO should", func
 		if exutil.IsSTSCluster(oc) {
 			patchAlbControllerWithRoleArn(oc, operatorNamespace)
 		}
-		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandPodLabel)
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the aws-load-balancer controller pod is not ready"))
+		ensurePodWithLabelReady(oc, operatorNamespace, operandPodLabel)
 
 		g.By("Create user project, pod and NodePort service")
 		oc.SetupProject()
 		createResourceFromFile(oc, oc.Namespace(), podsvc)
-		waitErr = waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server")
-		exutil.AssertWaitPollNoErr(waitErr, "the pod web-server is not ready")
+		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server")
 
 		g.By("create ingress with alb annotation in the project and ensure the alb is provsioned")
 		// need to ensure the ingress is deleted before deleting the CR AWSLoadBalancerController

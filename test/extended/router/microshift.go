@@ -75,8 +75,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("create a web-server-rc pod and its services")
 		defer operateResourceFromFile(oc, "delete", e2eTestNamespace, testPodSvc)
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
-		err := waitForPodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
+		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
 		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-rc")
 		ingressPod := getRouterPod(oc, "default")
 
@@ -193,8 +192,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("create a web-server-rc pod and its services")
 		defer operateResourceFromFile(oc, "delete", e2eTestNamespace, testPodSvc)
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
-		err := waitForPodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
+		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
 		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-rc")
 		ingressPod := getRouterPod(oc, "default")
 
@@ -220,7 +218,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_http:" + e2eTestNamespace + ":" + routeNames[0]))
 	})
 
-	g.It("MicroShiftOnly-Author:shudili-High-72802-make router namespace ownership check configurable for the default microshift configuration", func() {
+	g.It("Author:shudili-MicroShiftOnly-High-72802-make router namespace ownership check configurable for the default microshift configuration", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
@@ -254,24 +252,20 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 
 		exutil.By("3. create a client pod, a server pod and two services in one ns")
 		createResourceFromFile(oc, e2eTestNamespace1, clientPod)
-		err := waitForPodWithLabelReady(oc, e2eTestNamespace1, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time in the first ns!")
+		ensurePodWithLabelReady(oc, e2eTestNamespace1, cltPodLabel)
 
 		createResourceFromFile(oc, e2eTestNamespace1, testPodSvc)
-		err = waitForPodWithLabelReady(oc, e2eTestNamespace1, "name="+srvrcInfo)
-		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the first ns!")
+		ensurePodWithLabelReady(oc, e2eTestNamespace1, "name="+srvrcInfo)
 
 		exutil.By("4. create a server pod and two services in the other ns")
 		createResourceFromFile(oc, e2eTestNamespace2, clientPod)
-		err = waitForPodWithLabelReady(oc, e2eTestNamespace2, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time in the second ns!")
+		ensurePodWithLabelReady(oc, e2eTestNamespace2, cltPodLabel)
 
 		createResourceFromFile(oc, e2eTestNamespace2, testPodSvc)
-		err = waitForPodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
-		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the second ns!")
+		ensurePodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
 
 		exutil.By("5. expose an insecure/edge/REEN type routes with path " + path1 + " in the first ns")
-		err = oc.Run("expose").Args("service", unSecSvcName, "--hostname="+httpRoutehost, "--path="+path1, "-n", e2eTestNamespace1).Execute()
+		err := oc.Run("expose").Args("service", unSecSvcName, "--hostname="+httpRoutehost, "--path="+path1, "-n", e2eTestNamespace1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForOutput(oc, e2eTestNamespace1, "route", "{.items[0].metadata.name}", unSecSvcName)
 
@@ -347,7 +341,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		o.Expect(result).To(o.ContainSubstring("Hello-OpenShift-Path-Test " + srvPodName[0] + " http-8080"))
 	})
 
-	g.It("MicroShiftOnly-Author:shudili-NonPreRelease-Longduration-Medium-73621-Disable/Enable namespace ownership support for router [Disruptive]", func() {
+	g.It("Author:shudili-MicroShiftOnly-NonPreRelease-Longduration-Medium-73621-Disable/Enable namespace ownership support for router [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
@@ -406,13 +400,11 @@ fi
 
 		exutil.By("3. create a server pod and the services in one ns")
 		createResourceFromFile(oc, e2eTestNamespace1, testPodSvc)
-		err = waitForPodWithLabelReady(oc, e2eTestNamespace1, "name="+srvrcInfo)
-		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the first ns!")
+		ensurePodWithLabelReady(oc, e2eTestNamespace1, "name="+srvrcInfo)
 
 		exutil.By("4. create a server pod and the services in the other ns")
 		createResourceFromFile(oc, e2eTestNamespace2, testPodSvc)
-		err = waitForPodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
-		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the second ns!")
+		ensurePodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
 
 		exutil.By("5. create a route with path " + path1 + " in the first ns")
 		extraParas := []string{"--hostname=" + httpRouteHost, "--path=" + path1}

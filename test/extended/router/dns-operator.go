@@ -80,8 +80,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment.apps/dns-operator", "--replicas=1", "-n", "openshift-dns-operator").Output()
 		// wait for the dns operator pod to come up
-		errPodRdy := waitForPodWithLabelReady(oc, "openshift-dns-operator", "name=dns-operator")
-		exutil.AssertWaitPollNoErr(errPodRdy, fmt.Sprintf("dns-operator pod isn't ready"))
+		ensurePodWithLabelReady(oc, "openshift-dns-operator", "name=dns-operator")
 
 		exutil.By("Step3: Confirm the new dns service came with the given address")
 		newClusterIp := getByJsonPath(oc, "openshift-dns", "service/svc-37912", "{.spec.clusterIP}")
@@ -198,7 +197,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 
 	// author: shudili@redhat.com
 	// no dns operator namespace on HyperShift guest cluster so this case is not available
-	g.It("NonHyperShiftHOST-Author:shudili-Medium-46873-Configure operatorLogLevel under the default dns operator and check the logs flag [Disruptive]", func() {
+	g.It("Author:shudili-NonHyperShiftHOST-Medium-46873-Configure operatorLogLevel under the default dns operator and check the logs flag [Disruptive]", func() {
 		var (
 			resourceName        = "dns.operator.openshift.io/default"
 			cfgOploglevelDebug  = "[{\"op\":\"replace\", \"path\":\"/spec/operatorLogLevel\", \"value\":\"Debug\"}]"
@@ -219,8 +218,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(errDelpod).NotTo(o.HaveOccurred())
 		errPodDis := waitForResourceToDisappear(oc, "openshift-dns-operator", "pod/"+dnsOperatorPodName)
 		exutil.AssertWaitPollNoErr(errPodDis, fmt.Sprintf("the dns-operator pod isn't terminated"))
-		errPodRdy := waitForPodWithLabelReady(oc, "openshift-dns-operator", "name=dns-operator")
-		exutil.AssertWaitPollNoErr(errPodRdy, fmt.Sprintf("dns-operator pod isn't ready"))
+		ensurePodWithLabelReady(oc, "openshift-dns-operator", "name=dns-operator")
 
 		exutil.By("Patch dns operator with operator logLevel Debug")
 		patchGlobalResourceAsAdmin(oc, resourceName, cfgOploglevelDebug)

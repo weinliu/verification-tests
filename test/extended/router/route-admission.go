@@ -16,7 +16,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	var oc = exutil.NewCLI("router-admission", exutil.KubeConfigPath())
 
 	// Test case creater: hongli@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-Critical-27594-Set namespaceOwnership of routeAdmission to InterNamespaceAllowed", func() {
+	g.It("Author:mjoseph-ROSA-OSD_CCS-ARO-Critical-27594-Set namespaceOwnership of routeAdmission to InterNamespaceAllowed", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
@@ -57,13 +57,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("4. Create a server pod and an unsecure service in one ns")
 		createResourceFromFile(oc, e2eTestNamespace1, testPodSvc)
-		err = waitForPodWithLabelReady(oc, e2eTestNamespace1, "name="+srvrcInfo)
-		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the first ns!")
+		ensurePodWithLabelReady(oc, e2eTestNamespace1, "name="+srvrcInfo)
 
 		exutil.By("5. Create a server pod and an unsecure service in the other ns")
 		operateResourceFromFile(oc, "create", e2eTestNamespace2, testPodSvc)
-		err = waitForPodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
-		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the second ns!")
+		ensurePodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
 
 		exutil.By("6. Expose a http route with path " + path1 + " in the first ns")
 		err = oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "--path="+path1, "-n", e2eTestNamespace1).Execute()
@@ -87,7 +85,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// Test case creater: hongli@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-Critical-27595-Set namespaceOwnership of routeAdmission to Strict", func() {
+	g.It("Author:mjoseph-ROSA-OSD_CCS-ARO-Critical-27595-Set namespaceOwnership of routeAdmission to Strict", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
@@ -111,11 +109,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("3. Create a server pod and an unsecure service in one ns")
 		createResourceFromFile(oc, e2eTestNamespace1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, e2eTestNamespace1, "name="+srvrcInfo)
-		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the first ns!")
+		ensurePodWithLabelReady(oc, e2eTestNamespace1, "name="+srvrcInfo)
 
 		exutil.By("4. Create a reen route with path " + path1 + " in the first ns")
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("route", "reencrypt", "route-reen", "--service=service-secure", "--hostname="+routehost, "--path="+path1, "-n", e2eTestNamespace1).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("route", "reencrypt", "route-reen", "--service=service-secure", "--hostname="+routehost, "--path="+path1, "-n", e2eTestNamespace1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		getRoutes(oc, e2eTestNamespace1)
 		waitForOutput(oc, e2eTestNamespace1, "route", "{.items[0].metadata.name}", "route-reen")
@@ -125,8 +122,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_secure:" + e2eTestNamespace1 + ":route-reen"))
 		exutil.By("6. Create a server pod and an unsecure service in the other ns")
 		operateResourceFromFile(oc, "create", e2eTestNamespace2, testPodSvc)
-		err = waitForPodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
-		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time in the second ns!")
+		ensurePodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
 
 		exutil.By("7. Create a http route with the same hostname, but with different path " + path2 + " in the second ns")
 		err = oc.AsAdmin().WithoutNamespace().Run("expose").Args("service", "service-unsecure", "--hostname="+routehost, "--path="+path2, "-n", e2eTestNamespace2).Execute()
@@ -195,7 +191,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// Test case creater: hongli@redhat.com
-	g.It("NonHyperShiftHOST-Author:mjoseph-Critical-30190-Set wildcardPolicy of routeAdmission to WildcardsAllowed", func() {
+	g.It("Author:mjoseph-NonHyperShiftHOST-Critical-30190-Set wildcardPolicy of routeAdmission to WildcardsAllowed", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
@@ -229,8 +225,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("3. Create a server pod and an unsecure service")
 		createResourceFromFile(oc, project1, testPodSvc)
-		err = waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
 
 		exutil.By("4. Expose a http wildcard route")
 		err = oc.WithoutNamespace().Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1, "--wildcard-policy=Subdomain").Execute()
@@ -254,7 +249,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 	// Test case creater: hongli@redhat.com
 	// For OCP-30191 and OCP-30192
-	g.It("NonHyperShiftHOST-Author:mjoseph-Medium-30191-Set wildcardPolicy of routeAdmission to WildcardsDisallowed", func() {
+	g.It("Author:mjoseph-NonHyperShiftHOST-Medium-30191-Set wildcardPolicy of routeAdmission to WildcardsDisallowed", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
@@ -282,11 +277,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("3. Create a server pod and an unsecure service")
 		createResourceFromFile(oc, project1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
 
 		exutil.By("4. Expose a http wildcard route")
-		err = oc.WithoutNamespace().Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1, "--wildcard-policy=Subdomain").Execute()
+		err := oc.WithoutNamespace().Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1, "--wildcard-policy=Subdomain").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		getRoutes(oc, project1)
 

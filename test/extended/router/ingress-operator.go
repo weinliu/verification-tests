@@ -521,7 +521,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: shudili@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:shudili-NonPreRelease-Medium-60012-matchExpressions for routeSelector defined in an ingress-controller", func() {
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-NonPreRelease-Medium-60012-matchExpressions for routeSelector defined in an ingress-controller", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -548,11 +548,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		project1 := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, project1)
 		createResourceFromFile(oc, project1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
-		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, "name="+srvrcInfo)
 
 		exutil.By("Create 4 routes for the testing")
-		err = oc.WithoutNamespace().Run("expose").Args("service", srvName, "--name=unsrv-1", "-n", project1).Execute()
+		err := oc.WithoutNamespace().Run("expose").Args("service", srvName, "--name=unsrv-1", "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.WithoutNamespace().Run("expose").Args("service", srvName, "--name=unsrv-2", "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -632,7 +631,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: shudili@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-NonPreRelease-Author:shudili-Medium-60013-matchExpressions for namespaceSelector defined in an ingress-controller", func() {
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-NonPreRelease-Medium-60013-matchExpressions for namespaceSelector defined in an ingress-controller", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -675,8 +674,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		}
 		for indexWt, nsWt := range []string{project1, project2, project3, project4} {
 			nsSeqWt := indexWt + 1
-			err := waitForPodWithLabelReady(oc, nsWt, "name="+srvrcInfo)
-			exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time in project "+nsWt+"!")
+			ensurePodWithLabelReady(oc, nsWt, "name="+srvrcInfo)
 			waitForOutput(oc, nsWt, "route/shard-ns"+strconv.Itoa(nsSeqWt), "{.metadata.name}", "shard-ns"+strconv.Itoa(nsSeqWt))
 		}
 
@@ -1235,8 +1233,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.SetNamespacePrivileged(oc, project1)
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "-f", syslogPod).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitForPodWithLabelReady(oc, project1, syslogPodLabel)
-		exutil.AssertWaitPollNoErr(err, "A syslog pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, syslogPodLabel)
 
 		exutil.By("2. Create a syslog ingresscontroller")
 		syslogPodIP := getPodv4Address(oc, syslogPodName, project1)
@@ -1266,12 +1263,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("4. create a client pod, a server pod and an unsecure service")
 		createResourceFromFile(oc, project1, clientPod)
-		err = waitForPodWithLabelReady(oc, project1, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 
 		createResourceFromFile(oc, project1, testPodSvc)
-		err = waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
-		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, "name="+srvrcInfo)
 
 		exutil.By("5. create a route")
 		routehost := srvName + "-" + project1 + "." + ingctrl.domain
@@ -1326,16 +1321,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("3. create a client pod, a server pod and an unsecure service")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, clientPod)
-		err := waitForPodWithLabelReady(oc, project1, cltPodLabel)
-		exutil.AssertWaitPollNoErr(err, "A client pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 
 		createResourceFromFile(oc, project1, testPodSvc)
-		err = waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
-		exutil.AssertWaitPollNoErr(err, "server pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, "name="+srvrcInfo)
 
 		exutil.By("4. create an route")
 		routehost := srvName + "-" + project1 + "." + ingctrl.domain
-		err = oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1).Execute()
+		err := oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForOutput(oc, project1, "route", "{.items[0].metadata.name}", srvName)
 
@@ -1410,8 +1403,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("4. delete the ingress-operator pod")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-ingress-operator", "pods", "-l", "name=ingress-operator").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitForPodWithLabelReady(oc, "openshift-ingress-operator", "name=ingress-operator")
-		exutil.AssertWaitPollNoErr(err, "the ingress-operator pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, "openshift-ingress-operator", "name=ingress-operator")
 		ensureClusterOperatorNormal(oc, "ingress", 1, 120)
 		output, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress-operator", "deployment/ingress-operator").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1586,7 +1578,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// Test case creater: hongli@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-Critical-22636-The namespaceSelector of router is controlled by ingresscontroller", func() {
+	g.It("Author:mjoseph-ROSA-OSD_CCS-ARO-Critical-22636-The namespaceSelector of router is controlled by ingresscontroller", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -1612,9 +1604,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("2. Create a server pod and expose an unsecure service")
 		createResourceFromFile(oc, project1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		err = oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1).Execute()
+		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		err := oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForOutput(oc, project1, "route/"+srvName, "{.spec.host}", routehost)
 
@@ -1639,7 +1630,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// Test case creater: hongli@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-High-22637-The routeSelector of router is controlled by ingresscontroller", func() {
+	g.It("Author:mjoseph-ROSA-OSD_CCS-ARO-High-22637-The routeSelector of router is controlled by ingresscontroller", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -1665,9 +1656,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("2. Create a server pod and expose an unsecure service")
 		createResourceFromFile(oc, project1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
-		err = oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1).Execute()
+		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		err := oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForOutput(oc, project1, "route/"+srvName, "{.spec.host}", routehost)
 

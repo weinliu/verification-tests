@@ -66,9 +66,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("create project, pod, svc, and ingress that mismatch with default ingressclass")
 		oc.SetupProject()
-		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		waitForPodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
-		createResourceFromFile(oc, oc.Namespace(), testIngress)
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		createResourceFromFile(oc, project1, testIngress)
 
 		exutil.By("ensure no route is created from the ingress")
 		output, err := oc.Run("get").Args("route").Output()
@@ -76,14 +77,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(output).NotTo(o.ContainSubstring("ingress-with-class"))
 
 		exutil.By("patch the ingress to use default ingressclass")
-		patchResourceAsUser(oc, oc.Namespace(), "ingress/ingress-with-class", "{\"spec\":{\"ingressClassName\": \"openshift-default\"}}")
+		patchResourceAsUser(oc, project1, "ingress/ingress-with-class", "{\"spec\":{\"ingressClassName\": \"openshift-default\"}}")
 		exutil.By("ensure one route is created from the ingress")
-		waitForOutput(oc, oc.Namespace(), "route", "{.items[*].metadata.name}", "ingress-with-class")
+		waitForOutput(oc, project1, "route", "{.items[*].metadata.name}", "ingress-with-class")
 
 		// bug:- 1820075
 		exutil.By("Confirm the address field is getting populated with the Router domain details")
 		baseDomain := getBaseDomain(oc)
-		ingressOut := getIngress(oc, oc.Namespace())
+		ingressOut := getIngress(oc, project1)
 		o.Expect(ingressOut).To(o.ContainSubstring("router-default.apps." + baseDomain))
 	})
 
@@ -104,8 +105,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("create project and a pod")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project1, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
 		podName := getPodListByLabel(oc, project1, "name=web-server-rc")
 		baseDomain := getBaseDomain(oc)
 		rut.domain = "apps" + "." + baseDomain
@@ -175,8 +175,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		baseDomain := getBaseDomain(oc)
 		project2 := oc.Namespace()
 		createResourceFromFile(oc, project2, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project2, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
+		ensurePodWithLabelReady(oc, project2, "name=web-server-rc")
 		podName := getPodListByLabel(oc, project2, "name=web-server-rc")
 		rut.domain = "apps" + "." + baseDomain
 		rut.namespace = project2
@@ -252,8 +251,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		baseDomain := getBaseDomain(oc)
 		project3 := oc.Namespace()
 		createResourceFromFile(oc, project3, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project3, "name=web-server-rc")
-		exutil.AssertWaitPollNoErr(err, "the pod with name=web-server-rc, Ready status not met")
+		ensurePodWithLabelReady(oc, project3, "name=web-server-rc")
 		podName := getPodListByLabel(oc, project3, "name=web-server-rc")
 		rut.domain = "apps" + "." + baseDomain
 		rut.namespace = project3
@@ -297,7 +295,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForCurl(oc, podName[0], baseDomain, "bar.alpha-alpha-ocp51437.", "Hello-OpenShift", custContIP)
 
 		exutil.By("Overwrite route with beta shard")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("label").Args("routes/bar-unsecure", "--overwrite", "shard=beta", "-n", project3).Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args("routes/bar-unsecure", "--overwrite", "shard=beta", "-n", project3).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("check whether required host is present in beta ingress controller domain")
@@ -375,8 +373,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("create a server pod")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		err := waitForPodWithLabelReady(oc, project1, "name="+srvrcInfo)
-		exutil.AssertWaitPollNoErr(err, "backend server pod failed to be ready state within allowed time!")
+		ensurePodWithLabelReady(oc, project1, "name="+srvrcInfo)
 
 		exutil.By("try to create an external load balancer service and an internal load balancer service")
 		operateResourceFromFile(oc, "create", project1, lbServices)

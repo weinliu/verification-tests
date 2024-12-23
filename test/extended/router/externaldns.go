@@ -61,8 +61,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 		createExternalDNSOperator(oc)
 
 		exutil.By("Create CR ExternalDNS sample-aws-rt and ensure operand pod is ready")
-		waitErr := waitForPodWithLabelReady(oc, operatorNamespace, operatorLabel)
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operator pod is not ready"))
+		ensurePodWithLabelReady(oc, operatorNamespace, operatorLabel)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("externaldns", crName).Output()
 		// To avoid connection refused flake error, as the controller CR creation needs extra prepare time after the operator pod is ready
 		time.Sleep(3 * time.Second)
@@ -71,8 +70,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sampleAWS).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandLabel)
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operand pod is not ready"))
+		ensurePodWithLabelReady(oc, operatorNamespace, operandLabel)
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, recordsReadyLog)
 
 		exutil.By("Add label to canary route, ensure ExternalDNS added the record")
@@ -116,14 +114,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 		createExternalDNSOperator(oc)
 
 		exutil.By("Create CR ExternalDNS sample-azure-svc with invalid zone ID")
-		waitErr := waitForPodWithLabelReady(oc, operatorNamespace, operatorLabel)
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operator pod is not ready"))
+		ensurePodWithLabelReady(oc, operatorNamespace, operatorLabel)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("externaldns", crName).Output()
 		time.Sleep(3 * time.Second)
 		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sampleAzure).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandLabel)
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operand pod is not ready"))
+		ensurePodWithLabelReady(oc, operatorNamespace, operandLabel)
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Found 0 Azure DNS zone")
 		operandPod := getPodListByLabel(oc, operatorNamespace, operandLabel)
 
@@ -132,8 +128,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 		patchGlobalResourceAsAdmin(oc, "externaldnses.externaldns.olm.openshift.io/"+crName, patchStr)
 		err = waitForResourceToDisappear(oc, operatorNamespace, "pod/"+operandPod[0])
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+operandPod[0]))
-		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandLabel)
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operand pod is not ready"))
+		ensurePodWithLabelReady(oc, operatorNamespace, operandLabel)
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, "Found 1 Azure Private DNS zone")
 
 		exutil.By("Add label to canary route, ensure ExternalDNS added the record")
@@ -149,7 +144,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 	})
 
 	// author: hongli@redhat.com
-	g.It("ConnectedOnly-Author:hongli-High-48140-Support External DNS on GCP DNS provider", func() {
+	g.It("Author:hongli-ConnectedOnly-High-48140-Support External DNS on GCP DNS provider", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "extdns")
 			sampleGCP           = filepath.Join(buildPruningBaseDir, "sample-gcp-svc.yaml")
@@ -172,24 +167,21 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 		baseDomain := getBaseDomain(oc)
 
 		exutil.By("Create CR ExternalDNS sample-gcp-svc and ensure operand pod is ready")
-		waitErr := waitForPodWithLabelReady(oc, operatorNamespace, operatorLabel)
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operator pod is not ready"))
+		ensurePodWithLabelReady(oc, operatorNamespace, operatorLabel)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("externaldns", crName).Output()
 		time.Sleep(3 * time.Second)
 		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sampleGCP).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandLabel)
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operand pod is not ready"))
+		ensurePodWithLabelReady(oc, operatorNamespace, operandLabel)
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, "No zones in the project")
 		operandPod := getPodListByLabel(oc, operatorNamespace, operandLabel)
 
 		exutil.By("Patch externaldns with valid privateZone ID and wait until new operand pod ready")
 		patchStr := "[{\"op\":\"replace\",\"path\":\"/spec/source/fqdnTemplate/0\",\"value\":'{{.Name}}." + baseDomain + "'},{\"op\":\"replace\",\"path\":\"/spec/zones/0\",\"value\":" + zoneID + "}]"
 		patchGlobalResourceAsAdmin(oc, "externaldnses.externaldns.olm.openshift.io/"+crName, patchStr)
-		waitErr = waitForResourceToDisappear(oc, operatorNamespace, "pod/"+operandPod[0])
+		waitErr := waitForResourceToDisappear(oc, operatorNamespace, "pod/"+operandPod[0])
 		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("resource %v does not disapper", "pod/"+operandPod[0]))
-		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandLabel)
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operand pod is not ready"))
+		ensurePodWithLabelReady(oc, operatorNamespace, operandLabel)
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, recordsReadyLog)
 
 		exutil.By("Add label to canary service, ensure ExternalDNS added the record")
@@ -205,7 +197,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("ConnectedOnly-ROSA-OSD_CCS-Author:mjoseph-Critical-68826-External DNS support for preexisting Route53 for Shared VPC clusters", func() {
+	g.It("Author:mjoseph-ConnectedOnly-ROSA-OSD_CCS-Critical-68826-External DNS support for preexisting Route53 for Shared VPC clusters", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router", "extdns")
 			sampleAWSVPC        = filepath.Join(buildPruningBaseDir, "sample-aws-sharedvpc-rt.yaml")
@@ -238,8 +230,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 
 		exutil.By("2. Create External DNS Operator in the cluster")
 		createExternalDNSOperator(oc)
-		waitErr := waitForPodWithLabelReady(oc, operatorNamespace, operatorLabel)
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operator pod is not ready"))
+		ensurePodWithLabelReady(oc, operatorNamespace, operatorLabel)
 
 		exutil.By("3. Create CR ExternalDNS sample-aws-sharedvpc-rt and ensure operand pod is ready")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("externaldns", crName).Output()
@@ -251,8 +242,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS should", fu
 		o.Expect(err).NotTo(o.HaveOccurred())
 		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sampleAWSVPC).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandLabel)
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("the external dns operand pod is not ready"))
+		ensurePodWithLabelReady(oc, operatorNamespace, operandLabel)
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, recordsReadyLog)
 
 		exutil.By("4. Add label to canary route, ensure ExternalDNS added the record")
@@ -317,8 +307,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS on STS shou
 
 		exutil.By("2. Create the External DNS Operator")
 		createExternalDNSOperator(oc)
-		waitErr := waitForPodWithLabelReady(oc, operatorNamespace, operatorLabel)
-		exutil.AssertWaitPollNoErr(waitErr, "the external dns operator pod is not ready")
+		ensurePodWithLabelReady(oc, operatorNamespace, operatorLabel)
 
 		exutil.By("3. Prepare the STS related credentials like role, policy and secret for the cluster")
 		defer clearUpExDnsStsCluster(oc, "74949")
@@ -334,8 +323,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_ExtDNS on STS shou
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("externaldns", crName).Output()
 		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sampleAWSSTS).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = waitForPodWithLabelReady(oc, operatorNamespace, operandLabel)
-		exutil.AssertWaitPollNoErr(waitErr, "the external dns operand pod is not ready")
+		ensurePodWithLabelReady(oc, operatorNamespace, operandLabel)
 		ensureLogsContainString(oc, operatorNamespace, operandLabel, recordsReadyLog)
 
 		exutil.By("5. Add label to canary route, ensure ExternalDNS added the record")
