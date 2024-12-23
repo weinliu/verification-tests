@@ -68,10 +68,12 @@ describe('Operators related features', () => {
     operatorHubPage.installOperator('argocd-operator', 'custom-catalogsource', 'test-ocp40457');
     Pages.gotoInstalledOperatorPage('test-ocp40457')
     operatorHubPage.checkOperatorStatus('etcd', 'Succeed');
+    cy.wait(20000);
     operatorHubPage.checkOperatorStatus('Argo CD', 'Succeed');
     operatorHubPage.removeOperator('Argo CD');
     operatorHubPage.installOperator('cockroachdb', 'community-operators', 'test-ocp40457');
     Pages.gotoInstalledOperatorPage('test-ocp40457')
+    cy.wait(20000);
     operatorHubPage.checkOperatorStatus('CockroachDB Helm Operator', 'Succeed');
   });
 

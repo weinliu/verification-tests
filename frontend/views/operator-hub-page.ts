@@ -110,6 +110,7 @@ export const operatorHubPage = {
     cy.get('[data-test="install-operator"]').click();
   },
   checkOperatorStatus: (csvName, csvStatus) => {
+    cy.get('thead', { timeout: 60000 });
     cy.get('input[data-test="name-filter-input"]').clear().type(`${csvName}`);
     cy.get(`[data-test-operator-row="${csvName}"]`, { timeout: 120000 })
       .parents('tr')
