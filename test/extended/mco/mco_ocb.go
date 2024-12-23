@@ -700,6 +700,74 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		ValidateMOSCIsGarbageCollected(mosc, mcp)
 
 	})
+
+	g.It("Author:ptalgulk-ConnectedOnly-Longduration-NonPreRelease-Medium-78196-Verify for etc-pki-etitlement secret is removed for  OCB rhel enablement [Disruptive]", func() {
+
+		var (
+			entitlementSecret    = NewSecret(oc.AsAdmin(), "openshift-config-managed", "etc-pki-entitlement")
+			containerFileContent = `
+		FROM configs AS final
+		RUN rm -rf /etc/rhsm-host && \
+		  rpm-ostree install buildah && \
+		  ln -s /run/secrets/rhsm /etc/rhsm-host && \
+		  ostree container commit
+ `
+
+			mcp = GetCompactCompatiblePool(oc.AsAdmin())
+		)
+		if !entitlementSecret.Exists() {
+			g.Skip(fmt.Sprintf("There is no entitlement secret available in this cluster %s. This test case cannot be executed", entitlementSecret))
+		}
+
+		exutil.By("Copy the entitlement secret in MCO namespace")
+		mcoEntitlementSecret, err := CloneResource(entitlementSecret, "etc-pki-entitlement", MachineConfigNamespace, nil)
+		defer mcoEntitlementSecret.Delete()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error copying %s to the %s namespace", mcoEntitlementSecret, MachineConfigNamespace)
+		logger.Infof("OK!\n")
+
+		exutil.By("Delete the entitlement secret in the openshift-config-managed namespace")
+		defer func() {
+			exutil.By("Recover the entitlement secret in the openshift-config-managed namespace")
+			recoverSecret, err := CloneResource(mcoEntitlementSecret, "etc-pki-entitlement", "openshift-config-managed", nil)
+			o.Expect(err).NotTo(o.HaveOccurred(), "Error copying %s to the openshift-config-managed namespace", entitlementSecret)
+			o.Expect(recoverSecret).To(Exist(), "Unable to recover the entitlement secret in openshift-config-managed namespace")
+		}()
+
+		entitlementSecret.Delete()
+		logger.Infof("OK!\n")
+
+		exutil.By("Create the MOSC")
+		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), MachineConfigNamespace, "test-78001-mosc", mcp.GetName(), []ContainerFile{{Content: containerFileContent}})
+		defer DisableOCL(mosc)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
+		logger.Infof("OK!\n")
+
+		exutil.By("Check that a new build has been triggered")
+		o.Eventually(mosc.GetCurrentMachineOSBuild, "5m", "20s").Should(Exist(),
+			"No build was created when OCB was enabled")
+		mosb, err := mosc.GetCurrentMachineOSBuild()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting MOSB from MOSC")
+		o.Eventually(mosb, "5m", "20s").Should(HaveConditionField("Building", "status", TrueString),
+			"MachineOSBuild didn't report that the build has begun")
+		logger.Infof("OK!\n")
+
+		exutil.By("Verify the error is produced in buildPod")
+		exutil.AssertAllPodsToBeReady(oc.AsAdmin(), MachineConfigNamespace)
+		logger.Infof("OK!\n")
+
+		job, err := mosb.GetJob()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		logger.Infof("OK!\n")
+
+		o.Eventually(job.Logs, "5m", "10s").Should(o.ContainSubstring("Found 0 entitlement certificates"), "Error getting the logs")
+		logger.Infof("OK!\n")
+
+		exutil.By("Remove the MachineOSConfig resource")
+		o.Expect(DisableOCL(mosc)).To(o.Succeed(), "Error cleaning up %s", mosc)
+		ValidateMOSCIsGarbageCollected(mosc, mcp)
+		logger.Infof("OK!\n")
+	})
+
 })
 
 func testContainerFile(containerFiles []ContainerFile, imageNamespace string, mcp *MachineConfigPool, checkers []Checker) {
