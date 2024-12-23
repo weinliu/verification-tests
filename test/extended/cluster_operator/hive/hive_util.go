@@ -691,7 +691,10 @@ func (config *installConfig) create(oc *exutil.CLI) {
 	if len(config.credentialsMode) > 0 {
 		parameters = append(parameters, "CREDENTIALSMODE="+config.credentialsMode)
 	}
-	if len(config.internalJoinSubnet) > 0 {
+	if len(config.internalJoinSubnet) == 0 {
+		defaultInternalJoinSubnet := "100.64.0.0/16"
+		parameters = append(parameters, "INTERNALJOINSUBNET="+defaultInternalJoinSubnet)
+	} else {
 		parameters = append(parameters, "INTERNALJOINSUBNET="+config.internalJoinSubnet)
 	}
 	err := applyResourceFromTemplate(oc, parameters...)
