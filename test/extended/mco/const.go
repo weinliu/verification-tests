@@ -109,7 +109,7 @@ const (
 	AlibabaCloudPlatform = "alibabacloud"
 
 	// ExpirationDockerfileLabel Expiration label in Dockerfile
-	ExpirationDockerfileLabel = `LABEL maintainer="mco-qe-team" quay.expires-after=2h`
+	ExpirationDockerfileLabel = `LABEL maintainer="mco-qe-team" quay.expires-after=24h`
 
 	layeringTestsTmpNamespace   = "layering-tests-imagestreams"
 	layeringRegistryAdminSAName = "test-registry-sa"

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	logger "github.com/openshift/openshift-tests-private/test/extended/util/logext"
@@ -117,6 +118,48 @@ func CreateMachineOSConfigUsingInternalRegistry(oc *exutil.CLI, namespace, name,
 	pushSpec := fmt.Sprintf("%s/%s/ocb-%s-image:latest", InternalRegistrySvcURL, namespace, pool)
 
 	return CreateMachineOSConfig(oc, name, pool, currentImagePullSecret.GetName(), baseImagePullSecret.GetName(), renderedImagePushSecret.GetName(), pushSpec, containerFile)
+}
+
+// CreateMachineOSConfigUsingExternalRegistry creates a new MOSC resource using the mcoqe external registry. The credentials to pull and push images in the mcoqe repo should be previously added to the cluster's pull secret
+func CreateMachineOSConfigUsingExternalRegistry(oc *exutil.CLI, name, pool string, containerFile []ContainerFile) (*MachineOSConfig, error) {
+	var (
+		// We use a copy of the cluster's pull secret to pull the images
+		pullSecret = NewSecret(oc.AsAdmin(), "openshift-config", "pull-secret")
+	)
+	copyPullSecret, err := CopySecretToMCONamespace(pullSecret, "cloned-pull-secret-"+exutil.GetRandomString())
+	if err != nil {
+		return NewMachineOSConfig(oc, name), err
+	}
+
+	clusterName, err := exutil.GetInfraID(oc)
+	if err != nil {
+		return NewMachineOSConfig(oc, name), err
+	}
+
+	// We use a push spec stored in the internal registry in the MCO namespace. We use a different image for every pool
+	pushSpec := fmt.Sprintf("%s:ocb-%s-%s", DefaultLayeringQuayRepository, pool, clusterName)
+
+	// If we use the external registry we need to add an expiration date label so that the images are automatically cleaned
+	configuredContainerFile := []ContainerFile{}
+	if len(containerFile) == 0 {
+		configuredContainerFile = append(configuredContainerFile, ContainerFile{Content: ExpirationDockerfileLabel})
+	} else {
+		for _, cf := range containerFile {
+			configuredContainerFile = append(configuredContainerFile, ContainerFile{Content: cf.Content + "\n" + ExpirationDockerfileLabel, ContainerfileArch: cf.ContainerfileArch})
+		}
+	}
+
+	return CreateMachineOSConfig(oc, name, pool, copyPullSecret.GetName(), copyPullSecret.GetName(), copyPullSecret.GetName(), pushSpec, configuredContainerFile)
+}
+
+// CreateMachineOSConfigUsingExternalOrInternalRegistry creates a MOSC using internal registry if possible, if not possible it will use external registry
+func CreateMachineOSConfigUsingExternalOrInternalRegistry(oc *exutil.CLI, namespace, name, pool string, containerFile []ContainerFile) (*MachineOSConfig, error) {
+	if CanUseInternalRegistryToStoreOSImage(oc) {
+		return CreateMachineOSConfigUsingInternalRegistry(oc, namespace, name, pool, containerFile)
+	}
+
+	return CreateMachineOSConfigUsingExternalRegistry(oc, name, pool, containerFile)
+
 }
 
 // GetBaseImagePullSecret returns the pull secret configured in this MOSC
@@ -375,4 +418,28 @@ func CreateInternalRegistrySecretFromSA(oc *exutil.CLI, saName, saNamespace, sec
 	logger.Infof("OK!")
 
 	return NewSecret(oc, secretNamespace, secretName), nil
+}
+
+// CanUseInternalRegistryToStoreOSImage returns true if the osImage can be stored in the internal registry in this cluster
+func CanUseInternalRegistryToStoreOSImage(oc *exutil.CLI) bool {
+	var (
+		registryConfig = NewResource(oc, "configs.imageregistry.operator.openshift.io", "cluster")
+	)
+
+	if !IsCapabilityEnabled(oc.AsAdmin(), "ImageRegistry") {
+		logger.Infof("ImageRegistry capability is not enabled. Cannot use the internal registry to store the osImage")
+		return false
+	}
+
+	// if the configured storage is "emptyDir" we cannot use the internal registry to store the osImage
+	// because when the image registry pods are evicted, all images are deleted
+	storageConfig := registryConfig.GetOrFail(`{.spec.storage.emptyDir}`)
+
+	return storageConfig == ""
+}
+
+func SkipTestIfCannotUseInternalRegistry(oc *exutil.CLI) {
+	if !CanUseInternalRegistryToStoreOSImage(oc) {
+		g.Skip("The internal registry cannot be used to store the osImage in this cluster. Skipping test case")
+	}
 }
