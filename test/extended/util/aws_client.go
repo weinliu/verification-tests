@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/aws/aws-sdk-go/service/ecr"
 	"github.com/aws/aws-sdk-go/service/iam"
+	"github.com/aws/aws-sdk-go/service/kms"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -1214,4 +1215,41 @@ func (ecrClient *ECRClient) GetAuthorizationToken() (string, error) {
 	authData := loginRes.AuthorizationData[0]
 	password := aws.StringValue(authData.AuthorizationToken)
 	return password, nil
+}
+
+// KMSClient struct.
+type KMSClient struct {
+	kmssvc *kms.KMS
+}
+
+// Init the aws KMS client.
+func NewKMSClient(region string) *KMSClient {
+	awsSession := session.Must(session.NewSession())
+	kmsClient := &KMSClient{
+		kmssvc: kms.New(awsSession, aws.NewConfig().WithRegion(region)),
+	}
+
+	return kmsClient
+}
+
+// CreateKey create a key
+func (kmsClient *KMSClient) CreateKey(description string) (string, error) {
+	createRes, err := kmsClient.kmssvc.CreateKey(&kms.CreateKeyInput{
+		Description: aws.String(description),
+	})
+	if err != nil {
+		e2e.Logf("Error creating key %s", err.Error())
+		return "", err
+	}
+	e2e.Logf("key created: %s", *createRes.KeyMetadata.Arn)
+	return *createRes.KeyMetadata.Arn, nil
+}
+
+// DeleteKey delete a key
+func (kmsClient *KMSClient) DeleteKey(key string) error {
+	_, err := kmsClient.kmssvc.ScheduleKeyDeletion(&kms.ScheduleKeyDeletionInput{
+		KeyId:               aws.String(key),
+		PendingWindowInDays: aws.Int64(7),
+	})
+	return err
 }
