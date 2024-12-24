@@ -2529,4 +2529,142 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		CurlNode2PodFailUDN(oc, nodeList.Items[0].Name, ns, pods[0].name)
 		CurlNode2PodFailUDN(oc, nodeList.Items[0].Name, ns, pods[1].name)
 	})
+
+	g.It("Author:qiowang-High-77542-Check default network ports can be exposed on UDN pods(layer3) [Serial]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			sctpModule          = filepath.Join(buildPruningBaseDir, "sctp/load-sctp-module.yaml")
+			statefulSetHelloPod = filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
+			tcpPort             = 8080
+			udpPort             = 6000
+			sctpPort            = 30102
+		)
+
+		exutil.By("Preparing the nodes for SCTP")
+		prepareSCTPModule(oc, sctpModule)
+
+		exutil.By("1. Create the first namespace")
+		ns1 := oc.Namespace()
+
+		exutil.By("2. Create a hello pod in ns1")
+		createResourceFromFile(oc, ns1, statefulSetHelloPod)
+		pod1Err := waitForPodWithLabelReady(oc, ns1, "app=hello")
+		exutil.AssertWaitPollNoErr(pod1Err, "The statefulSet pod is not ready")
+		pod1Name := getPodName(oc, ns1, "app=hello")[0]
+
+		exutil.By("3. Create the 2nd namespace")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		exutil.By("4. Create CRD for UDN in ns2")
+		err := applyL3UDNtoNamespace(oc, ns2, 0)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5. Create a udn hello pod in ns2")
+		createResourceFromFile(oc, ns2, statefulSetHelloPod)
+		pod2Err := waitForPodWithLabelReady(oc, ns2, "app=hello")
+		exutil.AssertWaitPollNoErr(pod2Err, "The statefulSet pod is not ready")
+		pod2Name := getPodName(oc, ns2, "app=hello")[0]
+
+		exutil.By("6. Check ICMP/TCP/UDP/SCTP traffic between pods in ns1 and ns2, should not be able to access")
+		PingPod2PodFail(oc, ns1, pod1Name, ns2, pod2Name)
+		CurlPod2PodFail(oc, ns1, pod1Name, ns2, pod2Name)
+		verifyConnPod2Pod(oc, ns1, pod1Name, ns2, pod2Name, "UDP", udpPort, false)
+		verifyConnPod2Pod(oc, ns1, pod1Name, ns2, pod2Name, "SCTP", sctpPort, false)
+
+		exutil.By("7. Add annotation to expose default network port on udn pod")
+		annotationConf := `k8s.ovn.org/open-default-ports=[{"protocol":"icmp"}, {"protocol":"tcp","port":` + strconv.Itoa(tcpPort) + `}, {"protocol":"udp","port":` + strconv.Itoa(udpPort) + `}, {"protocol":"sctp","port":` + strconv.Itoa(sctpPort) + `}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("pod", pod2Name, "-n", ns2, "--overwrite", annotationConf).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("8. Check ICMP/TCP/UDP/SCTP traffic between pods in ns1 and ns2, should be able to access")
+		PingPod2PodPass(oc, ns1, pod1Name, ns2, pod2Name)
+		CurlPod2PodPass(oc, ns1, pod1Name, ns2, pod2Name)
+		verifyConnPod2Pod(oc, ns1, pod1Name, ns2, pod2Name, "UDP", udpPort, true)
+		verifyConnPod2Pod(oc, ns1, pod1Name, ns2, pod2Name, "SCTP", sctpPort, true)
+	})
+
+	g.It("Author:qiowang-High-77742-Check default network ports can be exposed on UDN pods(layer2) [Serial]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			sctpModule          = filepath.Join(buildPruningBaseDir, "sctp/load-sctp-module.yaml")
+			udnCRDdualStack     = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_dualstack_template.yaml")
+			udnCRDSingleStack   = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_singlestack_template.yaml")
+			statefulSetHelloPod = filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
+			tcpPort             = 8080
+			udpPort             = 6000
+			sctpPort            = 30102
+		)
+
+		exutil.By("Preparing the nodes for SCTP")
+		prepareSCTPModule(oc, sctpModule)
+
+		exutil.By("1. Create the first namespace")
+		ns1 := oc.Namespace()
+
+		exutil.By("2. Create a hello pod in ns1")
+		createResourceFromFile(oc, ns1, statefulSetHelloPod)
+		pod1Err := waitForPodWithLabelReady(oc, ns1, "app=hello")
+		exutil.AssertWaitPollNoErr(pod1Err, "The statefulSet pod is not ready")
+		pod1Name := getPodName(oc, ns1, "app=hello")[0]
+
+		exutil.By("3. Create the 2nd namespace")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		exutil.By("4. Create CRD for UDN in ns2")
+		var cidr, ipv4cidr, ipv6cidr string
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/48"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/48"
+			}
+		}
+		udncrd := udnCRDResource{
+			crdname:   "udn-l2-network-77742",
+			namespace: ns2,
+			role:      "Primary",
+			mtu:       1300,
+		}
+		if ipStackType == "dualstack" {
+			udncrd.IPv4cidr = ipv4cidr
+			udncrd.IPv6cidr = ipv6cidr
+			udncrd.template = udnCRDdualStack
+			udncrd.createLayer2DualStackUDNCRD(oc)
+		} else {
+			udncrd.cidr = cidr
+			udncrd.template = udnCRDSingleStack
+			udncrd.createLayer2SingleStackUDNCRD(oc)
+		}
+		err := waitUDNCRDApplied(oc, ns2, udncrd.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5. Create a udn hello pod in ns2")
+		createResourceFromFile(oc, ns2, statefulSetHelloPod)
+		pod2Err := waitForPodWithLabelReady(oc, ns2, "app=hello")
+		exutil.AssertWaitPollNoErr(pod2Err, "The statefulSet pod is not ready")
+		pod2Name := getPodName(oc, ns2, "app=hello")[0]
+
+		exutil.By("6. Check ICMP/TCP/UDP/SCTP traffic between pods in ns1 and ns2, should not be able to access")
+		PingPod2PodFail(oc, ns1, pod1Name, ns2, pod2Name)
+		CurlPod2PodFail(oc, ns1, pod1Name, ns2, pod2Name)
+		verifyConnPod2Pod(oc, ns1, pod1Name, ns2, pod2Name, "UDP", udpPort, false)
+		verifyConnPod2Pod(oc, ns1, pod1Name, ns2, pod2Name, "SCTP", sctpPort, false)
+
+		exutil.By("7. Add annotation to expose default network port on udn pod")
+		annotationConf := `k8s.ovn.org/open-default-ports=[{"protocol":"icmp"}, {"protocol":"tcp","port":` + strconv.Itoa(tcpPort) + `}, {"protocol":"udp","port":` + strconv.Itoa(udpPort) + `}, {"protocol":"sctp","port":` + strconv.Itoa(sctpPort) + `}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("pod", pod2Name, "-n", ns2, "--overwrite", annotationConf).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("8. Check ICMP/TCP/UDP/SCTP traffic between pods in ns1 and ns2, should be able to access")
+		PingPod2PodPass(oc, ns1, pod1Name, ns2, pod2Name)
+		CurlPod2PodPass(oc, ns1, pod1Name, ns2, pod2Name)
+		verifyConnPod2Pod(oc, ns1, pod1Name, ns2, pod2Name, "UDP", udpPort, true)
+		verifyConnPod2Pod(oc, ns1, pod1Name, ns2, pod2Name, "SCTP", sctpPort, true)
+	})
 })

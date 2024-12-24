@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
+	netutils "k8s.io/utils/net"
 )
 
 type udnPodResource struct {
@@ -398,4 +399,106 @@ func applyL3UDNtoNamespace(oc *exutil.CLI, namespace string, udnSelector int) er
 	err := waitUDNCRDApplied(oc, namespace, udncrd.crdname)
 	return err
 
+}
+
+func PingPod2PodPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, namespaceDst string, podNameDst string) {
+	podIP1, podIP2 := getPodIP(oc, namespaceDst, podNameDst)
+	if podIP2 != "" {
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "ping6 -c4 "+podIP1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "ping -c4 "+podIP2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		if netutils.IsIPv6String(podIP1) {
+			_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "ping6 -c4 "+podIP1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "ping -c4 "+podIP1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+	}
+}
+
+func PingPod2PodFail(oc *exutil.CLI, namespaceSrc string, podNameSrc string, namespaceDst string, podNameDst string) {
+	podIP1, podIP2 := getPodIP(oc, namespaceDst, podNameDst)
+	if podIP2 != "" {
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "ping6 -c4 "+podIP1)
+		o.Expect(err).To(o.HaveOccurred())
+		_, err = e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "ping -c4 "+podIP2)
+		o.Expect(err).To(o.HaveOccurred())
+	} else {
+		if netutils.IsIPv6String(podIP1) {
+			_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "ping6 -c4 "+podIP1)
+			o.Expect(err).To(o.HaveOccurred())
+		} else {
+			_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "ping -c4 "+podIP1)
+			o.Expect(err).To(o.HaveOccurred())
+		}
+	}
+}
+
+func verifyConnPod2Pod(oc *exutil.CLI, namespaceSrc string, podNameSrc string, namespaceDst string, podNameDst string, protocol string, port int, pass bool) {
+	e2e.Logf("==== Check %s traffic ====", protocol)
+	// kill socat process before sending/listen traffic
+	for _, nsPod := range [][]string{{namespaceSrc, podNameSrc}, {namespaceDst, podNameDst}} {
+		e2eoutput.RunHostCmd(nsPod[0], nsPod[1], "killall socat")
+	}
+	var clientOpt, serverOpt string
+	switch protocol {
+	case "UDP":
+		clientOpt = "udp-connect"
+		serverOpt = "udp6-listen"
+	case "SCTP":
+		clientOpt = "sctp-connect"
+		serverOpt = "sctp6-listen"
+	default:
+		e2e.Failf("protocol is not specified")
+	}
+
+	e2e.Logf("Listening on port %s on dst pod %s", strconv.Itoa(port), podNameDst)
+	serverCmd, serverCmdOutput, _, serverCmdErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", namespaceDst, podNameDst, "--", "socat", "-", serverOpt+":"+strconv.Itoa(port)+",fork").Background()
+	defer serverCmd.Process.Kill()
+	o.Expect(serverCmdErr).NotTo(o.HaveOccurred())
+
+	e2e.Logf("Check %s process enabled in the dst pod %s", protocol, podNameDst)
+	o.Eventually(func() string {
+		msg, err := e2eoutput.RunHostCmd(namespaceDst, podNameDst, "ps aux | grep socat")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		return msg
+	}, "30s", "5s").Should(o.ContainSubstring(serverOpt), "No expected process running on dst pod")
+
+	e2e.Logf("Sending %s packets from src pod %s to dst pod %s", protocol, podNameSrc, podNameDst)
+	podIP1, podIP2 := getPodIP(oc, namespaceDst, podNameDst)
+	if pass {
+		if podIP2 != "" {
+			clientCmd := fmt.Sprintf("echo hello | socat - %s:%s", clientOpt, net.JoinHostPort(podIP1, strconv.Itoa(port)))
+			_, clientCmdErr := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, clientCmd)
+			o.Expect(clientCmdErr).NotTo(o.HaveOccurred())
+			clientCmd = fmt.Sprintf("echo hello | socat - %s:%s", clientOpt, net.JoinHostPort(podIP2, strconv.Itoa(port)))
+			_, clientCmdErr = e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, clientCmd)
+			o.Expect(clientCmdErr).NotTo(o.HaveOccurred())
+			e2e.Logf("output on server side: %s", serverCmdOutput.String())
+			o.Expect(strings.Count(serverCmdOutput.String(), "hello") == 2).To(o.BeTrue())
+		} else {
+			clientCmd := fmt.Sprintf("timeout 10 sh -c 'echo hello | socat - %s:%s'", clientOpt, net.JoinHostPort(podIP1, strconv.Itoa(port)))
+			_, clientCmdErr := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, clientCmd)
+			o.Expect(clientCmdErr).NotTo(o.HaveOccurred())
+			e2e.Logf("output on server side: %s", serverCmdOutput.String())
+			o.Expect(strings.Contains(serverCmdOutput.String(), "hello")).To(o.BeTrue())
+		}
+	} else {
+		if podIP2 != "" {
+			clientCmd := fmt.Sprintf("timeout 10 sh -c 'echo hello | socat - %s:%s'", clientOpt, net.JoinHostPort(podIP1, strconv.Itoa(port)))
+			e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, clientCmd)
+			clientCmd = fmt.Sprintf("timeout 10 sh -c 'echo hello | socat %s:%s'", clientOpt, net.JoinHostPort(podIP2, strconv.Itoa(port)))
+			e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, clientCmd)
+			e2e.Logf("output on server side: %s", serverCmdOutput.String())
+			o.Expect(strings.Contains(serverCmdOutput.String(), "hello")).To(o.BeFalse())
+		} else {
+			clientCmd := fmt.Sprintf("timeout 10 sh -c 'echo hello | socat - %s:%s'", clientOpt, net.JoinHostPort(podIP1, strconv.Itoa(port)))
+			e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, clientCmd)
+			e2e.Logf("output on server side: %s", serverCmdOutput.String())
+			o.Expect(strings.Contains(serverCmdOutput.String(), "hello")).To(o.BeFalse())
+		}
+	}
 }
