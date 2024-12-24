@@ -6242,7 +6242,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Author:xiyuan-High-70206-Check the profiles annotation avaiable in the rules", func() {
+	g.It("Author:xiyuan-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-High-70206-Medium-47368-Check the checkType and profiles annotation avaiable in the rules", func() {
+		g.By("Check checkType available for rules")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Platform", ok, []string{"rule", "ocp4-api-server-api-priority-flowschema-catch-all", "-n", subD.namespace, "-o=jsonpath={.checkType}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Node", ok, []string{"rule", "ocp4-file-groupowner-cni-conf", "-n", subD.namespace, "-o=jsonpath={.checkType}"}).check(oc)
+
 		g.By("Check rule ocp4-accounts-restrict-service-account-tokens has the profiles annotation")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", subD.namespace, "rule", "ocp4-accounts-restrict-service-account-tokens", "-o=jsonpath={.metadata.annotations}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
