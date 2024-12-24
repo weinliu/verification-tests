@@ -4994,7 +4994,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		if regName == networkRGName {
 			patchNetwork = fmt.Sprintf("{\"spec\":{\"storage\":{\"azure\":{\"networkAccess\":{\"type\":\"Internal\"}}}}}")
 		} else {
-			patchNetwork = fmt.Sprintf("{\"spec\":{\"storage\":{\"azure\":{\"networkAccess\":{\"type\":\"Internal\",\"internal\":{\"networkResourceGroupName\": %s}}}}}}", networkRGName)
+			patchNetwork = fmt.Sprintf("{\"spec\":{\"storage\":{\"azure\":{\"networkAccess\":{\"type\":\"Internal\",\"internal\":{\"networkResourceGroupName\": \"%s\"}}}}}}", networkRGName)
 		}
 		defer func() {
 			g.By("Recover image registry change")
