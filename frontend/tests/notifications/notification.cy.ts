@@ -44,7 +44,7 @@ describe('Notification drawer tests', () => {
     cy.get('[class$=notification-drawer__list-item-description]').contains('Testing 123');
   });
 
-  it('(OCP-43119,yapei,UserInterface) Check alerts are filtered based on Pod/Project/Node labels',{tags:['@userinterface','@e2e','admin']}, () => {
+  it('(OCP-43119,yapei,UserInterface) Check alerts are filtered based on Pod/Project/Node labels',{tags:['@userinterface','@e2e','admin','@hypershift-hosted']}, () => {
     let token, query_command, query_output, scheduled_node_value;
     const alertName = 'KubePodRestartsOften';
     cy.adminCLI('oc new-project test-ocp43119');

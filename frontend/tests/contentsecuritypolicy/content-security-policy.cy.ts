@@ -45,7 +45,7 @@ describe('Content Security Policy tests', () => {
   });
 
   // Content Security Policy basic functionality
-  it('(OCP-77556,yapei,UserInterface)Notify user of console plugin related CSP violations',{tags:['@userinterface','@e2e','@techpreview','admin']}, () => {
+  it('(OCP-77556,yapei,UserInterface)Notify user of console plugin related CSP violations',{tags:['@userinterface','@e2e','@techpreview','admin','@hypershift-hosted']}, () => {
     cy.uiLogin(login_idp, login_user, login_password);
     // content-security-policy-report-only header exist
     cy.request('/').then((response) => {
@@ -68,7 +68,7 @@ describe('Content Security Policy tests', () => {
     checkCSPStatus('console-demo-plugin', 'No');
   });
 
-  it('(OCP-77059,yapei,UserInterface)Console-operator should configure console with the CSP allowed directives)',{tags:['@userinterface','@techpreview','admin']}, function() {
+  it('(OCP-77059,yapei,UserInterface)Console-operator should configure console with the CSP allowed directives)',{tags:['@userinterface','@techpreview','admin','@hypershift-hosted']}, function() {
     cy.isTechPreviewNoUpgradeEnabled().then(value => {
       if (value === false) {
         cy.log('Skip the case because TP not enabled!!');

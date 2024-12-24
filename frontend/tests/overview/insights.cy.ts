@@ -26,7 +26,7 @@ describe('Insights check', () => {
     });
   });
 
-  it('(OCP-47571,yapei,UserInterface) Show Cluster Support Level',{tags:['@userinterface','@e2e','admin']}, () => {
+  it('(OCP-47571,yapei,UserInterface) Show Cluster Support Level',{tags:['@userinterface','@e2e','admin','@hypershift-hosted']}, () => {
     let sla_text, cluster_id;
     // get clusterID
     let include_unknown = true;

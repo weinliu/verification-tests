@@ -26,7 +26,7 @@ describe('nodes page', () => {
     cy.get('dt:contains("Uptime")').should('exist');
   });
 
-  it('(OCP-75487,yapei,UserInterface)Add Architecture column to NodeList and filter for archs)',{tags: ['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-75487,yapei,UserInterface)Add Architecture column to NodeList and filter for archs)',{tags: ['@userinterface','@e2e','admin','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
     let node_names = [];
     let node_archs = [];
     const node_arch_counts = {};

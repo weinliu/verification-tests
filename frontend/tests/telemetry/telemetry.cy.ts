@@ -11,7 +11,7 @@ describe('Telemetry cases', () => {
     cy.restoreClusterMonitoringConfig();
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${login_username}`);
   })
-  it('(OCP-72611,yapei,UserInterface)Disable segment analytics when cluster telemetry is disabled',{tags:['@userinterface','@e2e','admin']}, () => {
+  it('(OCP-72611,yapei,UserInterface)Disable segment analytics when cluster telemetry is disabled',{tags:['@userinterface','@e2e','admin','@hypershift-hosted']}, () => {
     // wait for some time until operator takes cluster-monitoring-config changes
     cy.wait(10000);
     cy.intercept(

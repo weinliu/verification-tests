@@ -21,7 +21,7 @@ describe('operand form view', () => {
     cy.adminCLI(`oc delete namespace ${params.namespace}`);
   })
 
-  it('(OCP-29819,yapei,UserInterface) Dynamically Generate Create Operand Form',{tags:['@userinterface','@e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-29819,yapei,UserInterface) Dynamically Generate Create Operand Form',{tags:['@userinterface','@e2e','admin','@osd-ccs','@hypershift-hosted']}, () => {
     cy.visit(`/k8s/ns/${params.namespace}/operators.coreos.com~v1alpha1~ClusterServiceVersion/mock-operator/test.tectonic.com~v1~MockResource`)
     cy.byTestID('item-create').click()
     Operand.switchToFormView()

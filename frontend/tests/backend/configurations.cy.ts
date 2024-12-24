@@ -39,7 +39,7 @@ describe('console configuration tests', () => {
     Deployment.checkPodStatus('openshift-console','component=downloads','Running');
   });
 
-  it('(OCP-73409,yapei,UserInterface)Configure and load default Segment Api Key and proxy', {tags: ['@userinterface','@e2e','@admin','@rosa','@osd-ccs']}, () => {
+  it('(OCP-73409,yapei,UserInterface)Configure and load default Segment Api Key and proxy', {tags: ['@userinterface','@e2e','@admin','@rosa','@osd-ccs','@hypershift-hosted']}, () => {
     const segment_API_HOST = `"SEGMENT_API_HOST":"console.redhat.com/connections/api/v1"`;
     const segment_JS_HOST = `"SEGMENT_JS_HOST":"console.redhat.com/connections/cdn"`;
     cy.adminCLI(`oc get cm telemetry-config -n openshift-console-operator -o jsonpath={.data}`)
@@ -54,7 +54,7 @@ describe('console configuration tests', () => {
       .should('include', cm_segment_JS_HOST);
   });
 
-  it('(OCP-75320,yapei,UserInterface)Cluster wide setting for showing/hiding Lightspeed button', {tags:['@userinterface','@e2e','@admin','@rosa','@osd-ccs']}, () => {
+  it('(OCP-75320,yapei,UserInterface)Cluster wide setting for showing/hiding Lightspeed button', {tags:['@userinterface','@e2e','@admin','@rosa','@osd-ccs','@hypershift-hosted']}, () => {
     const patch_invalid_state = `oc patch console.operator cluster -p '{"spec":{"customization":{"capabilities":[{"name": "LightspeedButton","visibility":{"state":"Tested"}}]}}}'  --type merge`;
     const patch_another_entry = `oc patch console.operator cluster --type='json' -p='[{"op": "add", "path": "/spec/customization/capabilities/-", "value":{"name": "TestCap","visibility":{"state":"Enabled"}}}]'`;
     const patch_unsupported_name = `oc patch console.operator cluster -p '{"spec":{"customization":{"capabilities":[{"name": "TestCap","visibility":{"state":"Enabled"}}]}}}'  --type merge`;

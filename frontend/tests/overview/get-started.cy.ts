@@ -28,7 +28,7 @@ describe('features for get started resources', () => {
     });
   });
 
-  it('(OCP-73803,yapei,UserInterface)Add user-impersonation to QuickStart and new langs to ExploreAdminFeatures',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-73803,yapei,UserInterface)Add user-impersonation to QuickStart and new langs to ExploreAdminFeatures',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
     Overview.goToDashboard();
     cy.get('button[data-test~="user-impersonation"]').as('user-impersonate-button').should('exist');
     cy.get('@user-impersonate-button').click();

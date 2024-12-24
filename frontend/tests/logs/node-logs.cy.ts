@@ -17,7 +17,7 @@ describe('node logs related features', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-43996,yapei,UserInterface) View Master and Worker Node Logs',{tags:['@userinterface','@e2e','admin']}, () => {
+  it('(OCP-43996,yapei,UserInterface) View Master and Worker Node Logs',{tags:['@userinterface','@e2e','admin','@hypershift-hosted']}, () => {
     cy.log('view master node logs');
     cy.visit('/k8s/cluster/nodes?rowFilter-node-role=control-plane');
     listPage.rows.shouldBeLoaded();

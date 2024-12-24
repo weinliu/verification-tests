@@ -10,7 +10,7 @@ describe('feature for hypershift provisined cluster', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-48890,yanpzhan,UserInterface) The TopologyMode needs to be passed to the console via console-config.yaml',{tags:['@userinterface','@e2e','HyperShiftGUEST','admin']}, () => {
+  it('(OCP-48890,yanpzhan,UserInterface) The TopologyMode needs to be passed to the console via console-config.yaml',{tags:['@userinterface','@e2e','@hypershift-hosted','admin']}, () => {
     let $topologyMode;
     cy.exec(`oc get infrastructures.config.openshift.io cluster --template={{.status.controlPlaneTopology}} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {
       $topologyMode = result.stdout;
@@ -26,7 +26,7 @@ describe('feature for hypershift provisined cluster', () => {
     });
   });
 
-  it('(OCP-50239,yanpzhan,UserInterface) Update cluster setting page and overview page for hypershift provisioned cluster',{tags:['@userinterface','HyperShiftGUEST','admin']}, () => {
+  it('(OCP-50239,yanpzhan,UserInterface) Update cluster setting page and overview page for hypershift provisioned cluster',{tags:['@userinterface','@hypershift-hosted','admin']}, () => {
     cy.switchPerspective('Administrator');
     ClusterSettingPage.goToClusterSettingConfiguration();
 

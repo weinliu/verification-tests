@@ -31,7 +31,7 @@ describe('Operator Hub tests', () => {
     cy.adminCLI(`oc delete project ${testParams.suggestedNamespace}`,{ failOnNonZeroExit: false });
   });
 
-  it('(OCP-45874,yapei,UserInterface) Check source labels on the operator hub page tiles',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-45874,yapei,UserInterface) Check source labels on the operator hub page tiles',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
     const queryCatalogSource = `oc get catalogsource custom-catalogsource -n openshift-marketplace -o jsonpath={.status.connectionState.lastObservedState}`;
     cy.checkCommandResult(queryCatalogSource, 'READY', { retries: 6, interval: 10000 }).then(() => {
       Pages.gotoOperatorHubPage();
@@ -46,7 +46,7 @@ describe('Operator Hub tests', () => {
     });
   });
 
-  it('(OCP-54544,yapei,UserInterface) Check OperatorHub filter to use nodeArchitectures instead of GOARCH',{tags:['@userinterface','@e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-54544,yapei,UserInterface) Check OperatorHub filter to use nodeArchitectures instead of GOARCH',{tags:['@userinterface','@e2e','admin','@osd-ccs','@hypershift-hosted']}, () => {
     // in ocp54544--catalogsource, we have
     // etcd: operatorframework.io/arch.arm64: supported only
     // argocd: didn't define operatorframework.io in CSV, but by default operatorframework.io/arch.amd64 will be added
@@ -74,7 +74,7 @@ describe('Operator Hub tests', () => {
     });
   });
 
-  it('(OCP-74621,yapei,UserInterface)Show deprecated operators in OperatorHub)',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-74621,yapei,UserInterface)Show deprecated operators in OperatorHub)',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
     const operator_name_threescale = '3scale-community';
     const deprecated_channel_threescale = 'threescale-2.11';
     const deprecated_version_threescale = '0.8.2';
@@ -185,7 +185,7 @@ describe('Operator Hub tests', () => {
       });
   });
 
-  it('(OCP-54037,yapei,UserInterface) Affinity definition support',{tags:['@userinterface','@e2e','admin','@osd-ccs']}, ()=> {
+  it('(OCP-54037,yapei,UserInterface) Affinity definition support',{tags:['@userinterface','@e2e','admin','@osd-ccs','@hypershift-hosted']}, ()=> {
     cy.createProject(testParams.testNamespace);
     operatorHubPage.installOperator('sonarqube-operator', `${testParams.catalogName}`, `${testParams.testNamespace}`);
     Pages.gotoInstalledOperatorPage(testParams.testNamespace)

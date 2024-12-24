@@ -14,7 +14,7 @@ describe('OLM V1 tests', () => {
     cy.adminCLI(`oc delete clusterrolebinding ns-75036-sa75036`,{failOnNonZeroExit: false});
   })
 
-  it('(OCP-75036,yapei,UserInterface)List packages from catalogs',{tags:['@userinterface','@e2e','admin']}, function (){
+  it('(OCP-75036,yapei,UserInterface)List packages from catalogs',{tags:['@userinterface','@e2e','admin','@hypershift-hosted']}, function (){
     cy.isTechPreviewNoUpgradeEnabled().then(value => {
       if (value === false) {
         cy.log('Skip the case because TP not enabled!!');

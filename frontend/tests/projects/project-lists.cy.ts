@@ -31,7 +31,7 @@ describe('project list tests', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${login_user_two}`);
   });
 
-  it('(OCP-43131,yapei,UserInterface) normal and admin user able to filter projects with Requester',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-43131,yapei,UserInterface) normal and admin user able to filter projects with Requester',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
     cy.log('normal user able to filter with Requester');
     cy.visit('/k8s/cluster/projects');
     listPage.rows.shouldBeLoaded();

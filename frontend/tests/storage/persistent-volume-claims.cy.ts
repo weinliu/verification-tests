@@ -23,7 +23,7 @@ describe('PVC tests', () => {
     cy.adminCLI(`oc delete project ${project_name}`,{failOnNonZeroExit: false});
   });
 
-  it('(OCP-72032,yapei,UserInterface)Cross storage class clone and restore',{tags:['@userinterface','@e2e','admin','@rosa','@osd-ccs']}, function() {
+  it('(OCP-72032,yapei,UserInterface)Cross storage class clone and restore',{tags:['@userinterface','@e2e','admin','@rosa','@osd-ccs','@hypershift-hosted']}, function() {
     cy.isEFSDeployed().then(result => {
       if (result === true) {
         this.skip();

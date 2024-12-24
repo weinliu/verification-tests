@@ -24,7 +24,7 @@ describe('Group tests', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-72434,yapei,UserInterface)Add Impersonate Group action to Groups list and details',{tags:['@userinterface','@e2e','admin']}, () => {
+  it('(OCP-72434,yapei,UserInterface)Add Impersonate Group action to Groups list and details',{tags:['@userinterface','@e2e','admin','@hypershift-hosted']}, () => {
     // verify Impersonate Group action on list page
     Pages.gotoGroupListPage();
     listPage.rows.clickKebabAction(groupName,`Impersonate Group ${groupName}`);

@@ -5,7 +5,7 @@
   "scripts": {
     "test-cypress-console": "./node_modules/.bin/cypress open --env openshift=true --browser chrome",
     "test-cypress-console-headless": "node --max-old-space-size=4096 ./node_modules/.bin/cypress run --env grepTags=@e2e openshift=true --browser chrome",
-    "test-cypress-console-hypershift-guest": "node --max-old-space-size=4096 ./node_modules/.bin/cypress run --env grepTags=HyperShiftGUEST openshift=true --browser chrome",
+    "test-cypress-console-hypershift-guest": "node --max-old-space-size=4096 ./node_modules/.bin/cypress run --env grepTags=@hypershift-hosted openshift=true --browser chrome",
     "test-cypress-console-osd": "node --max-old-space-size=4096 ./node_modules/.bin/cypress run --env grepTags=@osd-ccs openshift=true --browser chrome",
     "test-cypress-console-rosa": "node --max-old-space-size=4096 ./node_modules/.bin/cypress run --env grepTags=@rosa openshift=true --browser chrome",
     "cypress-merge": "mochawesome-merge ./gui_test_screenshots/cypress_report*.json > ./gui_test_screenshots/cypress.json",

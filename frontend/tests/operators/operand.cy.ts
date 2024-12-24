@@ -62,7 +62,7 @@ describe('operand tests', () => {
       });
   });
 
-  it('(OCP-63078,yapei,UserInterface)Enable filtering for k8sResourcePrefix x-descriptor',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-63078,yapei,UserInterface)Enable filtering for k8sResourcePrefix x-descriptor',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
     // create several secrets with different labels for later filtering
     let secret = [{'name': 'test-secret-equity', 'literal': 'key111=value111', 'labels': 'test=true level=staging'},
                   {'name': 'test-secret-set', 'literal': 'key222=value222', 'labels': 'test=true level=production'},
