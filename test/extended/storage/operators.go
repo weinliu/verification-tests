@@ -369,7 +369,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		var TLSProfileDefault TLSSecurityProfile = TLSSecurityProfile{
 			profileType:     "default",
 			patchCmd:        `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":}]`,
-			expectedCipher:  `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"]`,
+			expectedCipher:  `["TLS_AES_128_GCM_SHA256","TLS_AES_256_GCM_SHA384","TLS_CHACHA20_POLY1305_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"]`,
 			expectedVersion: "VersionTLS12",
 		}
 
@@ -404,17 +404,13 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			patchCmdRestore := fmt.Sprintf(`--patch=[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":%s}]`, savedTLSSecurityProfile)
 			exeErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("apiserver/cluster", "--type=json", patchCmdRestore).Execute()
 			o.Expect(exeErr).ShouldNot(o.HaveOccurred())
-			// wait 1 min to let co delect the changes and wait the key Cluster Operator in healthy status
-			// Check clusterversion/version doesn't work
-			// Todo: We might need a general function to wait cluster healthy before exiting disruptive test,
-			// but the point is do we need to check/wait all CO? Will it cause longer duration for test?
-			// Or we need a CO snapshot and at least make sure not worse than original status?
-			time.Sleep(60 * time.Second)
-			waitCOHealthy(oc, "storage", 120)
-			waitCOHealthy(oc, "kube-apiserver", 900)
-			// The kube-apiserver is almost the last CO to recover, but still check other and usually it will not wait additional time
-			waitCOHealthy(oc, "authentication", 120)
-			waitCOHealthy(oc, "etcd", 120)
+
+			e2e.Logf("Check all cluster operators should be recover healthy")
+			err = waitForAllCOHealthy(oc)
+			if err != nil {
+				g.Fail(fmt.Sprintf("Cluster operators health check failed. Abnormality found in cluster operators:: %s ", err))
+			}
+
 		}()
 
 		for _, provisioner = range supportProvisioners {

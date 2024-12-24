@@ -781,22 +781,19 @@ func checkCOHealthy(oc *exutil.CLI, coName string) (bool, error) {
 	return reflect.DeepEqual([]string{degradedStatus, progressingStatus, availableStatus}, healthyStatus), err
 }
 
-// Wait for Cluster Storage Operator become healthy using checkCOHealthy()
-// Using 20 Second as polling time, consider it when define the maxWaitingSeconds
-func waitCOHealthy(oc *exutil.CLI, coName string, maxWaitingSeconds int) {
-	pollErr := wait.Poll(20*time.Second, time.Duration(maxWaitingSeconds)*time.Second, func() (bool, error) {
-		healthyBool, err := checkCOHealthy(oc, coName)
+// Wait for an individual cluster operator to become healthy
+func waitCOHealthy(oc *exutil.CLI, coName string) error {
+	return wait.Poll(defaultMaxWaitingTime/defaultIterationTimes, longerMaxWaitingTime, func() (bool, error) {
+		isHealthy, err := checkCOHealthy(oc, coName)
 		if err != nil {
-			e2e.Logf("Get Cluster status failed of: \"%v\"", err)
-			return false, err
+			e2e.Logf("Failed to check status of cluster operator %q: %v", coName, err)
+			return false, nil // continue polling even if an error occurs
 		}
-		if healthyBool {
-			e2e.Logf("Cluster Operator %v status become healthy", coName)
-			return true, nil
+		if isHealthy {
+			e2e.Logf("Cluster operator %q is healthy", coName)
 		}
-		return false, nil
+		return isHealthy, nil
 	})
-	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Waiting for Cluster Operator %v become healthy timeout after %v seconds.", coName, maxWaitingSeconds))
 }
 
 // Check CSI driver successfully installed or no
@@ -1184,4 +1181,34 @@ func isAzureInternalRegistryConfigured(oc *exutil.CLI) bool {
 	registryType, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("configs.imageregistry/cluster", "-o=jsonpath={.spec.storage.azure.networkAccess.type}", "--ignore-not-found").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return registryType == "Internal"
+}
+
+// Retrieve all cluster operator (CO) names
+func getCONames(oc *exutil.CLI) ([]string, error) {
+	coNamesOutput, err := oc.AsAdmin().Run("get").Args("co", "-o=custom-columns=NAME:.metadata.name", "--no-headers").Output()
+	return strings.Fields(coNamesOutput), err
+}
+
+// Ensure all cluster operators reach a healthy state
+func waitForAllCOHealthy(oc *exutil.CLI) error {
+	var coNames []string
+	err := wait.PollImmediate(10*time.Second, 2*time.Minute, func() (bool, error) {
+		var err error
+		coNames, err = getCONames(oc)
+		if err != nil {
+			e2e.Logf("Failed to fetch all cluster operators names: %v", err)
+			return false, nil // continue polling if error occurs
+		}
+		return len(coNames) > 0, nil
+	})
+	if err != nil {
+		return fmt.Errorf("Failed to fetch cluster operators names within the timeout")
+	}
+
+	for _, coName := range coNames {
+		if err := waitCOHealthy(oc, coName); err != nil {
+			return fmt.Errorf("Cluster operator %q failed to become healthy: %w", coName, err)
+		}
+	}
+	return nil
 }
