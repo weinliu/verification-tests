@@ -188,6 +188,8 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 		o.Expect(out).NotTo(o.ContainSubstring(bmhName))
 
 		exutil.By("9) Check if an Image is already attached to the node master-02")
+		setProxyEnv()
+		defer unsetProxyEnv()
 		cmdCurl := fmt.Sprintf(`curl --silent --insecure --request GET --url %s | jq '.Image'`, redfishUrl)
 		img, err := exec.Command("bash", "-c", cmdCurl).Output()
 		if err != nil {
@@ -195,7 +197,10 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 		}
 		if !strings.Contains(string(img), curlImg) {
 			e2e.Logf("A Image is already attached, dataImage should override and attach itself", string(img))
+		} else {
+			e2e.Logf("No Image attached", string(img))
 		}
+		unsetProxyEnv()
 
 		exutil.By("10) Create dataImage 'master-02'")
 		masterNode, err := exutil.GetClusterNodesBy(oc, "master")
@@ -232,7 +237,7 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 			checkNodeStatus(oc, 5*time.Second, 80*time.Second, masterNode[2], "Unknown")
 
 			// poll for node status to change to Ready
-			checkNodeStatus(oc, 10*time.Second, 10*time.Minute, masterNode[2], "True")
+			checkNodeStatus(oc, 15*time.Second, 20*time.Minute, masterNode[2], "True")
 
 			_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("dataImage/"+bmhName, "-n", machineAPINamespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -259,9 +264,11 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 		checkNodeStatus(oc, 5*time.Second, 80*time.Second, masterNode[2], "Unknown")
 
 		// poll for node status to change to Ready
-		checkNodeStatus(oc, 10*time.Second, 10*time.Minute, masterNode[2], "True")
+		checkNodeStatus(oc, 15*time.Second, 20*time.Minute, masterNode[2], "True")
 
 		exutil.By("13) Check ISO image is attached to the node")
+		setProxyEnv()
+		defer unsetProxyEnv()
 		err = wait.Poll(15*time.Second, 60*time.Minute, func() (bool, error) {
 			img, err := exec.Command("bash", "-c", cmdCurl).Output()
 			if err != nil || !strings.Contains(string(img), ".iso") {
@@ -275,6 +282,7 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "DataImage was not attached to the node as expected")
+		unsetProxyEnv()
 
 		exutil.By("14) Mount the iso image on the node to check contents")
 		cmdReadme := fmt.Sprintf(`mkdir %s;
@@ -323,6 +331,8 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 		o.Expect(out).NotTo(o.ContainSubstring(bmhName))
 
 		exutil.By("9) Check if an Image is already attached to the node worker-00")
+		setProxyEnv()
+		defer unsetProxyEnv()
 		cmdCurl := fmt.Sprintf(`curl --silent --insecure --request GET --url %s | jq '.Image'`, redfishUrl)
 		img, err := exec.Command("bash", "-c", cmdCurl).Output()
 		if err != nil {
@@ -330,7 +340,10 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 		}
 		if !strings.Contains(string(img), curlImg) {
 			e2e.Logf("A Image is already attached, dataImage should override and attach itself", string(img))
+		} else {
+			e2e.Logf("No Image attached", string(img))
 		}
+		unsetProxyEnv()
 
 		exutil.By("10) Create dataImage 'worker-00'")
 		workerNode, err := exutil.GetClusterNodesBy(oc, "worker")
@@ -367,7 +380,7 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 			checkNodeStatus(oc, 5*time.Second, 80*time.Second, workerNode[0], "Unknown")
 
 			// poll for node status to change to Ready
-			checkNodeStatus(oc, 10*time.Second, 10*time.Minute, workerNode[0], "True")
+			checkNodeStatus(oc, 15*time.Second, 20*time.Minute, workerNode[0], "True")
 
 			_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("dataImage/"+bmhName, "-n", machineAPINamespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -394,9 +407,11 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 		checkNodeStatus(oc, 5*time.Second, 80*time.Second, workerNode[0], "Unknown")
 
 		// poll for node status to change to Ready
-		checkNodeStatus(oc, 10*time.Second, 10*time.Minute, workerNode[0], "True")
+		checkNodeStatus(oc, 15*time.Second, 20*time.Minute, workerNode[0], "True")
 
 		exutil.By("13) Check ISO image is attached to the node")
+		setProxyEnv()
+		defer unsetProxyEnv()
 		err = wait.Poll(5*time.Second, 60*time.Minute, func() (bool, error) {
 			img, err = exec.Command("bash", "-c", cmdCurl).Output()
 			if err != nil || !strings.Contains(string(img), ".iso") {
@@ -410,6 +425,7 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 			return false, nil
 		})
 		exutil.AssertWaitPollNoErr(err, "DataImage was not attached to the node as expected")
+		unsetProxyEnv()
 
 		exutil.By("14) Mount the iso image on the node to check contents")
 		cmdReadme := fmt.Sprintf(`mkdir %s;

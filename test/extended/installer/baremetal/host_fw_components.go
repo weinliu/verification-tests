@@ -233,7 +233,7 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 	})
 
 	// author: jhajyahy@redhat.com
-	g.It("Author:jhajyahy-Longduration-NonPreRelease-Medium-78361-DAY2 Update host FW via HostFirmwareComponents CRD [Serial] [Disruptive]", func() {
+	g.It("Author:jhajyahy-Longduration-NonPreRelease-Medium-78361-DAY2 Update host FW via HostFirmwareComponents CRD [Disruptive]", func() {
 		dirname = "OCP-78361.log"
 		host, getBmhErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, "-o=jsonpath={.items[4].metadata.name}").Output()
 		o.Expect(getBmhErr).NotTo(o.HaveOccurred(), "Failed to get bmh name")

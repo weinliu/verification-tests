@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,6 +26,8 @@ const (
 	machineAPINamespace              = "openshift-machine-api"
 	maxCpuUsageAllowed       float64 = 90.0
 	minRequiredMemoryInBytes         = 1000000000
+	clusterProfileDir                = "CLUSTER_PROFILE_DIR"
+	proxyFile                        = "proxy"
 )
 
 type Response struct {
@@ -399,4 +402,50 @@ func buildFirmwareURL(vendor, currentVersion string) (string, string) {
 	}
 
 	return url, fileName
+}
+
+func setProxyEnv() {
+	sharedProxy := filepath.Join(os.Getenv("SHARED_DIR"), "proxy-conf.sh")
+	if _, err := os.Stat(sharedProxy); err == nil {
+		e2e.Logf("proxy-conf.sh exists. Proxy environment variables are already set.")
+		return
+	}
+	proxyFilePath := filepath.Join(os.Getenv(clusterProfileDir), proxyFile)
+	if _, err := os.Stat(proxyFilePath); err == nil {
+		content, err := ioutil.ReadFile(proxyFilePath)
+		if err != nil {
+			e2e.Failf("Failed to read file: %v", err)
+		}
+		proxyValue := strings.TrimSpace(string(content))
+		proxyVars := []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"}
+		for _, proxyVar := range proxyVars {
+			if err := os.Setenv(proxyVar, proxyValue); err != nil {
+				e2e.Failf("Failed to set %s: %v", proxyVar, err)
+			}
+		}
+		noProxyValue := "localhost,127.0.0.1"
+		os.Setenv("NO_PROXY", noProxyValue)
+		os.Setenv("no_proxy", noProxyValue)
+		e2e.Logf("Proxy environment variables are set.")
+	} else if os.IsNotExist(err) {
+		e2e.Failf("File does not exist at path: %s\n", proxyFilePath)
+	} else {
+		e2e.Failf("Error checking file: %v\n", err)
+	}
+}
+
+func unsetProxyEnv() {
+	sharedProxy := filepath.Join(os.Getenv("SHARED_DIR"), "proxy-conf.sh")
+	if _, err := os.Stat(sharedProxy); err == nil {
+		e2e.Logf("proxy-conf.sh exists. Not unsetting proxy enviornment variables.")
+		return
+	}
+	proxyVars := []string{"HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy", "NO_PROXY", "no_proxy"}
+	for _, proxyVar := range proxyVars {
+		err := os.Unsetenv(proxyVar)
+		if err != nil {
+			e2e.Failf("Failed to unset %s: %v", proxyVar, err)
+		}
+	}
+	e2e.Logf("Proxy environment variables are unset.")
 }
