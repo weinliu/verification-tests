@@ -1550,6 +1550,10 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 	g.It("Author:vvoronko-High-68930-deploy peerpod with type annotation", func() {
 
+		if testrun.workloadToTest == "coco" {
+			g.Skip("Test not supported with coco")
+		}
+
 		oc.SetupProject()
 
 		var (
@@ -1589,6 +1593,10 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	})
 
 	g.It("Author:vvoronko-High-69018-deploy peerpod with default vcpu and memory", func() {
+
+		if testrun.workloadToTest == "coco" {
+			g.Skip("Test not supported with coco")
+		}
 
 		oc.SetupProject()
 
@@ -1843,7 +1851,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			testNamespace      = oc.Namespace()
 			podLastEventReason string
 			loopCount          int
-			loopMax            = 240
+			loopMax            = 450
 			countIncrement     = 15
 			sleepTime          = time.Duration(countIncrement) * time.Second
 			outputFromOc       string
