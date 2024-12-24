@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -500,5 +501,88 @@ func verifyConnPod2Pod(oc *exutil.CLI, namespaceSrc string, podNameSrc string, n
 			e2e.Logf("output on server side: %s", serverCmdOutput.String())
 			o.Expect(strings.Contains(serverCmdOutput.String(), "hello")).To(o.BeFalse())
 		}
+	}
+}
+
+func createGeneralUDNCRD(oc *exutil.CLI, namespace, crdName, ipv4cidr, ipv6cidr, cidr, layer string) {
+	// This is a function for common CRD creation without special requirement for parameters which is can be used for common cases and to reduce code lines in case level.
+	var (
+		testDataDirUDN          = exutil.FixturePath("testdata", "networking/udn")
+		udnCRDdualStack         = filepath.Join(testDataDirUDN, "udn_crd_dualstack2_template.yaml")
+		udnCRDSingleStack       = filepath.Join(testDataDirUDN, "udn_crd_singlestack_template.yaml")
+		udnCRDLayer2dualStack   = filepath.Join(testDataDirUDN, "udn_crd_layer2_dualstack_template.yaml")
+		udnCRDLayer2SingleStack = filepath.Join(testDataDirUDN, "udn_crd_layer2_singlestack_template.yaml")
+	)
+
+	ipStackType := checkIPStackType(oc)
+	var udncrd udnCRDResource
+	if layer == "layer3" {
+		if ipStackType == "dualstack" {
+			udncrd = udnCRDResource{
+				crdname:    crdName,
+				namespace:  namespace,
+				role:       "Primary",
+				mtu:        1400,
+				IPv4cidr:   ipv4cidr,
+				IPv4prefix: 24,
+				IPv6cidr:   ipv6cidr,
+				IPv6prefix: 64,
+				template:   udnCRDdualStack,
+			}
+			udncrd.createUdnCRDDualStack(oc)
+		} else if ipStackType == "ipv6single" {
+			udncrd = udnCRDResource{
+				crdname:   crdName,
+				namespace: namespace,
+				role:      "Primary",
+				mtu:       1400,
+				cidr:      cidr,
+				prefix:    64,
+				template:  udnCRDSingleStack,
+			}
+			udncrd.createUdnCRDSingleStack(oc)
+		} else {
+			udncrd = udnCRDResource{
+				crdname:   crdName,
+				namespace: namespace,
+				role:      "Primary",
+				mtu:       1400,
+				cidr:      cidr,
+				prefix:    24,
+				template:  udnCRDSingleStack,
+			}
+			udncrd.createUdnCRDSingleStack(oc)
+		}
+		err := waitUDNCRDApplied(oc, namespace, udncrd.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+	} else if layer == "layer2" {
+		if ipStackType == "dualstack" {
+			udncrd = udnCRDResource{
+				crdname:   crdName,
+				namespace: namespace,
+				role:      "Primary",
+				mtu:       1400,
+				IPv4cidr:  ipv4cidr,
+				IPv6cidr:  ipv6cidr,
+				template:  udnCRDLayer2dualStack,
+			}
+			udncrd.createLayer2DualStackUDNCRD(oc)
+
+		} else {
+			udncrd = udnCRDResource{
+				crdname:   crdName,
+				namespace: namespace,
+				role:      "Primary",
+				mtu:       1400,
+				cidr:      cidr,
+				template:  udnCRDLayer2SingleStack,
+			}
+			udncrd.createLayer2SingleStackUDNCRD(oc)
+			err := waitUDNCRDApplied(oc, namespace, udncrd.crdname)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+	} else {
+		e2e.Logf("Not surpport UDN type for now.")
 	}
 }
