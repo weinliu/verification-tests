@@ -1654,10 +1654,6 @@ spec:
 			g.Skip("This is not a SNO cluster, skip.")
 		}
 
-		var (
-			keyWords = "Stopped container|Removed container"
-		)
-
 		nodes, nodeGetError := exutil.GetAllNodes(oc)
 		o.Expect(nodeGetError).NotTo(o.HaveOccurred())
 
@@ -1729,8 +1725,8 @@ spec:
 		exutil.AssertWaitPollNoErr(fallbackError, "Step 3, Test Failed: Failed to start kube-apiserver with previous good revision")
 
 		exutil.By("4: Check startup-monitor pod was created during fallback and currently in Stopped/Removed state")
-		cmd := fmt.Sprintf("journalctl -u crio --since '10min ago'| grep 'startup-monitor' | egrep %v", keyWords)
-		out, journalctlErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodes[0], []string{"--to-namespace=openshift-kube-apiserver"}, cmd)
+		cmd := "journalctl -u crio --since '10min ago'| grep 'startup-monitor' | grep -E 'Stopped container|Removed container'"
+		out, journalctlErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodes[0], []string{"--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(journalctlErr).NotTo(o.HaveOccurred())
 		o.Expect(out).ShouldNot(o.BeEmpty())
 		e2e.Logf("Step 4, Test Passed : Startup-monitor pod was created and Stopped/Removed state")
