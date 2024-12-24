@@ -2536,7 +2536,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Use oc explain to explain configs.imageregistry.operator.openshift.io")
 		result, explainErr := oc.WithoutNamespace().AsAdmin().Run("explain").Args("configs", "--api-version=imageregistry.operator.openshift.io/v1").Output()
 		o.Expect(explainErr).NotTo(o.HaveOccurred())
-		o.Expect(result).To(o.ContainSubstring("Config is the configuration object for a registry instance managed by the"))
+		o.Expect(result).To(o.ContainSubstring("Config is the configuration object for a registry instance managed"))
 		o.Expect(result).To(o.ContainSubstring("registry operator"))
 		o.Expect(result).To(o.ContainSubstring("ImageRegistrySpec defines the specs for the running registry."))
 		o.Expect(result).To(o.ContainSubstring("ImageRegistryStatus reports image registry operational status."))
@@ -3664,15 +3664,20 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("invalid"))
 		o.Expect(output).To(o.ContainSubstring(`valid modes are '', 'Legacy', 'PreserveOriginal'`))
-
 		o.Expect(err).To(o.HaveOccurred())
 		// Set importMode to empty, the default importMode is Legacy
+		// https://github.com/openshift/cluster-image-registry-operator/pull/1167 Set import mode in image config based on ClusterVersion desired Architecture
 		isimportsrc.mode = ""
 		isimportsrc.name = "empty"
 		isimportsrc.create(oc)
 		importOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("is/empty", "-o=jsonpath={.spec.tags[0].importPolicy.importMode}", "-n", isimportsrc.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(importOut).To(o.ContainSubstring("Legacy"))
+		if architecture.IsMultiArchCluster(oc) {
+			o.Expect(importOut).To(o.ContainSubstring("PreserveOriginal"))
+		} else {
+			o.Expect(importOut).To(o.ContainSubstring("Legacy"))
+
+		}
 	})
 
 	g.It("Author:wewang-Medium-57405-Add import-mode option to oc tag command", func() {
@@ -4574,8 +4579,14 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("imagestreamtag", "is67714:tag-manifest", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(output, "Manifests:") {
-			e2e.Failf("The import-mode is wrong, shoule be Legacy mode")
+		if architecture.IsMultiArchCluster(oc) {
+			if !strings.Contains(output, "Manifests:") {
+				e2e.Failf("The default import-mode should be PreserveOriginal in multiarch cluster")
+			}
+		} else {
+			if strings.Contains(output, "Manifests:") {
+				e2e.Failf("The import-mode is wrong, shoule be Legacy mode")
+			}
 		}
 		outputMan, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("imagestreamtag", "is67714:tag-manifest-preserve-original", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
