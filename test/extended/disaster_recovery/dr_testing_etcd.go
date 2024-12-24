@@ -160,7 +160,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 				e2e.Logf("Fail to get master, error: %s. Trying again", err)
 				return false, nil
 			}
-			if matched, _ := regexp.MatchString(masterNodeInternalIPList[0], out); matched {
+			if matched, _ := regexp.MatchString(masterNodeList[0], out); matched {
 				e2e.Logf("Api is back online:")
 				return true, nil
 			}
@@ -610,7 +610,7 @@ var _ = g.Describe("[sig-disasterrecovery] DR_Testing", func() {
 				e2e.Logf("Fail to get master, error: %s. Trying again", err)
 				return false, nil
 			}
-			if matched, _ := regexp.MatchString(masterNodeInternalIPList[0], out); matched {
+			if matched, _ := regexp.MatchString(masterNodeList[0], out); matched {
 				e2e.Logf("Api is back online:")
 				return true, nil
 			}
