@@ -1707,7 +1707,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		clusterextension.LabelKey = "olm.operatorframework.io/metadata.name"
 		clusterextension.LabelValue = clustercatalog1.Name
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+		clusterextension.WaitClusterExtensionVersion(oc, "v1.0.1")
 		clusterextension.Delete(oc)
 
 		exutil.By("4) Install 2 clustercatalogs with different priorities, and the selector of  clusterextension is empty")
@@ -1715,7 +1715,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		clustercatalog2.Patch(oc, `{"spec":{"priority": 1000}}`)
 		clusterextension.Template = clusterextensionTemplate
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v2.0.0"))
+		clusterextension.WaitClusterExtensionVersion(oc, "v2.0.0")
 		clusterextension.Delete(oc)
 
 		exutil.By("5) Install 2 clustercatalogs with different priorities, and the selector of clusterextension is not empty")
@@ -1723,7 +1723,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		clusterextension.LabelKey = "olm.operatorframework.io/metadata.name"
 		clusterextension.LabelValue = clustercatalog1.Name
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
+		clusterextension.WaitClusterExtensionVersion(oc, "v1.0.1")
 
 		exutil.By("6) add ClusterCatalog 3, and modify the selector of clusterextension to use ClusterCatalog 3")
 		defer clustercatalog3.Delete(oc)
@@ -1731,7 +1731,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		clusterextension.LabelKey = clustercatalog3.LabelKey
 		clusterextension.LabelValue = clustercatalog3.LabelValue
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v3.0.0"))
+		clusterextension.WaitClusterExtensionVersion(oc, "v3.0.0")
 		clusterextension.Delete(oc)
 
 		exutil.By("7) matchExpressions")
@@ -1740,7 +1740,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		clusterextension.ExpressionsOperator = "NotIn"
 		clusterextension.ExpressionsValue1 = clustercatalog3.LabelValue
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v2.0.0"))
+		clusterextension.WaitClusterExtensionVersion(oc, "v2.0.0")
 
 		exutil.By("8) test both matchLabels and matchExpressions")
 		clusterextension.Template = clusterextensionLableExpressionsTemplate
@@ -1752,7 +1752,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		clusterextension.ExpressionsValue2 = clustercatalog2.LabelValue
 		clusterextension.ExpressionsValue3 = clustercatalog3.LabelValue
 		clusterextension.Create(oc)
-		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v3.0.0"))
+		clusterextension.WaitClusterExtensionVersion(oc, "v3.0.0")
 
 	})
 

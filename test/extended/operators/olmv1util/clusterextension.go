@@ -243,3 +243,20 @@ func (clusterextension *ClusterExtensionDescription) Delete(oc *exutil.CLI) {
 	clusterextension.DeleteWithoutCheck(oc)
 	//add check later
 }
+
+func (clusterextension *ClusterExtensionDescription) WaitClusterExtensionVersion(oc *exutil.CLI, version string) {
+	e2e.Logf("========= wait clusterextension %v version is %s =========", clusterextension.Name, version)
+	errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
+		installedBundle, _ := GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.install.bundle.name}")
+		if strings.Contains(installedBundle, version) {
+			e2e.Logf("version is %v", installedBundle)
+			return true, nil
+		}
+		e2e.Logf("version is %v, not %s, and try next", installedBundle, version)
+		return false, nil
+	})
+	if errWait != nil {
+		Get(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+		exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("clusterextension version is not %s", version))
+	}
+}
