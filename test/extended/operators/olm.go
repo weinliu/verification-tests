@@ -13354,7 +13354,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 	})
 
 	// OCP-45359 author: jitli@redhat.com
-	g.It("Author:jitli-NonHyperShiftHOST-ConnectedOnly-Medium-45359-Default catalogs need to use the correct tags", func() {
+	g.It("Author:jitli-DEPRECATED-NonHyperShiftHOST-ConnectedOnly-Medium-45359-Default catalogs need to use the correct tags", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		exutil.By("step: get version")
