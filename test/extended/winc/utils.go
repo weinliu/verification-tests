@@ -1280,6 +1280,11 @@ func isProxy(oc *exutil.CLI) bool {
 	clusterPayload, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "-o=jsonpath={.items[0].status}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	clusterProxies := getPayloadMap(clusterPayload)
+
+	// Skip if it's a devcluster environment
+	if httpProxy, ok := clusterProxies["httpProxy"]; ok && strings.Contains(httpProxy.(string), "ci.devcluster.openshift.com") {
+		return false
+	}
 	return len(clusterProxies) != 0
 }
 
