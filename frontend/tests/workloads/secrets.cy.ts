@@ -42,7 +42,7 @@ describe('Workload Secrets test', () => {
       .should('eq', '')
   });
 
-  it('(OCP-54213,yanpzhan,UserInterface) Trim whitespace to form inputs when create image pull secret',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-54213,yanpzhan,UserInterface) Trim whitespace to form inputs when create image pull secret',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
     guidedTour.close();
     Secrets.gotoSecretsPage(project_name);
     Secrets.createImagePullSecret('secrettest','  quay.io  ','  testuser  ','  testpassword  ','  test@redhat.com  ');

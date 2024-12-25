@@ -18,7 +18,7 @@ describe('console-route', () => {
     cy.adminCLI('oc patch ingress.config cluster --type json -p \'[{"op": "remove", "path": "/spec/appsDomain"}]\'');
   });
 
-  it('(OCP-64619,yanpzhan,UserInterface)console route should be re-generated using cluster domain',{tags:['@userinterface','@e2e', 'admin'] }, () => {
+  it('(OCP-64619,yanpzhan,UserInterface)console route should be re-generated using cluster domain',{tags:['@userinterface','@e2e','admin','@hypershift-hosted'] }, () => {
     cy.adminCLI('oc get route console -n openshift-console -ojsonpath="{.metadata.annotations}"')
       .then(result => expect(result.stdout).contains(`"haproxy.router.openshift.io/timeout":"5m"`));
     cy.adminCLI('oc patch route console -n openshift-console --type json -p \'[{"op":"replace","path":"/spec/host","value":"example.com"}]\'');

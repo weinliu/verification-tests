@@ -9,7 +9,7 @@ describe('features for get started resources', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-73109,yanpzhan,UserInterface) Update "Explore new features and capabilities" on "Geting started resources" card',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-73109,yanpzhan,UserInterface) Update "Explore new features and capabilities" on "Geting started resources" card',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
     Overview.goToDashboard();
     cy.exec(`oc get packagemanifests.packages.operators.coreos.com --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | grep rhods-operator`, {failOnNonZeroExit: false}).then((result) => {
       if(result.stdout.includes('rhods')){

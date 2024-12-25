@@ -9,7 +9,7 @@ describe('Lightspeed Operator related features', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-76350,yanpzhan,UserInterface) Console could default select "Enable Operator recommended monitoring"',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-76350,yanpzhan,UserInterface) Console could default select "Enable Operator recommended monitoring"',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
     cy.exec(`oc get packagemanifests.packages.operators.coreos.com --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | grep lightspeed-operator`, {failOnNonZeroExit: false}).then((result) => {
       if(result.stdout.includes('lightspeed')){
 	operatorHubPage.checkRecommenedMonitoring('lightspeed-operator', 'redhat-operators', 'OpenShift Lightspeed Operator', 'true');

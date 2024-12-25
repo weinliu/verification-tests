@@ -17,7 +17,7 @@ describe('Insights check', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-48054,yanpzhan,UserInterface) Add severity links on insights popover',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-48054,yanpzhan,UserInterface) Add severity links on insights popover',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
     Insights.openInsightsPopup();
     cy.exec(`oc get clusterversions.config.openshift.io version --template={{.spec.clusterID}} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {
       const clusterID = result.stdout;

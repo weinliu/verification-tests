@@ -45,7 +45,7 @@ describe('node logs related features', () => {
     logsPage.filterByUnit('systemd-journald');
     logsPage.logLinesNotContain('crio');
   });
-  it('(OCP-46636,yanpzhan,UserInterface) Support for search and line number in pod/node log',{tags:['@userinterface','@e2e','admin']}, () => {
+  it('(OCP-46636,yanpzhan,UserInterface) Support for search and line number in pod/node log',{tags:['@userinterface','@e2e','admin','@hypershift-hosted']}, () => {
     cy.exec(`oc create -f ./fixtures/pods/pod-with-white-space-logs.yaml -n ${testName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`);
     //search log on node log page
     cy.visit('/k8s/cluster/nodes');

@@ -18,7 +18,7 @@ describe('user preferences related features', () => {
     cy.adminCLI(`oc delete project ${projectName}`, {failOnNonZeroExit: false});
   });
 
-  it('(OCP-75494,yanpzhan,UserInterface) Show Lightspeed hover button on pages',{tags:['@userinterface','@e2e','@osd-ccs','@rosa']}, () => {
+  it('(OCP-75494,yanpzhan,UserInterface) Show Lightspeed hover button on pages',{tags:['@userinterface','@e2e','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
     cy.exec(`oc get packagemanifests.packages.operators.coreos.com --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | grep lightspeed-operator`, {failOnNonZeroExit: false}).then((result) => {
       if(result.stdout.includes('lightspeed')){
 	// check lightspeed button with normal user
@@ -44,7 +44,7 @@ describe('user preferences related features', () => {
     });
   });
 
-  it('(OCP-49134,yanpzhan,UserInterface) Support dark theme for admin console',{tags:['@userinterface','@e2e','@osd-ccs','@rosa']}, () => {
+  it('(OCP-49134,yanpzhan,UserInterface) Support dark theme for admin console',{tags:['@userinterface','@e2e','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
     cy.visit('/user-preferences');
     consoleTheme.setLightTheme();
     cy.get('.pf-theme-dark').should('not.exist');

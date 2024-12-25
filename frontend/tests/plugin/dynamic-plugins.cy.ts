@@ -43,7 +43,7 @@ describe('Dynamic plugins features', () => {
     cy.adminCLI(`oc delete consoleplugin console-customization console-demo-plugin`,{failOnNonZeroExit: false});
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`,{failOnNonZeroExit: false});
   });
-  it('(OCP-77719,yanpzhan,UserInterface)Supply custom Consoleplugin details page',{tags:['@userinterface','@e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-77719,yanpzhan,UserInterface)Supply custom Consoleplugin details page',{tags:['@userinterface','@e2e','admin','@osd-ccs','@hypershift-hosted']}, () => {
     cy.visit('/k8s/cluster/console.openshift.io~v1~ConsolePlugin/console-demo-plugin');
     Pages.checkDynamicConsolePluginDetails('OpenShift Console Demo Plugin','-','-','-','Disabled','-','console-demo-plugin','thanos-querier');
     cy.contains('Plugin manifest').click();

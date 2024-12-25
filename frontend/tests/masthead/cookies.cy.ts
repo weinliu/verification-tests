@@ -5,7 +5,7 @@ describe('cookies related feature', () => {
     guidedTour.close();
   });
 
-  it('(OCP-75895,yanpzhan,UserInterface) Console cookies csrf-token and openshift-session-token have SameSite option',{tags:['@userinterface','@e2e','@rosa','@osd-ccs']}, () => {
+  it('(OCP-75895,yanpzhan,UserInterface) Console cookies csrf-token and openshift-session-token have SameSite option',{tags:['@userinterface','@e2e','@rosa','@osd-ccs','@hypershift-hosted']}, () => {
     cy.getCookie('csrf-token').should('have.property','sameSite','strict');
     cy.getCookie('openshift-session-token').should('have.property','sameSite','strict');
   });

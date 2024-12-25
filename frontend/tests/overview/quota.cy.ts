@@ -21,7 +21,7 @@ describe('quota related feature', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-52470,yanpzhan,UserInterface) Quota charts should support to show all resource types',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-52470,yanpzhan,UserInterface) Quota charts should support to show all resource types',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
     cy.visit('/k8s/cluster/projects/test-ocp52470');
     //check quota charts on overview quota card
     quotaCard.checkQuotaCollapsed('quota1');
