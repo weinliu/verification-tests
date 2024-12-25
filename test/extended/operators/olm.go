@@ -5635,15 +5635,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne-withCache",
+				address:     "quay.io/olmqe/nginx-ok-index:vokv23170",
 				template:    catsrcImageTemplate,
 			}
 			subD = subscriptionDescription{
-				subName:                "oadp-operator",
+				subName:                "nginx-ok-v23170",
 				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "oadp-operator",
+				operatorPackage:        "nginx-ok-v23170",
 				catalogSourceName:      catsrc.name,
 				catalogSourceNamespace: "",
 				startingCSV:            "",
@@ -6109,14 +6109,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				template:  ogSingleTemplate,
 			}
 			subD = subscriptionDescription{
-				subName:                "oadp-operator",
+				subName:                "nginx-ok-v24027",
 				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "oadp-operator",
+				operatorPackage:        "nginx-ok-v24027",
 				catalogSourceName:      "",
 				catalogSourceNamespace: "",
-				startingCSV:            "oadp-operator.v0.5.3",
+				startingCSV:            "nginx-ok-v24027.v0.0.1",
 				currentCSV:             "",
 				installedCSV:           "",
 				template:               subTemplate,
@@ -6128,7 +6128,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-index:OLM-2378-Oadp-GoodOne-withCache",
+				address:     "quay.io/olmqe/nginx-ok-index:vokv24027",
 				template:    catsrcImageTemplate,
 			}
 			repeatedCount = 2
@@ -6337,18 +6337,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 30762 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-api:v4-withCache",
+				address:     "quay.io/olmqe/nginx-ok-index:vokv30762",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
-				subName:                "cockroachdb",
+				subName:                "nginx-ok-v30762",
 				namespace:              "",
-				channel:                "stable-5.x",
+				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "cockroachdb",
+				operatorPackage:        "nginx-ok-v30762",
 				catalogSourceName:      catsrc.name,
 				catalogSourceNamespace: "",
-				startingCSV:            "cockroachdb.v5.0.4",
+				startingCSV:            "nginx-ok-v30762.v0.0.1",
 				currentCSV:             "",
 				installedCSV:           "",
 				template:               subTemplate,
@@ -6394,18 +6394,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "Test Catsrc 27683 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/mta-index:v0.0.6-withCache",
+				address:     "quay.io/olmqe/nginx-ok-index:vokv27683",
 				template:    catsrcImageTemplate,
 			}
 			sub = subscriptionDescription{
-				subName:                "mta-operator",
+				subName:                "nginx-ok-v27683",
 				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "mta-operator",
+				operatorPackage:        "nginx-ok-v27683",
 				catalogSourceName:      catsrc.name,
 				catalogSourceNamespace: "",
-				startingCSV:            "windup-operator.0.0.5",
+				startingCSV:            "nginx-ok-v27683.v0.0.1",
 				currentCSV:             "",
 				installedCSV:           "",
 				template:               subTemplate,
@@ -11318,6 +11318,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover test case: OCP-60114, author: kuiwang@redhat.com
 	g.It("Author:kuiwang-ConnectedOnly-ROSA-OSD_CCS-ARO-Medium-60114-olm serves an api to discover all versions of an operator", func() {
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
+		platform := exutil.CheckPlatform(oc)
+		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
+		o.Expect(errProxy).NotTo(o.HaveOccurred())
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "vsphere") ||
+			strings.Contains(platform, "ibmcloud") || strings.Contains(platform, "nutanix") || exutil.Is3MasterNoDedicatedWorkerNode(oc) ||
+			os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
