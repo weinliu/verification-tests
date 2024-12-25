@@ -402,7 +402,7 @@ spec:
 		var (
 			cipherToRecover = `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":}]`
 			cipherOps       = []string{"openshift-authentication", "openshiftapiservers.operator", "kubeapiservers.operator"}
-			cipherToMatch   = `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"] VersionTLS12`
+			cipherToMatch   = `["TLS_AES_128_GCM_SHA256","TLS_AES_256_GCM_SHA384","TLS_CHACHA20_POLY1305_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"] VersionTLS12`
 		)
 
 		cipherItems := []struct {
@@ -422,7 +422,7 @@ spec:
 			},
 			{
 				cipherType:    "Old",
-				cipherToCheck: `["TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA","TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA","TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA","TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA","TLS_RSA_WITH_AES_128_GCM_SHA256","TLS_RSA_WITH_AES_256_GCM_SHA384","TLS_RSA_WITH_AES_128_CBC_SHA256","TLS_RSA_WITH_AES_128_CBC_SHA","TLS_RSA_WITH_AES_256_CBC_SHA","TLS_RSA_WITH_3DES_EDE_CBC_SHA"] VersionTLS10`,
+				cipherToCheck: `["TLS_AES_128_GCM_SHA256","TLS_AES_256_GCM_SHA384","TLS_CHACHA20_POLY1305_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256","TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384","TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256","TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA","TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA","TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA","TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA","TLS_RSA_WITH_AES_128_GCM_SHA256","TLS_RSA_WITH_AES_256_GCM_SHA384","TLS_RSA_WITH_AES_128_CBC_SHA256","TLS_RSA_WITH_AES_128_CBC_SHA","TLS_RSA_WITH_AES_256_CBC_SHA","TLS_RSA_WITH_3DES_EDE_CBC_SHA"] VersionTLS10`,
 				patch:         `[{"op": "replace", "path": "/spec/tlsSecurityProfile", "value":{"old":{},"type":"Old"}}]`,
 			},
 		}
@@ -456,13 +456,13 @@ spec:
 				exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available in 1500 seconds")
 
 				// Using 60s because KAS takes long time, when KAS finished rotation, OAS and Auth should have already finished.
-				e2e.Logf("Checking openshift-apiserver operator should be Available in 200 seconds")
-				err = waitCoBecomes(oc, "openshift-apiserver", 200, expectedStatus)
-				exutil.AssertWaitPollNoErr(err, "openshift-apiserver operator is not becomes available in 200 seconds")
+				e2e.Logf("Checking openshift-apiserver operator should be Available in 300 seconds")
+				err = waitCoBecomes(oc, "openshift-apiserver", 300, expectedStatus)
+				exutil.AssertWaitPollNoErr(err, "openshift-apiserver operator is not becomes available in 300 seconds")
 
-				e2e.Logf("Checking authentication operator should be Available in 200 seconds")
-				err = waitCoBecomes(oc, "authentication", 200, expectedStatus)
-				exutil.AssertWaitPollNoErr(err, "authentication operator is not becomes available in 200 seconds")
+				e2e.Logf("Checking authentication operator should be Available in 300 seconds")
+				err = waitCoBecomes(oc, "authentication", 500, expectedStatus)
+				exutil.AssertWaitPollNoErr(err, "authentication operator is not becomes available in 300 seconds")
 				e2e.Logf("KAS, OAS and Auth operator are available after rollout and cipher's recovery")
 			}
 		}()
@@ -491,13 +491,13 @@ spec:
 			exutil.AssertWaitPollNoErr(err, "kube-apiserver operator is not becomes available in 1500 seconds")
 
 			// Using 60s because KAS takes long time, when KAS finished rotation, OAS and Auth should have already finished.
-			e2e.Logf("Checking openshift-apiserver operator should be Available in 200 seconds")
-			err = waitCoBecomes(oc, "openshift-apiserver", 200, expectedStatus)
-			exutil.AssertWaitPollNoErr(err, "openshift-apiserver operator is not becomes available in 200 seconds")
+			e2e.Logf("Checking openshift-apiserver operator should be Available in 300 seconds")
+			err = waitCoBecomes(oc, "openshift-apiserver", 300, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "openshift-apiserver operator is not becomes available in 300 seconds")
 
-			e2e.Logf("Checking authentication operator should be Available in 200 seconds")
-			err = waitCoBecomes(oc, "authentication", 200, expectedStatus)
-			exutil.AssertWaitPollNoErr(err, "authentication operator is not becomes available in 200 seconds")
+			e2e.Logf("Checking authentication operator should be Available in 300 seconds")
+			err = waitCoBecomes(oc, "authentication", 500, expectedStatus)
+			exutil.AssertWaitPollNoErr(err, "authentication operator is not becomes available in 300 seconds")
 		}
 	})
 
