@@ -269,7 +269,7 @@ func checkPodDeleted(oc *exutil.CLI, ns, label, checkValue string) {
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(podCheck, fmt.Sprintf("found \"%s\" exist or not fully deleted", checkValue))
+	exutil.AssertWaitPollNoErr(podCheck, fmt.Sprintf("Pod \"%s\" exists or not fully deleted", checkValue))
 }
 
 // For normal user to create resources in the specified namespace from the file (not template)
@@ -573,6 +573,26 @@ func waitUntilVMReady(oc *exutil.CLI, vm, ns string) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Virtual machine %s did not become Available", vm))
+}
+
+// wait until catalogSource is Ready
+func WaitUntilCatSrcReady(oc *exutil.CLI, catSrc string) {
+	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 600*time.Second, false, func(context.Context) (done bool, err error) {
+		state, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", catSrc, "-n", "openshift-marketplace", "-o", "jsonpath='{.status.connectionState.lastObservedState}'").Output()
+		if err != nil {
+			// loop until virtual machine is found or until timeout
+			if strings.Contains(err.Error(), "not found") {
+				return false, nil
+			}
+			return false, err
+		}
+
+		if strings.Trim(state, "'") != "READY" {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Catalog Source %s did not become Ready", catSrc))
 }
 
 // check if cluster has baremetal workers

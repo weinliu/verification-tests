@@ -1,0 +1,19 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: catalog-source-template
+objects:
+- apiVersion: operators.coreos.com/v1alpha1
+  kind: CatalogSource
+  metadata:
+    name: "${CATALOG_NAME}"
+    namespace: openshift-marketplace
+  spec:
+    displayName: NetObserv Konflux
+    image: "${IMAGE}"
+    sourceType: grpc
+parameters:
+- name: CATALOG_NAME
+  value: "netobserv-konflux-fbc"
+- name: IMAGE
+  value: "quay.io/redhat-user-workloads/ocp-network-observab-tenant/netobserv-operator/network-observability-operator-fbc:latest"

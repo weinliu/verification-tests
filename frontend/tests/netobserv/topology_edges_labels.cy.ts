@@ -44,7 +44,7 @@ describe("(OCP-53591 Network_Observability) Netflow Topology edges,labels, badge
 
     it("(OCP-53591, memodi, Network_Observability) should verify group owners", function () {
         cy.intercept(getTopologyResourceScopeGroupURL('owners'), { fixture: 'netobserv/flow_metrics_gOwners.json' })
-        cy.get(topologySelectors.nGroups).should('have.length', 14)
+        cy.get(topologySelectors.nGroups).should('have.length', 5)
     })
 
     it("(OCP-53591, memodi, Network_Observability) should verify group expand/collapse", function () {

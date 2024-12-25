@@ -82,7 +82,7 @@ type Flowlog struct {
 	SrcAddr          string
 	TimeFlowEndMs    int
 	DstK8S_OwnerType string
-	Flags            int
+	Flags            []string
 	Etype            int
 	DstK8S_Type      string
 	IfDirection      int

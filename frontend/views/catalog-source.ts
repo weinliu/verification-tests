@@ -11,35 +11,30 @@ export const catalogSources = {
         })
     },
     enableQECatalogSource: (catalogName = "qe-app-registry", catalogDisplayName = "QE Catalog") => {
-        let cmd = `oc get -n openshift-marketplace catalogsource ${catalogName} --kubeconfig=${Cypress.env('KUBECONFIG_PATH')} 2>&1`
-        cy.exec(cmd, { failOnNonZeroExit: false }).then(result => {
-            cy.wrap(result.stdout).then((out) => {
-                // add QE catalog only if it does not exist.
-                if (out.includes("NotFound")) {
-                    cy.adminCLI(`oc create -f ./fixtures/icsp.yaml`)
-                    catalogSources.getOCPVersion()
-                    cy.get('@VERSION').then((VERSION) => {
-                        const INDEX_IMAGE = `quay.io/openshift-qe-optional-operators/aosqe-index:v${VERSION}`
-                        cy.log(`adding catalog source ${INDEX_IMAGE}`)
-                        catalogSources.navToOperatorHubSources();
-                        cy.get('#yaml-create').should('exist').click()
-                        cy.get("#catalog-source-name").type(catalogName)
-                        cy.get('#catalog-source-display-name').type(catalogDisplayName)
-                        cy.get('#catalog-source-image').type(INDEX_IMAGE)
-                        cy.get('#save-changes').click()
-                        cy.byTestID(catalogName + '-status', { timeout: 60000 }).should('exist').should('have.text', "READY")
-                    })
-                }
+        // add QE catalog only if it does not exist.
+        if (!catalogSources.checkCatalogSourcePresent(catalogName)) {
+            cy.adminCLI(`oc create -f ./fixtures/icsp.yaml`)
+            catalogSources.getOCPVersion()
+            cy.get('@VERSION').then((VERSION) => {
+                const INDEX_IMAGE = `quay.io/openshift-qe-optional-operators/aosqe-index:v${VERSION}`
+                cy.log(`adding catalog source ${INDEX_IMAGE}`)
+                catalogSources.navToOperatorHubSources();
+                cy.get('#yaml-create').should('exist').click()
+                cy.get("#catalog-source-name").type(catalogName)
+                cy.get('#catalog-source-display-name').type(catalogDisplayName)
+                cy.get('#catalog-source-image').type(INDEX_IMAGE)
+                cy.get('#save-changes').click()
+                cy.byTestID(catalogName + '-status', { timeout: 60000 }).should('exist').should('have.text', "READY")
             })
-        })
+        }
     },
     createCustomCatalog: (image: any, catalogSource: string, displayName: string) => {
         catalogSources.navToOperatorHubSources()
         if (catalogSource != "community-operators" && image == null) {
             throw new Error("Operator catalog image must be specified for catalogSource other than community-operator");
         }
-
-        if (catalogSource != "community-operators") {
+        // create custom catalog only if its not already present
+        if (catalogSource != "community-operators" && !catalogSources.checkCatalogSourcePresent(catalogSource)) {
             cy.byTestID('item-create').should('exist').click()
             cy.byTestID('catalog-source-name').type(catalogSource)
             cy.get('#catalog-source-display-name').type(displayName)
@@ -50,5 +45,16 @@ export const catalogSources = {
 
         cy.byTestID(catalogSource).should('exist')
         cy.byTestID(catalogSource + '-status', { timeout: 60000 }).should('have.text', "READY")
+    },
+    checkCatalogSourcePresent: (catalogName: string) => {
+        return cy.exec(`oc get -n openshift-marketplace catalogsource ${catalogName} --kubeconfig=${Cypress.env('KUBECONFIG_PATH')}`, {failOnNonZeroExit: false})
+        .then((result) => {
+        if(!result.stderr.includes('NotFound')) {
+          return true;
+        }
+        else {
+            return false;
+        }
+      })
     }
 }

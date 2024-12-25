@@ -12,7 +12,7 @@ export const dashboard = {
             })
         })
 
-        cy.get('#monitoring-time-range-dropdown-dropdown').should('exist').then(btn => {
+        cy.get('#monitoring-time-range-dropdown').should('exist').then(btn => {
             cy.wrap(btn).click().then(drop => {
                 cy.contains('Last 5 minutes').should('exist').click()
             })

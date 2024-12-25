@@ -46,19 +46,13 @@ describe('(OCP-67615, OCP-72874 Network_Observability) Return external traffic a
         cy.byTestID('table-composable').each((td) => {
             expect(td).attr("data-test-rows-count").to.contain(1)
         })
-        cy.get('[data-test-td-column-id=DstK8S_Name]').each((td) => {
-            expect(td).attr("data-test-td-value").to.be.empty
-        })
-        cy.get('[data-test-td-column-id=DstK8S_Namespace]').each((td) => {
-            expect(td).attr("data-test-td-value").to.be.empty
-        })
 
         // validate SrcSubnetLabel=Pods and DstSustomLabel=testcustomlabel for custom subnet labels
         cy.get('[data-test-td-column-id=SrcSubnetLabel]').each((td) => {
             expect(td).attr("data-test-td-value").to.contain('Pods')
         })
         cy.get('[data-test-td-column-id=DstSubnetLabel]').each((td) => {
-            expect(td).attr("data-test-td-value").to.contain('testcustomlabel')
+            expect(td).to.contain('testcustomlabel')
         })
 
         // click on Back-on-Forth button

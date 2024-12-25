@@ -30,7 +30,10 @@ export const Operator = {
             catalogSources.createCustomCatalog(catalogImg, catalogSource, catalogDisplayName)
         }
         else {
-            catalogSources.enableQECatalogSource()
+            let catalogImg = "quay.io/redhat-user-workloads/ocp-network-observab-tenant/netobserv-operator/network-observability-operator-fbc:latest"
+            let catalogSource = "netobserv-konflux-fbc"
+            catalogDisplayName = "NetObserv Konflux"
+            catalogSources.createCustomCatalog(catalogImg, catalogSource, catalogDisplayName)
         }
         return catalogDisplayName
     },
@@ -122,6 +125,7 @@ export const Operator = {
                 cy.log(`Running command: ${cmd}`)
                 cy.exec(cmd, { failOnNonZeroExit: false })
                 // deploy loki
+                cy.adminCLI(`oc apply -f https://raw.githubusercontent.com/netobserv/documents/main/examples/zero-click-loki/1-storage.yaml -n ${namespace}`)
                 cy.adminCLI(`oc apply -f https://raw.githubusercontent.com/netobserv/documents/main/examples/zero-click-loki/2-loki.yaml -n ${namespace}`)
                 cy.byTestID('item-create').should('exist').click()
                 cy.get('#form').click() // bug in console where yaml view is default

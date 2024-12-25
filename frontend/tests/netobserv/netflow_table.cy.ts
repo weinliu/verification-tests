@@ -122,7 +122,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
 
         // Verify SrcNS column for all rows
         cy.get('[data-test-td-column-id=SrcK8S_Namespace]').each((td) => {
-            expect(td).attr("data-test-td-value").to.contain(`${project}`)
+            expect(td).to.contain(`${project}`)
         })
 
         // verify swap button
@@ -133,7 +133,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
 
         // Verify DstNS column for all rows
         cy.get('[data-test-td-column-id=DstK8S_Namespace]').each((td) => {
-            expect(td).attr("data-test-td-value").to.contain(`${project}`)
+            expect(td).to.contain(`${project}`)
         })
 
         netflowPage.clearAllFilters()

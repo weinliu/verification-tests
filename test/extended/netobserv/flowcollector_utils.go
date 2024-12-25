@@ -102,7 +102,11 @@ func (lokilabels Lokilabels) getLokiJSONfilterQuery(parameters ...string) string
 	if len(parameters) != 0 {
 		lokiQuery += " | json"
 		for _, p := range parameters {
-			lokiQuery += fmt.Sprintf(" | %s", p)
+			if strings.Contains(p, "Flags") {
+				lokiQuery += fmt.Sprintf(" %s | json", p)
+			} else {
+				lokiQuery += fmt.Sprintf(" | %s", p)
+			}
 		}
 	}
 	e2e.Logf("Loki query is %s", lokiQuery)

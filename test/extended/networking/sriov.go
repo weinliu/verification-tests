@@ -1139,7 +1139,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			podTempfile         = "sriov-testpod-netobserv-template.yaml"
 			netobservNS         = "openshift-netobserv-operator"
 			NOPackageName       = "netobserv-operator"
-			catsrc              = netobserv.Resource{Kind: "catsrc", Name: "qe-app-registry", Namespace: "openshift-marketplace"}
+			catsrc              = netobserv.Resource{Kind: "catsrc", Name: "netobserv-konflux-fbc", Namespace: "openshift-marketplace"}
 			subscriptionDir     = exutil.FixturePath("testdata", "netobserv", "subscription")
 			NOSource            = netobserv.CatalogSourceObjects{Channel: "stable", SourceName: catsrc.Name, SourceNamespace: catsrc.Namespace}
 			// Operator namespace object
@@ -1231,6 +1231,11 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			if !checkDeviceIDExist(oc, sriovOpNs, deviceID) {
 				g.Skip("the cluster do not contain the sriov card. skip this testing!")
 			}
+
+			g.By("Deploy konflux FBC")
+			catSrcTemplate := filePath.Join(subscriptionDir, "catalog-source.yaml")
+			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), "--ignore-unknown-parameters=true", "-f", catSrcTemplate, "-p", "NAMESPACE="+catsrc.Namespace)
+			netobserv.WaitUntilCatSrcReady(oc, catsrc.Name)
 
 			g.By(fmt.Sprintf("Subscribe operators to %s channel", NOSource.Channel))
 			// check if Network Observability Operator is already present

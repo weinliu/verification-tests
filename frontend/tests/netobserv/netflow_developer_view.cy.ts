@@ -66,6 +66,7 @@ describe('(OCP-75874 Network_Observability) NetObserv developer view', { tags: [
     })
 
     after("after all tests are done", function () {
+        cy.adminCLI(`oc login -u system:admin`)
         cy.adminCLI(`oc delete flowcollector cluster`)
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${user1}`)
     })

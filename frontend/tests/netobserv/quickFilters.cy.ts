@@ -46,10 +46,10 @@ describe('(OCP-56222 Network_Observability) Quick Filters test', { tags: ['Netwo
 
         // verify source and destination NS are test-server and test-client respectively
         cy.get('[data-test-td-column-id=SrcK8S_Namespace]').each((td) => {
-            expect(td).attr("data-test-td-value").to.contain('test-server')
+            expect(td).to.contain('test-server')
         })
         cy.get('[data-test-td-column-id=DstK8S_Namespace]').each((td) => {
-            expect(td).attr("data-test-td-value").to.contain('test-client')
+            expect(td).to.contain('test-client')
         })
 
         cy.get('[role="listbox"]').contains("Test NS").children('[type="checkbox"]').uncheck()

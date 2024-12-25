@@ -23,8 +23,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		// NetObserv Operator variables
 		netobservNS   = "openshift-netobserv-operator"
 		NOPackageName = "netobserv-operator"
-		catsrc        = Resource{"catsrc", "qe-app-registry", "openshift-marketplace"}
-		NOSource      = CatalogSourceObjects{"stable", catsrc.Name, catsrc.Namespace}
+		NOcatSrc      = Resource{"catsrc", "netobserv-konflux-fbc", "openshift-marketplace"}
+		NOSource      = CatalogSourceObjects{"stable", NOcatSrc.Name, NOcatSrc.Namespace}
 
 		// Template directories
 		baseDir         = exutil.FixturePath("testdata", "netobserv")
@@ -50,7 +50,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			NamespaceTemplate: filePath.Join(subscriptionDir, "namespace.yaml"),
 		}
 
-		OTELSource = CatalogSourceObjects{"stable", catsrc.Name, catsrc.Namespace}
+		OTELSource = CatalogSourceObjects{"stable", "redhat-operators", "openshift-marketplace"}
 
 		OTEL = SubscriptionObjects{
 			OperatorName:  "opentelemetry-operator",
@@ -63,13 +63,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	)
 
 	g.BeforeEach(func() {
-		// check if qe-app-registry catSrc is present
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
-		if strings.Contains(output, "NotFound") {
-			// Use redhat-operators castSrc
-			catsrc.Name = "redhat-operators"
-			NOSource.SourceName = catsrc.Name
-		}
+		g.By("Deploy konflux FBC")
+		catSrcTemplate := filePath.Join(subscriptionDir, "catalog-source.yaml")
+		catsrcErr := NOcatSrc.applyFromTemplate(oc, "-n", NOcatSrc.Namespace, "-f", catSrcTemplate)
+		o.Expect(catsrcErr).NotTo(o.HaveOccurred())
+		WaitUntilCatSrcReady(oc, NOcatSrc.Name)
 
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", NOSource.Channel))
 		// check if Network Observability Operator is already present

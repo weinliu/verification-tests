@@ -123,3 +123,9 @@ func getOIDC(oc *exutil.CLI) (string, error) {
 	}
 	return strings.TrimPrefix(oidc, "https://"), nil
 }
+
+func getLokiChannel(oc *exutil.CLI, catalog string) (lokiChannel string, err error) {
+	channels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifests", "-l", "catalog="+catalog, "-n", "openshift-marketplace", "-o=jsonpath={.items[?(@.metadata.name==\"loki-operator\")].status.channels[*].name}").Output()
+	channelArr := strings.Split(channels, " ")
+	return channelArr[len(channelArr)-1], err
+}
