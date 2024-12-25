@@ -1155,11 +1155,9 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		exutil.By("upgrade will be prevented if New enum restrictions are added to an existing field which did not previously have enum restrictions")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.2","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
-
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
 			`field "^.spec.unenumfield": enum constraints ["value1" "value2" "value3"] added when there were no restrictions previously for resolved bundle`, 10, 60, 0)
-
+		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 		clusterextension.Delete(oc)
 
 		exutil.By("Create clusterextension v1.0.3")
@@ -1170,19 +1168,13 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		exutil.By("upgrade will be prevented if Existing enum values from an existing field are removed")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.5","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message", "validation failed", 10, 60, 0)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.3"))
 
 		exutil.By("upgrade will be allowed if Adding new enum values to the list of allowed enum values in a field")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.6","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "reason", "Succeeded", 3, 150, 0)
-		clusterextension.WaitClusterExtensionCondition(oc, "Installed", "True", 0)
-		clusterextension.GetBundleResource(oc)
-		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.6"))
-
-		clusterextension.CheckClusterExtensionCondition(oc, "Installed", "message",
-			"Installed bundle quay.io/openshifttest/nginxolm-operator-bundle:v1.0.6-nginxolm75515 successfully", 10, 60, 0)
-
+		clusterextension.WaitClusterExtensionVersion(oc, "v1.0.6")
 	})
 
 	// author: jitli@redhat.com
