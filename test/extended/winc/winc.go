@@ -2285,18 +2285,19 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to delete windows-services %v ConfigMap", windowsServicesCM)
 
 		g.By("Step 5: Generate new service ConfigMap adding fake new services here")
-		manifestFile, err := exutil.GenerateManifestFile(oc, "winc", "wicd_configmap.yaml", map[string]string{
+		var manifestFile string
+		manifestFile, err = exutil.GenerateManifestFile(oc, "winc", "wicd_configmap.yaml", map[string]string{
 			"<version>": wmcoLogVersion, // Replace the version dynamically
 			"<new_services>": `[
 				{"name":"new-service-1","path":"C:\\k\\new-service-1.exe --logfile C:\\var\\log\\new-service-1.log","bootstrap":false,"priority":2},
 				{"name":"new-service-2","path":"C:\\k\\new-service-2.exe --logfile C:\\var\\log\\new-service-2.log","bootstrap":false,"priority":3}
 			]`, // New services added dynamically
 		})
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		// Ensure cleanup of the manifest and the resources created
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile, "--ignore-not-found").Execute()
-		defer os.Remove(manifestFile)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to find manifest file")
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile, "--ignore-not-found").Execute()
+			os.Remove(manifestFile)
+		}()
 
 		// Create the new windows-services ConfigMap using the generated manifest
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
