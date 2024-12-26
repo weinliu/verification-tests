@@ -32,6 +32,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 		configFile          string
 		configErrFile       string
 		configFile1         string
+		maxBackupsFile      string
 		md5configFile       string
 		og                  operatorGroupDescription
 		sub                 subscriptionDescription
@@ -53,6 +54,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 		configFile = filepath.Join(buildPruningBaseDir, "aide.conf.rhel8")
 		configErrFile = filepath.Join(buildPruningBaseDir, "aide.conf.rhel8.err")
 		configFile1 = filepath.Join(buildPruningBaseDir, "aide.conf.rhel8.1")
+		maxBackupsFile = filepath.Join(buildPruningBaseDir, "fileintegrity-maxbackup.yaml")
 		md5configFile = filepath.Join(buildPruningBaseDir, "md5aide.conf.rhel8")
 
 		og = operatorGroupDescription{
@@ -866,6 +868,59 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 			return false, nil
 		})
 		exutil.AssertWaitPollWithErr(errGet, "The timeout err is expected")
+	})
+
+	//author: xiyuan@redhat.com
+	g.It("Author:xiyuan-NonPreRelease-Medium-51167-check the maxBackups is configurable [Serial][Slow]", func() {
+		g.By("Create fileintegrity with maxBackups unset")
+		defer cleanupObjects(oc, objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.createFIOWithoutConfig(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fi1.checkArgsInPod(oc, "maxbackups=5")
+		fi1.assertNodesConditionNotEmpty(oc)
+
+		g.By("Check DB Backup Result")
+		nodeName := getOneMasterNodeName(oc)
+		fi1.maxbackups = 2
+		fi1.template = maxBackupsFile
+		dbReinit := false
+		dbInitialBackupList, isNewFIO := fi1.getDBBackupLists(oc, nodeName, dbReinit)
+
+		g.By("Create fileintegrity with maxBackup 2")
+		fi1.createFIOWithoutConfig(oc)
+		fi1.checkFileintegrityStatus(oc, "running")
+		fi1.checkArgsInPod(oc, "maxbackups=2")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fi1.assertNodesConditionNotEmpty(oc)
+
+		g.By("Check AIDE database Not re-initialized")
+		checkDBFilesUpdated(oc, fi1, dbInitialBackupList, nodeName, dbReinit, isNewFIO)
+
+		g.By("Re-initializing the AIDE database")
+		dbInitialBackupListBefore, isNewFIO := fi1.getDBBackupLists(oc, nodeName, dbReinit)
+		dbReinit = true
+		fi1.reinitFileintegrity(oc, "annotated")
+		fi1.checkFileintegrityStatus(oc, "running")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fi1.assertNodesConditionNotEmpty(oc)
+		checkDBFilesUpdated(oc, fi1, dbInitialBackupListBefore, nodeName, dbReinit, isNewFIO)
+
+		g.By("Patch Fileintegrity with maxBackups 1")
+		patch := fmt.Sprintf("{\"spec\":{\"config\":{\"maxBackups\":1}}}")
+		patchResource(oc, asAdmin, withoutNamespace, "fileintegrity", fi1.name, "-n", fi1.namespace, "--type", "merge", "-p", patch)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fi1.assertNodesConditionNotEmpty(oc)
+		fi1.checkArgsInPod(oc, "maxbackups=1")
+
+		g.By("Re-initializing the AIDE database and check backups on node")
+		dbInitialBackupList, isNewFIO = fi1.getDBBackupLists(oc, nodeName, dbReinit)
+		e2e.Logf("The dbInitialBackupList is: %s; the isNewFIO is: %v", dbInitialBackupList, isNewFIO)
+		fi1.reinitFileintegrity(oc, "annotated")
+		fi1.checkFileintegrityStatus(oc, "running")
+		fi1.checkArgsInPod(oc, "maxbackups=1")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fi1.assertNodesConditionNotEmpty(oc)
+		checkDBFilesUpdated(oc, fi1, dbInitialBackupList, nodeName, dbReinit, isNewFIO)
 	})
 
 	// author: xiyuan@redhat.com

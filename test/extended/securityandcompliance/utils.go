@@ -23,6 +23,7 @@ type fileintegrity struct {
 	configkey         string
 	graceperiod       int
 	debug             bool
+	maxbackups        int
 	nodeselectorkey   string
 	nodeselectorvalue string
 	template          string
@@ -289,7 +290,8 @@ func (pod *podModify) doActionsOnNode(oc *exutil.CLI, expected string) {
 
 func (fi1 *fileintegrity) createFIOWithoutConfig(oc *exutil.CLI) {
 	err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-n", fi1.namespace, "-f", fi1.template, "-p", "NAME="+fi1.name, "NAMESPACE="+fi1.namespace,
-		"GRACEPERIOD="+strconv.Itoa(fi1.graceperiod), "DEBUG="+strconv.FormatBool(fi1.debug), "NODESELECTORKEY="+fi1.nodeselectorkey, "NODESELECTORVALUE="+fi1.nodeselectorvalue)
+		"GRACEPERIOD="+strconv.Itoa(fi1.graceperiod), "DEBUG="+strconv.FormatBool(fi1.debug), "NODESELECTORKEY="+fi1.nodeselectorkey, "NODESELECTORVALUE="+fi1.nodeselectorvalue,
+		"MAXBACKUPS="+strconv.Itoa(fi1.maxbackups))
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
@@ -530,11 +532,19 @@ func (fi1 *fileintegrity) checkDBBackupResult(oc *exutil.CLI, nodeName string) {
 }
 
 func (fi1 *fileintegrity) getDBBackupLists(oc *exutil.CLI, nodeName string, dbReinitiated bool) ([]string, bool) {
-	var dbGzBackupList []string
-	isNewFIO := false
-	maxBackups, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.spec.config.maxBackups}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	maxBackupsInt, _ := strconv.Atoi(maxBackups)
+	var (
+		dbGzBackupList []string
+		maxBackupsInt  int
+		isNewFIO       bool
+	)
+	isNewFIO = false
+	if fi1.maxbackups == 0 {
+		maxBackups, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.spec.config.maxBackups}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		maxBackupsInt, _ = strconv.Atoi(maxBackups)
+	} else {
+		maxBackupsInt = fi1.maxbackups
+	}
 
 	errWait := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 		dbBackup, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args(`node/`+nodeName, "-n", fi1.namespace, "--", "chroot", "/host", "find", "/etc/kubernetes/", "-maxdepth", "1").Output()
