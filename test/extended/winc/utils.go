@@ -1531,13 +1531,11 @@ func extractMetricValue(queryResult string) string {
 func isDisconnectedCluster(oc *exutil.CLI) bool {
 	// Get the configmap content in YAML format using the more concise method
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", wincTestCM, "-n", defaultNamespace, "-o=yaml").Output()
-	if err != nil {
-		return false
-	}
-
+	// exit with error if the command fails
+	o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get configmap content: %v", err)
 	// Return false if configmap doesn't contain disconnected image key
 	// This means it's not configured for disconnected environment
-	return strings.Contains(output, "primary_windows_container_disconnected_image")
+	return !strings.Contains(output, "primary_windows_container_disconnected_image")
 }
 
 // a function that checks AWS persistant routes before and after the upgrade

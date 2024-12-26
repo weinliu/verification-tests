@@ -592,17 +592,17 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		// we scale the deployment to 5 windows pods
 		scaleDeployment(oc, windowsWorkloads, 5, namespace)
 		hostIPArray, err := getWorkloadsHostIP(oc, windowsWorkloads, namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get Windows pod host IP")
 
 		g.By("Check communication: Windows pod <--> Linux pod")
 		winPodNameArray, err := getWorkloadsNames(oc, windowsWorkloads, namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get Windows pod name")
 		linuxPodNameArray, err := getWorkloadsNames(oc, linuxWorkloads, namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get Linux pod name")
 		winPodIPArray, err := getWorkloadsIP(oc, windowsWorkloads, namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get Windows pod IP")
 		linuxPodIPArray, err := getWorkloadsIP(oc, linuxWorkloads, namespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get Linux pod IP")
 		command := []string{"exec", "-n", namespace, linuxPodNameArray[0], "--", "curl", winPodIPArray[0]}
 		msg, err := oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -612,7 +612,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		linuxSVC := linuxPodIPArray[0] + ":8080"
 		command = []string{"exec", "-n", namespace, winPodNameArray[0], "--", "curl", linuxSVC}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to curl Linux web server from Windows pod")
 		if !strings.Contains(msg, "Linux Container Web Server") {
 			e2e.Failf("Failed to curl Linux web server from Windows pod")
 		}
@@ -623,13 +623,13 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 		command = []string{"exec", "-n", namespace, winPodNameArray[0], "--", "curl", winPodIPArray[0]}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to curl Windows web server from Windows pod in the same node")
 		if !strings.Contains(msg, "Windows Container Web Server") {
 			e2e.Failf("Failed to curl Windows web server from Windows pod in the same node")
 		}
 		command = []string{"exec", "-n", namespace, winPodNameArray[0], "--", "curl", winPodIPArray[1]}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to curl Windows web server from Windows pod in the same node")
 		if !strings.Contains(msg, "Windows Container Web Server") {
 			e2e.Failf("Failed to curl Windows web server from Windows pod in the same node")
 		}
@@ -637,7 +637,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Test connectivity from Linux pod to a Windows pod by DNS")
 		command = []string{"exec", "-n", namespace, linuxPodNameArray[0], "--", "curl", windowsServiceDNS}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to curl by DNS a Windows workload from a Linux pod")
 		if !strings.Contains(msg, "Windows Container Web Server") {
 			e2e.Failf("Failed to curl by DNS a Windows workload from a Linux pod")
 		}
@@ -645,7 +645,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Test connectivity from last Windows pod to a Windows by DNS")
 		command = []string{"exec", "-n", namespace, winPodNameArray[len(winPodNameArray)-1], "--", "curl", windowsServiceDNS}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to curl by DNS a Windows workload from last Windows pod")
 		if !strings.Contains(msg, "Windows Container Web Server") {
 			e2e.Failf("Failed to curl by DNS a Windows workload from last Windows pod pod")
 		}
@@ -653,7 +653,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Test connectivity from Windows pod to a Linux pod by DNS")
 		command = []string{"exec", "-n", namespace, winPodNameArray[0], "--", "curl", linuxServiceDNS}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to curl by DNS a Linux workload from a Windows pod")
 		if !strings.Contains(msg, "Linux Container Web Server") {
 			e2e.Failf("Failed to curl by DNS a Linux web server from Windows pod")
 		}
@@ -666,7 +666,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		lastIP := winPodIPArray[len(winPodIPArray)-1]
 		command = []string{"exec", "-n", namespace, winPodNameArray[0], "--", "curl", lastIP}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to curl Windows web server from Windows pod across different Windows nodes")
 		if !strings.Contains(msg, "Windows Container Web Server") {
 			e2e.Failf("Failed to curl Windows web server from Windows pod across different Windows nodes")
 		}
@@ -674,7 +674,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		lastPodName := winPodNameArray[len(winPodNameArray)-1]
 		command = []string{"exec", "-n", namespace, lastPodName, "--", "curl", winPodIPArray[0]}
 		msg, err = oc.AsAdmin().WithoutNamespace().Run(command...).Args().Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to curl Windows web server from Windows pod across different Windows nodes")
 		if !strings.Contains(msg, "Windows Container Web Server") {
 			e2e.Failf("Failed to curl Windows web server from Windows pod across different Windows nodes")
 		}
