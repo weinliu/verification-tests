@@ -15,7 +15,7 @@ describe('show shortname in console resourse badge', () => {
 
   })
 
-  it('(OCP-67717,xiyuzhao,UserInterface)Correct shortname in console resource barge',{tags:['@userinterface','@e2e','admin','@rosa','@osd-ccs']}, () => {
+  it('(OCP-67717,xiyuzhao,UserInterface)Correct shortname in console resource barge',{tags:['@userinterface','@e2e','admin','@rosa','@osd-ccs','@hypershift-hosted']}, () => {
     searchPage.navToSearchPage();
     cy.get('input[placeholder="Resources"]').clear().type(`far`);
     cy.get(`.co-m-resource-icon.co-m-resource-fenceagentsremediationtemplate`)

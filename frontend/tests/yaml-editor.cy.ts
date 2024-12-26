@@ -31,7 +31,7 @@ describe("yaml editor tests", () => {
     yamlOptions.setTooltips('show');
   });
 
-  it("(OCP-21956,xiyuzhao,UserInterface) drag and drop file for Import YAML page",{tags:['@userinterface','@e2e','@osd-ccs','@rosa']}, () => {
+  it("(OCP-21956,xiyuzhao,UserInterface) drag and drop file for Import YAML page",{tags:['@userinterface','@e2e','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
     cy.visit(`/k8s/ns/${testName}/import`)
       .contains('[data-test-id="resource-title"]', "Import YAML");
     importYamlPage.dragDropYamlFile("./fixtures/fakelargefile.yaml");
@@ -92,7 +92,7 @@ describe("yaml editor tests", () => {
     cy.contains('successfully created').should('exist');
   });
 
-  it("(OCP-68746,xiyuzhao,UserInterface) Yaml editor can handle a line of data longer than 78 characters",{tags:['@userinterface','@e2e','@osd-ccs','@rosa']}, () => {
+  it("(OCP-68746,xiyuzhao,UserInterface) Yaml editor can handle a line of data longer than 78 characters",{tags:['@userinterface','@e2e','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
     cy.exec(`oc create -f ./fixtures/configmap_with_multiple_characters.yaml -n ${testName}`);
     Pages.gotoConfigMapDetailsYamlTab(testName, "test-68746");
     cy.contains('span', 'eeee')

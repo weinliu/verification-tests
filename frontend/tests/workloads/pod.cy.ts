@@ -55,7 +55,7 @@ describe('pod page', () => {
       })
     }
   });
-  it('(OCP-53357,xiyuzhao,UserInterface) Pod host IP is visible on Pod details page',{tags:['@userinterface','@e2e','admin','@rosa','@smoke']}, () => {
+  it('(OCP-53357,xiyuzhao,UserInterface) Pod host IP is visible on Pod details page',{tags:['@userinterface','@e2e','admin','@rosa','@smoke','@hypershift-hosted']}, () => {
     const podname = "limitpod-withnetworks"
     podsPage.goToPodDetails(testName,podname)
     cy.get('[data-test="Host IP"]')
@@ -73,7 +73,7 @@ describe('pod page', () => {
         })
   });
 
-  it('(OCP-33771,xiyuzhao,UserInterface) Check limits, requests, and secondary networks to charts in Pod Details	',{tags:['@userinterface','@e2e','admin','@rosa','@osd-ccs']}, () => {
+  it('(OCP-33771,xiyuzhao,UserInterface) Check limits, requests, and secondary networks to charts in Pod Details	',{tags:['@userinterface','@e2e','admin','@rosa','@osd-ccs','@hypershift-hosted']}, () => {
     const resourceName = ['CPU','Memory','Filesystem', 'Network transfer','Pod count'];
     const params ={
       'ns': testName,

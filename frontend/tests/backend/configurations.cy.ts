@@ -89,7 +89,7 @@ describe('console configuration tests', () => {
       .should('match', /Unsupported value.*TestCap.*supported values.*LightspeedButton.*GettingStartedBanner/)
   });
 
-  it('(OCP-75940,xiyuzhao,Cluster setting for hiding "Getting started resources" banner from Overview', {tags:['@userinterface','@e2e','@admin','@rosa','@osd-ccs']}, () => {
+  it('(OCP-75940,xiyuzhao,Cluster setting for hiding "Getting started resources" banner from Overview', {tags:['@userinterface','@e2e','@admin','@rosa','@osd-ccs','@hypershift-hosted']}, () => {
     const gettingStartBannerEnable= `{"name":"GettingStartedBanner","visibility":{"state":"Enabled"}}`
     const gettingStartBannerDisable=`{"name":"GettingStartedBanner","visibility":{"state":"Disabled"}}`
     const patch_consoleoperator_gettingstartbanner_disabled = `oc patch console.operator cluster -p '{"spec":{"customization":{"capabilities":[{"name": "LightspeedButton","visibility":{"state":"Enabled"}},{"name": "GettingStartedBanner","visibility":{"state":"Disabled"}}]}}}' --type merge`;

@@ -22,7 +22,7 @@ describe('Debug console for pods', () => {
     cy.adminCLI(`oc delete project ${testParams.namespace}`, {failOnNonZeroExit: false});
   })
 
-  it('(OCP-48000,xiyuzhao,UserInterface), Run Pod in Debug mode',{tags:['@userinterface','@e2e']}, () => {
+  it('(OCP-48000,xiyuzhao,UserInterface), Run Pod in Debug mode',{tags:['@userinterface','@e2e','@hypershift-hosted']}, () => {
     // Go and find the CrashLoopBackOff Pod in the deployment page for the application
     cy.visit(`/k8s/ns/${testParams.namespace}/deployments/${testParams.name}-deployment/pods`)
 

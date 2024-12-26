@@ -24,7 +24,7 @@ describe('Check rollout restart and retry in Deployment/DC', () => {
      cy.adminCLI(`oc delete project ${params.namespace}`);
   })
 
-  it('(OCP-52579,xiyuzhao,UserInterface) Add Rollout Restart and Retry function to Deployment/Deployment Config',{tags:['@userinterface','@e2e','@rosa','@smoke']}, () => {
+  it('(OCP-52579,xiyuzhao,UserInterface) Add Rollout Restart and Retry function to Deployment/Deployment Config',{tags:['@userinterface','@e2e','@rosa','@smoke','@hypershift-hosted']}, () => {
     const checkRolloutState = (judge: string) => {
       cy.adminCLI(`oc get deployment/${params.deploymentName} -n ${params.namespace} -o yaml`)
         .its('stdout')
