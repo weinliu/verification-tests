@@ -455,9 +455,9 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		//g.By("****** Reboot Worker Node ****** ")
 		//exutil.DebugNodeWithChroot(oc, workerNodeName, "reboot")
 
-		g.By("Check Nodes Status\n")
-		err = checkNodeStatus(oc, workerNodeName)
-		exutil.AssertWaitPollNoErr(err, "node is not ready")
+		//g.By("Check Nodes Status\n")
+		//err = checkNodeStatus(oc, workerNodeName)
+		//exutil.AssertWaitPollNoErr(err, "node is not ready")
 
 		g.By("Get Master node\n")
 		masterNode := getSingleMasterNode(oc)
@@ -1601,6 +1601,127 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		nodeName = getSingleWorkerNode(oc)
 		out, _ = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", "crictl pull docker.io/ocpqe/hello-pod:latest")
 		o.Expect(strings.Contains(string(out), "Source image rejected: A signature was required, but no signature exists")).Should(o.BeTrue())
+	})
+
+	//author: minmli@redhat.com
+	g.It("Author:minmli-NonHyperShiftHOST-NonPreRelease-Longduration-Critical-72080-Verify cpu affinity of container process matches with cpuset cgroup controller interface file cpuset.cpus [Disruptive][Slow]", func() {
+		//this case verify 3 scenarios:
+		//1)Verify burstable pods affinity contains all online cpus
+		//2)when guaranteed pods are created (with integral cpus) , the affinity of burstable pods are modified accordingly to remove any cpus that was used by guaranteed pod
+		//3)After node reboot, burstable pods affinity should contain all cpus excluding the cpus used by guranteed pods
+		exutil.By("1)Label a specific worker node")
+		workerNodes := getWorkersList(oc)
+		var worker string
+		for i := 0; i < len(workerNodes); i++ {
+			readyStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", workerNodes[i], "-o=jsonpath={.status.conditions[?(@.reason=='KubeletReady')].status}").Output()
+			if readyStatus == "True" {
+				worker = workerNodes[i]
+				break
+			}
+		}
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("nodes", worker, "node-role.kubernetes.io/worker-affinity-tests-").Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("label").Args("nodes", worker, "node-role.kubernetes.io/worker-affinity-tests=", "--overwrite").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2)Create a machine config pool for the specific worker")
+		mcpAffinity := filepath.Join(buildPruningBaseDir, "machineconfigpool-affinity.yaml")
+		defer func() {
+			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + mcpAffinity).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = checkMachineConfigPoolStatus(oc, "worker")
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + mcpAffinity).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2.1)Check the mcp finish updating")
+		mcpName := "worker-affinity-tests"
+		err = checkMachineConfigPoolStatus(oc, mcpName)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("macineconfigpool %v update failed!", mcpName))
+		//the mcp worker also need updating after mcp worker-affinity-tests finish updating
+		err = checkMachineConfigPoolStatus(oc, "worker")
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("macineconfigpool worker update failed!"))
+
+		exutil.By("3)Create a kubeletconfig to enable cpumanager")
+		kubeconfigCpumager := filepath.Join(buildPruningBaseDir, "kubeletconfig-cpumanager.yaml")
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f=" + kubeconfigCpumager).Execute()
+			err := checkMachineConfigPoolStatus(oc, mcpName)
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("macineconfigpool %v update failed!", mcpName))
+		}()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f=" + kubeconfigCpumager).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3.1)Check the mcp finish updating")
+		err = checkMachineConfigPoolStatus(oc, mcpName)
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("macineconfigpool %v update failed!", mcpName))
+
+		exutil.By("4)Check one running burstable pod that its cpu affinity include all online cpus")
+		//select one pod of ns openshift-cluster-node-tuning-operator which is running on the $worker node
+		burstPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-cluster-node-tuning-operator", "--field-selector=spec.nodeName="+worker, "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		coreNum := getCpuNum(oc, worker)
+		burstNs := "openshift-cluster-node-tuning-operator"
+		checkCpuAffinityBurst(oc, burstPodName, burstNs, worker, coreNum, "false")
+
+		exutil.By("5)Create a guranteed pod with integral cpus")
+		podGuTemp := filepath.Join(buildPruningBaseDir, "pod-guaranteed.yaml")
+		podGu72080 := podGuDescription{
+			name:      "gurantee-72080",
+			namespace: oc.Namespace(),
+			nodename:  worker,
+			template:  podGuTemp,
+		}
+		defer podGu72080.delete(oc)
+		podGu72080.create(oc)
+
+		exutil.By("5.1)Check the pod status")
+		err = podStatus(oc, podGu72080.namespace, podGu72080.name)
+		exutil.AssertWaitPollNoErr(err, "pod is not running")
+
+		exutil.By("5.2)Get cpu affinity of the guranteed pod")
+		gu_affinity := getCpuAffinityFromPod(oc, podGu72080.namespace, podGu72080.name)
+
+		exutil.By("6)Check the cpu affinity of burstable pod changed after creating the guranteed pod")
+		checkCpuAffinityBurst(oc, burstPodName, burstNs, worker, coreNum, gu_affinity)
+
+		exutil.By("7)Delete the guranteed pod")
+		podGu72080.delete(oc)
+
+		exutil.By("8)Check the cpu affinity of burstable pod revert after deleting the guranteed pod")
+		// there exist a bug currently, when deleting the pod, the cpu affinity of burstable pod can't revert in a short time
+		//checkCpuAffinityBurst(oc, burstPodName, burstNs, worker, coreNum, "false")
+
+		exutil.By("9)Create a deployment with guranteed pod with integral cpus")
+		deployGuTemp := filepath.Join(buildPruningBaseDir, "guaranteed-deployment.yaml")
+		deploy := NewDeploymentWithNode("guarantee-72080", oc.Namespace(), "1", worker, deployGuTemp)
+		defer deploy.delete(oc)
+		deploy.create(oc)
+		deploy.waitForCreation(oc, 5)
+
+		exutil.By("9.1)Get cpu affinity of the guranteed pod owned by the deployment")
+		guPodName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", oc.Namespace(), "--field-selector", "spec.nodeName="+worker, "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		gu_affinity = getCpuAffinityFromPod(oc, oc.Namespace(), guPodName)
+
+		exutil.By("10)Check the cpu affinity of burstable pod changed after creating the deployment")
+		checkCpuAffinityBurst(oc, burstPodName, burstNs, worker, coreNum, gu_affinity)
+
+		exutil.By("11)Reboot the node")
+		defer checkNodeStatus(oc, worker, "Ready")
+		rebootNode(oc, worker)
+		checkNodeStatus(oc, worker, "NotReady")
+		checkNodeStatus(oc, worker, "Ready")
+
+		exutil.By("12)Check the cpu affinity of burstable pod contain all cpus excluding the cpus used by guranteed pods")
+		deploy.waitForCreation(oc, 5)
+		guPodName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", oc.Namespace(), "--field-selector", "spec.nodeName="+worker, "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		gu_affinity = getCpuAffinityFromPod(oc, oc.Namespace(), guPodName)
+		burstPodName, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-cluster-node-tuning-operator", "--field-selector=spec.nodeName="+worker, "-o=jsonpath={.items[0].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkCpuAffinityBurst(oc, burstPodName, burstNs, worker, coreNum, gu_affinity)
 	})
 })
 

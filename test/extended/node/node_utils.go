@@ -82,6 +82,13 @@ type podNoWkloadCpuDescription struct {
 	template  string
 }
 
+type podGuDescription struct {
+	name      string
+	namespace string
+	nodename  string
+	template  string
+}
+
 type podHelloDescription struct {
 	name      string
 	namespace string
@@ -228,6 +235,7 @@ type deployment struct {
 	namespace string
 	replicas  string
 	image     string
+	nodename  string
 	template  string
 }
 
@@ -358,6 +366,16 @@ func (podNoWkloadCpu *podNoWkloadCpuDescription) delete(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
+func (podGu *podGuDescription) create(oc *exutil.CLI) {
+	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", podGu.template, "-p", "NAME="+podGu.name, "NAMESPACE="+podGu.namespace, "NODENAME="+podGu.nodename)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (podGu *podGuDescription) delete(oc *exutil.CLI) {
+	err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", podGu.namespace, "pod", podGu.name, "--ignore-not-found").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 func getWorkersList(oc *exutil.CLI) []string {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "node-role.kubernetes.io/worker", "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -427,21 +445,35 @@ func checkReservedCpu(oc *exutil.CLI, reservedCpu string) {
 
 // deployment generator function (uses default image from template)
 func NewDeployment(name, namespace, replicas, template string) *deployment {
-	return &deployment{name, namespace, replicas, "", template}
+	return &deployment{name, namespace, replicas, "", "", template}
+}
+
+// deployment generator function (uses default image from template and deploy on specific node)
+func NewDeploymentWithNode(name, namespace, replicas, hostname, template string) *deployment {
+	return &deployment{name, namespace, replicas, "", hostname, template}
 }
 
 // deployment generator function with image override
 func NewDeploymentWithImage(name, namespace, replicas, image, template string) *deployment {
-	return &deployment{name, namespace, replicas, image, template}
+	return &deployment{name, namespace, replicas, image, "", template}
 }
 
+// this function consider parameter image and hostname can't coexist by default
 func (deployment *deployment) create(oc *exutil.CLI) {
 	imageArg := ""
+	nodenameArg := ""
 	if deployment.image != "" {
 		imageArg = "IMAGE=" + deployment.image
+		err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deployment.template, "-p", "NAME="+deployment.name, "NAMESPACE="+deployment.namespace, "REPLICAS="+deployment.replicas, imageArg)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else if deployment.nodename != "" {
+		nodenameArg = "NODENAME=" + deployment.nodename
+		err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deployment.template, "-p", "NAME="+deployment.name, "NAMESPACE="+deployment.namespace, "REPLICAS="+deployment.replicas, nodenameArg)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deployment.template, "-p", "NAME="+deployment.name, "NAMESPACE="+deployment.namespace, "REPLICAS="+deployment.replicas)
+		o.Expect(err).NotTo(o.HaveOccurred())
 	}
-	err := createResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", deployment.template, "-p", "NAME="+deployment.name, "NAMESPACE="+deployment.namespace, "REPLICAS="+deployment.replicas, imageArg)
-	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 // waits until all the pods in the created deployment are in Ready state
@@ -956,19 +988,29 @@ func (podInitCon *podInitConDescription) initContainerNotRestart(oc *exutil.CLI)
 	})
 }
 
-func checkNodeStatus(oc *exutil.CLI, workerNodeName string) error {
-	return wait.Poll(30*time.Second, 3*time.Minute, func() (bool, error) {
-		nodeStatus, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", workerNodeName, "-o=jsonpath={.status.conditions[3].type}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("\nNode Status is %s\n", nodeStatus)
-		if nodeStatus == "Ready" {
-			e2e.Logf("\n WORKER NODE IS READY\n ")
-		} else {
-			e2e.Logf("\n WORKERNODE IS NOT READY\n ")
+func checkNodeStatus(oc *exutil.CLI, nodeName string, expectedStatus string) {
+	var expectedStatus1 string
+	if expectedStatus == "Ready" {
+		expectedStatus1 = "True"
+	} else if expectedStatus == "NotReady" {
+		expectedStatus1 = "Unknown"
+	} else {
+		err1 := fmt.Errorf("TBD supported node status")
+		o.Expect(err1).NotTo(o.HaveOccurred())
+	}
+	err := wait.Poll(5*time.Second, 15*time.Minute, func() (bool, error) {
+		statusOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", nodeName, "-ojsonpath={.status.conditions[-1].status}").Output()
+		if err != nil {
+			e2e.Logf("\nGet node status with error : %v", err)
+			return false, nil
+		}
+		e2e.Logf("Expect Node %s in state %v, kubelet status is %s", nodeName, expectedStatus, statusOutput)
+		if statusOutput != expectedStatus1 {
 			return false, nil
 		}
 		return true, nil
 	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Node %s is not in expected status %s", nodeName, expectedStatus))
 }
 
 func getSingleWorkerNode(oc *exutil.CLI) string {
@@ -1023,8 +1065,8 @@ func removeLabelFromNode(oc *exutil.CLI, label string, workerNodeName string, re
 
 func rebootNode(oc *exutil.CLI, workerNodeName string) error {
 	return wait.Poll(1*time.Second, 1*time.Second, func() (bool, error) {
-		e2e.Logf("\nRebooting....")
-		_, err1 := oc.AsAdmin().WithoutNamespace().Run("debug").Args(`node/`+workerNodeName, "--", "chroot", "/host", "reboot").Output()
+		e2e.Logf("\nRebooting node %s....", workerNodeName)
+		_, err1 := exutil.DebugNodeWithChroot(oc, workerNodeName, "shutdown", "-r", "+1", "-t", "30")
 		o.Expect(err1).NotTo(o.HaveOccurred())
 		return true, nil
 	})
@@ -2430,4 +2472,169 @@ func ExecCommandOnPod(oc *exutil.CLI, podname string, namespace string, command 
 	}
 	exutil.AssertWaitPollNoErr(errExec, fmt.Sprintf("Run commands %q on pod %q failed", command, podname))
 	return podOutput
+}
+
+// this function return the cpu affinity of a pod
+func getCpuAffinityFromPod(oc *exutil.CLI, namespace string, podname string) string {
+	cpuOut, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(podname, "-n", namespace, "--", "/bin/sh", "-c", "cat /proc/self/status | grep Cpus_allowed_list").Output() // Cpus_allowed_list:	1,3
+	o.Expect(err).NotTo(o.HaveOccurred())
+	cpustr := strings.Split(cpuOut, ":")[1]
+	cpuAffinity := strings.TrimSpace(cpustr)
+	e2e.Logf(fmt.Sprintf("The cpu affinity is: %v", cpuAffinity))
+	return cpuAffinity
+}
+
+func getCpuAffinityFromCmd(oc *exutil.CLI, pid string, nodeName string) string {
+	tsksetCmd := fmt.Sprintf(`taskset -pc %v`, pid)
+	cpuAffinityOut, err := exutil.DebugNodeWithOptionsAndChroot(oc, nodeName, []string{"-q"}, "bash", "-c", tsksetCmd) //pid 2535's current affinity list: 0-3
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("command of `taskset -pc %v` return: %v", pid, cpuAffinityOut)
+	cpuAffinity := strings.Split(cpuAffinityOut, ":")[1]
+	cpuAffinity = strings.TrimSpace(cpuAffinity)
+	return cpuAffinity
+}
+
+func getPid(oc *exutil.CLI, podName string, namespace string, nodeName string) string {
+	containerIDString, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-n", namespace, "-o=jsonpath={.status.containerStatuses[0].containerID}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	containerID := strings.Split(containerIDString, "//")[1] // cri-o://98d6bb3c6dbc367571d8cf4e50943184835f298b195361130cd98da4612c3b3b
+	e2e.Logf("containerID is %v", containerID)
+	getPidCmd := fmt.Sprintf(`crictl inspect %v | grep -E \"pid\":`, containerID) // "pid": 2535,
+	pidOut, err := exutil.DebugNodeWithOptionsAndChroot(oc, nodeName, []string{"-q"}, "bash", "-c", getPidCmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("pidOut is %v", pidOut)
+	pidMid := strings.Split(pidOut, ":")[1]
+	pid := strings.Split(pidMid, ",")[0]
+	pid = strings.TrimSpace(pid)
+	return pid
+}
+
+// this function check the cpu affinity of burstable pod
+// coreNum means the number of cpu cores in the node
+// guCore means the cpu core sequence that consumed by guranteed pod, when assigned "false" means no cpu core consumed by gu pod
+func checkCpuAffinityBurst(oc *exutil.CLI, podName string, namespace string, nodeName string, coreNum int, guCore string) {
+	pid := getPid(oc, podName, namespace, nodeName)
+	burstCore := getCpuAffinityFromCmd(oc, pid, nodeName)
+	allCpu := "0-" + strconv.Itoa(coreNum-1)
+
+	if guCore == "false" {
+		o.Expect(burstCore == allCpu).To(o.BeTrue(), fmt.Sprintf("test failed: burstCore != allCpu // guCore is [%v], burstable core is [%v], cpu_num is [%v]", guCore, burstCore, coreNum))
+		e2e.Logf("verify pass: burstCore == allCpu // guCore is [%v], burstable core is [%v], cpu_num is [%v]", guCore, burstCore, coreNum)
+	} else {
+		burstout := getDiffSet(oc, coreNum, guCore)
+		e2e.Logf("The diff set of [allCpu - guCore] is: %v", burstout)
+		o.Expect(burstCore == burstout).To(o.BeTrue(), fmt.Sprintf("test failed: burstCore != allCpu - guCore // burstable core is [%v], guCore is [%v], cpu_num is [%v]", burstout, guCore, coreNum))
+		e2e.Logf("verify pass: burstCore = allCpu - guCore // burstable core is [%v], guCore is [%v], cpu_num is [%v]", burstout, guCore, coreNum)
+	}
+	checkCpuInterfaceFile(oc, pid, burstCore, nodeName)
+}
+
+func checkCpuInterfaceFile(oc *exutil.CLI, pid string, cpuAffinity string, nodeName string) {
+	/*
+	   "pid": 78162
+	   cat /proc/78162/cgroup ==  0::/kubepods.slice/kubepods-pod7c259501_a249_479d_9280_621dcd56bc41.slice/crio-0f5e79c7110c8b6d767373b6b6defd4f9c284247a3ee205204f9e250be95fec1.scope/container
+	   cat /sys/fs/cgroup/kubepods.slice/kubepods-pod7c259501_a249_479d_9280_621dcd56bc41.slice/crio-0f5e79c7110c8b6d767373b6b6defd4f9c284247a3ee205204f9e250be95fec1.scope/cpuset.cpus.effective == 0-3
+	   cat /sys/fs/cgroup/kubepods.slice/kubepods-pod7c259501_a249_479d_9280_621dcd56bc41.slice/crio-0f5e79c7110c8b6d767373b6b6defd4f9c284247a3ee205204f9e250be95fec1.scope/cpuset.cpus ==  0-3
+	*/
+	getCgroupCmd := fmt.Sprintf(`cat /proc/%v/cgroup`, pid)
+	cgroupOut, err := exutil.DebugNodeWithOptionsAndChroot(oc, nodeName, []string{"-q"}, "bash", "-c", getCgroupCmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("the command of `cat /proc/%v/cgroup` return: %v", pid, cgroupOut)
+
+	cgroupStr := strings.Split(cgroupOut, "::")[1]
+	e2e.Logf("cgroupStr is: %v", cgroupStr)
+	cgroup := strings.TrimSpace(cgroupStr)
+	cgroup = strings.Trim(cgroup, "container") //4.18
+	//cgroup = cgroup + "/" //4.17
+	e2e.Logf("cgroup is: %v", cgroup)
+	cpuEffectiveCmd := fmt.Sprintf(`cat /sys/fs/cgroup%vcpuset.cpus.effective`, cgroup)
+	cpuEffective, err := exutil.DebugNodeWithOptionsAndChroot(oc, nodeName, []string{"-q"}, "bash", "-c", cpuEffectiveCmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	cpuEffective = strings.TrimSpace(cpuEffective)
+	e2e.Logf("the command of `cat /sys/fs/cgroup%vcpuset.cpus.effective` return: %v", cgroup, cpuEffective)
+
+	/*
+		// here exists a bug, comment it temporarily
+		cpuCpusCmd := fmt.Sprintf(`cat /sys/fs/cgroup%vcpuset.cpus`, cgroup)
+		cpuCpus, err := exutil.DebugNodeWithOptionsAndChroot(oc, nodeName, []string{"-q"}, "bash", "-c", cpuCpusCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("the command of `cat /sys/fs/cgroup%vcpuset.cpus` return: %v", cgroup, cpuCpus)
+	*/
+
+	//e2e.Logf("cpuAffinity is: %v, cpuEffective is: %v and cpuCpus is: %v", cpuAffinity, cpuEffective, cpuCpus)
+	e2e.Logf("cpuAffinity is: %v, cpuEffective is: %v", cpuAffinity, cpuEffective)
+	// compare cpuAffinity == cpuEffective == cpuCpus
+	o.Expect(cpuAffinity == cpuEffective).To(o.BeTrue(), fmt.Sprintf("test failed! cpuAffinity != cpuEffective, cpuAffinity:%v and cpuEffective:%v", cpuAffinity, cpuEffective))
+	//o.Expect(cpuCpus == cpuEffective).To(o.BeTrue(), fmt.Sprintf("test failed, cpuCpus != cpuEffective : %v", cpuCpus))
+	//e2e.Logf("verify pass: cpuAffinity == cpuEffective == cpuCpus // cpuAffinity is %v, cpuEffective is %v, cpuCpus is %v", cpuAffinity, cpuEffective, cpuCpus)
+	e2e.Logf("verify pass: cpuAffinity == cpuEffective // cpuAffinity is %v, cpuEffective is %v", cpuAffinity, cpuEffective)
+}
+
+// get a difference set of cpu core, e.g. cpu_num is 4 , guCore is "1", then return "0,2-3"
+func getDiffSet(oc *exutil.CLI, cpu_num int, guCore string) string {
+	fullSet := make([]int, cpu_num)
+	for i := 0; i < cpu_num; i++ {
+		fullSet[i] = i
+	}
+	// Parse the guCore "1" into individual numbers
+	excludeParts := strings.Split(guCore, ",")
+	excludeMap := make(map[int]bool)
+	for _, numStr := range excludeParts {
+		num, _ := strconv.Atoi(numStr)
+		excludeMap[num] = true
+	}
+	// Create a slice for the remaining numbers
+	var remaining []int
+	for _, num := range fullSet {
+		if !excludeMap[num] {
+			remaining = append(remaining, num)
+		}
+	}
+	return formatStr(remaining)
+}
+
+// format the numbers into a string with ranges, e.g. numbers[0,2,3], then return "0,2-3"
+func formatStr(numbers []int) string {
+	var formatted []string
+	i := 0
+	for i < len(numbers) {
+		start := numbers[i]
+		// Find the end of the current contiguous range
+		for i+1 < len(numbers) && numbers[i+1] == numbers[i]+1 {
+			i++
+		}
+		end := numbers[i]
+		// If the range has only one element, just add it as a single number
+		if start == end {
+			formatted = append(formatted, strconv.Itoa(start))
+		} else {
+			// Otherwise, add it as a range
+			formatted = append(formatted, fmt.Sprintf("%d-%d", start, end))
+		}
+		i++
+	}
+	return strings.Join(formatted, ",")
+}
+
+// clusterNodesHealthcheck check abnormal nodes
+func clusterNodesHealthcheck(oc *exutil.CLI, waitTime int) error {
+	errNode := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, time.Duration(waitTime)*time.Second, false, func(cxt context.Context) (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Output()
+		if err == nil {
+			if strings.Contains(output, "NotReady") || strings.Contains(output, "SchedulingDisabled") {
+				return false, nil
+			}
+		} else {
+			return false, nil
+		}
+		e2e.Logf("Nodes are normal...")
+		err = oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		return true, nil
+	})
+	if errNode != nil {
+		err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	return errNode
 }
