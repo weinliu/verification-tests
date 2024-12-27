@@ -2650,7 +2650,7 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 	})
 
 	g.It("Author:yinzhou-ROSA-OSD_CCS-ARO-High-76116-Make sure oc could run on rhel with fips on", func() {
-		mnodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-o=jsonpath={.items[0].metadata.name}").Output()
+		workerNodeList, err := exutil.GetClusterNodesBy(oc, "worker")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.By("Create new namespace")
 		oc.SetupProject()
@@ -2658,14 +2658,14 @@ var _ = g.Describe("[sig-cli] Workloads client test", func() {
 		exutil.By("Set namespace as privileged namespace")
 		exutil.SetNamespacePrivileged(oc, project76116)
 		exutil.By("Check if fips enable")
-		efips, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", project76116, "node/"+mnodeName, "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
+		efips, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", project76116, "node/"+workerNodeList[0], "--", "chroot", "/host", "fips-mode-setup", "--check").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(efips, "FIPS mode is enabled.") {
 			g.Skip("Fips mode is disabled, skip it.")
 		}
 
 		exutil.By("Check if oc could run with fips on")
-		clientVersion, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", project76116, "node/"+mnodeName, "--", "chroot", "/host", "oc", "version").Output()
+		clientVersion, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", project76116, "node/"+workerNodeList[0], "--", "chroot", "/host", "oc", "version").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(clientVersion, "Client Version") {
 			e2e.Failf("Failed to run oc client with fips on")
