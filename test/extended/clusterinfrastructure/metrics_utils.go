@@ -26,7 +26,7 @@ func checkAlertRaised(oc *exutil.CLI, alertName string) {
 	token := getPrometheusSAToken(oc)
 	url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "prometheus-k8s", "-n", "openshift-monitoring", "-o=jsonpath={.spec.host}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	alertCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"%s\")'", token, url, alertName)
+	alertCMD := fmt.Sprintf("oc -n openshift-monitoring exec -c prometheus prometheus-k8s-0 -- curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/alerts | jq -r '.data.alerts[] | select (.labels.alertname == \"%s\")'", token, url, alertName)
 	err = wait.Poll(30*time.Second, 960*time.Second, func() (bool, error) {
 		result, err := exec.Command("bash", "-c", alertCMD).Output()
 		if err != nil {
@@ -53,7 +53,7 @@ func checkMetricsShown(oc *exutil.CLI, metricsName string, args ...string) {
 	token := getPrometheusSAToken(oc)
 	url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "prometheus-k8s", "-n", "openshift-monitoring", "-o=jsonpath={.spec.host}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	metricsCMD := fmt.Sprintf("curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/query?query=%s", token, url, metricsName)
+	metricsCMD := fmt.Sprintf("oc -n openshift-monitoring exec -c prometheus prometheus-k8s-0 -- curl -s -k -H \"Authorization: Bearer %s\" https://%s/api/v1/query?query=%s", token, url, metricsName)
 	var queryResult string
 	errQuery := wait.Poll(10*time.Second, 300*time.Second, func() (bool, error) {
 		result, err := exec.Command("bash", "-c", metricsCMD).Output()

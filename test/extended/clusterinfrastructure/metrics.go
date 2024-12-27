@@ -149,7 +149,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		token := getPrometheusSAToken(oc)
 		url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "prometheus-k8s", "-n", "openshift-monitoring", "-o=jsonpath={.spec.host}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		metricsCMD := fmt.Sprintf("curl -X GET --header \"Authorization: Bearer %s\" https://%s/api/v1/query?query=%s --insecure", token, url, metricsName)
+		metricsCMD := fmt.Sprintf("oc -n openshift-monitoring exec -c prometheus prometheus-k8s-0 -- curl -X GET --header \"Authorization: Bearer %s\" https://%s/api/v1/query?query=%s --insecure", token, url, metricsName)
 		metricsOutput, cmdErr := exec.Command("bash", "-c", metricsCMD).Output()
 
 		o.Expect(cmdErr).NotTo(o.HaveOccurred())
