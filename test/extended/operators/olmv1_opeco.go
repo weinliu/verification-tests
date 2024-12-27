@@ -403,6 +403,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	// author: jfan@redhat.com
 	g.It("Author:jfan-VMonly-ConnectedOnly-NonHyperShiftHOST-High-69202-Catalogd clustercatalog offer the operator content through http server off cluster", func() {
+		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")
