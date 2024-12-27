@@ -122,6 +122,24 @@ type installConfig struct {
 	internalJoinSubnet string
 }
 
+type installConfigPrivateLink struct {
+	name1              string
+	namespace          string
+	baseDomain         string
+	name2              string
+	region             string
+	template           string
+	publish            string
+	vmType             string
+	arch               string
+	credentialsMode    string
+	internalJoinSubnet string
+	privateSubnetId1   string
+	privateSubnetId2   string
+	privateSubnetId3   string
+	machineNetworkCidr string
+}
+
 type clusterDeployment struct {
 	fake                 string
 	installerType        string
@@ -445,12 +463,14 @@ const (
 
 // Installer Configurations
 const (
-	PublishExternal = "External"
-	PublishInternal = "Internal"
-	AWSVmTypeARM64  = "m6g.xlarge"
-	AWSVmTypeAMD64  = "m6i.xlarge"
-	archARM64       = "arm64"
-	archAMD64       = "amd64"
+	PublishExternal              = "External"
+	PublishInternal              = "Internal"
+	AWSVmTypeARM64               = "m6g.xlarge"
+	AWSVmTypeAMD64               = "m6i.xlarge"
+	archARM64                    = "arm64"
+	archAMD64                    = "amd64"
+	defaultAWSInternalJoinSubnet = "100.64.0.0/16"
+	defaultAWSMachineNetworkCidr = "10.0.0.0/16"
 )
 
 // Monitoring configurations
@@ -678,13 +698,13 @@ func (claim *clusterClaim) create(oc *exutil.CLI) {
 func (config *installConfig) create(oc *exutil.CLI) {
 	// Set default values
 	if config.publish == "" {
-		config.publish = "External"
+		config.publish = PublishExternal
 	}
 	if config.vmType == "" {
-		config.vmType = "m6i.xlarge"
+		config.vmType = AWSVmTypeAMD64
 	}
 	if config.arch == "" {
-		config.arch = "amd64"
+		config.arch = archAMD64
 	}
 
 	parameters := []string{"--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1=" + config.name1, "NAMESPACE=" + config.namespace, "BASEDOMAIN=" + config.baseDomain, "NAME2=" + config.name2, "REGION=" + config.region, "PUBLISH=" + config.publish, "VMTYPE=" + config.vmType, "ARCH=" + config.arch}
@@ -692,10 +712,48 @@ func (config *installConfig) create(oc *exutil.CLI) {
 		parameters = append(parameters, "CREDENTIALSMODE="+config.credentialsMode)
 	}
 	if len(config.internalJoinSubnet) == 0 {
-		defaultInternalJoinSubnet := "100.64.0.0/16"
-		parameters = append(parameters, "INTERNALJOINSUBNET="+defaultInternalJoinSubnet)
+		parameters = append(parameters, "INTERNALJOINSUBNET="+defaultAWSInternalJoinSubnet)
 	} else {
 		parameters = append(parameters, "INTERNALJOINSUBNET="+config.internalJoinSubnet)
+	}
+	err := applyResourceFromTemplate(oc, parameters...)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+func (config *installConfigPrivateLink) create(oc *exutil.CLI) {
+	// Set default values
+	if config.publish == "" {
+		config.publish = PublishExternal
+	}
+	if config.vmType == "" {
+		config.vmType = AWSVmTypeAMD64
+	}
+	if config.arch == "" {
+		config.arch = archAMD64
+	}
+
+	parameters := []string{"--ignore-unknown-parameters=true", "-f", config.template, "-p", "NAME1=" + config.name1, "NAMESPACE=" + config.namespace, "BASEDOMAIN=" + config.baseDomain, "NAME2=" + config.name2, "REGION=" + config.region, "PUBLISH=" + config.publish, "VMTYPE=" + config.vmType, "ARCH=" + config.arch}
+	if len(config.credentialsMode) > 0 {
+		parameters = append(parameters, "CREDENTIALSMODE="+config.credentialsMode)
+	}
+	if len(config.internalJoinSubnet) == 0 {
+		parameters = append(parameters, "INTERNALJOINSUBNET="+defaultAWSInternalJoinSubnet)
+	} else {
+		parameters = append(parameters, "INTERNALJOINSUBNET="+config.internalJoinSubnet)
+	}
+	if len(config.privateSubnetId1) > 0 {
+		parameters = append(parameters, "PRIVATESUBNETID1="+config.privateSubnetId1)
+	}
+	if len(config.privateSubnetId2) > 0 {
+		parameters = append(parameters, "PRIVATESUBNETID2="+config.privateSubnetId2)
+	}
+	if len(config.privateSubnetId3) > 0 {
+		parameters = append(parameters, "PRIVATESUBNETID3="+config.privateSubnetId3)
+	}
+	if len(config.machineNetworkCidr) == 0 {
+		parameters = append(parameters, "MACHINENETWORKCIDR="+defaultAWSMachineNetworkCidr)
+	} else {
+		parameters = append(parameters, "MACHINENETWORKCIDR="+config.machineNetworkCidr)
 	}
 	err := applyResourceFromTemplate(oc, parameters...)
 	o.Expect(err).NotTo(o.HaveOccurred())

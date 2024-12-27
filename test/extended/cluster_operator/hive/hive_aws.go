@@ -3465,7 +3465,7 @@ spec:
 		}
 	})
 
-	// Author: fxie@redhat.com
+	// Author: fxie@redhat.com mihuang@redhat.com
 	// ./bin/extended-platform-tests run all --dry-run|grep "41212"|./bin/extended-platform-tests run --timeout 80m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-41212-High-43751-Medium-57403-[HiveSDRosa] [HiveSpec] [AWSGov] Hive supports to install private cluster [Disruptive]", func() {
 		// Settings
@@ -3802,15 +3802,20 @@ spec:
 		imageSet.create(oc)
 
 		exutil.By("Creating install-config Secret")
+		// Reuse endpoint VPC here to save cloud resource.
 		installConfigSecretName := cdName + "-install-config"
-		installConfigSecret := installConfig{
-			name1:      installConfigSecretName,
-			namespace:  oc.Namespace(),
-			baseDomain: basedomain,
-			name2:      cdName,
-			region:     region,
-			publish:    PublishInternal,
-			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
+		installConfigSecret := installConfigPrivateLink{
+			name1:              installConfigSecretName,
+			namespace:          oc.Namespace(),
+			baseDomain:         basedomain,
+			name2:              cdName,
+			region:             region,
+			publish:            PublishInternal,
+			machineNetworkCidr: cidr,
+			privateSubnetId1:   strings.Split(privateSubnetIds, ",")[0],
+			privateSubnetId2:   strings.Split(privateSubnetIds, ",")[1],
+			privateSubnetId3:   strings.Split(privateSubnetIds, ",")[2],
+			template:           filepath.Join(testDataDir, "aws-install-config-privatelink.yaml"),
 		}
 		defer cleanupObjects(oc, objectTableRef{"Secret", oc.Namespace(), installConfigSecretName})
 		installConfigSecret.create(oc)
