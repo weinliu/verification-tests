@@ -1,6 +1,7 @@
 package securityandcompliance
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -1098,6 +1099,21 @@ func checkAlert(oc *exutil.CLI, labelName string, alertString string, timeout ti
 		e2e.Logf("The description for the query alerts is: %s", gjson.Get(string(alerts), gjsonQueryAlertNameEqual+labelName+").annotations.description").String())
 	}
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The alerts NOT to contain %s", alertString))
+}
+
+// check Alerts not exist
+func checkAlertNotExist(oc *exutil.CLI, url, alertName string, timeout time.Duration) {
+	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
+	cmd := "curl -G -k -s -H \"Authorization:Bearer " + token + "\" " + url
+	err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, timeout*time.Second, false, func(context.Context) (bool, error) {
+		chk, err := exutil.RemoteShPod(oc, "openshift-monitoring", "prometheus-k8s-0", "sh", "-c", cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if err != nil || strings.Contains(chk, alertName) {
+			return false, nil
+		}
+		return true, err
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Target alert found: %s", alertName))
 }
 
 func getAlertQueriesWithLabelName(oc *exutil.CLI) (string, string, error) {
