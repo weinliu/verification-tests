@@ -1417,13 +1417,14 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 
 		exutil.By("1.3 Validate from the pods running on all the nodes, egress traffic from each node is allowed.\n")
 		nodeList := []string{labelledNodeMap["ocp"], labelledNodeMap["qe"]}
+
 		for _, egressNode := range nodeList {
+			// Ping between the nodes does not work on all clusters, therefore check allowed ICMP egress traffic from pod running on the node
+			o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[egressNode])).To(o.BeTrue())
 			for i := 0; i < numWorkerNodes; i++ {
-				o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[workersList.Items[i].Name])).To(o.BeTrue())
 				CurlPod2NodePass(oc, ns, nodePodMap[workersList.Items[i].Name], egressNode, strconv.Itoa(int(hostport)))
 			}
 		}
-
 		exutil.By("2.0 Create BANP to block egress traffic from all the worker nodes.\n")
 		banp := singleRuleBANPPolicyResourceNode{
 			name:       "default",
@@ -1446,8 +1447,8 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 		exutil.By("2.1 Validate from the pods running on all the nodes, egress traffic from each node is blocked.\n")
 		nodeList = []string{labelledNodeMap["ocp"], labelledNodeMap["qe"]}
 		for _, egressNode := range nodeList {
+			o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[egressNode])).To(o.BeFalse())
 			for i := 0; i < numWorkerNodes; i++ {
-				o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[workersList.Items[i].Name])).To(o.BeFalse())
 				CurlPod2NodeFail(oc, ns, nodePodMap[workersList.Items[i].Name], egressNode, strconv.Itoa(int(hostport)))
 			}
 		}
@@ -1483,18 +1484,17 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 
 		exutil.By("3.1 Validate from the pods running on all the nodes, egress traffic from node labeled team=qe is allowed.\n")
 		egressNode := labelledNodeMap["qe"]
+		o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[egressNode])).To(o.BeTrue())
 		for i := 0; i < numWorkerNodes; i++ {
-			o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[workersList.Items[i].Name])).To(o.BeTrue())
 			CurlPod2NodePass(oc, ns, nodePodMap[workersList.Items[i].Name], egressNode, strconv.Itoa(int(hostport)))
 		}
-
 		exutil.By("3.2 Validate from the pods running on all the nodes, egress traffic from the node labelled team=ocp is blocked.\n")
-
 		egressNode = labelledNodeMap["ocp"]
+		o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[egressNode])).To(o.BeFalse())
 		for i := 0; i < numWorkerNodes; i++ {
-			o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[workersList.Items[i].Name])).To(o.BeFalse())
 			CurlPod2NodeFail(oc, ns, nodePodMap[workersList.Items[i].Name], egressNode, strconv.Itoa(int(hostport)))
 		}
+
 		exutil.By("4.0 Update ANP with only HTTP egress traffic is allowed from node labeled team=qe and all other traffic blocked from other nodes")
 		patchANP = fmt.Sprintf("[{\"op\": \"add\", \"path\":\"/spec/%s/0/ports\", \"value\": [\"portRange\": {\"protocol\": \"TCP\", \"start\": %s, \"end\": %s}]}]", policyType, strconv.Itoa(int(containerport)), strconv.Itoa(int(hostport)))
 		patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("adminnetworkpolicy", anp.name, "--type=json", "-p", patchANP).Execute()
@@ -1506,8 +1506,8 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 
 		exutil.By("4.1 Validate from the pods running on all the nodes, only HTTP egress traffic is allowed from node labeled team=qe.\n")
 		egressNode = labelledNodeMap["qe"]
+		o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[egressNode])).To(o.BeFalse())
 		for i := 0; i < numWorkerNodes; i++ {
-			o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[workersList.Items[i].Name])).To(o.BeFalse())
 			CurlPod2NodePass(oc, ns, nodePodMap[workersList.Items[i].Name], egressNode, strconv.Itoa(int(hostport)))
 		}
 
@@ -1526,8 +1526,8 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 		}
 		exutil.By("5.2 Validate from newly created pods on all the nodes, only HTTP egress traffic is allowed from node labeled team=qe.\n")
 		egressNode = labelledNodeMap["qe"]
+		o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, newNodePodMap[egressNode])).To(o.BeFalse())
 		for i := 0; i < numWorkerNodes; i++ {
-			o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, newNodePodMap[workersList.Items[i].Name])).To(o.BeFalse())
 			CurlPod2NodePass(oc, ns, newNodePodMap[workersList.Items[i].Name], egressNode, strconv.Itoa(int(hostport)))
 		}
 
@@ -1542,8 +1542,8 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 
 		exutil.By("6.2 Validate from pods on all the nodes, all egress traffic from node that had label team=qe is now allowed.\n")
 		egressNode = labelledNodeMap["qe"]
+		o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[egressNode])).To(o.BeTrue())
 		for i := 0; i < numWorkerNodes; i++ {
-			o.Expect(checkNodeAccessibilityFromAPod(oc, egressNode, ns, nodePodMap[workersList.Items[i].Name])).To(o.BeTrue())
 			CurlPod2NodePass(oc, ns, nodePodMap[workersList.Items[i].Name], egressNode, strconv.Itoa(int(hostport)))
 		}
 	})
