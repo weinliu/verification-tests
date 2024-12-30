@@ -86,9 +86,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	// OCP-34163 [HAProxy-frontend-capture] capture and log specific http Response headers via "httpCaptureHeaders" option
 	g.It("Author:shudili-ROSA-OSD_CCS-ARO-ConnectedOnly-Critical-34157-NetworkEdge capture and log specific http Request header via httpCaptureHeaders option", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
-		testPod := filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
-		unsecsvc := filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
-		unsecsvcName := "service-unsecure"
+		testPodSvc := filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
+		unsecsvcName := "httpbin-svc-insecure"
 		clientPod := filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 		cltPodName := "hello-pod"
 		cltPodLabel := "app=hello-pod"
@@ -132,9 +131,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.SetNamespacePrivileged(oc, project1)
 		createResourceFromFile(oc, project1, clientPod)
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
-		createResourceFromFile(oc, project1, testPod)
+		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
-		createResourceFromFile(oc, project1, unsecsvc)
 
 		exutil.By("3.0 Create a http route, and then curl the route")
 		routehost := unsecsvcName + "34157" + ".apps." + getBaseDomain(oc)
@@ -1985,9 +1983,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPod             = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
-			unsecsvc            = filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
-			unsecsvcName        = "service-unsecure"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
+			unsecsvcName        = "httpbin-svc-insecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
@@ -2013,9 +2010,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.SetNamespacePrivileged(oc, project1)
 		createResourceFromFile(oc, project1, clientPod)
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
-		createResourceFromFile(oc, project1, testPod)
+		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
-		createResourceFromFile(oc, project1, unsecsvc)
 
 		exutil.By("Expose a route with the unsecure service inside the project")
 		routeHost := "service-unsecure66560" + "." + ingctrl.domain
@@ -2116,10 +2112,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPod             = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
-			secsvc              = filepath.Join(buildPruningBaseDir+"/httpbin", "service_secure.json")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
-			secsvcName          = "service-secure"
+			secsvcName          = "httpbin-svc-secure"
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
 			srv                 = "gunicorn"
@@ -2192,16 +2187,17 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, fileDir, project1+"/"+cltPodName+":"+fileDir).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		createResourceFromFile(oc, project1, testPod)
+		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
-		createResourceFromFile(oc, project1, secsvc)
+		podName := getPodListByLabel(oc, project1, "name=httpbin-pod")
+		fileSpec := project1 + "/" + podName[0] + ":" + srvCert
 
 		exutil.By("create a reen route")
 		reenRouteHost := "r2-reen66662." + ingctrl.domain
 		lowHostReen := strings.ToLower(reenRouteHost)
 		base64HostReen := base64.StdEncoding.EncodeToString([]byte(reenRouteHost))
 		reenRouteDst := reenRouteHost + ":443:" + podIP
-		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, "-c", "httpbin-https", project1+"/httpbin-pod:"+srvCert, srvCertBackup).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, "-c", "httpbin-https", fileSpec, srvCertBackup).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "route", "reencrypt", "r2-reen", "--service="+secsvcName, "--cert="+customCert, "--key="+customKey, "--ca-cert="+name+"-ca.pem", "--dest-ca-cert="+srvCertBackup, "--hostname="+reenRouteHost).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2294,10 +2290,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPod             = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
-			unsecsvc            = filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
-			unsecsvcName        = "service-unsecure"
+			unsecsvcName        = "httpbin-svc-insecure"
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
 			srv                 = "gunicorn"
@@ -2366,9 +2361,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, fileDir, project1+"/"+cltPodName+":"+fileDir).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		createResourceFromFile(oc, project1, testPod)
+		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
-		createResourceFromFile(oc, project1, unsecsvc)
 
 		exutil.By("create an edge route")
 		routerpod := getNewRouterPod(oc, ingctrl.name)
@@ -2468,9 +2462,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPod             = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
-			unsecsvc            = filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
-			unsecsvcName        = "service-unsecure"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
+			unsecsvcName        = "httpbin-svc-insecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
@@ -2496,9 +2489,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.SetNamespacePrivileged(oc, project1)
 		createResourceFromFile(oc, project1, clientPod)
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
-		createResourceFromFile(oc, project1, testPod)
+		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
-		createResourceFromFile(oc, project1, unsecsvc)
 
 		exutil.By("Expose a route with the unsecure service inside the project")
 		routeHost := "service-unsecure66572" + "." + ingctrl.domain
@@ -2601,10 +2593,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPod             = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
-			unsecsvc            = filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
-			unsecsvcName        = "service-unsecure"
+			unsecsvcName        = "httpbin-svc-insecure"
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
 			srv                 = "gunicorn"
@@ -2673,9 +2664,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, fileDir, project1+"/"+cltPodName+":"+fileDir).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		createResourceFromFile(oc, project1, testPod)
+		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
-		createResourceFromFile(oc, project1, unsecsvc)
 
 		exutil.By("create an edge route")
 		edgeRouteHost := "r3-edge67009." + ingctrl.domain
@@ -2778,10 +2768,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPod             = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
-			secsvc              = filepath.Join(buildPruningBaseDir+"/httpbin", "service_secure.json")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
-			secsvcName          = "service-secure"
+			secsvcName          = "httpbin-svc-secure"
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
 			srv                 = "gunicorn"
@@ -2852,15 +2841,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, fileDir, project1+"/"+cltPodName+":"+fileDir).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		createResourceFromFile(oc, project1, testPod)
+		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
-		createResourceFromFile(oc, project1, secsvc)
+		podName := getPodListByLabel(oc, project1, "name=httpbin-pod")
+		fileSpec := project1 + "/" + podName[0] + ":" + srvCert
 
 		exutil.By("create a reen route")
 		reenRouteHost := "r2-reen67010." + ingctrl.domain
 		lowHostReen := strings.ToLower(reenRouteHost)
 		base64HostReen := base64.StdEncoding.EncodeToString([]byte(reenRouteHost))
-		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, "-c", "httpbin-https", project1+"/httpbin-pod:"+srvCert, srvCertBackup).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, "-c", "httpbin-https", fileSpec, srvCertBackup).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "route", "reencrypt", "r2-reen", "--service="+secsvcName, "--cert="+customCert, "--key="+customKey, "--ca-cert="+name+"-ca.pem", "--dest-ca-cert="+srvCertBackup, "--hostname="+reenRouteHost).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2959,9 +2949,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		var (
 			buildPruningBaseDir      = exutil.FixturePath("testdata", "router")
 			customTemp               = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPod                  = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
-			unsecsvc                 = filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
-			unsecsvcName             = "service-unsecure"
+			testPodSvc               = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
+			unsecsvcName             = "httpbin-svc-insecure"
 			clientPod                = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			cltPodName               = "hello-pod"
 			cltPodLabel              = "app=hello-pod"
@@ -2989,9 +2978,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.SetNamespacePrivileged(oc, project1)
 		createResourceFromFile(oc, project1, clientPod)
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
-		createResourceFromFile(oc, project1, testPod)
+		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
-		createResourceFromFile(oc, project1, unsecsvc)
 
 		exutil.By("Expose a route with the unsecure service inside the project")
 		routehost := "service-unsecure66566" + "." + "apps." + baseDomain
@@ -3191,9 +3179,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPod             = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
-			unsecsvc            = filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
-			unsecsvcName        = "service-unsecure"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
+			unsecsvcName        = "httpbin-svc-insecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
@@ -3218,9 +3205,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.SetNamespacePrivileged(oc, project1)
 		createResourceFromFile(oc, project1, clientPod)
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
-		createResourceFromFile(oc, project1, testPod)
+		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
-		createResourceFromFile(oc, project1, unsecsvc)
 
 		exutil.By("Expose a route with the unsecure service inside the project")
 		routehost := "service-unsecure66568" + "." + ingctrl.name + baseDomain
@@ -3326,9 +3312,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPod             = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
-			unsecsvc            = filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
-			unsecsvcName        = "service-unsecure"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
+			unsecsvcName        = "httpbin-svc-insecure"
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp66569",
 				namespace: "openshift-ingress-operator",
@@ -3349,9 +3334,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("Deploy a project with a backend pod and its service resources")
 		project1 := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, project1)
-		createResourceFromFile(oc, project1, testPod)
+		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
-		createResourceFromFile(oc, project1, unsecsvc)
 
 		exutil.By("Expose a route with the unsecure service inside the project")
 		routehost := "service-unsecure66569" + "." + ingctrl.name + baseDomain
@@ -3463,9 +3447,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPod             = filepath.Join(buildPruningBaseDir+"/httpbin", "httpbin-pod.json")
-			unsecsvc            = filepath.Join(buildPruningBaseDir+"/httpbin", "service_unsecure.json")
-			unsecsvcName        = "service-unsecure"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
+			unsecsvcName        = "httpbin-svc-insecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
@@ -3489,9 +3472,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, clientPod)
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
-		createResourceFromFile(oc, project1, testPod)
+		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
-		createResourceFromFile(oc, project1, unsecsvc)
 
 		exutil.By("3.0 Create a HTTP route inside the project")
 		routehost := "service-unsecure77284" + "." + ingctrl.domain
