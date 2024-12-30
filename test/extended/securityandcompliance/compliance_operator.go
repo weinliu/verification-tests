@@ -70,6 +70,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		prometheusAuditRuleYAML          string
 		wordpressRouteYAML               string
 		resourceQuotaYAML                string
+		tpConfigureTlsCipherSuites       string
 		tprofileHypershfitTemplate       string
 		tpSingleVariableTemplate         string
 		tpThreeVariablesTemplate         string
@@ -130,6 +131,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		prometheusAuditRuleYAML = filepath.Join(buildPruningBaseDir, "prometheus-audit.yaml")
 		wordpressRouteYAML = filepath.Join(buildPruningBaseDir, "wordpress-route.yaml")
 		resourceQuotaYAML = filepath.Join(buildPruningBaseDir, "resource-quota.yaml")
+		tpConfigureTlsCipherSuites = filepath.Join(buildPruningBaseDir, "tailoredprofile-rule-ocp4-kubelet-configure-tls-cipher-suites.yaml")
 		tprofileWithoutDescriptionYAML = filepath.Join(buildPruningBaseDir, "tailoredprofile-withoutdescription.yaml")
 		tprofileWithoutTitleYAML = filepath.Join(buildPruningBaseDir, "tailoredprofile-withouttitle.yaml")
 		serviceYAML = filepath.Join(buildPruningBaseDir, "service-unsecure.yaml")
@@ -6996,6 +6998,119 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		o.Expect(files).NotTo(o.BeEmpty(), msgIfErr)
 		fails = verifyFilesUnderMustgather(mustgatherDir, fails)
 		o.Expect(fails).To(o.Equal(0), fmt.Sprintf("%v logs did not match expectd results\n", fails))
+	})
+
+	// author: xiyuan@redhat.com
+	g.It("Author:xiyuan-NonHyperShiftHOST-CPaasrunOnly-NonPreRelease-Medium-50505-Verify remediation works for rule ocp4_kubelet_configure_tls_cipher_suites with variables set in tatilored profile [Disruptive][Slow]", func() {
+		var (
+			tpName = "tp-config-tls-cipher-" + getRandomString()
+			ss     = scanSettingDescription{
+				autoapplyremediations:  true,
+				autoupdateremediations: true,
+				name:                   "auto-rem-ss-" + getRandomString(),
+				namespace:              subD.namespace,
+				roles1:                 "wrscan",
+				rotation:               5,
+				schedule:               "0 1 * * *",
+				strictnodescan:         false,
+				size:                   "2Gi",
+				priorityclassname:      "",
+				debug:                  false,
+				suspend:                false,
+				template:               scansettingSingleTemplate,
+			}
+			ssb = scanSettingBindingDescription{
+				name:            "tp-test" + getRandomString(),
+				namespace:       subD.namespace,
+				profilekind1:    "TailoredProfile",
+				profilename1:    tpName,
+				scansettingname: ss.name,
+				template:        scansettingbindingSingleTemplate,
+			}
+		)
+
+		// checking all nodes are in Ready state before the test case starts
+		checkNodeStatus(oc)
+		// adding label to one rhcos worker node to skip rhel and other RHCOS worker nodes
+		g.By("Label one rhcos worker node as wrscan.. !!!\n")
+		workerNodeName := getOneRhcosWorkerNodeName(oc)
+		setLabelToOneWorkerNode(oc, workerNodeName)
+
+		g.By("Cleanup before starting with testcase")
+		cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"ssb", subD.namespace, "--all"},
+			objectTableRef{"suite", subD.namespace, "--all"},
+			objectTableRef{"scan", subD.namespace, "--all"})
+
+		defer func() {
+			g.By("Remove scansettingbinding, machineconfig, machineconfigpool objects.. !!!\n")
+			removeLabelFromWorkerNode(oc, workerNodeName)
+			checkMachineConfigPoolStatus(oc, "worker")
+			cleanupObjectsIgnoreNotFound(oc, objectTableRef{"tp", subD.namespace, tpName},
+				objectTableRef{"ss", subD.namespace, ss.name},
+				objectTableRef{"ssb", subD.namespace, ssb.name})
+			checkMachineConfigPoolStatus(oc, "worker")
+			cleanupObjectsIgnoreNotFound(oc, objectTableRef{"mcp", subD.namespace, ss.roles1})
+			checkMachineConfigPoolStatus(oc, "worker")
+			checkNodeStatus(oc)
+			cleanupObjectsIgnoreNotFound(oc, objectTableRef{"mc", subD.namespace, "-l compliance.openshift.io/suite=" + ssb.name},
+				objectTableRef{"kubeletconfig", subD.namespace, "compliance-operator-kubelet-" + ss.roles1})
+		}()
+		defer func() {
+			g.By("Remove lables for the worker nodes !!!\n")
+			removeLabelFromWorkerNode(oc, workerNodeName)
+			checkMachineConfigPoolStatus(oc, "worker")
+			newCheck("expect", asAdmin, withoutNamespace, compare, "0", ok, []string{"machineconfigpool", ss.roles1, "-n", subD.namespace, "-o=jsonpath={.status.machineCount}"}).check(oc)
+		}()
+		defer func() {
+			g.By("Patch all complianceremediations to false .. !!!\n")
+			patchPaused := fmt.Sprintf("{\"spec\":{\"paused\":true}}")
+			patchResource(oc, asAdmin, withoutNamespace, "mcp", ss.roles1, "-n", subD.namespace, "--type", "merge", "-p", patchPaused)
+			setApplyToFalseForAllCrs(oc, subD.namespace, ssb.name)
+			patchUnpaused := fmt.Sprintf("{\"spec\":{\"paused\":false}}")
+			patchResource(oc, asAdmin, withoutNamespace, "mcp", ss.roles1, "-n", subD.namespace, "--type", "merge", "-p", patchUnpaused)
+			checkMachineConfigPoolStatus(oc, ss.roles1)
+		}()
+
+		g.By("Create wrscan machineconfigpool.. !!!\n")
+		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", subD.namespace, "-f", machineConfigPoolYAML).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkMachineConfigPoolStatus(oc, ss.roles1)
+
+		g.By("Create tp... !!!\n")
+		errApply := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", tpConfigureTlsCipherSuites, "-p", "NAME="+tpName, "NAMESPACE="+subD.namespace)
+		o.Expect(errApply).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, "READY", ok, []string{"tailoredprofile", "-n", subD.namespace, tpName,
+			"-o=jsonpath={.status.state}"}).check(oc)
+
+		g.By("Create scansetting... !!!\n")
+		ss.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ss.name, ok, []string{"scansetting", "-n", ss.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Create scansettingbinding... !!!\n")
+		ssb.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status !!!\n")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult", tpName + "-" + ss.roles1 + "-kubelet-configure-tls-cipher-suites",
+			"-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Applied", ok, []string{"complianceremediations", tpName + "-" + ss.roles1 + "-kubelet-configure-tls-cipher-suites",
+			"-n", subD.namespace, "-o=jsonpath={.status.applicationState}"}).check(oc)
+		checkMachineConfigPoolStatus(oc, ss.roles1)
+		clusterOperatorHealthcheck(oc, 1500)
+
+		g.By("Trigger another round of rescan if needed !!!\n")
+		_, err2 := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("-n", ssb.namespace, "compliancescan", tpName+"-"+ss.roles1, "compliance.openshift.io/rescan=").Output()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "COMPLIANT", ok, []string{"compliancesuite", ssb.name,
+			"-n", subD.namespace, "-o=jsonpath={.status.result}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult", tpName + "-" + ss.roles1 + "-kubelet-configure-tls-cipher-suites",
+			"-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
 	})
 
 	// author: xiyuan@redhat.com
