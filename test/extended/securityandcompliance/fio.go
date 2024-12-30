@@ -398,10 +398,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 	})
 
 	//author: xiyuan@redhat.com
-	g.It("Author:xiyuan-DEPRECATED-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-WRS-Medium-33332-V-EST.01-The fileintegritynodestatuses should show status summary for FIO [Serial]", func() {
-		fi1.debug = false
-
+	g.It("Author:xiyuan-NonHyperShiftHOST-ConnectedOnly-ROSA-ARO-OSD_CCS-WRS-NonPreRelease-Medium-33332-V-EST.01-The fileintegritynodestatuses should show status summary for FIO [Serial]", func() {
 		g.By("Create fileintegrity with aide config")
+		fi1.debug = false
 		fi1.configname = "myconf"
 		fi1.configkey = "aide-conf"
 		defer cleanupObjects(oc,
@@ -412,16 +411,52 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 		fi1.createFIOWithConfig(oc)
 		fi1.checkFileintegrityStatus(oc, "running")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		nodeName := fi1.getNodeName(oc)
+		fi1.assertNodesConditionNotEmpty(oc)
+
+		g.By("Trigger fileintegrity failure on node")
+		var filePath = "/root/fiotest" + getRandomString()
+		createCmd := fmt.Sprintf(`echo testAAAAAAAAA >> %s`, filePath+"/file1")
+		defer exutil.DebugNodeWithChroot(oc, nodeName, "rm", "-rf", filePath)
+		_, debugNodeErr := exutil.DebugNodeWithChroot(oc, nodeName, "mkdir", filePath)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+		_, debugNodeErr = exutil.DebugNodeWithChroot(oc, nodeName, "mkdir", filePath+"/test1")
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+		_, debugNodeErr = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", createCmd)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+		fi1.assertNodesConditionNotEmpty(oc)
+
+		g.By("Trigger reinit")
+		dbReinit := true
+		dbInitialBackupList, isNewFIO := fi1.getDBBackupLists(oc, nodeName, dbReinit)
+		fi1.reinitFileintegrity(oc, "fileintegrity.fileintegrity.openshift.io/"+fi1.name+" annotate")
+		fi1.checkFileintegrityStatus(oc, "running")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fi1.assertNodesConditionNotEmpty(oc)
+		fi1.checkFileintegritynodestatus(oc, nodeName, "Succeeded")
+		checkDBFilesUpdated(oc, fi1, dbInitialBackupList, nodeName, dbReinit, isNewFIO)
+
+		g.By("Trigger fileintegrity failure")
+		updateCmd := fmt.Sprintf(`echo testBBBBBBBBB >> %s`, filePath+"/file1")
+		_, debugNodeErr = exutil.DebugNodeWithChroot(oc, nodeName, "/bin/bash", "-c", updateCmd)
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+		_, debugNodeErr = exutil.DebugNodeWithChroot(oc, nodeName, "rm", "-rf", filePath+"/test1")
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
+		_, debugNodeErr = exutil.DebugNodeWithChroot(oc, nodeName, "touch", filePath+"/file2")
+		o.Expect(debugNodeErr).NotTo(o.HaveOccurred())
 
 		g.By("Check Data Details in CM and Fileintegritynodestatus Equal or not")
-		nodeName := fi1.getNodeName(oc)
 		fi1.checkFileintegritynodestatus(oc, nodeName, "Failed")
 		cmName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatus", fi1.name+"-"+nodeName, "-n", sub.namespace,
 			`-o=jsonpath={.results[?(@.condition=="Failed")].resultConfigMapName}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		intFileAddedExpected := 1
+		intFileChangedExpected := 2
+		intFileRemovedExpected := 1
 		intFileAddedCM, intFileChangedCM, intFileRemovedCM := fi1.getDetailedDataFromConfigmap(oc, cmName)
 		intFileAddedFins, intFileChangedFins, intFileRemovedFins := fi1.getDetailedDataFromFileintegritynodestatus(oc, nodeName)
 		checkDataDetailsEqual(intFileAddedCM, intFileChangedCM, intFileRemovedCM, intFileAddedFins, intFileChangedFins, intFileRemovedFins)
+		checkDataDetailsEqual(intFileAddedExpected, intFileChangedExpected, intFileRemovedExpected, intFileAddedFins, intFileChangedFins, intFileRemovedFins)
 	})
 
 	//author: xiyuan@redhat.com
