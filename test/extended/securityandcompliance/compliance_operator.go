@@ -641,7 +641,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 				"ocp4-cis-node-master-file-permissions-worker-service",
 				"ocp4-cis-node-master-kubelet-enable-streaming-connections",
 				"ocp4-cis-node-master-kubelet-configure-event-creation",
-				"ocp4-cis-node-master-kubelet-configure-tls-cipher-suites",
 				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-hard-imagefs-available",
 				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-hard-memory-available",
 				"ocp4-cis-node-master-kubelet-eviction-thresholds-set-hard-nodefs-available",
