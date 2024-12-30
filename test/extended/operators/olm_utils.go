@@ -228,6 +228,9 @@ func (sub *subscriptionDescription) findInstalledCSVWithSkip(oc *exutil.CLI, itN
 	if err != nil {
 		message, _ := oc.AsAdmin().WithoutNamespace().Run("describe").Args("sub", sub.subName, "-n", sub.namespace).Output()
 		e2e.Logf(message)
+		if sub.assertToSkipSpecificMessage(message) && skip {
+			g.Skip(fmt.Sprintf("the case skip without issue and impacted by others: %s", message))
+		}
 		message, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace,
 			"-o=jsonpath={.status.conditions[?(@.type==\"ResolutionFailed\")].message}").Output()
 		if sub.assertToSkipSpecificMessage(message) && skip {
@@ -258,6 +261,7 @@ func (sub *subscriptionDescription) assertToSkipSpecificMessage(message string) 
 		"subscription sub-learn-46964 requires @existing/openshift-operators//learn-operator.v0.0.3",
 		"error using catalogsource openshift-marketplace/qe-app-registry",
 		"failed to list bundles: rpc error: code = Unavailable desc = connection error",
+		"Unable to connect to the server",
 	}
 	for _, specificMessage := range specificMessages {
 		if strings.Contains(message, specificMessage) {

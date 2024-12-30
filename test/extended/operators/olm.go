@@ -6320,6 +6320,16 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	// It will cover test case: OCP-30762, author: kuiwang@redhat.com
 	g.It("ConnectedOnly-Author:kuiwang-Medium-30762-installs bundles with v1 CRDs", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
+		platform := exutil.CheckPlatform(oc)
+		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
+		o.Expect(errProxy).NotTo(o.HaveOccurred())
+		e2e.Logf("platform: %v", platform)
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") ||
+			strings.Contains(platform, "vsphere") || strings.Contains(platform, "osp") || strings.Contains(platform, "ibmcloud") || strings.Contains(platform, "nutanix") ||
+			os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" ||
+			exutil.Is3MasterNoDedicatedWorkerNode(oc) {
+			g.Skip("it is not supported")
+		}
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
@@ -12493,15 +12503,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 				displayName: "Test Catsrc 25783 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-api:v21-withCache",
+				address:     "quay.io/olmqe/nginx-ok-index:vokv25783",
 				template:    catsrcImageTemplate,
 			}
 			subCockroachdb = subscriptionDescription{
-				subName:                "cockroachdb33241",
+				subName:                "nginx-ok-v25783",
 				namespace:              "openshift-operators",
-				channel:                "stable-5.x",
+				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "cockroachdb",
+				operatorPackage:        "nginx-ok-v25783",
 				catalogSourceName:      catsrc.name,
 				catalogSourceNamespace: catsrc.namespace,
 				startingCSV:            "", //get it from package based on currentCSV if ipApproval is Automatic
@@ -12530,7 +12540,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		catsrc.create(oc, itName, dr)
 		defer catsrc.delete(itName, dr)
 
-		exutil.By("create operator Cockroachdb")
+		exutil.By("create operator nginx-ok")
 		defer subCockroachdb.delete(itName, dr)
 		subCockroachdb.create(oc, itName, dr)
 		csvCockroachdb.name = subCockroachdb.installedCSV
@@ -14147,7 +14157,11 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		platform := exutil.CheckPlatform(oc)
 		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
 		o.Expect(errProxy).NotTo(o.HaveOccurred())
-		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") {
+		e2e.Logf("platform: %v", platform)
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") ||
+			strings.Contains(platform, "vsphere") || strings.Contains(platform, "osp") || strings.Contains(platform, "ibmcloud") || strings.Contains(platform, "nutanix") ||
+			os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" ||
+			exutil.Is3MasterNoDedicatedWorkerNode(oc) {
 			g.Skip("it is not supported")
 		}
 		var (
