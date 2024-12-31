@@ -1,0 +1,11 @@
+reviewers:
+  - memodi
+  - Phaow
+  - geliu2016
+  - Xia-Zhao-rh
+# it involves in jenkins golang job and prow golang step
+approvers:
+  - memodi
+  - Phaow
+  - geliu2016
+  - Xia-Zhao-rh

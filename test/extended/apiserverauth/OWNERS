@@ -3,10 +3,9 @@ reviewers:
   - wangke19
   - gangwgr
   - dpuniaredhat
-  - zxiao-redhat
+  - lunarwhite
   - y4sht
 approvers:
-  - Xia-Zhao-rh
-  - kuiwang02
-  - bandrade
-  - jianzhangbjz
+  - xingxingxia
+  - wangke19
+  - lunarwhite

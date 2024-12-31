@@ -1,8 +1,5 @@
 reviewers:
   - rrasouli
-  - jfrancoa
+  - weinliu
 approvers:
-  - Xia-Zhao-rh
-  - kuiwang02
-  - bandrade
-  - jianzhangbjz
+  - rrasouli

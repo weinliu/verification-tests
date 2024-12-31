@@ -1,17 +1,24 @@
 reviewers:
-  - Xia-Zhao-rh
-  - kuiwang02
-  - bandrade
-  - jianzhangbjz
-  - rioliu-rh
+  - asood-rh
+  - lihongan
+  - juzhao
+  - liangxia
+  - memodi
+  - jechen0648
+  - Phaow
   - sergiordlr
+  - xingxingxia
+  - Xia-Zhao-rh
 approvers:
+  - asood-rh
+  - lihongan
+  - juzhao
+  - memodi
+  - jechen0648
+  - Phaow
   - sergiordlr
-  - rioliu-rh 
-  - yapei
+  - xingxingxia
   - Xia-Zhao-rh
-  - kuiwang02
-  - bandrade
-  - jianzhangbjz
+  - yapei
   - jhou1
   - liangxia

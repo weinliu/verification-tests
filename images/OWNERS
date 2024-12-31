@@ -1,0 +1,7 @@
+reviewers:
+  - liangxia
+  - pruan-rht
+# it involves in prow golang image
+approvers:
+  - liangxia
+  - pruan-rht
