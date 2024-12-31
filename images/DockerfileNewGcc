@@ -10,7 +10,7 @@ RUN sh -c 'echo -e "[appstream]\nname=AppStream\nbaseurl=http://mirror.centos.or
     PACKAGES="git gzip zip util-linux openssh-clients httpd-tools make gcc" && \
     yum install --setopt=tsflags=nodocs -y $PACKAGES && yum clean all && rm -rf /var/cache/yum/* && \
     git config --system user.name test-private && \
-    git config --system user.email test-private@test.com && \
+    git config --system user.email  test-private@test.com && \
     chmod g+w /etc/passwd
 RUN curl -s -k https://dl.google.com/go/go1.17.6.linux-amd64.tar.gz -o go1.17.6.linux-amd64.tar.gz && \
     tar -C /usr/local -xzf go1.17.6.linux-amd64.tar.gz && rm -fr go1.17.6.linux-amd64.tar.gz && \
