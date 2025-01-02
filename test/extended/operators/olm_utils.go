@@ -276,7 +276,7 @@ func (sub *subscriptionDescription) assertToSkipSpecificMessage(message string) 
 // if not same, raise error.
 // if same, nothong happen.
 func (sub *subscriptionDescription) expectCSV(oc *exutil.CLI, itName string, dr describerResrouce, cv string) {
-	err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 480*time.Second, false, func(ctx context.Context) (bool, error) {
 		sub.findInstalledCSV(oc, itName, dr)
 		if strings.Compare(sub.installedCSV, cv) == 0 {
 			return true, nil

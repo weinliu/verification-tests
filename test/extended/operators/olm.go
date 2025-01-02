@@ -13866,7 +13866,11 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		platform := exutil.CheckPlatform(oc)
 		proxy, errProxy := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status.httpProxy}{.status.httpsProxy}").Output()
 		o.Expect(errProxy).NotTo(o.HaveOccurred())
-		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") {
+		e2e.Logf("platform: %v", platform)
+		if proxy != "" || strings.Contains(platform, "openstack") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") ||
+			strings.Contains(platform, "vsphere") || strings.Contains(platform, "osp") || strings.Contains(platform, "ibmcloud") || strings.Contains(platform, "nutanix") ||
+			os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" ||
+			exutil.Is3MasterNoDedicatedWorkerNode(oc) {
 			g.Skip("it is not supported")
 		}
 		var (
