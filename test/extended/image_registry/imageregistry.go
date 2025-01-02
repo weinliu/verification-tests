@@ -46,6 +46,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		tenantIDErrInfo      = "Authentication failed"
 		imageRegistryBaseDir = exutil.FixturePath("testdata", "image_registry")
 		requireRules         = "requiredDuringSchedulingIgnoredDuringExecution"
+		specialRules         = "preferredDuringSchedulingIgnoredDuringExecution"
 		platformLoadTime     = 120
 	)
 
@@ -1259,11 +1260,17 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			g.Skip("Skip when replicas is not 2")
 		}
 
-		g.By("Check pods anti-affinity match requiredDuringSchedulingIgnoredDuringExecution rule when replicas is 2")
 		foundrequiredRules := false
-		foundrequiredRules = foundAffinityRules(oc, requireRules)
-		o.Expect(foundrequiredRules).To(o.BeTrue())
-
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("config.imageregistry/cluster", "-o=jsonpath={.spec.affinity.podAntiAffinity}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, specialRules) {
+			foundrequiredRules = foundAffinityRules(oc, specialRules)
+			o.Expect(foundrequiredRules).To(o.BeTrue())
+		} else {
+			g.By("Check pods anti-affinity match requiredDuringSchedulingIgnoredDuringExecution rule when replicas is 2")
+			foundrequiredRules = foundAffinityRules(oc, requireRules)
+			o.Expect(foundrequiredRules).To(o.BeTrue())
+		}
 		/*
 		   when https://bugzilla.redhat.com/show_bug.cgi?id=2000940 is fixed, will open this part
 		   		g.By("Set deployment.apps replica to 0")
