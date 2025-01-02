@@ -1324,13 +1324,17 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "passthrough75441", "-o", "jsonpath={..spec.host}", "-n", "openshift-catalogd").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Check the url response")
-		getCmd := fmt.Sprintf("curl -ki https://%s/catalogs/clustercatalog-75441/api/v1/all -H \"Accept-Encoding: gzip\"", url)
+		exutil.By("Check the url response of clustercatalog-75441")
+		getCmd := fmt.Sprintf("curl -ki https://%s/catalogs/clustercatalog-75441/api/v1/all -H \"Accept-Encoding: gzip\" --output -", url)
 		stringMessage, err := exec.Command("bash", "-c", getCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(stringMessage).To(o.ContainSubstring("Content-Encoding: gzip"))
-		o.Expect(stringMessage).To(o.ContainSubstring("Content-Type: application/jsonl"))
-
+		if !strings.Contains(string(stringMessage), "Content-Encoding: gzip") {
+			e2e.Failf("string Content-Encoding: gzip not in the output")
+		}
+		if !strings.Contains(string(stringMessage), "Content-Type: application/jsonl") {
+			e2e.Failf("string Content-Type: application/jsonl not in the output")
+		}
+		exutil.By("Check the url response of clustercatalog-75441v2")
 		getCmd2 := fmt.Sprintf("curl -ki https://%s/catalogs/clustercatalog-75441v2/api/v1/all -H \"Accept-Encoding: gzip\"", url)
 		stringMessage2, err := exec.Command("bash", "-c", getCmd2).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
