@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -1906,6 +1907,36 @@ func getValidIPv6Addresses(addressInfo string) (IPList []string) {
 		}
 	}
 	return IPList
+}
+
+// Convert the given IPv6 string to IPv6 PTR record
+// ie, from "fd03::a" to "a.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.3.0.d.f.ip6.arpa"
+func convertV6AddressToPTR(ipv6Address string) string {
+	addr, _ := netip.ParseAddr(ipv6Address)
+	// expand the ipv6 '::' string with zeros and remove the semicolon
+	v6AddWithoutSemicolon := strings.Join(strings.Split(addr.StringExpanded(), ":"), "")
+	reversedString := reverseString(v6AddWithoutSemicolon)
+	// split the string with dots and add another string (.ip6.arpa)
+	PtrString := strings.Join(strings.SplitAfter(reversedString, ""), ".") + ".ip6.arpa"
+	e2e.Logf("The PTR record is %s", PtrString)
+	return PtrString
+}
+
+// Get clusterIP of a service
+func getSvcClusterIPByName(oc *exutil.CLI, ns, serviceName string) string {
+	clusterIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "svc", serviceName, "-o=jsonpath={.spec.clusterIP}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The '%s' service's clusterIP of '%s' namespace is: %v", serviceName, ns, clusterIP)
+	return clusterIP
+}
+
+// Function to reverse a string
+func reverseString(str string) (result string) {
+	// iterate over str and prepend to result
+	for _, i := range str {
+		result = string(i) + result
+	}
+	return
 }
 
 // used to sort string type of slice or string which can be transformed to the slice

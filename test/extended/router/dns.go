@@ -417,6 +417,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			cltPodLabel         = "app=hello-pod"
 			cltPodName          = "hello-pod"
+			ptrValue            = "10.0.30.172.in-addr.arpa"
 		)
 		project1 := oc.Namespace()
 
@@ -445,11 +446,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 
 		exutil.By("Check the different DNS records")
 		ingressContPod := getPodListByLabel(oc, "openshift-ingress-operator", "name=ingress-operator")
-		// to identify which address type the cluster IP belongs
-		iplist := getPodIP(oc, "openshift-ingress-operator", ingressContPod[0])
-		ptrValue := "10.0.30.172.in-addr.arpa"
-		if netutils.IsIPv6String(iplist[0]) {
-			ptrValue = "a.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.3.0.d.f.ip6.arpa"
+		// To identify which address type the cluster IP belongs
+		clusterIP := getSvcClusterIPByName(oc, "openshift-dns", "dns-default")
+		if netutils.IsIPv6String(clusterIP) {
+			ptrValue = convertV6AddressToPTR(clusterIP)
 		}
 
 		// To find the PTR record
