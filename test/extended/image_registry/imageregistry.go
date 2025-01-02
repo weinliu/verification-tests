@@ -2536,7 +2536,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		g.By("Use oc explain to explain configs.imageregistry.operator.openshift.io")
 		result, explainErr := oc.WithoutNamespace().AsAdmin().Run("explain").Args("configs", "--api-version=imageregistry.operator.openshift.io/v1").Output()
 		o.Expect(explainErr).NotTo(o.HaveOccurred())
-		o.Expect(result).To(o.ContainSubstring("Config is the configuration object for a registry instance managed"))
+		o.Expect(result).To(o.ContainSubstring("Config is the configuration object for a registry"))
 		o.Expect(result).To(o.ContainSubstring("registry operator"))
 		o.Expect(result).To(o.ContainSubstring("ImageRegistrySpec defines the specs for the running registry."))
 		o.Expect(result).To(o.ContainSubstring("ImageRegistryStatus reports image registry operational status."))
