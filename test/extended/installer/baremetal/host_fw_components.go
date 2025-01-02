@@ -185,8 +185,12 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 			exutil.AssertWaitPollNoErr(clusterOperatorHealthcheckErr, "Cluster operators did not recover in time!")
 		}()
 
-		exutil.By("Update LogicalProc HFS setting")
-		patchConfig := `[{"op": "replace", "path": "/spec/settings/LogicalProc", "value": "Enabled"}]`
+		exutil.By("Update HFS setting based on vendor")
+		vendor, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("bmh", "-n", machineAPINamespace, host, "-o=jsonpath={.status.hardware.firmware.bios.vendor}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		hfs, value, err := getHfsByVendor(oc, vendor, machineAPINamespace, host)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchConfig := fmt.Sprintf(`[{"op": "replace", "path": "/spec/settings/%s", "value": "%s"}]`, hfs, value)
 		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hfs", "-n", machineAPINamespace, host, "--type=json", "-p", patchConfig).Execute()
 		o.Expect(patchErr).NotTo(o.HaveOccurred())
 		defer func() {
@@ -195,9 +199,9 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 			o.Expect(patchErr).NotTo(o.HaveOccurred())
 		}()
 
-		specModified, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hfs", "-n", machineAPINamespace, host, "-o=jsonpath={.spec.settings.LogicalProc}").Output()
+		specModified, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hfs", "-n", machineAPINamespace, host, fmt.Sprintf("-o=jsonpath={.spec.settings.%s}", hfs)).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(specModified).Should(o.Equal("Enabled"))
+		o.Expect(specModified).Should(o.Equal(value))
 
 		exutil.By("Reboot baremtalhost worker-01")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("baremetalhosts", host, "reboot.metal3.io=", "-n", machineAPINamespace).Output()
@@ -225,8 +229,8 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 		clusterOperatorHealthcheckErr := clusterOperatorHealthcheck(oc, 1500, dirname)
 		exutil.AssertWaitPollNoErr(clusterOperatorHealthcheckErr, "Cluster operators did not recover in time!")
 
-		exutil.By("Verify LogicalProc hfs setting was actually changed")
-		statusModified, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hfs", "-n", machineAPINamespace, host, "-o=jsonpath={.status.settings.LogicalProc}").Output()
+		exutil.By("Verify hfs setting was actually changed")
+		statusModified, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hfs", "-n", machineAPINamespace, host, fmt.Sprintf("-o=jsonpath={.status.settings.%s}", hfs)).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(statusModified).Should(o.Equal(specModified))
 

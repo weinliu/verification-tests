@@ -449,3 +449,31 @@ func unsetProxyEnv() {
 	}
 	e2e.Logf("Proxy environment variables are unset.")
 }
+
+func getHfsByVendor(oc *exutil.CLI, vendor, machineAPINamespace, host string) (string, string, error) {
+	var hfs, value, currStatus string
+	var err error
+
+	switch vendor {
+	case "Dell Inc.":
+		hfs = "LogicalProc"
+	case "HPE":
+		hfs = "NodeInterleaving"
+	default:
+		g.Skip("Unsupported vendor")
+		return "", "", nil
+	}
+
+	currStatus, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("hfs", "-n", machineAPINamespace, host, fmt.Sprintf("-o=jsonpath={.status.settings.%s}", hfs)).Output()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to fetch current status for %s: %v", hfs, err)
+	}
+
+	if currStatus == "Enabled" {
+		value = "Disabled"
+	} else {
+		value = "Enabled"
+	}
+
+	return hfs, value, nil
+}
