@@ -5210,7 +5210,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="ImageRegistryStorageFull"}'`, token, `"alertstate":"pending"`, time.Duration(2*platformLoadTime))
 	})
 
-	g.It("Author:xiuwang-Low-76929-shared access keys are disabled by default on new installations that use workload identity", func() {
+	g.It("Author:xiuwang-NonHyperShiftHOST-Low-76929-shared access keys are disabled by default on new installations that use workload identity", func() {
 
 		exutil.SkipIfPlatformTypeNot(oc, "Azure")
 		if !exutil.IsWorkloadIdentityCluster(oc) {
