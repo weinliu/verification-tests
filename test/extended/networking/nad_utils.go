@@ -66,6 +66,21 @@ type udnCRDResource struct {
 	template   string
 }
 
+type cudnCRDResource struct {
+	crdname    string
+	labelvalue string
+	labelkey   string
+	IPv4cidr   string
+	IPv4prefix int32
+	IPv6cidr   string
+	IPv6prefix int32
+	cidr       string
+	prefix     int32
+	mtu        int32
+	role       string
+	template   string
+}
+
 type udnPodWithProbeResource struct {
 	name             string
 	namespace        string
@@ -259,6 +274,32 @@ func (udncrd *udnCRDResource) createUdnCRDDualStack(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create udn CRD %s due to %v", udncrd.crdname, err))
 }
 
+func (cudncrd *cudnCRDResource) createCUDNCRDSingleStack(oc *exutil.CLI) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", cudncrd.template, "-p", "CRDNAME="+cudncrd.crdname, "LABELKEY="+cudncrd.labelkey, "LABELVALUE="+cudncrd.labelvalue,
+			"CIDR="+cudncrd.cidr, "PREFIX="+strconv.Itoa(int(cudncrd.prefix)), "MTU="+strconv.Itoa(int(cudncrd.mtu)), "ROLE="+cudncrd.role)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create cudn CRD %s due to %v", cudncrd.crdname, err))
+}
+
+func (cudncrd *cudnCRDResource) createCUDNCRDDualStack(oc *exutil.CLI) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", cudncrd.template, "-p", "CRDNAME="+cudncrd.crdname, "LABELKEY="+cudncrd.labelkey, "LABELVALUE="+cudncrd.labelvalue,
+			"IPv4CIDR="+cudncrd.IPv4cidr, "IPv4PREFIX="+strconv.Itoa(int(cudncrd.IPv4prefix)), "IPv6CIDR="+cudncrd.IPv6cidr, "IPv6PREFIX="+strconv.Itoa(int(cudncrd.IPv6prefix)), "MTU="+strconv.Itoa(int(cudncrd.mtu)), "ROLE="+cudncrd.role)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create cudn CRD %s due to %v", cudncrd.crdname, err))
+}
+
 func (udncrd *udnCRDResource) deleteUdnCRDDef(oc *exutil.CLI) {
 	removeResource(oc, true, true, "UserDefinedNetwork", udncrd.crdname, "-n", udncrd.namespace)
 }
@@ -272,6 +313,22 @@ func waitUDNCRDApplied(oc *exutil.CLI, ns, crdName string) error {
 		}
 		if !strings.Contains(output, fmt.Sprintf("userdefinednetwork.k8s.ovn.org/%s condition met", crdName)) {
 			e2e.Logf("UDN CRD was not applied yet, trying again. \n %s", output)
+			return false, nil
+		}
+		return true, nil
+	})
+	return checkErr
+}
+
+func waitCUDNCRDApplied(oc *exutil.CLI, crdName string) error {
+	checkErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
+		output, efErr := oc.AsAdmin().WithoutNamespace().Run("wait").Args("ClusterUserDefinedNetwork/"+crdName, "--for", "condition=NetworkReady=True").Output()
+		if efErr != nil {
+			e2e.Logf("Failed to get CUDN %v, error: %s. Trying again", crdName, efErr)
+			return false, nil
+		}
+		if !strings.Contains(output, fmt.Sprintf("clusteruserdefinednetwork.k8s.ovn.org/%s condition met", crdName)) {
+			e2e.Logf("CUDN CRD was not applied yet, trying again. \n %s", output)
 			return false, nil
 		}
 		return true, nil
@@ -301,6 +358,32 @@ func (udncrd *udnCRDResource) createLayer2SingleStackUDNCRD(oc *exutil.CLI) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create udn CRD %s due to %v", udncrd.crdname, err))
+}
+
+func (cudncrd *cudnCRDResource) createLayer2SingleStackCUDNCRD(oc *exutil.CLI) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", cudncrd.template, "-p", "CRDNAME="+cudncrd.crdname, "LABELKEY="+cudncrd.labelkey, "LABELVALUE="+cudncrd.labelvalue,
+			"CIDR="+cudncrd.cidr, "MTU="+strconv.Itoa(int(cudncrd.mtu)), "ROLE="+cudncrd.role)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create cudn CRD %s due to %v", cudncrd.crdname, err))
+}
+
+func (cudncrd *cudnCRDResource) createLayer2DualStackCUDNCRD(oc *exutil.CLI) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", cudncrd.template, "-p", "CRDNAME="+cudncrd.crdname, "LABELKEY="+cudncrd.labelkey, "LABELVALUE="+cudncrd.labelvalue,
+			"IPv4CIDR="+cudncrd.IPv4cidr, "IPv6CIDR="+cudncrd.IPv6cidr, "MTU="+strconv.Itoa(int(cudncrd.mtu)), "ROLE="+cudncrd.role)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create cudn CRD %s due to %v", cudncrd.crdname, err))
 }
 
 func checkPodCIDRsOverlap(oc *exutil.CLI, namespace string, ipStack string, Pods []string, netName string) bool {
