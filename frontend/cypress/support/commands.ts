@@ -7,7 +7,7 @@ declare global {
             switchPerspective(perspective: string);
             uiLogin(provider: string, username: string, password: string);
             uiLogout();
-            cliLogin(username?, password?, hostapi?);
+            cliLogin(username?: string, password?: string);
             cliLogout();
             configureClusterMonitoringConfig(content, testConfigMap);
             adminCLI(command: string, options?);
@@ -93,14 +93,18 @@ Cypress.Commands.add('uiLogout', () => {
   })
 });
 
-Cypress.Commands.add("cliLogin", (username?, password?, hostapi?) => {
+Cypress.Commands.add("cliLogin", (username?: string, password?: string) => {
   const loginUsername = username || Cypress.env('LOGIN_USERNAME');
   const loginPassword = password || Cypress.env('LOGIN_PASSWORD');
-  const hostapiurl = hostapi || Cypress.env('HOST_API');
-  cy.exec(`oc login -u ${loginUsername} -p ${loginPassword} ${hostapiurl} --insecure-skip-tls-verify=true`, { failOnNonZeroExit: false })
+  cy.exec(`oc whoami --show-server=true --kubeconfig ${kubeconfig}`)
     .then(result => {
-      cy.log(result.stderr);
-      cy.log(result.stdout);
+      const hostapi = result.stdout.trim();
+      cy.log(hostapi);
+      cy.exec(`oc login -u ${loginUsername} -p ${loginPassword} ${hostapi} --insecure-skip-tls-verify=true`, { failOnNonZeroExit: false })
+        .then(loginresult => {
+          cy.log(loginresult.stderr);
+          cy.log(loginresult.stdout);
+    });
   });
 });
 
