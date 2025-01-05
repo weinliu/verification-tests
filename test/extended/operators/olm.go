@@ -13409,22 +13409,22 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 			}
 
 			catsrc = catalogSourceDescription{
-				name:        "ditto-operator-index",
+				name:        "index-45361",
 				namespace:   "",
 				displayName: "Test Catsrc 45361 Operators",
 				publisher:   "OLM-QE",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/ditto-index:v1-4.8",
+				address:     "quay.io/olmqe/nginxolm-operator-index:v1",
 				interval:    "10m",
 				template:    catsrcImageTemplate,
 			}
 
 			sub = subscriptionDescription{
-				subName:                "ditto-operator",
+				subName:                "nginx-operator-45361",
 				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "ditto-operator",
+				operatorPackage:        "nginx-operator",
 				catalogSourceName:      catsrc.name,
 				catalogSourceNamespace: "",
 				template:               subTemplate,
@@ -13449,13 +13449,13 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 		exutil.By("5) Sub is created with error message")
 		message, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}").Output()
-		o.Expect(message).To(o.ContainSubstring("ditto-operator-index missing"))
+		o.Expect(message).To(o.ContainSubstring("index-45361 missing"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("6) Create catalog source")
 		catsrc.create(oc, itName, dr)
 		err = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
-			catsrcStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", "ditto-operator-index", "-n", sub.namespace, "-o=jsonpath={.status..lastObservedState}").Output()
+			catsrcStatus, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catsrc", catsrc.name, "-n", catsrc.namespace, "-o=jsonpath={.status..lastObservedState}").Output()
 			if strings.Compare(catsrcStatus, "READY") == 0 {
 				return true, nil
 			}
@@ -13480,7 +13480,7 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 		exutil.By("8) Error message is removed")
 		newmessage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}").Output()
-		o.Expect(newmessage).NotTo(o.ContainSubstring("ditto-operator-index missing"))
+		o.Expect(newmessage).NotTo(o.ContainSubstring("index-45361 missing"))
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 	})
