@@ -23,7 +23,7 @@ objects:
       dockerStrategy:
         from:
           kind: ImageStreamTag
-          name: ruby:3.0-ubi8
+          name: ruby:latest
           namespace: openshift
 - apiVersion: build.openshift.io/v1
   kind: BuildConfig
