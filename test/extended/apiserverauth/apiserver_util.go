@@ -1711,7 +1711,7 @@ func gatherSosreports(fqdnName string, user string, sosReportCmd string, tmpdir 
 	sosreportStatus, sosErr := runSSHCommand(fqdnName, user, sosReportCmd)
 	o.Expect(sosErr).NotTo(o.HaveOccurred())
 	e2e.Logf("SOS Report :: %v", sosreportStatus)
-	o.Expect(strings.Contains(sosreportStatus, "Your sosreport has been generated and saved in")).To(o.BeTrue())
+	o.Expect(strings.Contains(sosreportStatus, "Your sos report has been generated and saved in")).To(o.BeTrue())
 	o.Expect(strings.Contains(sosreportStatus, tmpdir+"/sosreport")).To(o.BeTrue())
 	return sosreportStatus
 }
