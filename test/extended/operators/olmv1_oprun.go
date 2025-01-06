@@ -246,7 +246,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	})
 
 	// author: kuiwang@redhat.com
-	g.It("Author:kuiwang-ConnectedOnly-Medium-75492-cluster extension can not be installed with wrong sa or insufficient permission sa", func() {
+	g.It("Author:kuiwang-ConnectedOnly-NonHyperShiftHOST-Medium-75492-cluster extension can not be installed with wrong sa or insufficient permission sa", func() {
 		exutil.SkipForSNOCluster(oc)
 		var (
 			caseID                       = "75492"

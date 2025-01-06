@@ -601,7 +601,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-High-74948-catalog offer the operator content through https server", func() {
+	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-74948-catalog offer the operator content through https server", func() {
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
