@@ -136,7 +136,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 
 		g.By("Get the dns")
 		var dns string
-		err := wait.Poll(2*time.Second, 30*time.Second, func() (bool, error) {
+		err := wait.Poll(2*time.Second, 60*time.Second, func() (bool, error) {
 			dnsfetched, dnsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("DNSRecord", ingressController.name+"-wildcard", "-n", "openshift-ingress-operator", "-o=jsonpath={.spec.targets[0]}").Output()
 			if dnsErr != nil {
 				e2e.Logf("hasn't got the dns ...")
