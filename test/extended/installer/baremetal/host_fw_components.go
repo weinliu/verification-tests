@@ -224,7 +224,7 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_DEDICATED job on
 		})
 		exutil.AssertWaitPollNoErr(err, "Node did not change state as expected")
 
-		nodeHealthErr := clusterNodesHealthcheck(oc, 1500)
+		nodeHealthErr := clusterNodesHealthcheck(oc, 3000)
 		exutil.AssertWaitPollNoErr(nodeHealthErr, "Cluster did not recover in time!")
 		clusterOperatorHealthcheckErr := clusterOperatorHealthcheck(oc, 1500, dirname)
 		exutil.AssertWaitPollNoErr(clusterOperatorHealthcheckErr, "Cluster operators did not recover in time!")

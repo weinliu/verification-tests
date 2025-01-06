@@ -458,7 +458,7 @@ func getHfsByVendor(oc *exutil.CLI, vendor, machineAPINamespace, host string) (s
 	case "Dell Inc.":
 		hfs = "LogicalProc"
 	case "HPE":
-		hfs = "NodeInterleaving"
+		hfs = "NetworkBootRetry"
 	default:
 		g.Skip("Unsupported vendor")
 		return "", "", nil
