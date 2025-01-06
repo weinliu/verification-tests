@@ -2869,4 +2869,83 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		exutil.By("5. Validate CUDN pod traffic")
 		CurlPod2PodPassUDN(oc, pods[0].namespace, pods[0].name, pods[1].namespace, pods[1].name)
 	})
+
+	g.It("Author:anusaxen-Low-77752-Check udn pods isolation with udn crd and native NAD integration", func() {
+		var (
+			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
+			udnNadtemplate            = filepath.Join(testDataDirUDN, "udn_nad_template.yaml")
+			udnPodTemplate            = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
+			udnCRDSingleStack         = filepath.Join(buildPruningBaseDir, "udn/udn_crd_singlestack_template.yaml")
+			mtu                 int32 = 1300
+		)
+		ipStackType := checkIPStackType(oc)
+		o.Expect(ipStackType).NotTo(o.BeEmpty())
+		if ipStackType != "ipv4single" {
+			g.Skip("This case requires IPv4 single stack cluster")
+		}
+
+		var cidr string
+		var prefix int32
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+			prefix = 24
+		}
+
+		exutil.By("1. Create first namespace")
+		ns1 := oc.Namespace()
+
+		exutil.By("2. Create 2nd namespace")
+		oc.SetupProject()
+		ns2 := oc.Namespace()
+
+		nadNS := []string{ns1, ns2}
+		nadResourcename := []string{"l3-network-" + nadNS[0], "l3-network-" + nadNS[1]}
+
+		exutil.By(fmt.Sprintf("create native NAD %s in namespace %s", nadResourcename[0], nadNS[0]))
+		nad := udnNetDefResource{
+			nadname:             nadResourcename[0],
+			namespace:           nadNS[0],
+			nad_network_name:    nadResourcename[0],
+			topology:            "layer3",
+			subnet:              "10.150.0.0/16/24",
+			mtu:                 mtu,
+			net_attach_def_name: nadNS[0] + "/" + nadResourcename[0],
+			role:                "primary",
+			template:            udnNadtemplate,
+		}
+		nad.createUdnNad(oc)
+
+		exutil.By(fmt.Sprintf("create crd NAD %s in namespace %s", nadResourcename[1], nadNS[1]))
+		udncrd := udnCRDResource{
+			crdname:   nadResourcename[1],
+			namespace: nadNS[1],
+			role:      "Primary",
+			mtu:       mtu,
+			cidr:      cidr,
+			prefix:    prefix,
+			template:  udnCRDSingleStack,
+		}
+		udncrd.createUdnCRDSingleStack(oc)
+
+		err := waitUDNCRDApplied(oc, nadNS[1], udncrd.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		pod := make([]udnPodResource, 2)
+		for i := 0; i < 2; i++ {
+			exutil.By("create a udn hello pod in ns1 and ns2")
+			pod[i] = udnPodResource{
+				name:      "hello-pod",
+				namespace: nadNS[i],
+				label:     "hello-pod",
+				template:  udnPodTemplate,
+			}
+			pod[i].createUdnPod(oc)
+			waitPodReady(oc, pod[i].namespace, pod[i].name)
+		}
+
+		//udn network connectivity should be isolated
+		CurlPod2PodFailUDN(oc, nadNS[0], pod[0].name, nadNS[1], pod[1].name)
+		//default network connectivity should also be isolated
+		CurlPod2PodFail(oc, nadNS[0], pod[0].name, nadNS[1], pod[1].name)
+	})
 })
