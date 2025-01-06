@@ -35,7 +35,12 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 	)
 	g.BeforeEach(func() {
 		buildPruningBaseDir = exutil.FixturePath("testdata", "apiserverauth/certmanager")
-		createCertManagerOperator(oc)
+
+		// Check the availability of the Cert Manager Operator
+		if !isDeploymentReady(oc, "cert-manager-operator", "cert-manager-operator-controller-manager") {
+			e2e.Logf("Creating Cert Manager Operator...")
+			createCertManagerOperator(oc)
+		}
 	})
 
 	// author: geliu@redhat.com

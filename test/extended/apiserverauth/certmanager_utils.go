@@ -220,7 +220,22 @@ func getAzureCloudName(oc *exutil.CLI) string {
 	return azureCloudName
 }
 
-// create cert-manager operator
+func isDeploymentReady(oc *exutil.CLI, namespace string, deploymentName string) bool {
+	e2e.Logf("Checking readiness of deployment '%s' in namespace '%s'...", deploymentName, namespace)
+	status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", deploymentName, "-n", namespace, `-o=jsonpath={.status.conditions[?(@.type=="Available")].status}`).Output()
+	if err != nil {
+		e2e.Logf("Failed to check deployment readiness: %v", err.Error())
+		return false
+	}
+	if strings.TrimSpace(status) == "True" {
+		e2e.Logf("Deployment '%s' is ready and available.", deploymentName)
+		return true
+	}
+	e2e.Logf("Deployment '%s' is not ready. Status: '%s'", deploymentName, status)
+	return false
+}
+
+// Create Cert Manager Operator
 func createCertManagerOperator(oc *exutil.CLI) {
 	var (
 		subscriptionName       = "openshift-cert-manager-operator"
@@ -248,7 +263,9 @@ func createCertManagerOperator(oc *exutil.CLI) {
 	if strings.Contains(output, "being deleted") {
 		g.Skip("skip the install process as the cert-manager-operator namespace is being terminated due to other env issue e.g. we ever hit such failures caused by OCPBUGS-31443")
 	}
-	o.Expect(err).NotTo(o.HaveOccurred())
+	if err != nil && !strings.Contains(output, "AlreadyExists") {
+		e2e.Failf("Failed to apply namespace cert-manager-operator: %v", err)
+	}
 
 	e2e.Logf("=> create the operatorgroup")
 	operatorGroupFile := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
@@ -259,7 +276,7 @@ func createCertManagerOperator(oc *exutil.CLI) {
 	subscriptionTemplate := filepath.Join(buildPruningBaseDir, "subscription.yaml")
 	params := []string{"-f", subscriptionTemplate, "-p", "NAME=" + subscriptionName, "SOURCE=" + catalogSourceName, "SOURCE_NAMESPACE=" + catalogSourceNamespace, "CHANNEL=" + channelName}
 	exutil.ApplyNsResourceFromTemplate(oc, subscriptionNamespace, params...)
-	// wait for subscription state to become AtLatestKnown
+	// Wait for subscription state to become AtLatestKnown
 	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, true, func(context.Context) (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", subscriptionNamespace, "-o=jsonpath={.status.state}").Output()
 		if strings.Contains(output, "AtLatestKnown") {
@@ -276,7 +293,7 @@ func createCertManagerOperator(oc *exutil.CLI) {
 	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", subscriptionNamespace, "-o=jsonpath={.status.installedCSV}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(csvName).NotTo(o.BeEmpty())
-	// wait for csv phase to become Succeeded
+	// Wait for csv phase to become Succeeded
 	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, true, func(context.Context) (bool, error) {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", subscriptionNamespace, "-o=jsonpath={.status.phase}").Output()
 		if strings.Contains(output, "Succeeded") {
