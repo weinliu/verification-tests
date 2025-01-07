@@ -15,11 +15,13 @@ function copyArtifacts {
 }
 trap copyArtifacts EXIT
 
-# clone upstream console repo and create soft link
+# clone upstream console repo and copy required libs
 set -x
-git clone -b master --depth=1 https://github.com/openshift/console.git upstream_console && cd upstream_console/frontend && yarn install
-cd ../../
-ln -s ./upstream_console/frontend/packages/integration-tests-cypress upstream
+git clone -b master --depth=1 --filter=blob:none --sparse https://github.com/openshift/console.git upstream_console
+cd upstream_console
+git sparse-checkout init --cone && git sparse-checkout set frontend/packages/integration-tests-cypress
+cd ../
+cp -r ./upstream_console/frontend/packages/integration-tests-cypress upstream
 
 # in frontend dir, install deps and trigger tests
 yarn install
