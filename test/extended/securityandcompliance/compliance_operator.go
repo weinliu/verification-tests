@@ -5,14 +5,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
+	"sync"
 
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
 	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
+	"go.uber.org/ratelimit"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	"path/filepath"
@@ -7160,7 +7160,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	g.It("Author:xiyuan-StressTest-NonHyperShiftHOST-NonPreRelease-Medium-53667-Check the ocp4-pci-dss-modified-api-checks-pod will not in CrashLoopBackoff state with large scale of mc [Disruptive][Slow]", func() {
 		g.By("Set initial value !!!\n")
 		var (
-			cnt           int
 			mcPrefix      = "isc-test-mc-53667-"
 			mcCount       = int64(150)
 			mcEnableAudit = "isc-mc-53667-enable-audit" + getRandomString()
@@ -7228,39 +7227,34 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 
 		g.By("Create a large scale of machineconfigs... !!!\n")
 		defer func() {
+			var wg sync.WaitGroup
+			rateLimiter := ratelimit.New(5)
 			for i := int64(0); i < mcCount; i++ {
+				wg.Add(1)
+				rateLimiter.Take()
 				go func(i int64) {
 					defer g.GinkgoRecover()
 					cleanupObjects(oc, objectTableRef{"mc", subD.namespace, mcPrefix + strconv.Itoa(int(i))})
+					wg.Done()
 				}(i)
 			}
-			err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
-				nsCnt := getResouceCnt(oc, "mc", mcPrefix)
-				if nsCnt == int(0) {
-					return true, nil
-				}
-				return false, nil
-			})
-			o.Expect(err).NotTo(o.HaveOccurred())
+			// Wait() for goroutine complete
+			wg.Wait()
 		}()
+		var wg sync.WaitGroup
+		limiter := ratelimit.New(100)
 		for mcId := int64(0); mcId < mcCount; mcId++ {
+			wg.Add(1)
+			limiter.Take()
 			go func(mcId int64) {
 				defer g.GinkgoRecover()
 				err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", mcTemplate, "-n", subD.namespace, "-p", "NAME="+mcPrefix+strconv.Itoa(int(mcId)), "ID="+strconv.Itoa(int(mcId)))
 				o.Expect(err).NotTo(o.HaveOccurred())
+				wg.Done()
 			}(mcId)
 		}
-		errPoll := wait.Poll(5*time.Second, 100*time.Second, func() (bool, error) {
-			cnt = getResouceCnt(oc, "mc", mcPrefix)
-			if cnt == int(mcCount) {
-				return true, nil
-			}
-			return false, nil
-		})
-		if errPoll != nil {
-			e2e.Logf("The created machineconfig number is: %d", cnt)
-		}
-		o.Expect(errPoll).NotTo(o.HaveOccurred())
+		// Wait() for goroutine complete
+		wg.Wait()
 
 		g.By("Create scansetting and scansettingbinding... !!!\n")
 		ss.create(oc)
