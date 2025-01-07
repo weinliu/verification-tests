@@ -55,7 +55,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 			nadNS = append(nadNS, oc.Namespace())
 		}
 
-		nadResourcename := []string{"l3-network-" + nadNS[0], "l3-network-" + nadNS[1], "l2-network-" + nadNS[2], "l2-network-" + nadNS[3]}
+		nadResourcename := []string{"l3-network-test", "l2-network-test"}
 		topo := []string{"layer3", "layer3", "layer2", "layer2"}
 
 		var subnet []string
@@ -73,15 +73,15 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		exutil.By("5. Create same NAD in ns1 ns2 for layer3")
 		nad := make([]udnNetDefResource, 4)
 		for i := 0; i < 2; i++ {
-			exutil.By(fmt.Sprintf("create NAD %s in namespace %s", nadResourcename[i], nadNS[i]))
+			exutil.By(fmt.Sprintf("create NAD %s in namespace %s", nadResourcename[0], nadNS[i]))
 			nad[i] = udnNetDefResource{
-				nadname:             nadResourcename[i],
+				nadname:             nadResourcename[0],
 				namespace:           nadNS[i],
-				nad_network_name:    "l3-network-test", // Need to use same nad name
+				nad_network_name:    nadResourcename[0], // Need to use same nad name
 				topology:            topo[i],
 				subnet:              subnet[i],
 				mtu:                 mtu,
-				net_attach_def_name: nadNS[i] + "/l3-network-test",
+				net_attach_def_name: nadNS[i] + "/" + nadResourcename[0],
 				role:                "primary",
 				template:            udnNadtemplate,
 			}
@@ -90,15 +90,15 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 
 		exutil.By("6. Create same NAD in ns3 ns4 for layer 2")
 		for i := 2; i < 4; i++ {
-			exutil.By(fmt.Sprintf("create NAD %s in namespace %s", nadResourcename[i], nadNS[i]))
+			exutil.By(fmt.Sprintf("create NAD %s in namespace %s", nadResourcename[1], nadNS[i]))
 			nad[i] = udnNetDefResource{
-				nadname:             nadResourcename[i],
+				nadname:             nadResourcename[1],
 				namespace:           nadNS[i],
-				nad_network_name:    "l2-network-test",
+				nad_network_name:    nadResourcename[1],
 				topology:            topo[i],
 				subnet:              subnet[i],
 				mtu:                 mtu,
-				net_attach_def_name: nadNS[i] + "/l2-network-test",
+				net_attach_def_name: nadNS[i] + "/" + nadResourcename[1],
 				role:                "primary",
 				template:            udnNadtemplate,
 			}
@@ -116,6 +116,11 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 			}
 			pod[i].createUdnPod(oc)
 			waitPodReady(oc, pod[i].namespace, pod[i].name)
+
+			// add a step to check ovn-udn1 created.
+			output, err := e2eoutput.RunHostCmd(pod[i].namespace, pod[i].name, "ip -o link show")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(output).Should(o.ContainSubstring("ovn-udn1"))
 		}
 
 		exutil.By("8. Create service in ns2,ns4")
