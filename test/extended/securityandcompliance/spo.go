@@ -266,7 +266,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 
 	// author: xiyuan@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-50242-High-50174-check Log enricher based seccompprofile recording and metrics working as expected for daemonset/deployment [Slow][Disruptive]", func() {
+	g.It("Author:xiyuan-ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Medium-50242-High-50174-check Log enricher based seccompprofile recording and metrics working as expected for daemonset/deployment [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		ns2 := "mytest" + getRandomString()
 		var (
@@ -390,7 +390,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 	})
 	// author: xiyuan@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:xiyuan-Medium-50262-High-50263-check Log enricher based selinuxprofile recording and metrics working as expected for daemonset/deployment [Slow][Disruptive]", func() {
+	g.It("Author:xiyuan-ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Medium-50262-High-50263-check Log enricher based selinuxprofile recording and metrics working as expected for daemonset/deployment [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		ns2 := "mytest" + getRandomString()
 		var (
@@ -1833,7 +1833,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("ConnectedOnly-Author:xiyuan-Medium-69598-check the http version for the metrics, webhook and profilefing service endpoints [Serial]", func() {
+	g.It("Author:xiyuan-ConnectedOnly-Medium-69598-check the http version for the metrics, webhook and profilefing service endpoints [Serial]", func() {
 		g.By("Check http version for metric serive")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		url := fmt.Sprintf("https://metrics.%v/metrics-spod", subD.namespace)
@@ -1876,7 +1876,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 
 	// author: bgudi@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:bgudi-Medium-50259-Medium-50244-check Log enricher based selinuxprofile/seccompprofile recording and metrics working as expected for cronjob [Slow][Disruptive]", func() {
+	g.It("Author:bgudi-ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Medium-50259-Medium-50244-check Log enricher based selinuxprofile/seccompprofile recording and metrics working as expected for cronjob [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		ns2 := "mytest" + getRandomString()
 		var (
@@ -2008,7 +2008,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Security_Profiles_Operator
 
 	// author: jkuriako@redhat.com
 	// The Disruptive label could be removed once the bug https://issues.redhat.com/browse/OCPBUGS-4126 resolved
-	g.It("ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Author:jkuriako-Critical-50254-check Log enricher based selinuxprofiles recording and metrics working as expected for pod [Slow][Disruptive]", func() {
+	g.It("Author:jkuriako-ROSA-ARO-OSD_CCS-ConnectedOnly-NonPreRelease-Longduration-Critical-50254-check Log enricher based selinuxprofiles recording and metrics working as expected for pod [Slow][Disruptive]", func() {
 		ns1 := "mytest" + getRandomString()
 		var (
 			profileRecordingPod = profileRecordingDescription{

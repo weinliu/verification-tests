@@ -2366,7 +2366,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-Medium-41769-The compliance operator could get HTTP_PROXY and HTTPS_PROXY environment from OpenShift has global proxy settings	", func() {
+	g.It("Author:xiyuan-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Medium-41769-The compliance operator could get HTTP_PROXY and HTTPS_PROXY environment from OpenShift has global proxy settings	", func() {
 		g.By("Get the httpPoxy and httpsProxy info!!!\n")
 		httpProxy, _ := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-n", subD.namespace, "-o=jsonpath={.spec.httpProxy}")
 		httpsProxy, _ := getResource(oc, asAdmin, withoutNamespace, "proxy", "cluster", "-n", subD.namespace, "-o=jsonpath={.spec.httpsProxy}")
@@ -5279,7 +5279,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Author:pdhamdhe-Medium-47173-Verify the rule that check for API Server audit error alerts [Serial][Slow]", func() {
+	g.It("Author:pdhamdhe-ConnectedOnly-NonHyperShiftHOST-NonPreRelease-Longduration-ROSA-ARO-OSD_CCS-Medium-47173-Verify the rule that check for API Server audit error alerts [Serial][Slow]", func() {
+		// skip test if telemetry not found
+		skipNotelemetryFound(oc)
+
 		var ssb = scanSettingBindingDescription{
 			name:            "ocp4-moderate-test" + getRandomString(),
 			namespace:       "",
@@ -6214,7 +6217,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("NonHyperShiftHOST-Author:xiyuan-Longduration-CPaasrunOnly-NonPreRelease-High-69602-Check http version for compliance operator's service endpoints [Serial]", func() {
+	g.It("Author:xiyuan-ConnectedOnly-NonHyperShiftHOST-Longduration-CPaasrunOnly-NonPreRelease-High-69602-Check http version for compliance operator's service endpoints [Serial]", func() {
+		// skip test if telemetry not found
+		skipNotelemetryFound(oc)
+
 		g.By("Check http version for metric serive")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		url := fmt.Sprintf("https://metrics.%v.svc:8585/metrics-co", subD.namespace)

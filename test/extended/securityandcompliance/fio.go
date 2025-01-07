@@ -959,7 +959,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("Author:xiyuan-CPaasrunOnly-WRS-High-71796-V-EST.01-file integrity operator should pass DAST test", func() {
+	g.It("Author:xiyuan-ConnectedOnly-CPaasrunOnly-WRS-High-71796-V-EST.01-file integrity operator should pass DAST test", func() {
+		// skip test if telemetry not found
+		skipNotelemetryFound(oc)
+
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 		configFile := filepath.Join(buildPruningBaseDir, "rapidast/data_rapidastconfig_fileintegrity_v1alpha1.yaml")
 		policyFile := filepath.Join(buildPruningBaseDir, "rapidast/customscan.policy")
@@ -968,7 +971,10 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 	})
 
 	// author: bgudi@redhat.com
-	g.It("Author:bgudi-NonHyperShiftHOST-WRS-High-72019-V-EST.01-Check http version for file-integrity-operator", func() {
+	g.It("Author:bgudi-ConnectedOnly-NonHyperShiftHOST-WRS-High-72019-V-EST.01-Check http version for file-integrity-operator", func() {
+		// skip test if telemetry not found
+		skipNotelemetryFound(oc)
+
 		g.By("Check http version for metric serive")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		url := fmt.Sprintf("https://metrics.%v.svc:8585/metrics-fio", sub.namespace)
