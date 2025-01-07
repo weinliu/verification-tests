@@ -85,6 +85,16 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		oc.SetupProject()
 		namespace = oc.Namespace()
 
+		exutil.By("confirm alertmanagerconfigs CRD exists")
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, false, func(context.Context) (bool, error) {
+			alertmanagerconfigs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("customresourcedefinitions", "alertmanagerconfigs.monitoring.coreos.com").Output()
+			if err != nil || strings.Contains(alertmanagerconfigs, "not found") {
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "alertmanagerconfigs CRD does not exist")
+
 		exutil.By("Create invalid AlertmanagerConfig, should throw out error")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", invalidAlertmanagerConfig, "-n", namespace).Output()
 		o.Expect(err).To(o.HaveOccurred())
