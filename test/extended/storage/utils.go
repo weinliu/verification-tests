@@ -623,6 +623,22 @@ func getZonesFromWorker(oc *exutil.CLI) []string {
 	return workerZones
 }
 
+func getZoneFromOneSchedulableWorker(oc *exutil.CLI, provisioner string) string {
+	topologyLabel := getTopologyLabelByProvisioner(provisioner)
+	topologyPath := getTopologyPathByLabel(topologyLabel)
+	allNodes := getAllNodesInfo(oc)
+	node := getOneSchedulableWorker(allNodes)
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", node.name, "-o=jsonpath={.metadata.labels}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	zone := gjson.Get(output, topologyPath).String()
+	if len(zone) == 0 {
+		e2e.Logf("There is no topology available zone in the node \"%s\"", node.name)
+	} else {
+		e2e.Logf("The available zone of node \"%s\" is \"%s\"", node.name, zone)
+	}
+	return zone
+}
+
 // Get and print the oc describe info, set namespace as "" for cluster-wide resource
 func getOcDescribeInfo(oc *exutil.CLI, namespace string, resourceKind string, resourceName string) {
 	var ocDescribeInfo string

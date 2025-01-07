@@ -1218,6 +1218,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
+		// Skip for multi-zone test scenario, see https://issues.redhat.com/browse/OCPBUGS-47765
+		if isVsphereTopologyConfigured(oc) {
+			g.Skip("Skip for vSphere multi-zone test scenario!")
+		}
+
 		// Use the framework created project as default, if use your own, exec the follow code setupProject
 		exutil.By("# Create new project for the scenario")
 		oc.SetupProject() //create new project
@@ -1819,6 +1824,11 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			}
 		}
 
+		// Skip for multi-zone test scenario, see https://issues.redhat.com/browse/OCPBUGS-47765
+		if isVsphereTopologyConfigured(oc) {
+			g.Skip("Skip for vSphere multi-zone test scenario!")
+		}
+
 		// Set the resource template for the scenario
 		var (
 			storageTeamBaseDir          = exutil.FixturePath("testdata", "storage")
@@ -1931,13 +1941,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate            = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
 			volumesnapshotTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
-			storageClassParameters = map[string]string{
-				"csi.storage.k8s.io/fstype": "ext4",
-			}
-			extraParameters = map[string]interface{}{
-				"parameters":           storageClassParameters,
-				"allowVolumeExpansion": true,
-			}
 		)
 
 		exutil.By("Create new project for the scenario")
@@ -1948,11 +1951,38 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
 			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
 			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
+
+			exutil.By("Create a new csi storageclass")
+			storageClassParameters := map[string]string{
+				"csi.storage.k8s.io/fstype": "ext4",
+			}
+			extraParameters := map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+			// Add allowedTopologies in sc for https://issues.redhat.com/browse/OCPBUGS-47765
+			// currently it only impact the multi-vcenter config, but I think this is a better practice for all multi-zone configs
+			if isVsphereTopologyConfigured(oc) {
+				zone := getZoneFromOneSchedulableWorker(oc, provisioner)
+				zones := []string{zone}
+				topologyLabel := getTopologyLabelByProvisioner(provisioner)
+				labelExpressions := []map[string]interface{}{
+					{"key": topologyLabel, "values": zones},
+				}
+				matchLabelExpressions := []map[string]interface{}{
+					{"matchLabelExpressions": labelExpressions},
+				}
+				extraParameters = map[string]interface{}{
+					"parameters":           storageClassParameters,
+					"allowVolumeExpansion": true,
+					"allowedTopologies":    matchLabelExpressions,
+				}
+			}
 			storageClass.provisioner = provisioner
 			storageClass.createWithExtraParameters(oc, extraParameters)
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
-			exutil.By("Create a pvc with the preset csi storageclass")
+			exutil.By("Create a pvc with the csi storageclass")
 			pvcOri.scname = storageClass.name
 			pvcOri.create(oc)
 			defer pvcOri.deleteAsAdmin(oc)
@@ -2039,13 +2069,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate            = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
 			volumesnapshotTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
-			storageClassParameters = map[string]string{
-				"csi.storage.k8s.io/fstype": "xfs",
-			}
-			extraParameters = map[string]interface{}{
-				"parameters":           storageClassParameters,
-				"allowVolumeExpansion": true,
-			}
 		)
 
 		exutil.By("Create new project for the scenario")
@@ -2056,11 +2079,39 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
 			pvcOri := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate))
 			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
+
+			exutil.By("Create a new csi storageclass")
+			storageClassParameters := map[string]string{
+				"csi.storage.k8s.io/fstype": "xfs",
+			}
+			extraParameters := map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+			// Add allowedTopologies in sc for https://issues.redhat.com/browse/OCPBUGS-47765
+			// currently it only impact the multi-vcenter config, but I think this is a better practice for all multi-zone configs
+			if isVsphereTopologyConfigured(oc) {
+				zone := getZoneFromOneSchedulableWorker(oc, provisioner)
+				zones := []string{zone}
+				topologyLabel := getTopologyLabelByProvisioner(provisioner)
+				labelExpressions := []map[string]interface{}{
+					{"key": topologyLabel, "values": zones},
+				}
+				matchLabelExpressions := []map[string]interface{}{
+					{"matchLabelExpressions": labelExpressions},
+				}
+				extraParameters = map[string]interface{}{
+					"parameters":           storageClassParameters,
+					"allowVolumeExpansion": true,
+					"allowedTopologies":    matchLabelExpressions,
+				}
+			}
+
 			storageClass.provisioner = provisioner
 			storageClass.createWithExtraParameters(oc, extraParameters)
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
 
-			exutil.By("Create a pvc with the preset csi storageclass")
+			exutil.By("Create a pvc with the csi storageclass")
 			pvcOri.scname = storageClass.name
 			pvcOri.create(oc)
 			defer pvcOri.deleteAsAdmin(oc)
@@ -3059,6 +3110,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				g.Skip("Skip for the test cluster vCenter version \"" + vcenterVersion + "\" not support snapshot!!!")
 			}
 		}
+		// Skip for multi-zone test scenario, see https://issues.redhat.com/browse/OCPBUGS-47765
+		if isVsphereTopologyConfigured(oc) {
+			g.Skip("Skip for vSphere multi-zone test scenario!")
+		}
 
 		var (
 			storageTeamBaseDir            = exutil.FixturePath("testdata", "storage")
@@ -3068,14 +3123,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			volumesnapshotTemplate        = filepath.Join(storageTeamBaseDir, "volumesnapshot-template.yaml")
 			volumeSnapshotClassTemplate   = filepath.Join(storageTeamBaseDir, "volumesnapshotclass-template.yaml")
 			volumeSnapshotContentTemplate = filepath.Join(storageTeamBaseDir, "volumesnapshotcontent-template.yaml")
-
-			storageClassParameters = map[string]string{
-				"csi.storage.k8s.io/fstype": "ext4",
-			}
-			scExtraParameters = map[string]interface{}{
-				"parameters":           storageClassParameters,
-				"allowVolumeExpansion": true,
-			}
 		)
 		exutil.By("Create new project for the scenario")
 		oc.SetupProject() //create new project
@@ -3086,6 +3133,31 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			podOri := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvcOri.name))
 
 			exutil.By("Create a csi storageclass with parameter 'csi.storage.k8s.io/fstype': 'ext4'")
+			storageClassParameters := map[string]string{
+				"csi.storage.k8s.io/fstype": "ext4",
+			}
+			scExtraParameters := map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+			// Add allowedTopologies in sc for https://issues.redhat.com/browse/OCPBUGS-47765
+			// currently it only impact the multi-vcenter config, but I think this is a better practice for all multi-zone configs
+			if isVsphereTopologyConfigured(oc) {
+				zone := getZoneFromOneSchedulableWorker(oc, provisioner)
+				zones := []string{zone}
+				topologyLabel := getTopologyLabelByProvisioner(provisioner)
+				labelExpressions := []map[string]interface{}{
+					{"key": topologyLabel, "values": zones},
+				}
+				matchLabelExpressions := []map[string]interface{}{
+					{"matchLabelExpressions": labelExpressions},
+				}
+				scExtraParameters = map[string]interface{}{
+					"parameters":           storageClassParameters,
+					"allowVolumeExpansion": true,
+					"allowedTopologies":    matchLabelExpressions,
+				}
+			}
 			storageClass.provisioner = provisioner
 			storageClass.createWithExtraParameters(oc, scExtraParameters)
 			defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.

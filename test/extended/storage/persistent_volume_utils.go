@@ -518,6 +518,8 @@ func getTopologyLabelByProvisioner(provisioner string) (topologyLabel string) {
 		return "failure-domain.beta.kubernetes.io/zone"
 	case aliDiskpluginCsiDriverProvisioner:
 		return "topology.diskplugin.csi.alibabacloud.com/zone"
+	case vmwareCsiDriverProvisioner:
+		return "topology.csi.vmware.com/openshift-zone"
 	default:
 		e2e.Failf("Failed to get topology label for provisioner %q", provisioner)
 	}
