@@ -1294,6 +1294,43 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		g.By("The ocp-28949 complianceScan for platform has performed successfully ..!!!\n")
 	})
 
+	// author: xiyuan@redhat.com
+	g.It("Author:xiyuan-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Low-46525-The remediation status should shows NeedsReview when the annotations set unset-value and value-required", func() {
+		g.By("Skip platform-compliancesuite.. !!!\n")
+		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
+		var csuiteD = complianceSuiteDescription{
+			name:         "rhcos4-chronyd-ntpd-" + getRandomString(),
+			namespace:    subD.namespace,
+			schedule:     "0 1 * * *",
+			scanname:     "worker-scan" + getRandomString(),
+			profile:      "xccdf_org.ssgproject.content_profile_moderate",
+			content:      "ssg-rhcos4-ds.xml",
+			contentImage: "quay.io/openshifttest/co_content:qe_remediation_variable",
+			rule:         "xccdf_org.ssgproject.content_rule_chronyd_or_ntpd_specify_multiple_servers",
+			nodeSelector: "worker",
+			debug:        true,
+			template:     csuiteRemTemplate,
+		}
+
+		g.By("Create platform-compliancesuite.. !!!\n")
+		defer cleanupObjects(oc, objectTableRef{"compliancesuite", subD.namespace, csuiteD.name})
+		csuiteD.create(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", csuiteD.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		subD.complianceSuiteResult(oc, csuiteD.name, "NON-COMPLIANT")
+
+		g.By("Check scan result.. !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"compliancecheckresult", csuiteD.scanname + "-chronyd-or-ntpd-specify-multiple-servers", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "NeedsReview", ok, []string{"complianceremediations",
+			csuiteD.scanname + "-chronyd-or-ntpd-specify-multiple-servers", "-n", csuiteD.namespace, "-o=jsonpath={.status.applicationState}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "var-multiple-time-servers", ok, []string{"complianceremediations",
+			csuiteD.scanname + "-chronyd-or-ntpd-specify-multiple-servers", "-n", csuiteD.namespace, "-o=jsonpath={.metadata.annotations.compliance\\.openshift\\.io/unset-value}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "var-multiple-time-servers", ok, []string{"complianceremediations",
+			csuiteD.scanname + "-chronyd-or-ntpd-specify-multiple-servers", "-n", csuiteD.namespace, "-o=jsonpath={.metadata.annotations.compliance\\.openshift\\.io/value-required}"}).check(oc)
+
+		g.By("The ocp-46525 The remediation status showing NeedsReview when the annotations set unset-value and value-required executed successfully ..!!!\n")
+	})
+
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:pdhamdhe-Critical-36988-The ComplianceScan could be triggered for cis profile for platform scanType", func() {
 
