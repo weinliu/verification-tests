@@ -3,6 +3,8 @@ package storage
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"regexp"
 	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -234,6 +236,81 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 					Should(o.ContainSubstring(newNodeSelector), fmt.Sprintf("%s nodeSelector is not populated", driverDeploy.name))
 			}
 		}
+
+	})
+
+	// author: pewang@redhat.com
+	// https://issues.redhat.com/browse/STOR-2107
+	g.It("Author:pewang-HyperShiftMGMT-NonHyperShiftHOST-ARO-High-78527-[CSI-Driver-Operator][HCP] Driver controllers should use the mounted secret store credentials", func() {
+		if cloudProvider != "azure" {
+			g.Skip("Skip the test as it is only for ARO HCP cluster")
+		}
+
+		var (
+			azureDiskCSICertName, azureFileCSICertName string
+			hostedClusterControlPlaneNs                = fmt.Sprintf("%s-%s", hostedClusterNS, guestClusterName)
+			clientCertBasePath                         = "/mnt/certs/"
+			azureDiskCSISecretProviderClass            = "managed-azure-disk-csi"
+			azureFileCSISecretProviderClass            = "managed-azure-file-csi"
+			azureDiskCSIConfig                         = "azure-disk-csi-config"
+			azureFileCSIConfig                         = "azure-file-csi-config"
+			azureDiskCSIOperator                       = newDeployment(setDeploymentName("azure-disk-csi-driver-operator"), setDeploymentNamespace(hostedClusterControlPlaneNs),
+				setDeploymentApplabel("name=azure-disk-csi-driver-operator"))
+			azureDiskCSIController = newDeployment(setDeploymentName("azure-disk-csi-driver-controller"), setDeploymentNamespace(hostedClusterControlPlaneNs),
+				setDeploymentApplabel("app=azure-disk-csi-driver-controller"))
+			azureFileCSIOperator = newDeployment(setDeploymentName("azure-file-csi-driver-operator"), setDeploymentNamespace(hostedClusterControlPlaneNs),
+				setDeploymentApplabel("name=azure-file-csi-driver-operator"))
+			azureFileCSIController = newDeployment(setDeploymentName("azure-file-csi-driver-controller"), setDeploymentNamespace(hostedClusterControlPlaneNs),
+				setDeploymentApplabel("app=azure-file-csi-driver-controller"))
+			clusterStorageOperator = newDeployment(setDeploymentName("cluster-storage-operator"), setDeploymentNamespace(hostedClusterControlPlaneNs),
+				setDeploymentApplabel("name=cluster-storage-operator"))
+		)
+
+		if aroHcpSecret := clusterStorageOperator.getSpecifiedJSONPathValue(oc, `{.spec.template.spec.containers[0].env[?(@.name=="ARO_HCP_SECRET_PROVIDER_CLASS_FOR_DISK")].value}`); len(aroHcpSecret) == 0 {
+			g.Skip("Skip the test as it is only for ARO HCP MSI cluster")
+		}
+
+		exutil.By("# Check hcp drivers operators environment variables should be set correctly")
+		o.Expect(azureDiskCSIOperator.getSpecifiedJSONPathValue(oc, `{.spec.template.spec.containers[0].env[?(@.name=="ARO_HCP_SECRET_PROVIDER_CLASS_FOR_DISK")].value}`)).
+			Should(o.ContainSubstring(azureDiskCSISecretProviderClass))
+		o.Expect(azureFileCSIOperator.getSpecifiedJSONPathValue(oc, `{.spec.template.spec.containers[0].env[?(@.name=="ARO_HCP_SECRET_PROVIDER_CLASS_FOR_FILE")].value}`)).
+			Should(o.ContainSubstring(azureFileCSISecretProviderClass))
+
+		exutil.By("# Check hcp drivers controllers secret volumes should be set correctly")
+		o.Expect(azureDiskCSIController.getSpecifiedJSONPathValue(oc, `{.spec.template.spec.volumes}`)).
+			Should(o.ContainSubstring(azureDiskCSISecretProviderClass))
+		o.Expect(azureFileCSIController.getSpecifiedJSONPathValue(oc, `{.spec.template.spec.volumes}`)).
+			Should(o.ContainSubstring(azureFileCSISecretProviderClass))
+
+		exutil.By("# Check hcp drivers secrets should be created correctly by control plane operator")
+
+		secretObjects, getObjectsError := oc.AsAdmin().WithoutNamespace().Run("get").Args("secretProviderClass", azureDiskCSISecretProviderClass, "-n", hostedClusterControlPlaneNs, "-o=jsonpath={.spec.parameters.objects}").Output()
+		o.Expect(getObjectsError).ShouldNot(o.HaveOccurred(), "Failed to get azure disk csi secret objects")
+
+		re := regexp.MustCompile(`objectName:\s*(\S+)`)
+		matches := re.FindStringSubmatch(secretObjects)
+		if len(matches) > 1 {
+			azureDiskCSICertName = matches[1]
+		} else {
+			e2e.Fail("azureDiskCSICertName not found in the secretProviderClass.")
+		}
+
+		secretObjects, getObjectsError = oc.AsAdmin().WithoutNamespace().Run("get").Args("secretProviderClass", azureFileCSISecretProviderClass, "-n", hostedClusterControlPlaneNs, "-o=jsonpath={.spec.parameters.objects}").Output()
+		o.Expect(getObjectsError).ShouldNot(o.HaveOccurred(), "Failed to get azure file csi secret objects")
+		matches = re.FindStringSubmatch(secretObjects)
+		if len(matches) > 1 {
+			azureFileCSICertName = matches[1]
+		} else {
+			e2e.Fail("azureFileCSICertName not found in the secretProviderClass.")
+		}
+
+		azureDiskCSIConfigContent, getDiskConfigError := oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", hostedClusterControlPlaneNs, fmt.Sprintf("secret/%s", azureDiskCSIConfig), "--to=-").Output()
+		o.Expect(getDiskConfigError).ShouldNot(o.HaveOccurred(), "Failed to get disk csi config content")
+		o.Expect(azureDiskCSIConfigContent).Should(o.ContainSubstring(filepath.Join(clientCertBasePath, azureDiskCSICertName)))
+
+		azureFileCSIConfigContent, getFileConfigError := oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", hostedClusterControlPlaneNs, fmt.Sprintf("secret/%s", azureFileCSIConfig), "--to=-").Output()
+		o.Expect(getFileConfigError).ShouldNot(o.HaveOccurred(), "Failed to get file csi config content")
+		o.Expect(azureFileCSIConfigContent).Should(o.ContainSubstring(filepath.Join(clientCertBasePath, azureFileCSICertName)))
 
 	})
 
