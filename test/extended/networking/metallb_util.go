@@ -176,6 +176,17 @@ type communityResource struct {
 	template      string
 }
 
+// struct to be used with node and pod affinity templates
+// nodeaffinity template needs param1 as node1, param2 as node2
+// pod affinity and anti affinity needs param1 as namespace1 and param2 as namespace1
+type metalLBAffinityCRResource struct {
+	name      string
+	namespace string
+	param1    string
+	param2    string
+	template  string
+}
+
 var (
 	snooze                 time.Duration = 720
 	bgpRouterIP                          = "192.168.111.60/24"
@@ -859,4 +870,24 @@ func checkBGPv4RouteTableEntry(oc *exutil.CLI, ns string, entry string, expected
 	})
 	exutil.AssertWaitPollNoErr(errCheck, "Checking BGP route table timed out")
 	return true
+}
+
+func createMetalLBAffinityCR(oc *exutil.CLI, metallbcr metalLBAffinityCRResource) (status bool) {
+	g.By("Creating MetalLB Affinity CR from template")
+
+	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", metallbcr.template, "-p", "NAME="+metallbcr.name, "NAMESPACE="+metallbcr.namespace,
+		"PARAM1="+metallbcr.param1, "PARAM2="+metallbcr.param2)
+	if err != nil {
+		e2e.Logf("Error creating MetalLB CR %v", err)
+		return false
+	}
+	return true
+}
+
+func getRouterPodNamespace(oc *exutil.CLI) string {
+	routerNS, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-A", "-l", "name=router-pod", "--no-headers", "-o=custom-columns=NAME:.metadata.namespace").Output()
+	if err != nil {
+		return ""
+	}
+	return routerNS
 }

@@ -351,6 +351,12 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 		o.Expect(strings.Contains(output, "frrnodestates.frrk8s.metallb.io")).To(o.BeTrue())
 		o.Expect(strings.Contains(output, "servicel2statuses.metallb.io")).To(o.BeTrue())
 
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("metallb", "-n", opNamespace).Output()
+		if err == nil && strings.Contains(output, "metallb") {
+			e2e.Logf("Deleting the existing metallb CR")
+			removeResource(oc, true, true, "metallb", "metallb", "-n", opNamespace)
+		}
+
 	})
 
 	g.It("Author:asood-High-46560-High-50944-MetalLB-CR All Workers Creation and Verify the logging level of MetalLB can be changed for debugging [Serial]", func() {
@@ -442,6 +448,155 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 			podName, err := exutil.GetPodName(oc, opNamespace, "component="+component, workerList.Items[i].Name)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(podName).NotTo(o.BeEmpty())
+		}
+
+	})
+
+	g.It("Author:asood-High-54822-Validate controller and speaker pods can be scheduled based on affinity - node affinity, pod affinity and pod anti affinity.[Serial]", func() {
+		var (
+			testDataBaseDir         = exutil.FixturePath("testdata", "networking")
+			nodeLabels              = []string{"east", "west"}
+			nodeAffinityFile        = filepath.Join(testDataDir, "metallb-cr-node-affinity.yaml")
+			nodeAffinityTemplate    = filepath.Join(testDataDir, "metallb-cr-node-affinity-template.yaml")
+			podAffinityTemplate     = filepath.Join(testDataDir, "metallb-cr-pod-affinity-template.yaml")
+			podAntiAffinityTemplate = filepath.Join(testDataDir, "metallb-cr-pod-antiaffinity-template.yaml")
+			pingPodNodeTemplate     = filepath.Join(testDataBaseDir, "ping-for-pod-specific-node-template.yaml")
+			components              = []string{"controller", "speaker", "frr-k8s"}
+		)
+
+		exutil.By("Obtain the worker nodes in cluster")
+		workersList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(workersList.Items) < 2 {
+			g.Skip("This test can only be run for cluster that has atleast two worker nodes.")
+		}
+
+		exutil.By("Label two nodes of the cluster")
+		for i := 0; i < 2; i++ {
+			defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, workersList.Items[i].Name, "zone")
+			e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, workersList.Items[i].Name, "zone", nodeLabels[i])
+		}
+		defer removeResource(oc, true, true, "metallb", "metallb", "-n", opNamespace)
+		metallbCR := metalLBAffinityCRResource{
+			name:      "metallb",
+			namespace: opNamespace,
+			param1:    "",
+			param2:    "",
+			template:  "",
+		}
+		// Node afinity
+		for i := 0; i < 2; i++ {
+			if i == 0 {
+				exutil.By("Create meatllb CR with Node Affinity using node selector term - matchExpressions")
+				createResourceFromFile(oc, opNamespace, nodeAffinityFile)
+
+			} else {
+				exutil.By("Create meatllb CR with Node Affinity using node selector term - matchFields")
+				metallbCR.param1 = workersList.Items[0].Name
+				metallbCR.param2 = workersList.Items[1].Name
+				metallbCR.template = nodeAffinityTemplate
+				o.Expect(createMetalLBAffinityCR(oc, metallbCR)).To(o.BeTrue())
+			}
+
+			exutil.By(fmt.Sprintf("Get the pod names for controller and speaker & frr-k8s respectively scheduled on %s and %s", workersList.Items[0].Name, workersList.Items[1].Name))
+			expectedPodNodeList := []string{workersList.Items[0].Name, workersList.Items[1].Name, workersList.Items[1].Name}
+			for j, component := range components {
+				if j == 0 {
+					err := waitForPodWithLabelReady(oc, opNamespace, "component="+component)
+					o.Expect(err).NotTo(o.HaveOccurred())
+				} else {
+					dsStatus, dsStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", opNamespace, "ds", component, "--timeout", "5m").Output()
+					o.Expect(dsStatusErr).NotTo(o.HaveOccurred())
+					o.Expect(strings.Contains(dsStatus, "successfully rolled out")).To(o.BeTrue())
+				}
+				podName, err := exutil.GetPodName(oc, opNamespace, "component="+component, expectedPodNodeList[j])
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(podName).NotTo(o.BeEmpty())
+			}
+			removeResource(oc, true, true, "metallb", "metallb", "-n", opNamespace)
+		}
+		// Pod affinity and anti affinity
+		exutil.By("Create a pod on one of the nodes")
+		pod := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: oc.Namespace(),
+			nodename:  workersList.Items[0].Name,
+			template:  pingPodNodeTemplate,
+		}
+		pod.createPingPodNode(oc)
+		waitPodReady(oc, pod.namespace, pod.name)
+
+		metallbCR.param1 = pod.namespace
+		metallbCR.param2 = pod.namespace
+
+		metallbCRTemplateList := []string{podAffinityTemplate, podAntiAffinityTemplate}
+		dsSearchStrList := []string{fmt.Sprintf("1 of %v updated pods are available", len(workersList.Items)), fmt.Sprintf("%v of %v updated pods are available", len(workersList.Items)-1, len(workersList.Items))}
+		scenarioStrList := []string{"affinity", "anti affinity"}
+
+		for index, scenario := range scenarioStrList {
+			exutil.By(fmt.Sprintf("Create meatllb CR with pod %s", scenario))
+			metallbCR.template = metallbCRTemplateList[index]
+			o.Expect(createMetalLBAffinityCR(oc, metallbCR)).To(o.BeTrue())
+			exutil.By(fmt.Sprintf("Validate roll out status of speaker and frr-k8s for pod %s", scenario))
+			for i := 1; i < len(components); i++ {
+				o.Eventually(func() bool {
+					dsStatus, dsStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", opNamespace, "ds", components[i], "--timeout", "10s").Output()
+					o.Expect(dsStatusErr).To(o.HaveOccurred())
+					return strings.Contains(dsStatus, dsSearchStrList[index])
+				}, "60s", "10s").Should(o.BeTrue(), "Pods did not reach running status")
+
+			}
+			if index == 0 {
+				exutil.By(fmt.Sprintf("Validate metallb pods are running only on %s", workersList.Items[0].Name))
+				for i := 0; i < len(components); i++ {
+					podName, err := exutil.GetPodName(oc, opNamespace, "component="+components[i], workersList.Items[0].Name)
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(podName).NotTo(o.BeEmpty())
+				}
+			} else {
+				exutil.By(fmt.Sprintf("Validate metallb pods are not running on %s", workersList.Items[0].Name))
+				for i := 0; i < len(components); i++ {
+					podName, err := exutil.GetPodName(oc, opNamespace, "component="+components[i], workersList.Items[0].Name)
+					o.Expect(err).NotTo(o.HaveOccurred())
+					o.Expect(podName).To(o.BeEmpty())
+				}
+			}
+			removeResource(oc, true, true, "metallb", "metallb", "-n", opNamespace)
+		}
+
+	})
+
+	g.It("Author:asood-High-54823-Validate controller and speaker pods are scheduled on nodes based priority class. [Serial]", func() {
+		var (
+			metallbCRPriorityClassFile = filepath.Join(testDataDir, "metallb-cr-priority-class.yaml")
+			metallbPriorityClassFile   = filepath.Join(testDataDir, "metallb-priority-class.yaml")
+			components                 = []string{"controller", "speaker", "frr-k8s"}
+		)
+
+		exutil.By("Create meatllb CR with priority class")
+		createResourceFromFile(oc, opNamespace, metallbCRPriorityClassFile)
+		defer removeResource(oc, true, true, "metallb", "metallb", "-n", opNamespace)
+		exutil.By("Validate metallb CR not created as priority class is not yet created")
+		// just check the daemon sets as pods are not expected to be scheduled
+		for i := 1; i < len(components); i++ {
+			o.Eventually(func() bool {
+				dsStatus, dsStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", opNamespace, "ds", components[i], "--timeout", "10s").Output()
+				o.Expect(dsStatusErr).To(o.HaveOccurred())
+				return strings.Contains(dsStatus, "0 out of")
+			}, "60s", "10s").Should(o.BeTrue(), "Pods did not reach running status")
+		}
+		createResourceFromFile(oc, opNamespace, metallbPriorityClassFile)
+		defer removeResource(oc, true, true, "priorityclass", "metallb-high-priority")
+		exutil.By("Validate metallb CR is created after priority class is created")
+		for j, component := range components {
+			if j == 0 {
+				err := waitForPodWithLabelReady(oc, opNamespace, "component="+component)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			} else {
+				dsStatus, dsStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", opNamespace, "ds", component, "--timeout", "60s").Output()
+				o.Expect(dsStatusErr).NotTo(o.HaveOccurred())
+				o.Expect(strings.Contains(dsStatus, "successfully rolled out")).To(o.BeTrue())
+			}
 		}
 
 	})
@@ -3392,6 +3547,329 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 		newExpectedPath = append(newExpectedPath, "1 available", nodeIPs[0])
 		o.Expect(checkBGPv4RouteTableEntry(oc, bgpRouterNamespaceWithSuffix, svcIP, newExpectedPath)).To(o.BeTrue())
 
+	})
+
+})
+
+// Cross feature testing
+var _ = g.Describe("[sig-networking] SDN udn metallb", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc                      = exutil.NewCLI("networking-metallb", exutil.KubeConfigPath())
+		opNamespace             = "metallb-system"
+		opName                  = "metallb-operator"
+		testDataDir             = exutil.FixturePath("testdata", "networking/metallb")
+		l2Addresses             = [2][2]string{{"192.168.111.65-192.168.111.69", "192.168.111.70-192.168.111.74"}, {"192.168.111.75-192.168.111.79", "192.168.111.80-192.168.111.85"}}
+		l3Addresses             = [2][2]string{{"10.10.10.0-10.10.10.10", "10.10.11.1-10.10.11.10"}, {"10.10.12.1-10.10.12.10", "10.10.13.1-10.10.13.10"}}
+		myASN                   = 64500
+		peerASN                 = 64500
+		peerIPAddress           = "192.168.111.60"
+		metalLBNodeSelKey       = "node-role.kubernetes.io/worker"
+		metalLBNodeSelVal       = ""
+		metalLBControllerSelKey = "node-role.kubernetes.io/worker"
+		metalLBControllerSelVal = ""
+		ipAddressPoolLabelKey   = "zone"
+		ipAddressPoolLabelVal   = "east"
+	)
+
+	g.BeforeEach(func() {
+		SkipIfNoFeatureGate(oc, "NetworkSegmentation")
+
+		exutil.By("Check the platform if it is suitable for running the test")
+		networkType := exutil.CheckNetworkType(oc)
+		if !(isPlatformSuitable(oc)) || !strings.Contains(networkType, "ovn") {
+			g.Skip("These cases can only be run on networking team's private RDU cluster, skipping for other platforms or non-OVN network plugin!!!")
+		}
+		namespaceTemplate := filepath.Join(testDataDir, "namespace-template.yaml")
+		operatorGroupTemplate := filepath.Join(testDataDir, "operatorgroup-template.yaml")
+		subscriptionTemplate := filepath.Join(testDataDir, "subscription-template.yaml")
+		sub := subscriptionResource{
+			name:             "metallb-operator-sub",
+			namespace:        opNamespace,
+			operatorName:     opName,
+			channel:          "stable",
+			catalog:          "qe-app-registry",
+			catalogNamespace: "openshift-marketplace",
+			template:         subscriptionTemplate,
+		}
+		ns := namespaceResource{
+			name:     opNamespace,
+			template: namespaceTemplate,
+		}
+		og := operatorGroupResource{
+			name:             opName,
+			namespace:        opNamespace,
+			targetNamespaces: opNamespace,
+			template:         operatorGroupTemplate,
+		}
+		exutil.By("Check the catalog source")
+		catalogSource := getOperatorSource(oc, "openshift-marketplace")
+		if catalogSource == "" {
+			g.Skip("Skip testing as auto-release-app-registry/qe-app-registry not found")
+		}
+		sub.catalog = catalogSource
+		operatorInstall(oc, sub, ns, og)
+
+		exutil.By("Making sure CRDs are successfully installed")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "bfdprofiles.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "bgpadvertisements.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "bgppeers.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "communities.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "ipaddresspools.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "l2advertisements.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "metallbs.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "frrconfigurations.frrk8s.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "frrnodestates.frrk8s.metallb.io")).To(o.BeTrue())
+		o.Expect(strings.Contains(output, "servicel2statuses.metallb.io")).To(o.BeTrue())
+
+		exutil.By("Create MetalLB CR")
+		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
+		metallbCR := metalLBCRResource{
+			name:                  "metallb",
+			namespace:             opNamespace,
+			nodeSelectorKey:       metalLBNodeSelKey,
+			nodeSelectorVal:       metalLBNodeSelVal,
+			controllerSelectorKey: metalLBControllerSelKey,
+			controllerSelectorVal: metalLBControllerSelVal,
+			template:              metallbCRTemplate,
+		}
+		result := createMetalLBCR(oc, metallbCR, metallbCRTemplate)
+		o.Expect(result).To(o.BeTrue())
+		exutil.By("SUCCESS - MetalLB CR Created")
+	})
+
+	g.It("Author:asood-High-76801-Validate LB services can be created in UDN with MetalLB operator on non cloud platform. [Serial]", func() {
+		var (
+			namespaces           []string
+			serviceSelectorKey   = "environ"
+			serviceSelectorValue = [2]string{"Test", "Dev"}
+			namespaceLabelKey    = "region"
+			namespaceLabelValue  = [1]string{"NA"}
+			interfaces           = [3]string{"br-ex", "eno1", "eno2"}
+			workers              []string
+			l2IPAddressPool      []string
+			l3IPAddressPool      []string
+			bgpPeers             []string
+			bgpPassword                = ""
+			bgpCommunties              = []string{"65001:65500"}
+			cidr                       = []string{"10.150.0.0/16", "10.151.0.0/16"}
+			mtu                  int32 = 1300
+			prefix               int32 = 24
+			testID                     = "76801"
+			proxyHost                  = "10.8.1.181"
+			routerNS                   = ""
+			udnTestDataDir             = exutil.FixturePath("testdata", "networking")
+			udnCRDL2SingleStack        = filepath.Join(udnTestDataDir, "udn/udn_crd_layer2_singlestack_template.yaml")
+			udnCRDL3SingleStack        = filepath.Join(udnTestDataDir, "udn/udn_crd_singlestack_template.yaml")
+			udnNADTemplate             = filepath.Join(udnTestDataDir, "udn/udn_nad_template.yaml")
+		)
+
+		exutil.By("1. Obtain the workers")
+		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(workerList.Items) < 2 {
+			g.Skip("These cases can only be run for cluster that has atleast two worker nodes")
+		}
+		for i := 0; i < len(workerList.Items); i++ {
+			workers = append(workers, workerList.Items[i].Name)
+		}
+
+		exutil.By("2. Set up user defined network namespaces")
+		namespaces = append(namespaces, oc.Namespace())
+		for i := 0; i < 3; i++ {
+			oc.SetupProject()
+			namespaces = append(namespaces, oc.Namespace())
+		}
+		exutil.By("2.1. Create CRD for UDN in first two namespaces")
+		udnResourceName := []string{"l2-network-udn", "l3-network-udn"}
+		udnTemplate := []string{udnCRDL2SingleStack, udnCRDL3SingleStack}
+		udnCRD := make([]udnCRDResource, 2)
+		for i := 0; i < 2; i++ {
+			udnCRD[i] = udnCRDResource{
+				crdname:   udnResourceName[i],
+				namespace: namespaces[i],
+				role:      "Primary",
+				mtu:       mtu,
+				cidr:      cidr[i],
+				prefix:    prefix,
+				template:  udnTemplate[i],
+			}
+			switch i {
+			case 0:
+				udnCRD[0].createLayer2SingleStackUDNCRD(oc)
+			case 1:
+				udnCRD[1].createUdnCRDSingleStack(oc)
+			default:
+				// Do nothing
+			}
+			err := waitUDNCRDApplied(oc, namespaces[i], udnCRD[i].crdname)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		exutil.By("2.2 Create NAD for UDN in last two namespaces")
+		udnNADResourceName := []string{"l2-network-nad", "l3-network-nad"}
+		topology := []string{"layer2", "layer3"}
+		udnNAD := make([]udnNetDefResource, 2)
+		for i := 0; i < 2; i++ {
+			udnNAD[i] = udnNetDefResource{
+				nadname:             udnNADResourceName[i],
+				namespace:           namespaces[i+2],
+				nad_network_name:    udnNADResourceName[i],
+				topology:            topology[i],
+				subnet:              "",
+				mtu:                 mtu,
+				net_attach_def_name: fmt.Sprintf("%s/%s", namespaces[i+2], udnNADResourceName[i]),
+				role:                "primary",
+				template:            udnNADTemplate,
+			}
+			udnNAD[i].subnet = cidr[i]
+			udnNAD[i].createUdnNad(oc)
+		}
+
+		exutil.By("3.1 Set up external BGP router")
+		suffix := getRandomString()
+		bgpRouterNamespaceWithSuffix := bgpRouterNamespace + "-" + suffix
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(bgpRouterNamespaceWithSuffix)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", bgpRouterPodName, "-n", bgpRouterNamespaceWithSuffix).Execute()
+		o.Expect(setUpExternalFRRRouter(oc, bgpRouterNamespaceWithSuffix, bgpPassword)).To(o.BeTrue())
+		exutil.By("3.2 Create BGP Peer")
+		BGPPeerTemplate := filepath.Join(testDataDir, "bgppeer-template.yaml")
+		BGPPeerCR := bgpPeerResource{
+			name:          "peer-64500-" + testID,
+			namespace:     opNamespace,
+			holdTime:      "30s",
+			keepAliveTime: "10s",
+			password:      bgpPassword,
+			myASN:         myASN,
+			peerASN:       peerASN,
+			peerAddress:   peerIPAddress,
+			template:      BGPPeerTemplate,
+		}
+		defer removeResource(oc, true, true, "bgppeers", BGPPeerCR.name, "-n", BGPPeerCR.namespace)
+		bgpPeers = append(bgpPeers, BGPPeerCR.name)
+		o.Expect(createBGPPeerCR(oc, BGPPeerCR)).To(o.BeTrue())
+		exutil.By("3.3 Check BGP Session between speakers and Router is established")
+		o.Expect(checkBGPSessions(oc, bgpRouterNamespaceWithSuffix)).To(o.BeTrue())
+		routerNS = getRouterPodNamespace(oc)
+		o.Expect(routerNS).NotTo(o.BeEmpty())
+
+		exutil.By("4. Create L2 and L3 IP addresspools")
+		ipAddresspoolTemplate := filepath.Join(testDataDir, "ipaddresspool-template.yaml")
+		ipAddresspool := ipAddressPoolResource{
+			name:                      "ipaddresspool-l2-" + testID,
+			namespace:                 opNamespace,
+			label1:                    ipAddressPoolLabelKey,
+			value1:                    ipAddressPoolLabelVal,
+			addresses:                 l2Addresses[0][:],
+			namespaces:                namespaces[:],
+			priority:                  10,
+			avoidBuggyIPs:             true,
+			autoAssign:                true,
+			serviceLabelKey:           serviceSelectorKey,
+			serviceLabelValue:         serviceSelectorValue[0],
+			serviceSelectorKey:        serviceSelectorKey,
+			serviceSelectorOperator:   "In",
+			serviceSelectorValue:      []string{serviceSelectorValue[0], "dummy"},
+			namespaceLabelKey:         namespaceLabelKey,
+			namespaceLabelValue:       namespaceLabelValue[0],
+			namespaceSelectorKey:      namespaceLabelKey,
+			namespaceSelectorOperator: "In",
+			namespaceSelectorValue:    namespaceLabelValue[:],
+			template:                  ipAddresspoolTemplate,
+		}
+		defer removeResource(oc, true, true, "ipaddresspools", ipAddresspool.name, "-n", ipAddresspool.namespace)
+		result := createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolTemplate)
+		o.Expect(result).To(o.BeTrue())
+		l2IPAddressPool = append(l2IPAddressPool, ipAddresspool.name)
+		patchResourceAsAdmin(oc, "ipaddresspools/"+ipAddresspool.name, "{\"spec\":{\"serviceAllocation\": {\"namespaces\": []}}}", opNamespace)
+		exutil.By("SUCCESS - L2 IP Addresspool created")
+
+		ipAddresspool.name = "ipaddresspool-l3-" + testID
+		ipAddresspool.addresses = l3Addresses[0][:]
+		ipAddresspool.serviceLabelValue = serviceSelectorValue[1]
+		ipAddresspool.serviceSelectorValue = []string{serviceSelectorValue[1], "dummy"}
+		defer removeResource(oc, true, true, "ipaddresspools", ipAddresspool.name, "-n", ipAddresspool.namespace)
+		o.Expect(createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolTemplate)).To(o.BeTrue())
+		l3IPAddressPool = append(l3IPAddressPool, ipAddresspool.name)
+		patchResourceAsAdmin(oc, "ipaddresspools/"+ipAddresspool.name, "{\"spec\":{\"serviceAllocation\": {\"namespaces\": []}}}", opNamespace)
+		exutil.By("SUCCESS - L3 IP Addresspool created")
+
+		exutil.By("5. Create L2 and BGP Advertisement")
+		l2AdvertisementTemplate := filepath.Join(testDataDir, "l2advertisement-template.yaml")
+		l2advertisement := l2AdvertisementResource{
+			name:               "l2-adv-" + testID,
+			namespace:          opNamespace,
+			ipAddressPools:     l2IPAddressPool[:],
+			interfaces:         interfaces[:],
+			nodeSelectorValues: workers[:],
+			template:           l2AdvertisementTemplate,
+		}
+		defer removeResource(oc, true, true, "l2advertisements", l2advertisement.name, "-n", l2advertisement.namespace)
+		o.Expect(createL2AdvertisementCR(oc, l2advertisement, l2AdvertisementTemplate)).To(o.BeTrue())
+		l2AdvWorkersList, err := json.Marshal(workers)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		patchL2Advertisement := fmt.Sprintf("[{\"op\": \"replace\", \"path\": \"/spec/nodeSelectors/0/matchExpressions/0/values\", \"value\":%s}]", l2AdvWorkersList)
+		patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", opNamespace, "l2advertisement", l2advertisement.name, "--type=json", "-p", patchL2Advertisement).Execute()
+		o.Expect(patchErr).NotTo(o.HaveOccurred())
+
+		bgpAdvertisementTemplate := filepath.Join(testDataDir, "bgpadvertisement-template.yaml")
+		bgpAdvertisement := bgpAdvertisementResource{
+			name:                  "bgp-adv-" + testID,
+			namespace:             opNamespace,
+			aggregationLength:     32,
+			aggregationLengthV6:   128,
+			communities:           bgpCommunties[:],
+			ipAddressPools:        l3IPAddressPool[:],
+			nodeSelectorsKey:      "kubernetes.io/hostname",
+			nodeSelectorsOperator: "In",
+			nodeSelectorValues:    workers[:],
+			peer:                  bgpPeers[:],
+			template:              bgpAdvertisementTemplate,
+		}
+		defer removeResource(oc, true, true, "bgpadvertisements", bgpAdvertisement.name, "-n", bgpAdvertisement.namespace)
+		o.Expect(createBGPAdvertisementCR(oc, bgpAdvertisement)).To(o.BeTrue())
+
+		exutil.By("6. Create LoadBalancer services")
+		loadBalancerServiceTemplate := filepath.Join(testDataDir, "loadbalancer-svc-template.yaml")
+		svc := loadBalancerServiceResource{
+			name:                          "",
+			namespace:                     "",
+			externaltrafficpolicy:         "Cluster",
+			labelKey:                      serviceSelectorKey,
+			labelValue:                    "",
+			allocateLoadBalancerNodePorts: true,
+			template:                      loadBalancerServiceTemplate,
+		}
+
+		for _, ns := range namespaces {
+			for index, serviceSelector := range serviceSelectorValue {
+				svc.name = "hello-world-" + testID + "-" + strconv.Itoa(index)
+				svc.namespace = ns
+				svc.labelValue = serviceSelector
+				exutil.By(fmt.Sprintf("6.1 Create LoadBalancer service %s in %s", svc.name, svc.namespace))
+				o.Expect(createLoadBalancerService(oc, svc, svc.template)).To(o.BeTrue())
+				err := checkLoadBalancerSvcStatus(oc, svc.namespace, svc.name)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				svcIP := getLoadBalancerSvcIP(oc, svc.namespace, svc.name)
+				//svcClusterIP := getSvcIPv4(oc, svc.namespace, svc.name )
+				exutil.By(fmt.Sprintf("6.2 Validating service %s using external IP %s", svc.name, svcIP))
+				svcIPCmd := fmt.Sprintf("curl -s -I --connect-timeout 5 %s:80", svcIP)
+				o.Eventually(func() bool {
+					cmdOutput, _ := exutil.RemoteShPodWithBashSpecifyContainer(oc, routerNS, "router-master1", "testcontainer", svcIPCmd)
+					return strings.Contains(cmdOutput, "200 OK")
+				}, "120s", "10s").Should(o.BeTrue(), "Service validation failed")
+				// L3 addresses are not accessible outside cluster
+				if index == 0 {
+					exutil.By(fmt.Sprintf("6.3 Validating service %s using external IP %s", svc.name, svcIP))
+					o.Eventually(func() bool {
+						return validateService(oc, proxyHost, svcIP)
+					}, "120s", "10s").Should(o.BeTrue(), "Service validation failed")
+				}
+			}
+		}
 	})
 
 })
