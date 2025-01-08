@@ -2,7 +2,9 @@ package securityandcompliance
 
 import (
 	"fmt"
+	"math"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,6 +29,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		oc                               = exutil.NewCLI("compliance-"+getRandomString(), exutil.KubeConfigPath())
 		buildPruningBaseDir              string
 		ogCoTemplate                     string
+		ogCoTemplate1                    string
 		subCoTemplate                    string
 		csuiteTemplate                   string
 		csuiteRemTemplate                string
@@ -79,6 +82,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		tprofileWithoutTitleYAML         string
 		serviceYAML                      string
 		ogD                              operatorGroupDescription
+		ogD1                             operatorGroupDescription
 		subD                             subscriptionDescription
 		storageClass                     storageClassDescription
 	)
@@ -86,6 +90,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	g.BeforeEach(func() {
 		buildPruningBaseDir = exutil.FixturePath("testdata", "securityandcompliance")
 		ogCoTemplate = filepath.Join(buildPruningBaseDir, "operator-group.yaml")
+		ogCoTemplate1 = filepath.Join(buildPruningBaseDir, "operator-group-all-namespaces.yaml")
 		subCoTemplate = filepath.Join(buildPruningBaseDir, "subscription.yaml")
 		csuiteTemplate = filepath.Join(buildPruningBaseDir, "compliancesuite.yaml")
 		csuiteRemTemplate = filepath.Join(buildPruningBaseDir, "compliancesuiterem.yaml")
@@ -136,6 +141,11 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		tprofileWithoutTitleYAML = filepath.Join(buildPruningBaseDir, "tailoredprofile-withouttitle.yaml")
 		serviceYAML = filepath.Join(buildPruningBaseDir, "service-unsecure.yaml")
 
+		ogD1 = operatorGroupDescription{
+			name:      "openshift-compliance",
+			namespace: "openshift-compliance",
+			template:  ogCoTemplate1,
+		}
 		ogD = operatorGroupDescription{
 			name:      "openshift-compliance",
 			namespace: "openshift-compliance",
@@ -6597,6 +6607,133 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		assertParameterValueForBulkPods(oc, "512Mi", "pod", "-l", "workload=scanner", "-n", subD.namespace, "-o=jsonpath={.items[*].spec.containers[?(@.name==\"scanner\")].resources.limits.memory}")
 
 		g.By("ocp-53920-Check the scanner's and api-resource-collector's limits configurable ..!!!\n")
+	})
+
+	// author: bgudi@redhat.com
+	g.It("Author:bgudi-StressTest-NonHyperShiftHOST-NonPreRelease-High-53762-operator Pod should NOT in OOMKilled status when the operator installed in all namespaces [Disruptive]", func() {
+		var (
+			nsCount = int64(300)
+			ss      = scanSettingDescription{
+				autoapplyremediations:  false,
+				autoupdateremediations: false,
+				name:                   "auto-rem-ss" + getRandomString(),
+				namespace:              subD.namespace,
+				roles1:                 "wrscan",
+				rotation:               5,
+				schedule:               "0 1 * * *",
+				strictnodescan:         false,
+				size:                   "2Gi",
+				priorityclassname:      "",
+				debug:                  false,
+				suspend:                false,
+				template:               scansettingSingleTemplate,
+			}
+			ssb = scanSettingBindingDescription{
+				name:            "my-ssb-" + getRandomString(),
+				namespace:       subD.namespace,
+				profilekind1:    "Profile",
+				profilename1:    "ocp4-cis-node",
+				profilename2:    "ocp4-cis",
+				scansettingname: ss.name,
+				template:        scansettingbindingTemplate,
+			}
+		)
+
+		//Delete existing compliance-operator
+		g.By("Delete existing compliance-operator")
+		cleanupObjects(oc, objectTableRef{"scansettingbindings", subD.namespace, "--all"})
+		cleanupObjects(oc, objectTableRef{"compliancesuites", subD.namespace, "--all"})
+		cleanupObjects(oc, objectTableRef{"compliancescans", subD.namespace, "--all"})
+		cleanupObjects(oc, objectTableRef{"profilebundles", subD.namespace, "--all"})
+		deleteNamespace(oc, subD.namespace)
+
+		defer func() {
+			g.By("delete Compliance Operator !!!")
+			deleteNamespace(oc, subD.namespace)
+			g.By("the Compliance Operator is deleted successfully !!!")
+		}()
+
+		defer func() {
+			g.By("Check the ssb/suite/scan/pod/pb are deleted sucessfully !!!")
+			cleanupObjects(oc, objectTableRef{"scansettingbindings", subD.namespace, "--all"})
+			cleanupObjects(oc, objectTableRef{"compliancesuites", subD.namespace, "--all"})
+			cleanupObjects(oc, objectTableRef{"compliancescans", subD.namespace, "--all"})
+			cleanupObjects(oc, objectTableRef{"profilebundles", subD.namespace, "--all"})
+		}()
+
+		// Create compliance opertaor with operator-group-all-namespaces.yaml
+		g.By("Create compliance-operator without targetNamespace in operator-group")
+		createComplianceOperator(oc, subD, ogD1)
+
+		g.By("Memory usage before creating 300 namespaces")
+		cmd := fmt.Sprintf("oc adm top pod --selector=name=compliance-operator --no-headers -n openshift-compliance | awk '{print $3}' | sed 's/Mi//' | tr -d '\n'")
+		output, err := exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		memUsageBefore, _ := strconv.ParseFloat(string(output), 64)
+		e2e.Logf("Memory usage before creating 300 namespaces: %v", memUsageBefore)
+
+		g.By("Create 300 namespaces")
+		defer func() {
+			var wg sync.WaitGroup
+			rateLimiter := ratelimit.New(5)
+			for ns := int64(0); ns < nsCount; ns++ {
+				wg.Add(1)
+				rateLimiter.Take()
+				go func(ns int64) {
+					defer g.GinkgoRecover()
+					err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "test-53762-"+strconv.Itoa(int(ns)), "--ignore-not-found").Execute()
+					o.Expect(err).NotTo(o.HaveOccurred())
+					wg.Done()
+				}(ns)
+			}
+			// Wait() for goroutine complete
+			wg.Wait()
+		}()
+		var wg sync.WaitGroup
+		limiter := ratelimit.New(100)
+		for ns := int64(0); ns < nsCount; ns++ {
+			wg.Add(1)
+			limiter.Take()
+			go func(ns int64) {
+				defer g.GinkgoRecover()
+				err := oc.AsAdmin().WithoutNamespace().Run("new-project").Args("test-53762-"+strconv.Itoa(int(ns)), "--skip-config-write").Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				wg.Done()
+			}(ns)
+		}
+		// Wait() for goroutine complete
+		wg.Wait()
+		e2e.Logf("All go routines finished executing")
+
+		g.By("Create scansetting and scansettingbinding... !!!\n")
+		defer func() {
+			cleanupObjects(oc, objectTableRef{"ssb", ssb.name, subD.namespace})
+			cleanupObjects(oc, objectTableRef{"ss", ss.name, subD.namespace})
+		}()
+		ss.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ss.name, ok, []string{"scansetting", "-n", ss.namespace, ss.name,
+			"-o=jsonpath={.metadata.name}"}).check(oc)
+		ssb.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check whether ClusterOperator is healthy")
+		clusterOperatorHealthcheck(oc, 1500)
+
+		g.By("Check ComplianceSuite status !!!\n")
+		checkComplianceSuiteStatus(oc, ssb.name, subD.namespace, "DONE")
+		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
+
+		g.By("Memory usage after creating 300 namespaces")
+		output, err = exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		memUsageAfter, _ := strconv.ParseFloat(string(output), 64)
+		e2e.Logf("Memory usage after creating 300 namespaces: %v", memUsageAfter)
+
+		g.By("Compare the memory usage")
+		e2e.Logf("Memory usage before:%v, Memory usage after:%v", memUsageBefore, memUsageAfter)
+		absVal := math.Abs(memUsageAfter - memUsageBefore)
+		o.Expect(absVal).Should(o.BeNumerically("<=", 20), fmt.Sprintf("Memory usage after 300 namespaces created is more than the expected. Hence testcase failed"))
 	})
 
 	// author: xiyuan@redhat.com
