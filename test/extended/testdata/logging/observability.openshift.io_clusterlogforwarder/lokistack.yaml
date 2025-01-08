@@ -8,6 +8,8 @@ objects:
   metadata:
     name: ${NAME}
     namespace: ${NAMESPACE}
+    annotations:
+      observability.openshift.io/tech-preview-otlp-output: "enabled"
   spec:
     managementState: ${MANAGEMENT_STATE}
     outputs:
@@ -17,6 +19,7 @@ objects:
         authentication:
           token:
             from: serviceAccount
+        dataModel: ${DATAMODEL}
         target:
           name: ${LOKISTACK_NAME}
           namespace: ${LOKISTACK_NAMESPACE}
@@ -51,3 +54,5 @@ parameters:
   value: "{}"
 - name: SECRET_NAME
   value: ""
+- name: DATAMODEL
+  value: "Viaq"

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -4121,4 +4122,492 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease - LokiStack wi
 		e2e.Logf("Validation with infrastructure labelKeys is success")
 	})
 
+})
+
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease - LokiStack with OTLP support", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc                    = exutil.NewCLI("lokistack-otlp-flow", exutil.KubeConfigPath())
+		loggingBaseDir, s, sc string
+	)
+
+	g.BeforeEach(func() {
+		s = getStorageType(oc)
+		if len(s) == 0 {
+			g.Skip("Current cluster doesn't have a proper object storage for this test!")
+		}
+		sc, _ = getStorageClassName(oc)
+		if len(sc) == 0 {
+			g.Skip("The cluster doesn't have a storage class for this test!")
+		}
+
+		loggingBaseDir = exutil.FixturePath("testdata", "logging")
+		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
+		CLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     cloNS,
+			PackageName:   "cluster-logging",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		LO := SubscriptionObjects{
+			OperatorName:  "loki-operator-controller-manager",
+			Namespace:     loNS,
+			PackageName:   "loki-operator",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		g.By("deploy CLO and LO")
+		CLO.SubscribeOperator(oc)
+		LO.SubscribeOperator(oc)
+	})
+
+	g.It("Author:kbharti-CPaasrunOnly-Critical-76990-Verify that LokiStack provides a default set of otlp configuration[Serial]", func() {
+
+		var (
+			loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+		)
+
+		exutil.By("Create an application")
+		oc.SetupProject()
+		user1 := oc.Username()
+		appProj := oc.Namespace()
+		userToken, err := oc.Run("whoami").Args("-t").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a group and role bindings to access loki logs")
+		defer oc.AsAdmin().Run("delete").Args("group", "admin-group-76990").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "new", "admin-group-76990").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "add-users", "admin-group-76990", user1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer deleteLokiClusterRolesForReadAccess(oc)
+		createLokiClusterRolesForReadAccess(oc)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-infrastructure-view", "admin-group-76990").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-infrastructure-view", "admin-group-76990").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-audit-view", "admin-group-76990").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-audit-view", "admin-group-76990").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-application-view", "admin-group-76990").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-application-view", "admin-group-76990").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Deploying LokiStack with adminGroup")
+		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+		ls := lokiStack{
+			name:          "lokistack-76990",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-secret-76990",
+			storageClass:  sc,
+			bucketName:    "logging-loki-76990-" + getInfrastructureName(oc),
+			template:      lokiStackTemplate,
+		}
+
+		defer ls.removeObjectStorage(oc)
+		err = ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc, "ADMIN_GROUPS=[\"admin-group-76990\"]")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		exutil.By("create a CLF to test forward to Lokistack")
+		clf := clusterlogforwarder{
+			name:                      "instance-76990",
+			namespace:                 loggingNS,
+			serviceAccountName:        "logcollector-76990",
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
+			secretName:                "lokistack-secret-76990",
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			waitForPodReady:           true,
+		}
+		clf.createServiceAccount(oc)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
+		defer clf.delete(oc)
+		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace, "DATAMODEL=Otel", `TUNING={"compression": "none"}`)
+
+		exutil.By("Extracting Loki config ...")
+		dirname := "/tmp/" + oc.Namespace() + "-lokistack-otlp-support"
+		defer os.RemoveAll(dirname)
+		err = os.MkdirAll(dirname, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/"+ls.name+"-config", "-n", ls.namespace, "--confirm", "--to="+dirname).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Validate the default OTLP configuration under lokiStack config")
+		lokiStackConf, err := os.ReadFile(dirname + "/config.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lokiLimitsConfig := LokiLimitsConfig{}
+		err = yaml.Unmarshal(lokiStackConf, &lokiLimitsConfig)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Default expected OTLP configuration under limits_config
+		defaultOTLPConfig := `
+resource_attributes:
+  attributes_config:
+    - action: index_label
+      attributes:
+        - k8s.container.name
+        - k8s.cronjob.name
+        - k8s.daemonset.name
+        - k8s.deployment.name
+        - k8s.job.name
+        - k8s.namespace.name
+        - k8s.node.name
+        - k8s.pod.name
+        - k8s.statefulset.name
+        - kubernetes.container_name
+        - kubernetes.host
+        - kubernetes.namespace_name
+        - kubernetes.pod_name
+        - log_source
+        - log_type
+        - openshift.cluster.uid
+        - openshift.log.source
+        - openshift.log.type
+        - service.name
+    - action: structured_metadata
+      attributes:
+        - k8s.node.uid
+        - k8s.pod.uid
+        - k8s.replicaset.name
+        - process.command_line
+        - process.executable.name
+        - process.executable.path
+        - process.pid
+    - action: structured_metadata
+      regex: k8s\.pod\.labels\..+
+    - action: structured_metadata
+      regex: openshift\.labels\..+
+log_attributes:
+  - action: structured_metadata
+    attributes:
+      - k8s.event.level
+      - k8s.event.object_ref.api.group
+      - k8s.event.object_ref.api.version
+      - k8s.event.object_ref.name
+      - k8s.event.object_ref.resource
+      - k8s.event.request.uri
+      - k8s.event.response.code
+      - k8s.event.stage
+      - k8s.event.user_agent
+      - k8s.user.groups
+      - k8s.user.username
+      - level
+      - log.iostream
+  - action: structured_metadata
+    regex: k8s\.event\.annotations\..+
+  - action: structured_metadata
+    regex: systemd\.t\..+
+  - action: structured_metadata
+    regex: systemd\.u\..+`
+
+		var staticOtlpConfig OtlpConfig
+		err = yaml.Unmarshal([]byte(defaultOTLPConfig), &staticOtlpConfig)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if reflect.DeepEqual(lokiLimitsConfig.LimitsConfig.OtlpConfig, staticOtlpConfig) {
+			fmt.Println("Validated expected default OTLP configuration under lokistack config")
+		} else {
+			e2e.Failf("Incorrect default OTLP configuration found. Failing case..")
+		}
+
+		//check logs in loki stack by quering with OTEL semantic attributes
+		exutil.By("Check logs are received with OTLP semantic convention attributes in loki")
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(userToken).retry(5)
+		for _, logType := range []string{"application", "infrastructure", "audit"} {
+			lc.waitForLogsAppearByKey(logType, "openshift_log_type", logType)
+		}
+
+		logs, err := lc.searchByKey("application", "k8s_namespace_name", appProj)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs := extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+
+		logs, err = lc.searchByKey("application", "k8s_container_name", "logging-centos-logtest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+
+		logs, err = lc.searchByKey("infrastructure", "k8s_namespace_name", "openshift-monitoring")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+
+		exutil.By("Validate log streams are pushed to external storage bucket/container")
+		ls.validateExternalObjectStorageForLogs(oc, []string{"application", "audit", "infrastructure"})
+	})
+
+	g.It("Author:kbharti-CPaasrunOnly-High-77345-Verify that LokiStack provides a custom set of otlp configuration with global and per tenant[Serial]", func() {
+
+		var (
+			loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+		)
+
+		exutil.By("Create an application")
+		oc.SetupProject()
+		user1 := oc.Username()
+		appProj := oc.Namespace()
+		userToken, err := oc.Run("whoami").Args("-t").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", loglabeltemplate).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create a group and role bindings to access loki logs")
+		defer oc.AsAdmin().Run("delete").Args("group", "admin-group-77345").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "new", "admin-group-77345").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "add-users", "admin-group-77345", user1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		defer deleteLokiClusterRolesForReadAccess(oc)
+		createLokiClusterRolesForReadAccess(oc)
+
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-infrastructure-view", "admin-group-77345").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-infrastructure-view", "admin-group-77345").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-audit-view", "admin-group-77345").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-audit-view", "admin-group-77345").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-application-view", "admin-group-77345").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-application-view", "admin-group-77345").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Deploying LokiStack with adminGroup")
+		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+		ls := lokiStack{
+			name:          "lokistack-77345",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-secret-77345",
+			storageClass:  sc,
+			bucketName:    "logging-loki-77345-" + getInfrastructureName(oc),
+			template:      lokiStackTemplate,
+		}
+
+		defer ls.removeObjectStorage(oc)
+		err = ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc, "ADMIN_GROUPS=[\"admin-group-77345\"]")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		// Patch LokiStack CR with a custom otlp configuration
+		// Here disableRecommendedAttributes enables only the required stream labels when 'true'
+		customOTLPconfig := `{
+			"spec": {
+			  "limits": {
+				"tenants": {
+				  "application": {
+					"otlp": {
+					  "streamLabels": {
+						"resourceAttributes": [
+						  { "name": "k8s.pod.name" }
+						]
+					  },
+					  "structuredMetadata": {
+						"logAttributes": [
+						  { "name": "k8s.pod.uid" }
+						]
+					  }
+					}
+				  },
+				  "infrastructure": {
+					"otlp": {
+					  "streamLabels": {
+						"resourceAttributes": [
+						  { "name": "k8s.container.name" }
+						]
+					  },
+					  "structuredMetadata": {
+						"logAttributes": [
+						  { "name": "log.iostream" }
+						]
+					  }
+					}
+				  }
+				}
+			  },
+			  "tenants": {
+				"mode": "openshift-logging",
+				"openshift": {
+				  "otlp": {
+					"disableRecommendedAttributes": true
+				  }
+				}
+			  }
+			}
+		  }`
+
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("lokistack", ls.name, "-n", ls.namespace, "--type", "merge", "-p", customOTLPconfig).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		exutil.By("create a CLF to test forward to Lokistack")
+		clf := clusterlogforwarder{
+			name:                      "instance-76990",
+			namespace:                 loggingNS,
+			serviceAccountName:        "logcollector-76990",
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
+			secretName:                "lokistack-secret-76990",
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			waitForPodReady:           true,
+		}
+		clf.createServiceAccount(oc)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
+		defer clf.delete(oc)
+		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace, "DATAMODEL=Otel", `TUNING={"compression": "none"}`)
+
+		exutil.By("Extracting Loki config ...")
+		dirname := "/tmp/" + oc.Namespace() + "-lokistack-otlp-support"
+		defer os.RemoveAll(dirname)
+		err = os.MkdirAll(dirname, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("cm/"+ls.name+"-config", "-n", ls.namespace, "--confirm", "--to="+dirname).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Validate the default OTLP configuration under lokiStack config")
+		lokiStackConf, err := os.ReadFile(dirname + "/config.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		lokiLimitsConfig := LokiLimitsConfig{}
+		err = yaml.Unmarshal(lokiStackConf, &lokiLimitsConfig)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// default OTLP config when disableRecommendedAttributes is enabled.
+		defaultOTLPConfig := `
+resource_attributes:
+  attributes_config:
+    - action: index_label
+      attributes:
+        - k8s.namespace.name
+        - kubernetes.namespace_name
+        - log_source
+        - log_type
+        - openshift.cluster.uid
+        - openshift.log.source
+        - openshift.log.type`
+
+		var staticOtlpConfig OtlpConfig
+		err = yaml.Unmarshal([]byte(defaultOTLPConfig), &staticOtlpConfig)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if reflect.DeepEqual(lokiLimitsConfig.LimitsConfig.OtlpConfig, staticOtlpConfig) {
+			fmt.Println("Validated expected default OTLP configuration under lokistack config")
+		} else {
+			e2e.Failf("Incorrect default OTLP configuration found. Failing case..")
+		}
+
+		exutil.By("Validate the per tenant OTLP configuration under lokiStack overrides config")
+		lokiStackConf, err = os.ReadFile(dirname + "/runtime-config.yaml")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Application tenant
+		customOtlpconfigForApp := `
+resource_attributes:
+  attributes_config:
+    - action: index_label
+      attributes:
+        - k8s.namespace.name
+        - k8s.pod.name
+        - kubernetes.namespace_name
+        - log_source
+        - log_type
+        - openshift.cluster.uid
+        - openshift.log.source
+        - openshift.log.type
+log_attributes:
+  - action: structured_metadata
+    attributes:
+      - k8s.pod.uid`
+
+		err = yaml.Unmarshal([]byte(customOtlpconfigForApp), &staticOtlpConfig)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		runtimeConfig := RuntimeConfig{}
+		err = yaml.Unmarshal(lokiStackConf, &runtimeConfig)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if reflect.DeepEqual(runtimeConfig.Overrides.Application.OtlpConfig, staticOtlpConfig) {
+			fmt.Println("Validated expected custom OTLP configuration for tenant: application")
+		} else {
+			e2e.Failf("Incorrect custom OTLP configuration found for tenant: application. Failing case..")
+		}
+
+		// Infrastructure tenant
+		customOtlpconfigForInfra := `
+resource_attributes:
+  attributes_config:
+    - action: index_label
+      attributes:
+        - k8s.container.name
+        - k8s.namespace.name
+        - kubernetes.namespace_name
+        - log_source
+        - log_type
+        - openshift.cluster.uid
+        - openshift.log.source
+        - openshift.log.type
+log_attributes:
+  - action: structured_metadata
+    attributes:
+      - log.iostream`
+
+		err = yaml.Unmarshal([]byte(customOtlpconfigForInfra), &staticOtlpConfig)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if reflect.DeepEqual(runtimeConfig.Overrides.Infrastructure.OtlpConfig, staticOtlpConfig) {
+			fmt.Println("Validated expected custom OTLP configuration for tenant: infrastructure")
+		} else {
+			e2e.Failf("Incorrect custom OTLP configuration found for tenant: infrastructure. Failing case..")
+		}
+
+		exutil.By("Check logs are received with OTLP semantic convention attributes in loki")
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(userToken).retry(5)
+		for _, logType := range []string{"application", "infrastructure", "audit"} {
+			lc.waitForLogsAppearByKey(logType, "openshift_log_type", logType)
+		}
+
+		logs, err := lc.searchByKey("application", "k8s_namespace_name", appProj)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs := extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+
+		// No logs found for app tenant with k8s_container_name streamLabel/labelKey since it is not included under custom overrides config
+		logs, err = lc.searchByKey("application", "k8s_container_name", "logging-centos-logtest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+
+		logs, err = lc.searchByKey("infrastructure", "k8s_namespace_name", "openshift-monitoring")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+
+		exutil.By("Validate log streams are pushed to external storage bucket/container")
+		ls.validateExternalObjectStorageForLogs(oc, []string{"application", "audit", "infrastructure"})
+	})
 })

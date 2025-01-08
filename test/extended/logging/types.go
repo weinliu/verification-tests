@@ -736,7 +736,7 @@ type Overrides struct {
 	Audit          *OverridesConfig `yaml:"audit,omitempty"`
 	Infrastructure *OverridesConfig `yaml:"infrastructure,omitempty"`
 }
-type RetentionStream []struct {
+type RetentionStream struct {
 	Selector string `yaml:"selector"`
 	Priority *int   `yaml:"priority,omitempty"`
 	Period   string `yaml:"period"`
@@ -770,12 +770,13 @@ type OverridesConfig struct {
 	QueryTimeout            *string                  `yaml:"query_timeout,omitempty"`
 	CardinalityLimit        *int                     `yaml:"cardinality_limit,omitempty"`
 	RetentionPeriod         *string                  `yaml:"retention_period,omitempty"`
-	RetentionStream         *RetentionStream         `yaml:"retention_stream,omitempty"`
+	RetentionStream         *[]RetentionStream       `yaml:"retention_stream,omitempty"`
 	RulerAlertmanagerConfig *RulerAlertmanagerConfig `yaml:"ruler_alertmanager_config,omitempty"`
 	ShardStreams            struct {
 		Enabled     bool   `yaml:"enabled"`
 		DesiredRate string `yaml:"desired_rate"`
 	} `yaml:"shard_streams"`
+	OtlpConfig OtlpConfig `yaml:"otlp_config,omitempty"`
 }
 
 /*
@@ -823,37 +824,58 @@ type LokiLimitsConfig struct {
 }
 
 type LimitsConfig struct {
-	IngestionRateStrategy      string `yaml:"ingestion_rate_strategy"`
-	IngestionRateMB            int    `yaml:"ingestion_rate_mb"`
-	IngestionBurstSizeMB       int    `yaml:"ingestion_burst_size_mb"`
-	MaxLabelNameLength         int    `yaml:"max_label_name_length"`
-	MaxLabelValueLength        int    `yaml:"max_label_value_length"`
-	MaxLabelNamesPerSeries     int    `yaml:"max_label_names_per_series"`
-	RejectOldSamples           bool   `yaml:"reject_old_samples"`
-	RejectOldSamplesMaxAge     string `yaml:"reject_old_samples_max_age"`
-	CreationGracePeriod        string `yaml:"creation_grace_period"`
-	EnforceMetricName          bool   `yaml:"enforce_metric_name"`
-	MaxStreamsPerUser          int    `yaml:"max_streams_per_user"`
-	MaxLineSize                int    `yaml:"max_line_size"`
-	MaxEntriesLimitPerQuery    int    `yaml:"max_entries_limit_per_query"`
-	MaxGlobalStreamsPerUser    int    `yaml:"max_global_streams_per_user"`
-	MaxChunksPerQuery          int    `yaml:"max_chunks_per_query"`
-	MaxQueryLength             string `yaml:"max_query_length"`
-	MaxQueryParallelism        int    `yaml:"max_query_parallelism"`
-	TSDBMaxQueryParallelism    int    `yaml:"tsdb_max_query_parallelism"`
-	MaxQuerySeries             int    `yaml:"max_query_series"`
-	CardinalityLimit           int    `yaml:"cardinality_limit"`
-	MaxStreamsMatchersPerQuery int    `yaml:"max_streams_matchers_per_query"`
-	QueryTimeout               string `yaml:"query_timeout"`
-	MaxCacheFreshnessPerQuery  string `yaml:"max_cache_freshness_per_query"`
-	PerStreamRateLimit         string `yaml:"per_stream_rate_limit"`
-	PerStreamRateLimitBurst    string `yaml:"per_stream_rate_limit_burst"`
-	SplitQueriesByInterval     string `yaml:"split_queries_by_interval"`
+	IngestionRateStrategy      string            `yaml:"ingestion_rate_strategy"`
+	IngestionRateMB            int               `yaml:"ingestion_rate_mb"`
+	IngestionBurstSizeMB       int               `yaml:"ingestion_burst_size_mb"`
+	MaxLabelNameLength         int               `yaml:"max_label_name_length"`
+	MaxLabelValueLength        int               `yaml:"max_label_value_length"`
+	MaxLabelNamesPerSeries     int               `yaml:"max_label_names_per_series"`
+	RejectOldSamples           bool              `yaml:"reject_old_samples"`
+	RejectOldSamplesMaxAge     string            `yaml:"reject_old_samples_max_age"`
+	CreationGracePeriod        string            `yaml:"creation_grace_period"`
+	MaxStreamsPerUser          int               `yaml:"max_streams_per_user"`
+	MaxLineSize                int               `yaml:"max_line_size"`
+	MaxEntriesLimitPerQuery    int               `yaml:"max_entries_limit_per_query"`
+	DiscoverServiceName        []string          `yaml:"discover_service_name"`
+	DiscoverLogLevels          bool              `yaml:"discover_log_levels"`
+	MaxGlobalStreamsPerUser    int               `yaml:"max_global_streams_per_user"`
+	MaxChunksPerQuery          int               `yaml:"max_chunks_per_query"`
+	MaxQueryLength             string            `yaml:"max_query_length"`
+	MaxQueryParallelism        int               `yaml:"max_query_parallelism"`
+	TsdbMaxQueryParallelism    int               `yaml:"tsdb_max_query_parallelism"`
+	MaxQuerySeries             int               `yaml:"max_query_series"`
+	CardinalityLimit           int               `yaml:"cardinality_limit"`
+	MaxStreamsMatchersPerQuery int               `yaml:"max_streams_matchers_per_query"`
+	QueryTimeout               string            `yaml:"query_timeout"`
+	VolumeEnabled              bool              `yaml:"volume_enabled"`
+	VolumeMaxSeries            int               `yaml:"volume_max_series"`
+	RetentionPeriod            string            `yaml:"retention_period"`
+	RetentionStream            []RetentionStream `yaml:"retention_stream"`
+	MaxCacheFreshnessPerQuery  string            `yaml:"max_cache_freshness_per_query"`
+	PerStreamRateLimit         string            `yaml:"per_stream_rate_limit"`
+	PerStreamRateLimitBurst    string            `yaml:"per_stream_rate_limit_burst"`
+	SplitQueriesByInterval     string            `yaml:"split_queries_by_interval"`
 	ShardStreams               struct {
 		Enabled     bool   `yaml:"enabled"`
 		DesiredRate string `yaml:"desired_rate"`
 	} `yaml:"shard_streams"`
-	AllowStructuredMetadata bool `yaml:"allow_structured_metadata"`
+	OtlpConfig              OtlpConfig `yaml:"otlp_config,omitempty"`
+	AllowStructuredMetadata bool       `yaml:"allow_structured_metadata"`
+}
+
+type OtlpConfig struct {
+	ResourceAttributes struct {
+		AttributesConfig []struct {
+			Action     string   `yaml:"action"`
+			Attributes []string `yaml:"attributes"`
+			Regex      string   `yaml:"regex,omitempty"`
+		} `yaml:"attributes_config"`
+	} `yaml:"resource_attributes"`
+	LogAttributes []struct {
+		Action     string   `yaml:"action"`
+		Attributes []string `yaml:"attributes,omitempty"`
+		Regex      string   `yaml:"regex,omitempty"`
+	} `yaml:"log_attributes,omitempty"`
 }
 
 /*
