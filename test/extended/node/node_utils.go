@@ -1313,7 +1313,7 @@ func configExist(oc *exutil.CLI, config []string, configPath string) error {
 
 func checkMachineConfigPoolStatus(oc *exutil.CLI, nodeSelector string) error {
 	//when mcp master change cgroup from v2 to v1, it takes more than 15 minutes
-	return wait.Poll(30*time.Second, 18*time.Minute, func() (bool, error) {
+	return wait.Poll(30*time.Second, 30*time.Minute, func() (bool, error) {
 		mCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.machineCount}").Output()
 		unmCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.unavailableMachineCount}").Output()
 		dmCount, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp", nodeSelector, "-n", oc.Namespace(), "-o=jsonpath={.status.degradedMachineCount}").Output()
@@ -2637,4 +2637,72 @@ func clusterNodesHealthcheck(oc *exutil.CLI, waitTime int) error {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 	return errNode
+}
+
+func defaultRuntimeCheck(oc *exutil.CLI, expectedRuntime string) {
+	var defaultruntime string
+	var err error
+	waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+		nodeName, nodeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		e2e.Logf("\nNode Names are %v", nodeName)
+		nodes := strings.Fields(nodeName)
+
+		for _, node := range nodes {
+			nodeStatus, statusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", node, "-o=jsonpath={.status.conditions[?(@.type=='Ready')].status}").Output()
+			o.Expect(statusErr).NotTo(o.HaveOccurred())
+			e2e.Logf("\nNode %s Status is %s\n", node, nodeStatus)
+
+			if nodeStatus == "True" {
+				defaultruntime, err = exutil.DebugNodeWithChroot(oc, node, "cat", "/etc/crio/crio.conf.d/00-default")
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				if strings.Contains(string(defaultruntime), expectedRuntime) {
+					e2e.Logf(" Success !! Default Runtime is %s. \n", expectedRuntime)
+					return true, nil
+				} else {
+					e2e.Logf(" FAILED!! Default Runtime is not %s \n", expectedRuntime)
+					return false, nil
+				}
+			} else {
+				e2e.Logf("\n NODES ARE NOT READY\n ")
+			}
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, "Default Runtime is not Expected")
+}
+
+func UpdatedRuntimeCheck(oc *exutil.CLI, runtime string) {
+	var defaultRuntime string
+	var err error
+	waitErr := wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+		nodeName, nodeErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		e2e.Logf("\nNode Names are %v", nodeName)
+		nodes := strings.Fields(nodeName)
+
+		for _, node := range nodes {
+			nodeStatus, statusErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", node, "-o=jsonpath={.status.conditions[?(@.type=='Ready')].status}").Output()
+			o.Expect(statusErr).NotTo(o.HaveOccurred())
+			e2e.Logf("\nNode %s Status is %s\n", node, nodeStatus)
+
+			if nodeStatus == "True" {
+				defaultRuntime, err = exutil.DebugNodeWithChroot(oc, node, "cat", "/etc/crio/crio.conf.d/01-ctrcfg-defaultRuntime")
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				if strings.Contains(string(defaultRuntime), runtime) {
+					e2e.Logf(" Success !! Default Runtime is %s. \n", runtime)
+					return true, nil
+				} else {
+					e2e.Logf(" FAILED!! Default Runtime is not %s \n", runtime)
+					return false, nil
+				}
+			} else {
+				e2e.Logf("\n NODES ARE NOT READY\n ")
+			}
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, "Default Runtime is not Expected")
 }

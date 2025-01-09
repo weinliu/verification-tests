@@ -1723,6 +1723,80 @@ var _ = g.Describe("[sig-node] NODE initContainer policy,volume,readines,quota",
 		o.Expect(err).NotTo(o.HaveOccurred())
 		checkCpuAffinityBurst(oc, burstPodName, burstNs, worker, coreNum, gu_affinity)
 	})
+
+	//author: asahay@redhat.com
+
+	g.It("Author:asahay-High-78394-Make CRUN as Default Runtime for 4.18", func() {
+
+		exutil.By("1) Check Cluster Version")
+		clusterVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Cluster version: %s\n", clusterVersion)
+
+		var expectedRuntime string
+		if strings.Contains(clusterVersion, "4.18") {
+			expectedRuntime = "crun"
+		} else {
+			expectedRuntime = "runc"
+		}
+
+		exutil.By("2) Check all Nodes are Up and Default Runtime is crun")
+		defaultRuntimeCheck(oc, expectedRuntime)
+
+	})
+
+	g.It("Author:asahay-NonPreRelease-Longduration-High-78610-Default Runtime can be Updated to runc in 4.18[Serial]", func() {
+
+		exutil.By("1) Check Cluster Version")
+		clusterVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Cluster version: %s\n", clusterVersion)
+
+		exutil.By("2.1) Apply ContainerRuntimeConfig install manifest on Worker node to request defaultRuntime to runc ")
+		ContainerRuntimeConfigTemp1 := filepath.Join(buildPruningBaseDir, "ContainerRuntimeConfigWorker-78610.yaml")
+		defer func() {
+			err := oc.AsAdmin().Run("delete").Args("-f=" + ContainerRuntimeConfigTemp1).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			mcpname1 := "worker"
+			err = checkMachineConfigPoolStatus(oc, mcpname1)
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		err1 := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f=" + ContainerRuntimeConfigTemp1).Execute()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+
+		exutil.By("2.2) Apply ContainerRuntimeConfig install manifest on Master node to request defaultRuntime to runc ")
+		ContainerRuntimeConfigTemp2 := filepath.Join(buildPruningBaseDir, "ContainerRuntimeConfigMaster-78610.yaml")
+		defer func() {
+			err := oc.AsAdmin().Run("delete").Args("-f=" + ContainerRuntimeConfigTemp2).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			mcpname2 := "master"
+			err = checkMachineConfigPoolStatus(oc, mcpname2)
+			exutil.AssertWaitPollNoErr(err, "macineconfigpool worker update failed")
+		}()
+		err2 := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f=" + ContainerRuntimeConfigTemp2).Execute()
+		o.Expect(err2).NotTo(o.HaveOccurred())
+
+		exutil.By("3) Wait for MCP to Finish Update")
+		exutil.By("Check mcp finish rolling out")
+		oc.NotShowInfo()
+		mcpName1 := "worker"
+		mcpName2 := "master"
+		err3 := checkMachineConfigPoolStatus(oc, mcpName1)
+		exutil.AssertWaitPollNoErr(err3, "macineconfigpool worker update failed")
+		err4 := checkMachineConfigPoolStatus(oc, mcpName2)
+		exutil.AssertWaitPollNoErr(err4, "macineconfigpool master update failed")
+
+		//for checking machine config pool
+
+		mcp, err5 := oc.AsAdmin().WithoutNamespace().Run("get").Args("mcp").Output()
+		o.Expect(err5).NotTo(o.HaveOccurred())
+		e2e.Logf("\n Machine config pools are:\n %s", mcp)
+
+		exutil.By("4) Check the Default Runtime Value")
+		UpdatedRuntimeCheck(oc, "runc")
+
+	})
+
 })
 
 var _ = g.Describe("[sig-node] NODE keda", func() {
