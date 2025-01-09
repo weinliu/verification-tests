@@ -95,6 +95,8 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		if isSNOCluster(oc) {
 			g.Skip("This is a SNO cluster, skip.")
 		}
+		// The cluster node doesn't recover in OSP, GCP, BM... due to the platform issue frequently. So, use the AWS only.
+		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		exutil.By("1, create a custom catalogsource in a random project")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
