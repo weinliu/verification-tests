@@ -3679,11 +3679,10 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		isimportsrc.create(oc)
 		importOut, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("is/empty", "-o=jsonpath={.spec.tags[0].importPolicy.importMode}", "-n", isimportsrc.namespace).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if architecture.IsMultiArchCluster(oc) {
+		if exutil.IsTechPreviewNoUpgrade(oc) && architecture.IsMultiArchCluster(oc) {
 			o.Expect(importOut).To(o.ContainSubstring("PreserveOriginal"))
 		} else {
 			o.Expect(importOut).To(o.ContainSubstring("Legacy"))
-
 		}
 	})
 
@@ -4586,7 +4585,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("imagestreamtag", "is67714:tag-manifest", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if architecture.IsMultiArchCluster(oc) {
+		if exutil.IsTechPreviewNoUpgrade(oc) && architecture.IsMultiArchCluster(oc) {
 			if !strings.Contains(output, "Manifests:") {
 				e2e.Failf("The default import-mode should be PreserveOriginal in multiarch cluster")
 			}
