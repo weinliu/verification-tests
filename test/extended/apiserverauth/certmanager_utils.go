@@ -352,10 +352,17 @@ func cleanupCertManagerOperator(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(err, "timeout waiting for operator pod to be deleted")
 
 	e2e.Logf("=> delete the operator namespace")
-	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", operatorNamespace, "--force", "--grace-period=0").Execute()
+	// To mitigate the known issue: https://issues.redhat.com/browse/OCPBUGS-31443
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("all", "--all", "-n", operatorNamespace, "--force", "--grace-period=0", "--wait=false").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", operatorNamespace, "--force", "--grace-period=0", "--wait=false", "-v=6").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
 	e2e.Logf("=> delete the operand namespace")
-	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", operandNamespace, "--force", "--grace-period=0").Execute()
+	// To mitigate the known issue: https://issues.redhat.com/browse/OCPBUGS-31443
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("all", "--all", "-n", operandNamespace, "--force", "--grace-period=0", "--wait=false").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", operandNamespace, "--force", "--grace-period=0", "--wait=false", "-v=6").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
 	e2e.Logf("=> delete the 'certmanagers' cluster object")
