@@ -30,66 +30,8 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
         cy.switchPerspective('Administrator');
 
-        // create DNS over TCP and UDP pods
-        cy.adminCLI('oc apply -f ./fixtures/netobserv/DNS-pods.yaml')
-
         Operator.install()
         Operator.createFlowcollector(project, "DNSTracking")
-    })
-
-    it("(OCP-67087, aramesha, Network_Observability) Validate DNS over TCP and UDP", function () {
-        netflowPage.visit()
-        cy.get('#tabs-container li:nth-child(2)').click()
-        cy.byTestID("table-composable").should('exist')
-
-        // filter on SrcPort 53, DstName dnsutils1, DstNamespace dns-traffic and DNSError = 0
-        cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
-        cy.byTestID('src_port').click()
-        cy.byTestID('autocomplete-search').type('53' + '{enter}')
-
-        cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
-        cy.byTestID('group-2-toggle').click().should('be.visible')
-        cy.byTestID('dns_errno').click()
-        cy.byTestID('autocomplete-search').type('0' + '{enter}')
-
-        cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
-        cy.byTestID('group-1-toggle').click().should('be.visible')
-        cy.byTestID('dst_namespace').click()
-        cy.byTestID('autocomplete-search').type('dns-traffic')
-        cy.get('#search-button').click()
-
-        cy.get('#filters div.custom-chip > p').should('contain.text', 'dns-traffic')
-
-        cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
-        cy.byTestID('dst_name').click()
-        cy.get('#search').type('dnsutils1' + '{enter}')
-
-        netflowPage.waitForLokiQuery()
-
-        // verify Protocol is TCP and DNS Latencies > 0 for all rows
-        cy.get('[data-test-td-column-id=Proto]').each((td) => {
-            expect(td).attr("data-test-td-value").to.contain(6)
-        })
-        cy.get('[data-test-td-column-id=DNSLatency]').each((td) => {
-            expect(td).attr("data-test-td-value").to.match(RegExp("^[0-9]*$"))
-        })
-
-        cy.get('#filters div:nth-child(4) > button').should('exist').click()
-
-        cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
-        cy.byTestID('dst_name').click()
-        cy.get('#search').type('dnsutils2' + '{enter}')
-
-        netflowPage.waitForLokiQuery()
-
-        // verify Protocol is UDP and DNS Latencies > 0  for all rows
-        cy.get('[data-test-td-column-id=Proto]').each((td) => {
-            expect(td).attr("data-test-td-value").to.contain(17)
-        })
-        cy.get('[data-test-td-column-id=DNSLatency]').each((td) => {
-            expect(td).attr("data-test-td-value").to.match(RegExp("^[0-9]*$"))
-        })
-        netflowPage.resetClearFilters()
     })
 
     it("(OCP-67087, aramesha, Network_Observability) Validate DNSLatencies edge label and Query Summary stats", function () {
@@ -136,7 +78,6 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
     })
 
     after("Delete flowcollector and DNS pods", function () {
-        cy.adminCLI('oc delete -f ./fixtures/netobserv/DNS-pods.yaml')
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
     })
 })

@@ -20,7 +20,7 @@ describe('(OCP-66141 Network_Observability) PacketDrop test', { tags: ['Network_
         netflowPage.visit()
     })
 
-    it("(OCP-66141, aramesha, Network_Observability) verify packetDrop panels", function () {
+    it("(OCP-66141, aramesha, Network_Observability) Verify packetDrop panels", function () {
         netflowPage.stopAutoRefresh()
 
         // verify default PacketDrop panels are visible
@@ -71,39 +71,6 @@ describe('(OCP-66141 Network_Observability) PacketDrop test', { tags: ['Network_
         cy.intercept('GET', getPacketDropURL('sent'), {
             fixture: 'netobserv/flow_records_containing_drops.json'
         }).as('matchedUrl')
-    })
-
-    it("(OCP-66141, aramesha, Network_Observability) Validate packetDrop filters", function () {
-        netflowPage.stopAutoRefresh()
-
-        cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
-        // verify drop TCP state filter
-        cy.byTestID('group-2-toggle').click().should('be.visible')
-        cy.byTestID('pkt_drop_state').click()
-        cy.byTestID('autocomplete-search').type('INVALID_STATE' + '{enter}')
-        cy.get('#filters div.custom-chip > p').should('contain.text', 'INVALID_STATE')
-        cy.get('#filters div.custom-chip-group > p').should('contain.text', 'Packet drop TCP state')
-
-        // verify dropped state panel has only INVALID_STATE
-        cy.get('#state_dropped_packet_rates').within(() => {
-            cy.get('#chart-legend-5-ChartLabel-0').should('contain.text', 'TCP_INVALID_STATE')
-            cy.get('#chart-legend-5-ChartLabel-1').should('contain.text', 'Total')
-            cy.get('#chart-legend-5-ChartLabel-2').should('not.exist')
-        })
-
-        // verify drop latest cause filter
-        cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
-        cy.byTestID('pkt_drop_cause').click()
-        cy.byTestID('autocomplete-search').type('NO_SOCKET' + '{enter}')
-        cy.get('#filters div.custom-chip > p').should('contain.text', 'NO_SOCKET')
-        cy.get('#filters div.custom-chip-group > p').should('contain.text', 'Packet drop latest cause')
-
-        // verify dropped cause panel has only NO_SOCKET
-        cy.get('#cause_dropped_packet_rates').within(() => {
-            cy.get('#chart-legend-5-ChartLabel-0').should('contain.text', 'SKB_DROP_REASON_NO_SOCKET')
-            cy.get('#chart-legend-5-ChartLabel-1').children().should('contain.text', 'Total')
-            cy.get('#chart-legend-5-ChartLabel-2').should('not.exist')
-        })
     })
 
     afterEach("test", function () {

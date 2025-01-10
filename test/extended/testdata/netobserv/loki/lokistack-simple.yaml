@@ -36,7 +36,7 @@ parameters:
 - name: StorageType
   value: "s3"
 - name: StorageClass
-  value: "gp2"
+  value: "gp3-csi"
 - name: Tenant
   value: openshift-network
 - name: EnableIPV6

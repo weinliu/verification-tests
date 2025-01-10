@@ -1,5 +1,4 @@
 import { Operator, project } from "../../views/netobserv"
-import { catalogSources } from "../../views/catalog-source"
 import { netflowPage, overviewSelectors, querySumSelectors, colSelectors } from "../../views/netflow-page"
 
 describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network_Observability'] }, function () {

@@ -40,6 +40,7 @@ type Flowcollector struct {
 	EBPFMetricServerTLSType           string
 	EBPFCacheActiveTimeout            string
 	EBPFPrivileged                    string
+	Sampling                          string
 	EBPFMetrics                       string
 	EBPFeatures                       []string
 	CacheMaxFlows                     string
@@ -62,44 +63,50 @@ type ForwardClusterRoleBinding struct {
 }
 
 type Flowlog struct {
-	Packets          int
-	Dscp             int
-	SrcPort          int
-	DstMac           string
-	TimeReceived     int
-	IcmpType         int
-	DstK8S_Name      string
-	DstPort          int
-	DstK8S_HostIP    string
-	Bytes            int
-	SrcK8S_Type      string
-	SrcK8S_HostName  string
-	DstK8S_HostName  string
-	Proto            int
-	DstAddr          string
-	IfDirections     []int
-	Interfaces       []string
-	SrcAddr          string
-	TimeFlowEndMs    int
-	DstK8S_OwnerType string
-	Flags            []string
-	Etype            int
-	DstK8S_Type      string
-	IfDirection      int
-	SrcMac           string
-	SrcK8S_OwnerType string
-	SrcK8S_Name      string
-	Duplicate        bool
-	TimeFlowStartMs  int
-	AgentIP          string
-	IcmpCode         int
-	HashId           string `json:"_HashId,omitempty"`
-	IsFirst          bool   `json:"_IsFirst,omitempty"`
-	RecordType       string `json:"_RecordType,omitempty"`
-	NumFlowLogs      int    `json:"numFlowLogs,omitempty"`
-	K8S_ClusterName  string `json:"K8S_ClusterName,omitempty"`
-	SrcK8S_Zone      string `json:"SrcK8S_Zone,omitempty"`
-	DstK8S_Zone      string `json:"DstK8S_Zone,omitempty"`
+	Packets                int
+	Dscp                   int
+	SrcPort                int
+	DstMac                 string
+	TimeReceived           int
+	IcmpType               int
+	DstK8S_Name            string
+	DstPort                int
+	DstK8S_HostIP          string
+	Bytes                  int
+	SrcK8S_Type            string
+	SrcK8S_HostName        string
+	DstK8S_HostName        string
+	Proto                  int
+	DstAddr                string
+	IfDirections           []int
+	Interfaces             []string
+	SrcAddr                string
+	TimeFlowEndMs          int
+	DstK8S_OwnerType       string
+	Flags                  []string
+	Etype                  int
+	DstK8S_Type            string
+	IfDirection            int
+	SrcMac                 string
+	SrcK8S_OwnerType       string
+	SrcK8S_Name            string
+	Duplicate              bool
+	TimeFlowStartMs        int
+	AgentIP                string
+	IcmpCode               int
+	HashId                 string `json:"_HashId,omitempty"`
+	IsFirst                bool   `json:"_IsFirst,omitempty"`
+	RecordType             string `json:"_RecordType,omitempty"`
+	NumFlowLogs            int    `json:"numFlowLogs,omitempty"`
+	K8S_ClusterName        string `json:"K8S_ClusterName,omitempty"`
+	SrcK8S_Zone            string `json:"SrcK8S_Zone,omitempty"`
+	DstK8S_Zone            string `json:"DstK8S_Zone,omitempty"`
+	DnsLatencyMs           int    `json:"DnsLatencyMs,omitempty"`
+	DnsFlagsResponseCode   string `json:"DnsFlagsResponseCode,omitempty"`
+	PktDropBytes           int    `json:"PktDropBytes,omitempty"`
+	PktDropPackets         int    `json:"PktDropPackets,omitempty"`
+	PktDropLatestState     string `json:"PktDropLatestState,omitempty"`
+	PktDropLatestDropCause string `json:"PktDropLatestDropCause,omitempty"`
 }
 
 type FlowRecord struct {

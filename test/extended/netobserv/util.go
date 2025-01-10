@@ -178,6 +178,18 @@ func (r Resource) applyFromTemplate(oc *exutil.CLI, parameters ...string) error 
 	return err
 }
 
+// For admin user to create resources in the specified namespace from the file (not template)
+func applyResourceFromFile(oc *exutil.CLI, ns, file string) {
+	err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file, "-n", ns).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// For normal user to create resources in the specified namespace from the file (not template)
+func createResourceFromFile(oc *exutil.CLI, ns, file string) {
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", file, "-n", ns).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 func WaitForPodsReadyWithLabel(oc *exutil.CLI, ns, label string) {
 	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 180*time.Second, false, func(context.Context) (done bool, err error) {
 		pods, err := oc.AdminKubeClient().CoreV1().Pods(ns).List(context.Background(), metav1.ListOptions{LabelSelector: label})
@@ -270,12 +282,6 @@ func checkPodDeleted(oc *exutil.CLI, ns, label, checkValue string) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(podCheck, fmt.Sprintf("Pod \"%s\" exists or not fully deleted", checkValue))
-}
-
-// For normal user to create resources in the specified namespace from the file (not template)
-func createResourceFromFile(oc *exutil.CLI, ns, file string) {
-	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", file, "--namespace="+ns).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
 func getSAToken(oc *exutil.CLI, name, ns string) string {

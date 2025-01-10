@@ -14,7 +14,7 @@ objects:
         type: eBPF
         ebpf:
           imagePullPolicy: IfNotPresent
-          sampling: 1
+          sampling: ${{Sampling}}
           cacheActiveTimeout: ${EBPFCacheActiveTimeout}
           cacheMaxFlows: ${{CacheMaxFlows}}
           interfaces: [ ]
@@ -112,6 +112,8 @@ parameters:
     value: "Direct"
   - name: EBPFCacheActiveTimeout
     value: 15s
+  - name: Sampling
+    value: "1"
   - name: EBPFPrivileged
     value: "false"
   - name: EBPFMetrics

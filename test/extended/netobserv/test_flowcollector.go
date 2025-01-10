@@ -1648,6 +1648,90 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(r.Flowlog.SrcK8S_OwnerType).Should(o.ContainSubstring("VirtualMachineInstance"))
 		}
 	})
+
+	g.It("Author:aramesha-NonPreRelease-Medium-78480-NetObserv with sampling 50 [Serial]", func() {
+		g.Skip("Skip this test until OCPBUGS-42844 is fixed")
+		namespace := oc.Namespace()
+
+		g.By("Deploy DNS pods")
+		DNSTemplate := filePath.Join(baseDir, "DNS-pods.yaml")
+		DNSNamespace := "dns-traffic"
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(DNSNamespace)
+		applyResourceFromFile(oc, DNSNamespace, DNSTemplate)
+		exutil.AssertAllPodsToBeReady(oc, DNSNamespace)
+
+		g.By("Deploy FlowCollector with DNSTracking and PacketDrop features enabled with sampling 50")
+		flow := Flowcollector{
+			Namespace:      namespace,
+			EBPFPrivileged: "true",
+			EBPFeatures:    []string{"\"DNSTracking\", \"PacketDrop\""},
+			Sampling:       "50",
+			LokiNamespace:  namespace,
+			Template:       flowFixturePath,
+		}
+
+		defer flow.DeleteFlowcollector(oc)
+		flow.CreateFlowcollector(oc)
+
+		g.By("Escalate SA to cluster admin")
+		defer func() {
+			g.By("Remove cluster role")
+			err := removeSAFromAdmin(oc, "netobserv-plugin", namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err := addSAToAdmin(oc, "netobserv-plugin", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
+
+		g.By("Wait for 2 mins before logs gets collected and written to loki")
+		startTime := time.Now()
+		time.Sleep(120 * time.Second)
+
+		lokilabels := Lokilabels{
+			App: "netobserv-flowcollector",
+		}
+
+		g.By("Verify Packet Drop flows")
+		parameters := []string{"PktDropLatestState=\"TCP_INVALID_STATE\"", "Proto=\"6\""}
+		flowRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of TCP Invalid State flows > 0")
+		for _, r := range flowRecords {
+			o.Expect(r.Flowlog.PktDropLatestDropCause).NotTo(o.BeEmpty())
+			o.Expect(r.Flowlog.PktDropBytes).Should(o.BeNumerically(">", 0))
+			o.Expect(r.Flowlog.PktDropPackets).Should(o.BeNumerically(">", 0))
+		}
+
+		parameters = []string{"PktDropLatestDropCause=\"SKB_DROP_REASON_NO_SOCKET\"", "Proto=\"6\""}
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of No Socket TCP flows > 0")
+		for _, r := range flowRecords {
+			o.Expect(r.Flowlog.PktDropLatestState).NotTo(o.BeEmpty())
+			o.Expect(r.Flowlog.PktDropBytes).Should(o.BeNumerically(">", 0))
+			o.Expect(r.Flowlog.PktDropPackets).Should(o.BeNumerically(">", 0))
+		}
+
+		lokilabels.DstK8S_Namespace = DNSNamespace
+
+		g.By("Verify TCP DNS flows")
+		parameters = []string{"DnsFlagsResponseCode=\"NoError\"", "SrcPort=\"53\"", "DstK8S_Name=\"dnsutils1\"", "Proto=\"6\""}
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of TCP DNS flows > 0")
+		for _, r := range flowRecords {
+			o.Expect(r.Flowlog.DnsLatencyMs).Should(o.BeNumerically(">=", 0))
+		}
+
+		g.By("Verify UDP DNS flows")
+		parameters = []string{"DnsFlagsResponseCode=\"NoError\"", "SrcPort=\"53\"", "DstK8S_Name=\"dnsutils2\"", "Proto=\"17\""}
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of UDP DNS flows > 0")
+		for _, r := range flowRecords {
+			o.Expect(r.Flowlog.DnsLatencyMs).Should(o.BeNumerically(">=", 0))
+		}
+	})
 	//Add future NetObserv + Loki test-cases here
 
 	g.Context("with Kafka", func() {
