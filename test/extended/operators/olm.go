@@ -7860,7 +7860,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// author: scolange@redhat.com
-	g.It("Author:scolange-ConnectedOnly-Medium-24738-CRD should update if previously defined schemas do not change [Disruptive]", func() {
+	g.It("Author:scolange-DEPRECATED-ConnectedOnly-Medium-24738-CRD should update if previously defined schemas do not change [Disruptive]", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		var buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
 		var cmTemplate = filepath.Join(buildPruningBaseDir, "configmap-etcd.yaml")
