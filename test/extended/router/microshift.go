@@ -398,44 +398,58 @@ fi
 		o.Expect(err).NotTo(o.HaveOccurred())
 		restartMicroshiftService(oc, e2eTestNamespace1, nodeName)
 
-		exutil.By("3. create a server pod and the services in one ns")
-		createResourceFromFile(oc, e2eTestNamespace1, testPodSvc)
-		ensurePodWithLabelReady(oc, e2eTestNamespace1, "name="+srvrcInfo)
-
-		exutil.By("4. create a server pod and the services in the other ns")
-		createResourceFromFile(oc, e2eTestNamespace2, testPodSvc)
-		ensurePodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
-
-		exutil.By("5. create a route with path " + path1 + " in the first ns")
-		extraParas := []string{"--hostname=" + httpRouteHost, "--path=" + path1}
-		createRoute(oc, e2eTestNamespace1, "http", "route-http", unSecSvcName, extraParas)
-		waitForOutput(oc, e2eTestNamespace1, "route", "{.items[0].metadata.name}", "route-http")
-
-		exutil.By("6. create a route with path " + path2 + " in the second ns")
-		extraParas = []string{"--hostname=" + httpRouteHost, "--path=" + path2}
-		createRoute(oc, e2eTestNamespace2, "http", "route-http", unSecSvcName, extraParas)
-		waitForOutput(oc, e2eTestNamespace2, "route", "{.items[0].metadata.name}", "route-http")
-
-		exutil.By("7. check the Env ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK of deployment/default-router, which should be false")
+		exutil.By("3. check the Env ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK of deployment/default-router, which should be false")
 		routerPodName := getNewRouterPod(oc, "default")
+		// wait some time and make sure the changes are done on the router pod
+		time.Sleep(5 * time.Second)
 		ownershipVal := readRouterPodEnv(oc, routerPodName, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
 		o.Expect(ownershipVal).To(o.ContainSubstring("false"))
 
-		exutil.By("8. check the two route with same hostname but with different path, one is adimitted, while the other isn't")
-		jpath := "{.status.ingress[0].conditions[0].status}"
-		adtInfo := getByJsonPath(oc, e2eTestNamespace1, "route/route-http", jpath)
-		o.Expect(adtInfo).To(o.Equal("True"))
-		adtInfo = getByJsonPath(oc, e2eTestNamespace2, "route/route-http", jpath)
-		o.Expect(adtInfo).To(o.Equal("False"))
+		exutil.By("4. create a server pod and the services in one ns")
+		createResourceFromFile(oc, e2eTestNamespace1, testPodSvc)
+		ensurePodWithLabelReady(oc, e2eTestNamespace1, "name="+srvrcInfo)
 
-		exutil.By("9. debug node to enable namespace ownership support by setting namespaceOwnership to InterNamespaceAllowed in the config.yaml file")
+		exutil.By("5. create a route with path " + path1 + " in the first ns, which should be admitted")
+		extraParas := []string{"--hostname=" + httpRouteHost, "--path=" + path1}
+		jpath := "{.status.ingress[0].conditions[0].status}"
+		createRoute(oc, e2eTestNamespace1, "http", "route-http", unSecSvcName, extraParas)
+		waitForOutput(oc, e2eTestNamespace1, "route", "{.items[0].metadata.name}", "route-http")
+		waitForOutput(oc, e2eTestNamespace1, "route/route-http", jpath, "True")
+
+		exutil.By("6. create a server pod and the services in the other ns")
+		createResourceFromFile(oc, e2eTestNamespace2, testPodSvc)
+		ensurePodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
+
+		exutil.By("7. create a route with path " + path2 + " in the second ns, which should NOT be admitted")
+		extraParas = []string{"--hostname=" + httpRouteHost, "--path=" + path2}
+		createRoute(oc, e2eTestNamespace2, "http", "route-http", unSecSvcName, extraParas)
+		waitForOutput(oc, e2eTestNamespace2, "route", "{.items[0].metadata.name}", "route-http")
+		waitForOutput(oc, e2eTestNamespace2, "route/route-http", jpath, "False")
+
+		exutil.By("8. check the two routes with same hostname but with different path for the second time, the first one is adimitted, while the second one isn't")
+		adtInfo := getByJsonPath(oc, e2eTestNamespace1, "route/route-http", jpath)
+		o.Expect(adtInfo).To(o.ContainSubstring("True"))
+		adtInfo = getByJsonPath(oc, e2eTestNamespace2, "route/route-http", jpath)
+		o.Expect(adtInfo).To(o.ContainSubstring("False"))
+
+		exutil.By("9. Confirm the second route is shown as HostAlreadyClaimed")
+		jpath2 := `{.status.ingress[?(@.routerName=="default")].conditions[*].reason}`
+		searchOutput := getByJsonPath(oc, e2eTestNamespace2, "route/route-http", jpath2)
+		o.Expect(searchOutput).To(o.ContainSubstring("HostAlreadyClaimed"))
+
+		exutil.By("10. debug node to enable namespace ownership support by setting namespaceOwnership to InterNamespaceAllowed in the config.yaml file")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace1, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", sedCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		restartMicroshiftService(oc, e2eTestNamespace1, nodeName)
 
-		exutil.By("10. check the two route with same hostname but with different path, both of them should be adimitted")
+		exutil.By("11. check the two route with same hostname but with different path, both of them should be adimitted")
 		waitForOutput(oc, e2eTestNamespace1, "route/route-http", jpath, "True")
 		waitForOutput(oc, e2eTestNamespace2, "route/route-http", jpath, "True")
+
+		exutil.By("12. Confirm no route is shown as HostAlreadyClaimed")
+		searchOutput1 := getByJsonPath(oc, e2eTestNamespace1, "route/route-http", jpath2)
+		searchOutput2 := getByJsonPath(oc, e2eTestNamespace2, "route/route-http", jpath2)
+		o.Expect(strings.Count(searchOutput1+searchOutput2, "HostAlreadyClaimed")).To(o.Equal(0))
 	})
 
 	g.It("Author:shudili-MicroShiftOnly-High-73152-Expose router as load balancer service type", func() {
