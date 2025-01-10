@@ -422,8 +422,8 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 
 		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
-		if len(nodeList.Items) < 2 {
-			g.Skip("This test requires at least 2 worker nodes which is not fulfilled. ")
+		if len(nodeList.Items) < 3 {
+			g.Skip("This test requires at least 3 worker nodes which is not fulfilled. ")
 		}
 
 		exutil.By("1. Obtain first namespace")
@@ -606,11 +606,11 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		exutil.By("16.3 From a third node, be able to access node0:nodePort")
 		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns1, svc.servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		masterNode, err := exutil.GetFirstMasterNode(oc)
+		thirdNode := nodeList.Items[2].Name
 		o.Expect(err).NotTo(o.HaveOccurred())
-		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodePort)
+		CurlNodePortPass(oc, thirdNode, nodeList.Items[0].Name, nodePort)
 		exutil.By("16.4 From a third node, be able to access node1:nodePort")
-		CurlNodePortPass(oc, masterNode, nodeList.Items[1].Name, nodePort)
+		CurlNodePortPass(oc, thirdNode, nodeList.Items[1].Name, nodePort)
 		//Ignore below steps because of bug https://issues.redhat.com/browse/OCPBUGS-43085
 		//exutil.By("16.5 From pod node, be able to access nodePort service")
 		//CurlNodePortPass(oc, nodeList.Items[0].Name, nodeList.Items[0].Name, nodePort)
@@ -621,9 +621,9 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("service/test-service", "-n", ns1, "-p", patch, "--type=json").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.By("17.1 From a third node, be able to access node0:nodePort")
-		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodePort)
+		CurlNodePortPass(oc, thirdNode, nodeList.Items[0].Name, nodePort)
 		exutil.By("17.2 From a third node, NOT be able to access node1:nodePort")
-		CurlNodePortFail(oc, masterNode, nodeList.Items[1].Name, nodePort)
+		CurlNodePortFail(oc, thirdNode, nodeList.Items[1].Name, nodePort)
 	})
 
 	g.It("Author:huirwang-Critical-75942-Validate pod2Service/nodePortService for UDN(Layer3)", func() {
@@ -639,7 +639,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 
 		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
-		if len(nodeList.Items) < 2 {
+		if len(nodeList.Items) < 3 {
 			g.Skip("This test requires at least 3 worker nodes which is not fulfilled. ")
 		}
 
@@ -838,11 +838,11 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		exutil.By("16.3 From a third node, be able to access node0:nodePort")
 		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns1, svc.servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		masterNode, err := exutil.GetFirstMasterNode(oc)
+		thirdNode := nodeList.Items[2].Name
 		o.Expect(err).NotTo(o.HaveOccurred())
-		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodePort)
+		CurlNodePortPass(oc, thirdNode, nodeList.Items[0].Name, nodePort)
 		exutil.By("16.4 From a third node, be able to access node1:nodePort")
-		CurlNodePortPass(oc, masterNode, nodeList.Items[1].Name, nodePort)
+		CurlNodePortPass(oc, thirdNode, nodeList.Items[1].Name, nodePort)
 		//Ignore below steps because of bug https://issues.redhat.com/browse/OCPBUGS-43085
 		exutil.By("16.5 From pod node, be able to access nodePort service")
 		CurlNodePortPass(oc, nodeList.Items[0].Name, nodeList.Items[0].Name, nodePort)
@@ -853,9 +853,9 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("service/test-service", "-n", ns1, "-p", patch, "--type=json").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.By("17.1 From a third node, be able to access node0:nodePort")
-		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodePort)
+		CurlNodePortPass(oc, thirdNode, nodeList.Items[0].Name, nodePort)
 		exutil.By("17.2 From a third node, NOT be able to access node1:nodePort")
-		CurlNodePortFail(oc, masterNode, nodeList.Items[1].Name, nodePort)
+		CurlNodePortFail(oc, thirdNode, nodeList.Items[1].Name, nodePort)
 	})
 
 	g.It("Author:meinli-Critical-78238-Validate host/pod to nodeport with externalTrafficPolicy is local/cluster on same/diff workers (UDN layer3 and default network)", func() {
@@ -1529,8 +1529,8 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 
 		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
-		if len(nodeList.Items) < 2 {
-			g.Skip("This test requires at least 2 worker nodes which is not fulfilled. ")
+		if len(nodeList.Items) < 3 {
+			g.Skip("This test requires at least 3 worker nodes which is not fulfilled. ")
 		}
 
 		exutil.By("1. Create CRD for CUDN")
@@ -1684,11 +1684,11 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		exutil.By("16.3 From a third node, be able to access node0:nodePort")
 		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", cudnNS[0], svc.servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		masterNode, err := exutil.GetFirstMasterNode(oc)
+		thirdNode := nodeList.Items[2].Name
 		o.Expect(err).NotTo(o.HaveOccurred())
-		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodePort)
+		CurlNodePortPass(oc, thirdNode, nodeList.Items[0].Name, nodePort)
 		exutil.By("16.4 From a third node, be able to access node1:nodePort")
-		CurlNodePortPass(oc, masterNode, nodeList.Items[1].Name, nodePort)
+		CurlNodePortPass(oc, thirdNode, nodeList.Items[1].Name, nodePort)
 		exutil.By("16.5 From pod node, be able to access nodePort service")
 		CurlNodePortPass(oc, nodeList.Items[0].Name, nodeList.Items[0].Name, nodePort)
 		CurlNodePortPass(oc, nodeList.Items[0].Name, nodeList.Items[1].Name, nodePort)
@@ -1698,9 +1698,9 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("service/test-service", "-n", cudnNS[0], "-p", patch, "--type=json").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.By("17.1 From a third node, be able to access node0:nodePort")
-		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodePort)
+		CurlNodePortPass(oc, thirdNode, nodeList.Items[0].Name, nodePort)
 		exutil.By("17.2 From a third node, NOT be able to access node1:nodePort")
-		CurlNodePortFail(oc, masterNode, nodeList.Items[1].Name, nodePort)
+		CurlNodePortFail(oc, thirdNode, nodeList.Items[1].Name, nodePort)
 	})
 
 	g.It("Author:huirwang-High-78768-Validate service for CUDN(Layer2)", func() {
@@ -1720,8 +1720,8 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 
 		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
-		if len(nodeList.Items) < 2 {
-			g.Skip("This test requires at least 2 worker nodes which is not fulfilled. ")
+		if len(nodeList.Items) < 3 {
+			g.Skip("This test requires at least 3 worker nodes which is not fulfilled. ")
 		}
 
 		exutil.By("1. Create CRD for CUDN")
@@ -1875,11 +1875,11 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		exutil.By("16.3 From a third node, be able to access node0:nodePort")
 		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", cudnNS[0], svc.servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		masterNode, err := exutil.GetFirstMasterNode(oc)
+		thirdNode := nodeList.Items[2].Name
 		o.Expect(err).NotTo(o.HaveOccurred())
-		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodePort)
+		CurlNodePortPass(oc, thirdNode, nodeList.Items[0].Name, nodePort)
 		exutil.By("16.4 From a third node, be able to access node1:nodePort")
-		CurlNodePortPass(oc, masterNode, nodeList.Items[1].Name, nodePort)
+		CurlNodePortPass(oc, thirdNode, nodeList.Items[1].Name, nodePort)
 		exutil.By("16.5 From pod node, be able to access nodePort service")
 		CurlNodePortPass(oc, nodeList.Items[0].Name, nodeList.Items[0].Name, nodePort)
 		CurlNodePortPass(oc, nodeList.Items[0].Name, nodeList.Items[1].Name, nodePort)
@@ -1889,9 +1889,9 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("service/test-service", "-n", cudnNS[0], "-p", patch, "--type=json").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.By("17.1 From a third node, be able to access node0:nodePort")
-		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodePort)
+		CurlNodePortPass(oc, thirdNode, nodeList.Items[0].Name, nodePort)
 		exutil.By("17.2 From a third node, NOT be able to access node1:nodePort")
-		CurlNodePortFail(oc, masterNode, nodeList.Items[1].Name, nodePort)
+		CurlNodePortFail(oc, thirdNode, nodeList.Items[1].Name, nodePort)
 	})
 
 })
