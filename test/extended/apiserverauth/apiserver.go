@@ -1649,7 +1649,7 @@ spec:
 	})
 
 	// author: dpunia@redhat.com
-	g.It("Author:dpunia-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-Longduration-NonPreRelease-High-44596-SNO kube-apiserver can fall back to last good revision well when failing to roll out in SNO env [Disruptive]", func() {
+	g.It("Author:dpunia-NonHyperShiftHOST-Longduration-NonPreRelease-High-78850-SNO kube-apiserver can fall back to last good revision well when failing to roll out [Disruptive]", func() {
 		if !isSNOCluster(oc) {
 			g.Skip("This is not a SNO cluster, skip.")
 		}
