@@ -321,3 +321,139 @@ var _ = g.Describe("[sig-networking] SDN network-tools ovnkube-trace", func() {
 		}
 	})
 })
+
+var _ = g.Describe("[sig-networking] SDN network-tools scripts", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc    = exutil.NewCLI("networking-tools", exutil.KubeConfigPath())
+		image = "openshift/network-tools:latest"
+	)
+
+	g.It("Author:qiowang-NonHyperShiftHOST-Medium-55890-Verify functionality of network-tools script - ovn-get", func() {
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+		scriptName := "ovn-get"
+
+		exutil.By("1. Get ovn-k/nbdb/sbdb leaders with " + scriptName + " script")
+		e2e.Logf("Get ovnk leader pod")
+		ovnkLeader := getOVNKMasterPod(oc)
+		mustgatherDir := "/tmp/must-gather-55890-1"
+		defer os.RemoveAll(mustgatherDir)
+		parameters := []string{"network-tools", scriptName, "leaders"}
+		output, cmdErr := collectMustGather(oc, mustgatherDir, image, parameters)
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "ovn-k master leader "+ovnkLeader)).Should(o.BeTrue())
+		o.Expect(strings.Contains(output, "nbdb leader not applicable in ovn-ic mode")).Should(o.BeTrue())
+		o.Expect(strings.Contains(output, "sbdb leader not applicable in ovn-ic mode")).Should(o.BeTrue())
+
+		exutil.By("2. Download dbs with " + scriptName + " script")
+		e2e.Logf("Get all ovnkube-node pods")
+		ovnNodePods := getPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		mustgatherDir = "/tmp/must-gather-55890-2"
+		defer os.RemoveAll(mustgatherDir)
+		parameters = []string{"network-tools", scriptName, "dbs"}
+		_, cmdErr = collectMustGather(oc, mustgatherDir, image, parameters)
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		files, getFilesErr := exec.Command("bash", "-c", "ls -l "+mustgatherDir+"/quay-io-openshift-release-dev-ocp*").Output()
+		o.Expect(getFilesErr).NotTo(o.HaveOccurred())
+		for _, podName := range ovnNodePods {
+			o.Expect(strings.Contains(string(files), podName+"_nbdb")).Should(o.BeTrue())
+			o.Expect(strings.Contains(string(files), podName+"_sbdb")).Should(o.BeTrue())
+		}
+
+		exutil.By("3. Get ovn cluster mode with " + scriptName + " script")
+		mustgatherDir = "/tmp/must-gather-55890-3"
+		defer os.RemoveAll(mustgatherDir)
+		parameters = []string{"network-tools", scriptName, "mode"}
+		output, cmdErr = collectMustGather(oc, mustgatherDir, image, parameters)
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "cluster is running in multi-zone (ovn-interconnect / ovn-ic)")).Should(o.BeTrue())
+	})
+
+	g.It("Author:qiowang-Medium-55889-Verify functionality of network-tools script - ovn-db-run-command", func() {
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+		scriptName := "ovn-db-run-command"
+
+		exutil.By("1. Run ovn-nbctl command with " + scriptName + " script")
+		mustgatherDir := "/tmp/must-gather-55889-1"
+		defer os.RemoveAll(mustgatherDir)
+		parameters := []string{"network-tools", scriptName, "ovn-nbctl", "lr-list"}
+		output, cmdErr := collectMustGather(oc, mustgatherDir, image, parameters)
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "ovn_cluster_router")).Should(o.BeTrue())
+
+		exutil.By("2. Run ovn-sbctl command with " + scriptName + " script")
+		mustgatherDir = "/tmp/must-gather-55889-2"
+		defer os.RemoveAll(mustgatherDir)
+		parameters = []string{"network-tools", scriptName, "ovn-sbctl", "show"}
+		output, cmdErr = collectMustGather(oc, mustgatherDir, image, parameters)
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "Port_Binding")).Should(o.BeTrue())
+
+		exutil.By("3. Run ovndb command in specified pod with " + scriptName + " script")
+		ovnNodePods := getPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		nodeName, getNodeErr := exutil.GetPodNodeName(oc, "openshift-ovn-kubernetes", ovnNodePods[0])
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		mustgatherDir = "/tmp/must-gather-55889-3"
+		defer os.RemoveAll(mustgatherDir)
+		parameters = []string{"network-tools", scriptName, "-p", ovnNodePods[0], "ovn-nbctl", "lr-list"}
+		output, cmdErr = collectMustGather(oc, mustgatherDir, image, parameters)
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "GR_"+nodeName)).Should(o.BeTrue())
+	})
+
+	g.It("Author:qiowang-Medium-55887-Verify functionality of network-tools script - pod-run-netns-command", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			pingPodTemplate     = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+			scriptName          = "pod-run-netns-command"
+		)
+		nodeList, getNodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("Not enough nodes available for the test, skip the case!!")
+		}
+
+		exutil.By("0. Create hello-pod")
+		ns := oc.Namespace()
+		pod := pingPodResource{
+			name:      "hello-pod",
+			namespace: ns,
+			template:  pingPodTemplate,
+		}
+		pod.createPingPod(oc)
+		waitPodReady(oc, pod.namespace, pod.name)
+		podIP := getPodIPv4(oc, ns, pod.name)
+
+		exutil.By("1. Run multiple commands with " + scriptName + " script")
+		mustgatherDir := "/tmp/must-gather-55887-1"
+		defer os.RemoveAll(mustgatherDir)
+		parameters := []string{"network-tools", scriptName, "--multiple-commands", pod.namespace, pod.name, "ip a show eth0; ip a show lo"}
+		output, cmdErr := collectMustGather(oc, mustgatherDir, image, parameters)
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, podIP)).Should(o.BeTrue())
+		o.Expect(strings.Contains(output, "127.0.0.1")).Should(o.BeTrue())
+
+		exutil.By("2. Run command that needs to preserve the literal meaning of with " + scriptName + " script")
+		mustgatherDir = "/tmp/must-gather-55887-2"
+		defer os.RemoveAll(mustgatherDir)
+		parameters = []string{"network-tools", scriptName, "--no-substitution", pod.namespace, pod.name, `'i=0; i=$(( $i + 1 )); echo result$i'`}
+		output, cmdErr = collectMustGather(oc, mustgatherDir, image, parameters)
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "result1")).Should(o.BeTrue())
+
+		exutil.By("3. Run command and save the debug pod for 5 minutes with " + scriptName + " script")
+		mustgatherDir = "/tmp/must-gather-55887-3"
+		defer os.RemoveAll(mustgatherDir)
+		parameters = []string{"network-tools", scriptName, "--preserve-pod", pod.namespace, pod.name, "timeout 5 tcpdump"}
+		output, cmdErr = collectMustGather(oc, mustgatherDir, image, parameters)
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "DONE")).Should(o.BeTrue())
+	})
+})

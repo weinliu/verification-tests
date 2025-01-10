@@ -4257,3 +4257,25 @@ func getTcpdumpOnNodeCmdFromPod(oc *exutil.CLI, nodeName, tcpdumpCmd, namespace,
 	cmdTcpdump.Process.Kill()
 	return cmdOutput.String()
 }
+
+func collectMustGather(oc *exutil.CLI, dstDir string, imageStream string, parameters []string) (string, error) {
+	args := []string{"must-gather"}
+	if dstDir != "" {
+		args = append(args, "--dest-dir="+dstDir)
+	}
+	if imageStream != "" {
+		args = append(args, "--image-stream="+imageStream)
+	}
+	if len(parameters) > 0 {
+		args = append(args, "--")
+		for _, param := range parameters {
+			args = append(args, param)
+		}
+	}
+	output, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args(args...).Output()
+	if err != nil {
+		e2e.Logf("collect must-gather failed, err: %v", err)
+		return "", err
+	}
+	return output, nil
+}
