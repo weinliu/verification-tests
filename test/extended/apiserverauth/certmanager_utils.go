@@ -240,20 +240,13 @@ func createCertManagerOperator(oc *exutil.CLI) {
 	var (
 		subscriptionName       = "openshift-cert-manager-operator"
 		subscriptionNamespace  = "cert-manager-operator"
+		catalogSourceName      = "redhat-operators"
 		catalogSourceNamespace = "openshift-marketplace"
 		channelName            = "stable-v1"
 		operandNamespace       = "cert-manager"
 		operandPodLabel        = "app.kubernetes.io/instance=cert-manager"
 		operandPodNum          = 3
 	)
-
-	// switch to an available catalogsource
-	catalogSourceName, err := getAvailableCatalogSourceName(oc, catalogSourceNamespace, subscriptionName)
-	if len(catalogSourceName) == 0 || err != nil {
-		g.Skip("skip since no available catalogsource was found")
-	}
-	e2e.Logf("=> using catalogsource: '%s'", catalogSourceName)
-
 	e2e.Logf("=> create the operator namespace")
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 	namespaceFile := filepath.Join(buildPruningBaseDir, "namespace.yaml")
@@ -266,6 +259,25 @@ func createCertManagerOperator(oc *exutil.CLI) {
 	if err != nil && !strings.Contains(output, "AlreadyExists") {
 		e2e.Failf("Failed to apply namespace cert-manager-operator: %v", err)
 	}
+
+	// use the default catalogsource if 'qe-app-registry' doesn't exists
+	output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", catalogSourceNamespace, "catalogsource", "redhat-operators").Output()
+	if strings.Contains(output, "NotFound") || err != nil {
+
+		// skip if the default catalogsource doesn't contain subscription's packagemanifest
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", catalogSourceNamespace, "-l", "catalog="+catalogSourceName, "--field-selector", "metadata.name="+subscriptionName).Output()
+		if !strings.Contains(output, subscriptionName) || err != nil {
+			g.Skip("skip since no available packagemanifest was found")
+		}
+	} else {
+		// TODO: until the Konflux pipeline is configured to add a deterministic tag, update this pull spec whenever a new stage build is out
+		fbcImage := "quay.io/redhat-user-workloads/cert-manager-oape-tenant/cert-manager-operator-1-15/cert-manager-operator-fbc-1-15:edb257f20c2c0261200e2f0f7bf8118099567745"
+		catalogSourceName = "konflux-fbc-cert-manager"
+		catalogSourceNamespace = "cert-manager-operator"
+		e2e.Logf("=> create the file-based catalog")
+		createFBC(oc, catalogSourceName, catalogSourceNamespace, fbcImage)
+	}
+	e2e.Logf("=> using catalogsource '%s' from namespace '%s'", catalogSourceName, catalogSourceNamespace)
 
 	e2e.Logf("=> create the operatorgroup")
 	operatorGroupFile := filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
@@ -583,40 +595,27 @@ func skipIfRouteUnreachable(oc *exutil.CLI) {
 	}
 }
 
-// Get the available CatalogSource's name for specific subscription from given namespace
-func getAvailableCatalogSourceName(oc *exutil.CLI, namespace, subscription string) (string, error) {
-	// check if there are any catalogsources that not READY, otherwise it will block the subscription's readiness
-	// ref: https://docs.openshift.com/container-platform/4.16/operators/understanding/olm/olm-understanding-olm.html#olm-cs-health_olm-understanding-olm
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "catalogsource", `-o=jsonpath={.items[?(@.status.connectionState.lastObservedState!="READY")].metadata.name}`).Output()
-	if err != nil {
-		return "", fmt.Errorf("failed to get catalogsource from namespace: %s", namespace)
-	}
-	if len(output) > 0 {
-		e2e.Logf("at least one catalogsource is not READY: '%s'", output)
-		return "", nil
-	}
-
-	list, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "catalogsource", `-o=jsonpath={.items[*].metadata.name}`).Output()
-	if err != nil {
-		return "", fmt.Errorf("failed to get catalogsource from namespace: %s", namespace)
-	}
-
-	// the default order is to use "qe-app-registry" first, if it is unavailable then switch to use "redhat-operators"
-	targetCatalogSources := []string{"qe-app-registry", "redhat-operators"}
-	for _, name := range targetCatalogSources {
-		if strings.Contains(list, name) {
-			// check if the specific subscription's packagemanifest exists in the catalogsource
-			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", namespace, "-l", "catalog="+name, "--field-selector", "metadata.name="+subscription).Output()
-			if strings.Contains(output, subscription) && err == nil {
-				return name, nil
-			}
+// createFBC creates the dedicated file-based catalog for cert-manager operator to subscribe
+func createFBC(oc *exutil.CLI, name, namespace, image string) {
+	exutil.SkipNoOLMCore(oc)
+	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
+	fbcTemplate := filepath.Join(buildPruningBaseDir, "konflux-fbc.yaml")
+	params := []string{"-f", fbcTemplate, "-p", "NAME=" + name, "NAMESPACE=" + namespace, "IMAGE_INDEX=" + image}
+	exutil.ApplyClusterResourceFromTemplate(oc, params...)
+	// wait for catalogsource lastObservedState to become READY
+	err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(context.Context) (bool, error) {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", name, "-n", namespace, "-o=jsonpath={.status.connectionState.lastObservedState}").Output()
+		if strings.Contains(output, "READY") {
+			return true, nil
 		}
+		return false, nil
+	})
+	if err != nil {
+		dumpResource(oc, name, "catalogsource", namespace, "-o=jsonpath={.status}")
+		oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", namespace).Execute()
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("catalogsource", name, "-n", namespace).Execute()
 	}
-
-	// if no target CatalogSource was found, print existing CatalogSource and return ""
-	output, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "catalogsource").Output()
-	e2e.Logf("get existing catalogsource: %s", output)
-	return "", nil
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for catalogsource state to become READY")
 }
 
 // Get installed cert-manager Operator version. The return value format is semantic 'x.y.z'.

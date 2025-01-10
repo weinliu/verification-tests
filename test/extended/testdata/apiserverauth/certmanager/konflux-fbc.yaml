@@ -1,0 +1,37 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: konflux-fbc-template
+objects:
+  - apiVersion: config.openshift.io/v1
+    kind: ImageDigestMirrorSet
+    metadata:
+      name: cert-manager-operator-mirror-stage-to-quay
+    spec:
+      imageDigestMirrors:
+      - source: registry.stage.redhat.io/cert-manager/cert-manager-operator-bundle
+        mirrors:
+          - quay.io/redhat-user-workloads/cert-manager-oape-tenant/cert-manager-operator-1-15/cert-manager-operator-bundle-1-15
+      - source: registry.stage.redhat.io/cert-manager/cert-manager-operator-rhel9
+        mirrors:
+          - quay.io/redhat-user-workloads/cert-manager-oape-tenant/cert-manager-operator-1-15/cert-manager-operator-1-15
+      - source: registry.stage.redhat.io/cert-manager/jetstack-cert-manager-rhel9
+        mirrors:
+          - quay.io/redhat-user-workloads/cert-manager-oape-tenant/jetstack-cert-manager-1-15/jetstack-cert-manager-1-15
+      - source: registry.stage.redhat.io/cert-manager/jetstack-cert-manager-acmesolver-rhel9
+        mirrors:
+          - quay.io/redhat-user-workloads/cert-manager-oape-tenant/jetstack-cert-manager-1-15/jetstack-cert-manager-acmesolver-1-15
+  - apiVersion: operators.coreos.com/v1alpha1
+    kind: CatalogSource
+    metadata:
+      name: "${NAME}"
+      namespace: "${NAMESPACE}"
+    spec:
+      sourceType: grpc
+      image: "${IMAGE_INDEX}"
+      displayName: "Konflux FBC cert-manager"
+      publisher: "cert-manager QE"
+parameters:
+  - name: NAME
+  - name: NAMESPACE
+  - name: IMAGE_INDEX
