@@ -70,6 +70,9 @@ type cudnCRDResource struct {
 	crdname    string
 	labelvalue string
 	labelkey   string
+	key        string
+	operator   string
+	values     []string
 	IPv4cidr   string
 	IPv4prefix int32
 	IPv6cidr   string
@@ -300,6 +303,32 @@ func (cudncrd *cudnCRDResource) createCUDNCRDDualStack(oc *exutil.CLI) {
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create cudn CRD %s due to %v", cudncrd.crdname, err))
 }
 
+func (cudncrd *cudnCRDResource) createCUDNCRDMatchExpSingleStack(oc *exutil.CLI) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", cudncrd.template, "-p", "CRDNAME="+cudncrd.crdname, "KEY="+cudncrd.key, "OPERATOR="+cudncrd.operator, "VALUE1="+cudncrd.values[0], "VALUE2="+cudncrd.values[1],
+			"CIDR="+cudncrd.cidr, "PREFIX="+strconv.Itoa(int(cudncrd.prefix)), "MTU="+strconv.Itoa(int(cudncrd.mtu)), "ROLE="+cudncrd.role)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create cudn CRD %s due to %v", cudncrd.crdname, err))
+}
+
+func (cudncrd *cudnCRDResource) createCUDNCRDMatchExpDualStack(oc *exutil.CLI) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", cudncrd.template, "-p", "CRDNAME="+cudncrd.crdname, "KEY="+cudncrd.key, "OPERATOR="+cudncrd.operator, "VALUE1="+cudncrd.values[0], "VALUE2="+cudncrd.values[1],
+			"IPv4CIDR="+cudncrd.IPv4cidr, "IPv4PREFIX="+strconv.Itoa(int(cudncrd.IPv4prefix)), "IPv6CIDR="+cudncrd.IPv6cidr, "IPv6PREFIX="+strconv.Itoa(int(cudncrd.IPv6prefix)), "MTU="+strconv.Itoa(int(cudncrd.mtu)), "ROLE="+cudncrd.role)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create cudn CRD %s due to %v", cudncrd.crdname, err))
+}
+
 func (udncrd *udnCRDResource) deleteUdnCRDDef(oc *exutil.CLI) {
 	removeResource(oc, true, true, "UserDefinedNetwork", udncrd.crdname, "-n", udncrd.namespace)
 }
@@ -376,6 +405,32 @@ func (cudncrd *cudnCRDResource) createLayer2SingleStackCUDNCRD(oc *exutil.CLI) {
 func (cudncrd *cudnCRDResource) createLayer2DualStackCUDNCRD(oc *exutil.CLI) {
 	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", cudncrd.template, "-p", "CRDNAME="+cudncrd.crdname, "LABELKEY="+cudncrd.labelkey, "LABELVALUE="+cudncrd.labelvalue,
+			"IPv4CIDR="+cudncrd.IPv4cidr, "IPv6CIDR="+cudncrd.IPv6cidr, "MTU="+strconv.Itoa(int(cudncrd.mtu)), "ROLE="+cudncrd.role)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create cudn CRD %s due to %v", cudncrd.crdname, err))
+}
+
+func (cudncrd *cudnCRDResource) createLayer2CUDNCRDMatchExpSingleStack(oc *exutil.CLI) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", cudncrd.template, "-p", "CRDNAME="+cudncrd.crdname, "KEY="+cudncrd.key, "OPERATOR="+cudncrd.operator, "VALUE1="+cudncrd.values[0], "VALUE2="+cudncrd.values[1],
+			"CIDR="+cudncrd.cidr, "MTU="+strconv.Itoa(int(cudncrd.mtu)), "ROLE="+cudncrd.role)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create cudn CRD %s due to %v", cudncrd.crdname, err))
+}
+
+func (cudncrd *cudnCRDResource) createLayer2CUDNCRDMatchExpDualStack(oc *exutil.CLI) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", cudncrd.template, "-p", "CRDNAME="+cudncrd.crdname, "KEY="+cudncrd.key, "OPERATOR="+cudncrd.operator, "VALUE1="+cudncrd.values[0], "VALUE2="+cudncrd.values[1],
 			"IPv4CIDR="+cudncrd.IPv4cidr, "IPv6CIDR="+cudncrd.IPv6cidr, "MTU="+strconv.Itoa(int(cudncrd.mtu)), "ROLE="+cudncrd.role)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
@@ -668,4 +723,66 @@ func createGeneralUDNCRD(oc *exutil.CLI, namespace, crdName, ipv4cidr, ipv6cidr,
 	} else {
 		e2e.Logf("Not surpport UDN type for now.")
 	}
+}
+
+func createCUDNCRD(oc *exutil.CLI, key, crdName, ipv4cidr, ipv6cidr, cidr, layer string, values []string) (cudnCRDResource, error) {
+	// This is a function for common CUDN CRD creation without special requirement for parameters which is can be used for common cases and to reduce code lines in case level.
+	var (
+		testDataDirUDN           = exutil.FixturePath("testdata", "networking/udn")
+		cudnCRDL3dualStack       = filepath.Join(testDataDirUDN, "cudn_crd_matchexp_dualstack_template.yaml")
+		cudnCRDL3SingleStack     = filepath.Join(testDataDirUDN, "cudn_crd_matchexp_singlestack_template.yaml")
+		cudnCRDLayer2dualStack   = filepath.Join(testDataDirUDN, "cudn_crd_matchexp_layer2_dualstack_template.yaml")
+		cudnCRDLayer2SingleStack = filepath.Join(testDataDirUDN, "cudn_crd_matchexp_layer2_singlestack_template.yaml")
+	)
+
+	ipStackType := checkIPStackType(oc)
+	cudncrd := cudnCRDResource{
+		crdname:  crdName,
+		key:      key,
+		operator: "In",
+		values:   values,
+		role:     "Primary",
+		mtu:      1300,
+		template: cudnCRDL3dualStack,
+	}
+
+	if layer == "layer3" {
+		if ipStackType == "dualstack" {
+			cudncrd.IPv4cidr = ipv4cidr
+			cudncrd.IPv4prefix = 24
+			cudncrd.IPv6cidr = ipv6cidr
+			cudncrd.IPv6prefix = 64
+			cudncrd.template = cudnCRDL3dualStack
+			cudncrd.createCUDNCRDMatchExpDualStack(oc)
+		} else if ipStackType == "ipv6single" {
+			cudncrd.prefix = 64
+			cudncrd.cidr = cidr
+			cudncrd.template = cudnCRDL3SingleStack
+			cudncrd.createCUDNCRDMatchExpSingleStack(oc)
+		} else {
+			cudncrd.prefix = 24
+			cudncrd.cidr = cidr
+			cudncrd.template = cudnCRDL3SingleStack
+			cudncrd.createCUDNCRDMatchExpSingleStack(oc)
+		}
+	} else if layer == "layer2" {
+		if ipStackType == "dualstack" {
+			cudncrd.IPv4cidr = ipv4cidr
+			cudncrd.IPv6cidr = ipv6cidr
+			cudncrd.template = cudnCRDLayer2dualStack
+			cudncrd.createLayer2CUDNCRDMatchExpDualStack(oc)
+		} else {
+			cudncrd.cidr = cidr
+			cudncrd.template = cudnCRDLayer2SingleStack
+			cudncrd.createLayer2CUDNCRDMatchExpSingleStack(oc)
+		}
+
+	} else {
+		e2e.Logf("Not supported UDN type for now.")
+	}
+	err := waitCUDNCRDApplied(oc, cudncrd.crdname)
+	if err != nil {
+		return cudncrd, err
+	}
+	return cudncrd, nil
 }

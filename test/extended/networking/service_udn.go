@@ -1511,4 +1511,387 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 			*/
 		}
 	})
+
+	g.It("Author:huirwang-High-78767-Validate service for CUDN(Layer3)", func() {
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			pingPodTemplate        = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+			testPodFile            = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			ipFamilyPolicy         = "SingleStack"
+			key                    = "test.cudn.layer3"
+			crdName                = "cudn-network-78767"
+			crdName2               = "cudn-network-78767-2"
+			values                 = []string{"value-78767-1", "value-78767-2"}
+			values2                = []string{"value2-78767-1", "value2-78767-2"}
+			cudnNS                 = []string{}
+		)
+
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This test requires at least 2 worker nodes which is not fulfilled. ")
+		}
+
+		exutil.By("1. Create CRD for CUDN")
+		ipStackType := checkIPStackType(oc)
+		var cidr, ipv4cidr, ipv6cidr string
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/60"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/60"
+			}
+		}
+
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", crdName)
+		_, err := createCUDNCRD(oc, key, crdName, ipv4cidr, ipv6cidr, cidr, "layer3", values)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2. Create 2 namespaces and add related values.")
+		cudnNS = append(cudnNS, oc.Namespace())
+		oc.SetupProject()
+		cudnNS = append(cudnNS, oc.Namespace())
+		for i := 0; i < 2; i++ {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", cudnNS[i], fmt.Sprintf("%s-", key)).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", cudnNS[i], fmt.Sprintf("%s=%s", key, values[i])).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("3. Create a pod deployed on node0 as backend pod for service.")
+		pod1ns1 := pingPodResourceNode{
+			name:      "hello-pod-1",
+			namespace: cudnNS[0],
+			nodename:  nodeList.Items[0].Name,
+			template:  pingPodTemplate,
+		}
+		defer removeResource(oc, true, true, "pod", pod1ns1.name, "-n", pod1ns1.namespace)
+		pod1ns1.createPingPodNode(oc)
+		waitPodReady(oc, pod1ns1.namespace, pod1ns1.name)
+
+		g.By("4. create a udn client pod in ns1")
+		pod2ns1 := pingPodResourceNode{
+			name:      "hello-pod-2",
+			namespace: cudnNS[0],
+			nodename:  nodeList.Items[1].Name,
+			template:  pingPodTemplate,
+		}
+		defer removeResource(oc, true, true, "pod", pod2ns1.name, "-n", pod2ns1.namespace)
+		pod2ns1.createPingPodNode(oc)
+		waitPodReady(oc, pod2ns1.namespace, pod2ns1.name)
+		// Update label for pod2 to a different one
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", cudnNS[0], "pod", pod2ns1.name, "name=hello-pod-2", "--overwrite=true").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5. create a udn client pod in ns2. ")
+		pod1ns2 := pingPodResourceNode{
+			name:      "hello-pod-3",
+			namespace: cudnNS[1],
+			nodename:  nodeList.Items[0].Name,
+			template:  pingPodTemplate,
+		}
+		defer removeResource(oc, true, true, "pod", pod1ns2.name, "-n", pod1ns2.namespace)
+		pod1ns2.createPingPodNode(oc)
+		waitPodReady(oc, pod1ns2.namespace, pod1ns2.name)
+
+		exutil.By("6. create a ClusterIP service in ns1")
+		svc := genericServiceResource{
+			servicename:           "test-service",
+			namespace:             cudnNS[0],
+			protocol:              "TCP",
+			selector:              "hello-pod",
+			serviceType:           "ClusterIP",
+			ipFamilyPolicy:        ipFamilyPolicy,
+			internalTrafficPolicy: "Cluster",
+			externalTrafficPolicy: "",
+			template:              genericServiceTemplate,
+		}
+		svc.createServiceFromParams(oc)
+
+		exutil.By("7. Verify ClusterIP service can be accessed from both pod2 in ns1 and pod3 in ns2")
+		CurlPod2SvcPass(oc, cudnNS[0], cudnNS[0], pod2ns1.name, svc.servicename)
+		CurlPod2SvcPass(oc, cudnNS[1], cudnNS[0], pod1ns2.name, svc.servicename)
+
+		exutil.By("8. Create third namespace")
+		oc.SetupProject()
+		cudnNS = append(cudnNS, oc.Namespace())
+
+		exutil.By("9. Create service and pods which are on default network.")
+		createResourceFromFile(oc, cudnNS[2], testPodFile)
+		err = waitForPodWithLabelReady(oc, cudnNS[2], "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		testPodName := getPodName(oc, cudnNS[2], "name=test-pods")
+
+		exutil.By("10. Not be able to access cudn service from default network.")
+		CurlPod2SvcFail(oc, cudnNS[2], cudnNS[0], testPodName[0], svc.servicename)
+		exutil.By("11. Not be able to access default network service from cudn network.")
+		CurlPod2SvcFail(oc, cudnNS[1], cudnNS[2], pod2ns1.name, "test-service")
+
+		exutil.By("11. Create fourth namespace for cudn pod")
+		oc.SetupProject()
+		cudnNS = append(cudnNS, oc.Namespace())
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", cudnNS[3], fmt.Sprintf("%s=%s", key, values2[0])).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("12. Create CRD in fourth namespace")
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/60"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/60"
+			}
+		}
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", cudnNS[3], fmt.Sprintf("%s-", key)).Execute()
+			removeResource(oc, true, true, "namespace", cudnNS[3])
+			removeResource(oc, true, true, "clusteruserdefinednetwork", crdName2)
+		}()
+		_, err = createCUDNCRD(oc, key, crdName2, ipv4cidr, ipv6cidr, cidr, "layer3", values2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("13. Create a udn pod in fourth namespace")
+		createResourceFromFile(oc, cudnNS[3], testPodFile)
+		err = waitForPodWithLabelReady(oc, cudnNS[3], "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		testPodNameNS3 := getPodName(oc, cudnNS[3], "name=test-pods")
+
+		exutil.By("14. Verify different cudn network, service was isolated.")
+		CurlPod2SvcFail(oc, cudnNS[3], cudnNS[0], testPodNameNS3[0], svc.servicename)
+
+		exutil.By("15.Update internalTrafficPolicy as Local for cudn service in ns1.")
+		patch := `[{"op": "replace", "path": "/spec/internalTrafficPolicy", "value": "Local"}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("service/test-service", "-n", cudnNS[0], "-p", patch, "--type=json").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("15.1. Verify ClusterIP service can be accessed from pod3 which is deployed same node as service back-end pod.")
+		CurlPod2SvcPass(oc, cudnNS[1], cudnNS[0], pod1ns2.name, svc.servicename)
+		exutil.By("15.2. Verify ClusterIP service can NOT be accessed from pod2 which is deployed different node as service back-end pod.")
+		CurlPod2SvcFail(oc, cudnNS[0], cudnNS[0], pod2ns1.name, svc.servicename)
+
+		exutil.By("16. Verify nodePort service can be accessed.")
+		exutil.By("16.1 Delete testservice from ns1")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "test-service", "-n", cudnNS[0]).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("16.2 Create testservice with NodePort in ns1")
+		svc.serviceType = "NodePort"
+		svc.createServiceFromParams(oc)
+
+		exutil.By("16.3 From a third node, be able to access node0:nodePort")
+		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", cudnNS[0], svc.servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		masterNode, err := exutil.GetFirstMasterNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodePort)
+		exutil.By("16.4 From a third node, be able to access node1:nodePort")
+		CurlNodePortPass(oc, masterNode, nodeList.Items[1].Name, nodePort)
+		exutil.By("16.5 From pod node, be able to access nodePort service")
+		CurlNodePortPass(oc, nodeList.Items[0].Name, nodeList.Items[0].Name, nodePort)
+		CurlNodePortPass(oc, nodeList.Items[0].Name, nodeList.Items[1].Name, nodePort)
+
+		exutil.By("17.Update externalTrafficPolicy as Local for udn service in ns1.")
+		patch = `[{"op": "replace", "path": "/spec/externalTrafficPolicy", "value": "Local"}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("service/test-service", "-n", cudnNS[0], "-p", patch, "--type=json").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("17.1 From a third node, be able to access node0:nodePort")
+		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodePort)
+		exutil.By("17.2 From a third node, NOT be able to access node1:nodePort")
+		CurlNodePortFail(oc, masterNode, nodeList.Items[1].Name, nodePort)
+	})
+
+	g.It("Author:huirwang-High-78768-Validate service for CUDN(Layer2)", func() {
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			pingPodTemplate        = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+			testPodFile            = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			ipFamilyPolicy         = "SingleStack"
+			key                    = "test.cudn.layer2"
+			crdName                = "cudn-network-78768"
+			crdName2               = "cudn-network-78768-2"
+			values                 = []string{"value-78768-1", "value-78768-2"}
+			values2                = []string{"value2-78768-1", "value2-78768-2"}
+			cudnNS                 = []string{}
+		)
+
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This test requires at least 2 worker nodes which is not fulfilled. ")
+		}
+
+		exutil.By("1. Create CRD for CUDN")
+		ipStackType := checkIPStackType(oc)
+		var cidr, ipv4cidr, ipv6cidr string
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/60"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/60"
+			}
+		}
+
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", crdName)
+		_, err := createCUDNCRD(oc, key, crdName, ipv4cidr, ipv6cidr, cidr, "layer2", values)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2. Create 2 namespaces and add related values.")
+		cudnNS = append(cudnNS, oc.Namespace())
+		oc.SetupProject()
+		cudnNS = append(cudnNS, oc.Namespace())
+		for i := 0; i < 2; i++ {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", cudnNS[i], fmt.Sprintf("%s-", key)).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", cudnNS[i], fmt.Sprintf("%s=%s", key, values[i])).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("3. Create a pod deployed on node0 as backend pod for service.")
+		pod1ns1 := pingPodResourceNode{
+			name:      "hello-pod-1",
+			namespace: cudnNS[0],
+			nodename:  nodeList.Items[0].Name,
+			template:  pingPodTemplate,
+		}
+		defer removeResource(oc, true, true, "pod", pod1ns1.name, "-n", pod1ns1.namespace)
+		pod1ns1.createPingPodNode(oc)
+		waitPodReady(oc, pod1ns1.namespace, pod1ns1.name)
+
+		g.By("4. create a udn client pod in ns1")
+		pod2ns1 := pingPodResourceNode{
+			name:      "hello-pod-2",
+			namespace: cudnNS[0],
+			nodename:  nodeList.Items[1].Name,
+			template:  pingPodTemplate,
+		}
+		defer removeResource(oc, true, true, "pod", pod2ns1.name, "-n", pod2ns1.namespace)
+		pod2ns1.createPingPodNode(oc)
+		waitPodReady(oc, pod2ns1.namespace, pod2ns1.name)
+		// Update label for pod2 to a different one
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", cudnNS[0], "pod", pod2ns1.name, "name=hello-pod-2", "--overwrite=true").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("5. create a udn client pod in ns2. ")
+		pod1ns2 := pingPodResourceNode{
+			name:      "hello-pod-3",
+			namespace: cudnNS[1],
+			nodename:  nodeList.Items[0].Name,
+			template:  pingPodTemplate,
+		}
+		defer removeResource(oc, true, true, "pod", pod1ns2.name, "-n", pod1ns2.namespace)
+		pod1ns2.createPingPodNode(oc)
+		waitPodReady(oc, pod1ns2.namespace, pod1ns2.name)
+
+		exutil.By("6. create a ClusterIP service in ns1")
+		svc := genericServiceResource{
+			servicename:           "test-service",
+			namespace:             cudnNS[0],
+			protocol:              "TCP",
+			selector:              "hello-pod",
+			serviceType:           "ClusterIP",
+			ipFamilyPolicy:        ipFamilyPolicy,
+			internalTrafficPolicy: "Cluster",
+			externalTrafficPolicy: "",
+			template:              genericServiceTemplate,
+		}
+		svc.createServiceFromParams(oc)
+
+		exutil.By("7. Verify ClusterIP service can be accessed from both pod2 in ns1 and pod3 in ns2")
+		CurlPod2SvcPass(oc, cudnNS[0], cudnNS[0], pod2ns1.name, svc.servicename)
+		CurlPod2SvcPass(oc, cudnNS[1], cudnNS[0], pod1ns2.name, svc.servicename)
+
+		exutil.By("8. Create third namespace")
+		oc.SetupProject()
+		cudnNS = append(cudnNS, oc.Namespace())
+
+		exutil.By("9. Create service and pods which are on default network.")
+		createResourceFromFile(oc, cudnNS[2], testPodFile)
+		err = waitForPodWithLabelReady(oc, cudnNS[2], "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		testPodName := getPodName(oc, cudnNS[2], "name=test-pods")
+
+		exutil.By("10. Not be able to access cudn service from default network.")
+		CurlPod2SvcFail(oc, cudnNS[2], cudnNS[0], testPodName[0], svc.servicename)
+		exutil.By("11. Not be able to access default network service from cudn network.")
+		CurlPod2SvcFail(oc, cudnNS[1], cudnNS[2], pod2ns1.name, "test-service")
+
+		exutil.By("11. Create fourth namespace for cudn pod")
+		oc.SetupProject()
+		cudnNS = append(cudnNS, oc.Namespace())
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", cudnNS[3], fmt.Sprintf("%s=%s", key, values2[0])).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("12. Create CRD in fourth namespace")
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/60"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/60"
+			}
+		}
+		defer func() {
+			oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", cudnNS[3], fmt.Sprintf("%s-", key)).Execute()
+			removeResource(oc, true, true, "namespace", cudnNS[3])
+			removeResource(oc, true, true, "clusteruserdefinednetwork", crdName2)
+		}()
+		_, err = createCUDNCRD(oc, key, crdName2, ipv4cidr, ipv6cidr, cidr, "layer2", values2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("13. Create a udn pod in fourth namespace")
+		createResourceFromFile(oc, cudnNS[3], testPodFile)
+		err = waitForPodWithLabelReady(oc, cudnNS[3], "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		testPodNameNS3 := getPodName(oc, cudnNS[3], "name=test-pods")
+
+		exutil.By("14. Verify different cudn network, service was isolated.")
+		CurlPod2SvcFail(oc, cudnNS[3], cudnNS[0], testPodNameNS3[0], svc.servicename)
+
+		exutil.By("15.Update internalTrafficPolicy as Local for cudn service in ns1.")
+		patch := `[{"op": "replace", "path": "/spec/internalTrafficPolicy", "value": "Local"}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("service/test-service", "-n", cudnNS[0], "-p", patch, "--type=json").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("15.1. Verify ClusterIP service can be accessed from pod3 which is deployed same node as service back-end pod.")
+		CurlPod2SvcPass(oc, cudnNS[1], cudnNS[0], pod1ns2.name, svc.servicename)
+		exutil.By("15.2. Verify ClusterIP service can NOT be accessed from pod2 which is deployed different node as service back-end pod.")
+		CurlPod2SvcFail(oc, cudnNS[0], cudnNS[0], pod2ns1.name, svc.servicename)
+
+		exutil.By("16. Verify nodePort service can be accessed.")
+		exutil.By("16.1 Delete testservice from ns1")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "test-service", "-n", cudnNS[0]).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("16.2 Create testservice with NodePort in ns1")
+		svc.serviceType = "NodePort"
+		svc.createServiceFromParams(oc)
+
+		exutil.By("16.3 From a third node, be able to access node0:nodePort")
+		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", cudnNS[0], svc.servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		masterNode, err := exutil.GetFirstMasterNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodePort)
+		exutil.By("16.4 From a third node, be able to access node1:nodePort")
+		CurlNodePortPass(oc, masterNode, nodeList.Items[1].Name, nodePort)
+		exutil.By("16.5 From pod node, be able to access nodePort service")
+		CurlNodePortPass(oc, nodeList.Items[0].Name, nodeList.Items[0].Name, nodePort)
+		CurlNodePortPass(oc, nodeList.Items[0].Name, nodeList.Items[1].Name, nodePort)
+
+		exutil.By("17.Update externalTrafficPolicy as Local for udn service in ns1.")
+		patch = `[{"op": "replace", "path": "/spec/externalTrafficPolicy", "value": "Local"}]`
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("service/test-service", "-n", cudnNS[0], "-p", patch, "--type=json").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("17.1 From a third node, be able to access node0:nodePort")
+		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodePort)
+		exutil.By("17.2 From a third node, NOT be able to access node1:nodePort")
+		CurlNodePortFail(oc, masterNode, nodeList.Items[1].Name, nodePort)
+	})
+
 })
