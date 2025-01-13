@@ -4509,14 +4509,15 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		g.By("The compliance operator supports remediation templating by setting custom variables in the tailored profile... !!!\n")
 	})
 
-	// author: pdhamdhe@redhat.com
-	g.It("NonHyperShiftHOST-Author:pdhamdhe-Longduration-CPaasrunOnly-NonPreRelease-High-46100-High-54323-Verify autoremediations works for CIS profiles [Disruptive][Slow]", func() {
+	// author: xiyuan@redhat.com
+	g.It("Author:xiyuan-NonHyperShiftHOST-Longduration-CPaasrunOnly-NonPreRelease-High-46100-High-46302-High-54323-Verify autoremediations works for CIS profiles [Disruptive][Slow]", func() {
 		//skip cluster when apiserver encryption type is eqauls to aescbc as enable/disable encryption is destructive and time consuming
 		g.By("Check if cluster is Etcd Encryption On")
 		skipEtcdEncryptionOff(oc)
 
 		var (
-			ss = scanSettingDescription{
+			kubeletcofnigTemplate = filepath.Join(buildPruningBaseDir, "custom-kubeletconfig.yaml")
+			ss                    = scanSettingDescription{
 				autoapplyremediations:  true,
 				autoupdateremediations: true,
 				name:                   "auto-rem-ss",
@@ -4531,7 +4532,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 				suspend:                false,
 				template:               scansettingSingleTemplate,
 			}
-			ssbCis = "cis-test" + getRandomString()
+			kubeletconfigName = "custom-" + ss.roles1 + "-" + getRandomString()
+			ssbCis            = "cis-test" + getRandomString()
 		)
 
 		// checking all nodes are in Ready state before the test case starts
@@ -4557,7 +4559,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, ss.roles1})
 			checkMachineConfigPoolStatus(oc, "worker")
 			checkNodeStatus(oc)
-			cleanupObjects(oc, objectTableRef{"mc", subD.namespace, "-l compliance.openshift.io/suite=" + ssbCis})
+			cleanupObjects(oc, objectTableRef{"mc", subD.namespace, "-l compliance.openshift.io/suite=" + ssbCis},
+				objectTableRef{"kubeletconfig", subD.namespace, kubeletconfigName})
 		}()
 		defer func() {
 			g.By("Remove lables for the worker nodes !!!\n")
@@ -4579,6 +4582,17 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", subD.namespace, "-f", machineConfigPoolYAML).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		checkMachineConfigPoolStatus(oc, ss.roles1)
+
+		g.By("Create kubeletconfig for the wrscan mcp.. !!!\n")
+		err = applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", kubeletcofnigTemplate, "-p", "NAME="+kubeletconfigName, "ROLE="+ss.roles1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkMachineConfigPoolStatus(oc, ss.roles1)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeletconfig", kubeletconfigName, `-o=jsonpath={.status.conditions[?(@.type=="Success")].status}`, "-n", subD.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(output), `True`))
+		checkMachineConfigPoolStatus(oc, ss.roles1)
+		newCheck("expect", asAdmin, withoutNamespace, notPresent, "", ok, []string{"kubeletconfig", kubeletconfigName, "-n", subD.namespace,
+			"-o=jsonpath={.spec.kubeletConfig.tlsCipherSuites}"}).check(oc)
 
 		g.By("Create scansetting... !!!\n")
 		ss.namespace = subD.namespace
@@ -4603,7 +4617,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		g.By("Check rules and remediation status !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"compliancecheckresult",
 			"ocp4-cis-api-server-encryption-provider-cipher", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
-
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeletconfig", kubeletconfigName, "-o=jsonpath={.spec.kubeletConfig.tlsCipherSuites}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(output), `TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384`))
 		g.By("ClusterOperator should be healthy before running rescan")
 		clusterOperatorHealthcheck(oc, 1500)
 
@@ -4623,6 +4639,9 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		clusterOperatorHealthcheck(oc, 1500)
 
 		g.By("Check all rules with autoremations PASS !!!\n")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("kubeletconfig", kubeletconfigName, `-o=jsonpath={.status.conditions[?(@.type=="Success")].status}`, "-n", subD.namespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(string(output), `True`))
 		result, err := oc.AsAdmin().Run("get").Args("ccr", "-n", subD.namespace, "-l", "compliance.openshift.io/automated-remediation=,compliance.openshift.io/check-status=FAIL").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(result).Should(o.MatchRegexp("No resources found.*"), fmt.Sprintf("%s is NOT expected result for the final result", result))
