@@ -4977,15 +4977,15 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	g.It("Author:xiuwang-NonHyperShiftHOST-Critical-76803-Discovery vnet by tag when set up azure private account [Disruptive]", func() {
 		// This feature test on 4.17+ ipi-on-azure
 		exutil.SkipIfPlatformTypeNot(oc, "Azure")
-		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure.config.openshift.io", "-o=jsonpath={..status.platformStatus.azure}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(output, "AzureStackCloud") {
-			g.Skip("Skip test for AzureStackCloud.")
+		azureCloudName, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+		o.Expect(azureErr).NotTo(o.HaveOccurred())
+		if azureCloudName == "AzureStackCloud" || azureCloudName == "AzureUSGovernmentCloud" {
+			g.Skip("Skip for ASH and azure Gov due to we didn't create container registry on them!")
 		}
 		if !isIPIAzure(oc) {
 			g.Skip("Skip on upi install.")
 		}
-		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.status.storage.azure.networkAccess.type}").Output()
+		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("config.image/cluster", "-o=jsonpath={.status.storage.azure.networkAccess.type}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(output, "Internal") {
 			g.Skip("The cluster is already using Internal networkAccess")
@@ -5232,6 +5232,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	g.It("Author:xiuwang-Critical-76802-Configure image registry to use a custom azure storage account located in a different resource group [Disruptive]", func(ctx context.Context) {
 		exutil.SkipIfPlatformTypeNot(oc, "Azure")
+		azureCloudName, azureErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+		o.Expect(azureErr).NotTo(o.HaveOccurred())
+		if azureCloudName == "AzureStackCloud" || azureCloudName == "AzureUSGovernmentCloud" {
+			g.Skip("Skip for ASH and azure Gov due to we didn't create container registry on them!")
+		}
 		if exutil.IsWorkloadIdentityCluster(oc) {
 			g.Skip("Skip test for Azure Workload Identity")
 		}
