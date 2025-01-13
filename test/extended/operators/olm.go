@@ -1100,17 +1100,19 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.By("1) Check OLM related resources' logs")
 		deps := []string{"catalog-operator", "olm-operator", "package-server-manager", "packageserver"}
 		// since https://issues.redhat.com/browse/OCPBUGS-13369 closed as Wont'do. I remove the certification checking
-		// re1, _ := regexp.Compile("x509.*")
+		// since https://issues.redhat.com/browse/OCPBUGS-43581 fixed, I add the certification checking back, but for OCP4.18+
+		re1, _ := regexp.Compile("x509.*")
 		// since https://issues.redhat.com/browse/OCPBUGS-11370, add "bad certificate" checking for prometheus pods
 		re2, _ := regexp.Compile("bad certificate")
-		prometheusLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/prometheus-operator-admission-webhook", "-n", "openshift-monitoring").Output()
-		if err != nil {
-			e2e.Failf("!!! Fail to get prometheus logs:%s", err)
-		}
-		prometheusTLS := re2.FindString(prometheusLogs)
-		if re2.FindString(prometheusLogs) != "" {
-			e2e.Failf("!!! prometheus occurs TLS error: %s", prometheusTLS)
-		}
+		// remove the promtheus checking since many failure not caused by OLM
+		// prometheusLogs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment/prometheus-operator-admission-webhook", "-n", "openshift-monitoring").Output()
+		// if err != nil {
+		// 	e2e.Failf("!!! Fail to get prometheus logs:%s", err)
+		// }
+		// prometheusTLS := re2.FindString(prometheusLogs)
+		// if re2.FindString(prometheusLogs) != "" {
+		// 	e2e.Failf("!!! prometheus occurs TLS error: %s", prometheusTLS)
+		// }
 
 		re3, _ := regexp.Compile("fatal error.*")
 		for _, dep := range deps {
@@ -1118,15 +1120,15 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			if err != nil {
 				e2e.Failf("!!! Fail to get %s logs.", dep)
 			}
-			// str1 := re1.FindString(logs)
-			// str2 := re2.FindString(logs)
+			str1 := re1.FindString(logs)
+			str2 := re2.FindString(logs)
 			str3 := re3.FindString(logs)
-			// if str1 != "" {
-			// 	e2e.Failf("!!! %s occurs x509 error: %s", dep, str1)
-			// }
-			// if str2 != "" {
-			// 	e2e.Failf("!!! %s occurs TLS error: %s", dep, str2)
-			// }
+			if str1 != "" {
+				e2e.Failf("!!! %s occurs x509 error: %s", dep, str1)
+			}
+			if str2 != "" {
+				e2e.Failf("!!! %s occurs TLS error: %s", dep, str2)
+			}
 			if str3 != "" {
 				e2e.Failf("!!! %s occurs fatal error: %s", dep, str3)
 			}
