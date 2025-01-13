@@ -556,7 +556,7 @@ func removeClonedMachineSet(ms *MachineSet, mcp *MachineConfigPool, expectedNumW
 			"Error scaling MachineSet %s to 0", ms.GetName())
 
 		logger.Infof("Waiting %s machineset for being ready", ms.GetName())
-		o.Eventually(ms.GetIsReady, "1s", "2m").Should(o.BeTrue(), "MachineSet %s is not ready", ms.GetName())
+		o.Eventually(ms.GetIsReady, "2m", "15s").Should(o.BeTrue(), "MachineSet %s is not ready", ms.GetName())
 
 		logger.Infof("Removing %s machineset", ms.GetName())
 		o.Expect(ms.Delete()).To(o.Succeed(),
