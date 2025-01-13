@@ -1619,3 +1619,25 @@ func getResourceGroupOnAzure(oc *exutil.CLI) string {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return resourceGroup
 }
+
+func IsFeaturegateEnabled(oc *exutil.CLI, featuregate string) (bool, error) {
+	enabledFeatureGates, err := getEnabledFeatureGates(oc)
+	if err != nil {
+		return false, err
+	}
+	for _, f := range enabledFeatureGates {
+		if f == featuregate {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func getEnabledFeatureGates(oc *exutil.CLI) ([]string, error) {
+	enabledFeatureGates, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.status.featureGates[0].enabled[*].name}").Output()
+	if err != nil {
+		return nil, err
+	}
+
+	return strings.Split(enabledFeatureGates, " "), nil
+}

@@ -5289,4 +5289,36 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		checkRegistryFunctionFine(oc, "test-76802", oc.Namespace())
 
 	})
+
+	g.It("Author:wewang-Critical-76095-Changes in imageregistry operator to set importmode to PreserveOriginal in multi-arch cluster", func() {
+		if !architecture.IsMultiArchCluster(oc) {
+			g.Skip("Skip for non multi-Arch cluster")
+		}
+
+		g.By("Check if ImageStreamImportMode is enabled")
+		var featuregate = "ImageStreamImportMode"
+		enabled, _ := IsFeaturegateEnabled(oc, featuregate)
+		if !enabled {
+			g.Skip("featuregate ImageStreamImportMode is not enabled")
+		}
+
+		g.By("Check cvo architecture is Multi")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion/version", "-o=jsonpath={.status.desired.architecture}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.Equal("Multi"))
+
+		g.By("Check imageStreamImportMode in image.config is PreserveOriginal")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config/cluster", "-o=jsonpath={.status.imageStreamImportMode}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.Equal("PreserveOriginal"))
+
+		g.By("Check image stream is include manifests")
+		err = oc.AsAdmin().WithoutNamespace().Run("import-image").Args("hello-openshift:latest", "--from=quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "--scheduled", "--confirm", "--reference-policy=local", "-n", oc.Namespace()).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForAnImageStreamTag(oc, oc.Namespace(), "hello-openshift", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("imagestreamtag", "hello-openshift:latest", "-n", oc.Namespace()).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Manifests:"))
+	})
 })
