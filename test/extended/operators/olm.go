@@ -912,10 +912,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.By("1, Create a CatalogSource that in a random project")
 		oc.SetupProject()
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-without-interval.yaml")
-		ocpVersionByte, err := exec.Command("bash", "-c", "oc version -o json | jq -r '.openshiftVersion' | cut -d '.' -f1,2").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		ocpVersion := strings.Replace(string(ocpVersionByte), "\n", "", -1)
-		indexImage := fmt.Sprintf("quay.io/openshift-qe-optional-operators/aosqe-index:v%s", ocpVersion)
+		indexImage := "quay.io/openshifttest/etcd-index:latest"
 		cs := catalogSourceDescription{
 			name:        "cs-53758",
 			namespace:   oc.Namespace(),
@@ -929,7 +926,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		cs.createWithCheck(oc, itName, dr)
 
 		exutil.By("2, delete this CatalogSource's SA")
-		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("serviceaccount", cs.name, "-n", cs.namespace).Output()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("serviceaccount", cs.name, "-n", cs.namespace).Output()
 		if err != nil {
 			e2e.Failf("fail to delete the catalogsource SA:%s", cs.name)
 		}
