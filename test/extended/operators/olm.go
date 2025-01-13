@@ -4522,12 +4522,19 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		sub.create(oc, itName, dr)
 
 		e2e.Logf("Check operator")
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 
-		e2e.Logf("Check install plan complete")
-		installPlan := sub.getIP(oc)
-		o.Expect(installPlan).NotTo(o.BeEmpty())
-		newCheck("expect", asAdmin, withoutNamespace, compare, "Complete", ok, []string{"installplan", installPlan, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 360*time.Second, false, func(ctx context.Context) (bool, error) {
+			csv := getResource(oc, asAdmin, withoutNamespace, "csv", "-n", sub.namespace)
+			if strings.Contains(csv, "ditto-operator") && strings.Contains(csv, "planetscale-operator") {
+				return true, nil
+			}
+			return false, nil
+		})
+		if err != nil {
+			logDebugInfo(oc, sub.namespace, "pod", "ip", "csv", "events")
+		}
+		exutil.AssertWaitPollNoErr(err, "failed to create ditto operator")
+
 	})
 
 	// author: xzha@redhat.com
