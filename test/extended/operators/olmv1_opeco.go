@@ -402,7 +402,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	})
 
 	// author: jfan@redhat.com
-	g.It("Author:jfan-VMonly-ConnectedOnly-NonHyperShiftHOST-High-69202-Catalogd clustercatalog offer the operator content through http server off cluster", func() {
+	g.It("Author:jfan-ConnectedOnly-NonHyperShiftHOST-High-69202-Catalogd clustercatalog offer the operator content through http server off cluster", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
@@ -417,14 +417,9 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		defer clustercatalog.Delete(oc)
 		clustercatalog.Create(oc)
 
-		exutil.By("port-forward the catalogd-service")
-		cmd1, _, _, err := oc.AsAdmin().WithoutNamespace().Run("port-forward").Args("svc/catalogd-service", "6920:443", "-n", "openshift-catalogd").Background()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer cmd1.Process.Kill()
-
 		exutil.By("get the index content through http service off cluster")
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 100*time.Second, false, func(ctx context.Context) (bool, error) {
-			checkOutput, err := exec.Command("bash", "-c", "curl -k https://127.0.0.1:6920/catalogs/clustercatalog-69202/api/v1/all").Output()
+			checkOutput, err := exec.Command("bash", "-c", "curl -k "+clustercatalog.ContentURL).Output()
 			if err != nil {
 				e2e.Logf("failed to execute the curl: %s. Trying again", err)
 				return false, nil
@@ -435,7 +430,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 			}
 			return false, nil
 		})
-		exutil.AssertWaitPollNoErr(errWait, "Cannot get the port-forward result")
+		exutil.AssertWaitPollNoErr(errWait, "Cannot get the result")
 	})
 
 	// author: jitli@redhat.com
@@ -1318,27 +1313,27 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		clustercatalog1.Create(oc)
 
 		exutil.By("Get the gzip response")
-		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("route", "passthrough", "passthrough75441", "--service=catalogd-service", "-n", "openshift-catalogd").Execute()
-		defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("route", "passthrough75441", "-n", "openshift-catalogd").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		url, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "passthrough75441", "-o", "jsonpath={..spec.host}", "-n", "openshift-catalogd").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		url1 := clustercatalog.ContentURL
 
 		exutil.By("Check the url response of clustercatalog-75441")
-		getCmd := fmt.Sprintf("curl -ki https://%s/catalogs/clustercatalog-75441/api/v1/all -H \"Accept-Encoding: gzip\" --output -", url)
+		getCmd := fmt.Sprintf("curl -ki %s -H \"Accept-Encoding: gzip\" --output -", url1)
 		stringMessage, err := exec.Command("bash", "-c", getCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if !strings.Contains(string(stringMessage), "Content-Encoding: gzip") {
+		if !strings.Contains(strings.ToLower(string(stringMessage)), "content-encoding: gzip") {
+			e2e.Logf(string(stringMessage))
 			e2e.Failf("string Content-Encoding: gzip not in the output")
 		}
-		if !strings.Contains(string(stringMessage), "Content-Type: application/jsonl") {
+		if !strings.Contains(strings.ToLower(string(stringMessage)), "content-type: application/jsonl") {
+			e2e.Logf(string(stringMessage))
 			e2e.Failf("string Content-Type: application/jsonl not in the output")
 		}
 		exutil.By("Check the url response of clustercatalog-75441v2")
-		getCmd2 := fmt.Sprintf("curl -ki https://%s/catalogs/clustercatalog-75441v2/api/v1/all -H \"Accept-Encoding: gzip\"", url)
+		url2 := clustercatalog1.ContentURL
+		getCmd2 := fmt.Sprintf("curl -ki %s -H \"Accept-Encoding: gzip\"", url2)
 		stringMessage2, err := exec.Command("bash", "-c", getCmd2).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(stringMessage2).NotTo(o.ContainSubstring("Content-Encoding: gzip"))
-		o.Expect(stringMessage2).To(o.ContainSubstring("Content-Type: application/jsonl"))
+		o.Expect(strings.ToLower(string(stringMessage2))).NotTo(o.ContainSubstring("content-encoding: gzip"))
+		o.Expect(strings.ToLower(string(stringMessage2))).To(o.ContainSubstring("content-type: application/jsonl"))
+
 	})
 })
