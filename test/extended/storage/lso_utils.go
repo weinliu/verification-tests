@@ -338,11 +338,6 @@ func (lv *localVolume) deleteAsAdmin(oc *exutil.CLI) {
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv/"+pv, "--ignore-not-found").Execute()
 	}
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("sc/"+lv.scname, "--ignore-not-found").Execute()
-	command := "rm -rf /mnt/local-storage/" + lv.scname
-	workers := getWorkersList(oc)
-	for _, worker := range workers {
-		execCommandInSpecificNode(oc, worker, command)
-	}
 }
 
 // Waiting for the localVolume CR become "Available"
@@ -493,11 +488,6 @@ func (lvs *localVolumeSet) deleteAsAdmin(oc *exutil.CLI) {
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pv/"+pv, "--ignore-not-found").Execute()
 	}
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("sc/"+lvs.scname, "--ignore-not-found").Execute()
-	command := "rm -rf /mnt/local-storage/" + lvs.scname
-	workers := getWorkersList(oc)
-	for _, worker := range workers {
-		execCommandInSpecificNode(oc, worker, command)
-	}
 }
 
 // Get the localVolumeSet CR totalProvisionedDeviceCount
