@@ -1,0 +1,26 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: frrconfiguration-receive-all-template
+objects:
+- kind: FRRConfiguration
+  apiVersion: frrk8s.metallb.io/v1beta1
+  metadata:
+    name: "${NAME}"
+    namespace: "${NAMESPACE}"
+  spec:
+    bgp:
+      routers:
+      - asn: ${{ASN}}
+        neighbors:
+        - address: "${FRR_IP}"
+          asn: ${{ASN}}
+          toReceive:
+            allowed:
+              mode: all
+parameters:
+- name: NAME 
+- name: NAMESPACE
+- name: ASN
+- name: FRR_IP
+
