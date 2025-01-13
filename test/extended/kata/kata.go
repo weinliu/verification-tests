@@ -745,7 +745,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 	})
 
 	g.It("Author:tbuskey-High-43523-Monitor deletion[Disruptive][Serial][Slow]", func() {
-		g.Skip("kataconfig deletion steps are skipped")
 		g.By("Delete kataconfig and verify it")
 		msg, err := deleteKataConfig(oc, kataconfig.name)
 		e2e.Logf("kataconfig %v was deleted\n--------- %v %v", kataconfig.name, msg, err)
