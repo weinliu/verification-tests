@@ -32,6 +32,7 @@ var _ = g.Describe("[sig-networking] SDN network-tools ovnkube-trace", func() {
 		expPod2IPResult  = []string{"ovn-trace from pod to IP indicates success",
 			"ovs-appctl ofproto/trace pod to IP indicates success",
 			"ovn-detrace pod to external IP indicates success"}
+		image = "openshift/network-tools:latest"
 	)
 
 	g.BeforeEach(func() {
@@ -57,7 +58,6 @@ var _ = g.Describe("[sig-networking] SDN network-tools ovnkube-trace", func() {
 		workerNode2 := nodeList.Items[1].Name
 		tmpPath := "/tmp/ocp-67625-67648"
 		defer os.RemoveAll(tmpPath)
-		cpOVNKubeTraceToLocal(oc, tmpPath)
 
 		exutil.By("1. Create hello-pod1, pod located on the first node")
 		ns := oc.Namespace()
@@ -115,16 +115,16 @@ var _ = g.Describe("[sig-networking] SDN network-tools ovnkube-trace", func() {
 		if netutils.IsIPv6String(podIP1) {
 			addrFamily = "ip6"
 		}
-		cmd := tmpPath + "/ovnkube-trace -src-namespace " + ns + " -src " + pod1.name + " -dst-namespace " + ns + " -dst " + pod2.name + " -tcp -addr-family " + addrFamily
-		traceOutput, cmdErr := exec.Command("bash", "-c", cmd).Output()
+		cmd := "ovnkube-trace -src-namespace " + ns + " -src " + pod1.name + " -dst-namespace " + ns + " -dst " + pod2.name + " -tcp -addr-family " + addrFamily
+		traceOutput, cmdErr := collectMustGather(oc, tmpPath, image, []string{cmd})
 		o.Expect(cmdErr).NotTo(o.HaveOccurred())
 		for _, expResult := range expPod2PodResult {
 			o.Expect(strings.Contains(string(traceOutput), expResult)).Should(o.BeTrue())
 		}
 
 		exutil.By("5. Simulate traffic between pod and pod when they land on different nodes")
-		cmd = tmpPath + "/ovnkube-trace -src-namespace " + ns + " -src " + pod1.name + " -dst-namespace " + ns + " -dst " + pod3.name + " -tcp -addr-family " + addrFamily
-		traceOutput, cmdErr = exec.Command("bash", "-c", cmd).Output()
+		cmd = "ovnkube-trace -src-namespace " + ns + " -src " + pod1.name + " -dst-namespace " + ns + " -dst " + pod3.name + " -tcp -addr-family " + addrFamily
+		traceOutput, cmdErr = collectMustGather(oc, tmpPath, image, []string{cmd})
 		o.Expect(cmdErr).NotTo(o.HaveOccurred())
 		for _, expResult := range expPod2PodResult {
 			o.Expect(strings.Contains(string(traceOutput), expResult)).Should(o.BeTrue())
@@ -134,16 +134,16 @@ var _ = g.Describe("[sig-networking] SDN network-tools ovnkube-trace", func() {
 		}
 
 		exutil.By("6. Simulate traffic between pod and hostnetwork pod when they land on the same node")
-		cmd = tmpPath + "/ovnkube-trace -src-namespace " + ns + " -src " + pod1.name + " -dst-namespace " + ns + " -dst " + hostnetworkPod2.name + " -udp -addr-family " + addrFamily
-		traceOutput, cmdErr = exec.Command("bash", "-c", cmd).Output()
+		cmd = "ovnkube-trace -src-namespace " + ns + " -src " + pod1.name + " -dst-namespace " + ns + " -dst " + hostnetworkPod2.name + " -udp -addr-family " + addrFamily
+		traceOutput, cmdErr = collectMustGather(oc, tmpPath, image, []string{cmd})
 		o.Expect(cmdErr).NotTo(o.HaveOccurred())
 		for _, expResult := range expPod2PodResult {
 			o.Expect(strings.Contains(string(traceOutput), expResult)).Should(o.BeTrue())
 		}
 
 		exutil.By("7. Simulate traffic between pod and hostnetwork pod when they land on different nodes")
-		cmd = tmpPath + "/ovnkube-trace -src-namespace " + ns + " -src " + pod1.name + " -dst-namespace " + ns + " -dst " + hostnetworkPod3.name + " -udp -addr-family " + addrFamily
-		traceOutput, cmdErr = exec.Command("bash", "-c", cmd).Output()
+		cmd = "ovnkube-trace -src-namespace " + ns + " -src " + pod1.name + " -dst-namespace " + ns + " -dst " + hostnetworkPod3.name + " -udp -addr-family " + addrFamily
+		traceOutput, cmdErr = collectMustGather(oc, tmpPath, image, []string{cmd})
 		o.Expect(cmdErr).NotTo(o.HaveOccurred())
 		for _, expResult := range expPod2PodResult {
 			o.Expect(strings.Contains(string(traceOutput), expResult)).Should(o.BeTrue())
@@ -163,7 +163,6 @@ var _ = g.Describe("[sig-networking] SDN network-tools ovnkube-trace", func() {
 		}
 		tmpPath := "/tmp/ocp-67649"
 		defer os.RemoveAll(tmpPath)
-		cpOVNKubeTraceToLocal(oc, tmpPath)
 
 		exutil.By("1. Create hello-pod")
 		ns := oc.Namespace()
@@ -181,8 +180,8 @@ var _ = g.Describe("[sig-networking] SDN network-tools ovnkube-trace", func() {
 		if netutils.IsIPv6String(podIP1) {
 			addrFamily = "ip6"
 		}
-		cmd := tmpPath + "/ovnkube-trace -src-namespace " + ns + " -src " + pod.name + " -dst-namespace openshift-dns -service dns-default -tcp -addr-family " + addrFamily
-		traceOutput, cmdErr := exec.Command("bash", "-c", cmd).Output()
+		cmd := "ovnkube-trace -src-namespace " + ns + " -src " + pod.name + " -dst-namespace openshift-dns -service dns-default -tcp -addr-family " + addrFamily
+		traceOutput, cmdErr := collectMustGather(oc, tmpPath, image, []string{cmd})
 		o.Expect(cmdErr).NotTo(o.HaveOccurred())
 		for _, expResult := range expPod2PodResult {
 			o.Expect(strings.Contains(string(traceOutput), expResult)).Should(o.BeTrue())
@@ -235,7 +234,6 @@ var _ = g.Describe("[sig-networking] SDN network-tools ovnkube-trace", func() {
 
 		tmpPath := "/tmp/ocp-55180"
 		defer os.RemoveAll(tmpPath)
-		cpOVNKubeTraceToLocal(oc, tmpPath)
 
 		var nsList, podList []string
 		for _, testItem := range testList {
@@ -287,9 +285,8 @@ var _ = g.Describe("[sig-networking] SDN network-tools ovnkube-trace", func() {
 			podList = append(podList, pod.name)
 
 			exutil.By("Simulate traffic between pod and external IP, pod associate " + testItem)
-			cmd := tmpPath + "/ovnkube-trace -src-namespace " + ns + " -src " + pod.name + " -dst-ip " + externalIP + " -tcp -addr-family " + addrFamily
-			e2e.Logf("ovnkube-trace command: %s", cmd)
-			traceOutput, cmdErr := exec.Command("bash", "-c", cmd).Output()
+			cmd := "ovnkube-trace -src-namespace " + ns + " -src " + pod.name + " -dst-ip " + externalIP + " -tcp -addr-family " + addrFamily
+			traceOutput, cmdErr := collectMustGather(oc, tmpPath, image, []string{cmd})
 			o.Expect(cmdErr).NotTo(o.HaveOccurred())
 			for _, expResult := range expPod2IPResult {
 				o.Expect(strings.Contains(string(traceOutput), expResult)).Should(o.BeTrue())
@@ -311,9 +308,8 @@ var _ = g.Describe("[sig-networking] SDN network-tools ovnkube-trace", func() {
 
 		for i, testItem := range testList {
 			exutil.By("Simulate traffic between pod and external IP, pod associate " + testItem)
-			cmd := tmpPath + "/ovnkube-trace -src-namespace " + nsList[i] + " -src " + podList[i] + " -dst-ip " + externalIP + " -tcp -addr-family " + addrFamily
-			e2e.Logf("ovnkube-trace command: %s", cmd)
-			traceOutput, cmdErr := exec.Command("bash", "-c", cmd).Output()
+			cmd := "ovnkube-trace -src-namespace " + nsList[i] + " -src " + podList[i] + " -dst-ip " + externalIP + " -tcp -addr-family " + addrFamily
+			traceOutput, cmdErr := collectMustGather(oc, tmpPath, image, []string{cmd})
 			o.Expect(cmdErr).NotTo(o.HaveOccurred())
 			for _, expResult := range expPod2IPResult {
 				o.Expect(strings.Contains(string(traceOutput), expResult)).Should(o.BeTrue())
