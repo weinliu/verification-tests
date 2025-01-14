@@ -189,8 +189,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	})
 
 	g.AfterEach(func() {
-		ls.removeObjectStorage(oc)
 		ls.removeLokiStack(oc)
+		ls.removeObjectStorage(oc)
 		if !Lokiexisting {
 			LO.uninstallOperator(oc)
 		}
