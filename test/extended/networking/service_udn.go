@@ -1210,7 +1210,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		}
 
 		nodeIP1, nodeIP2 := getNodeIP(oc, nodeList.Items[0].Name)
-		exteranIP := nodeIP2
+		externalIP := nodeIP2
 
 		exutil.By("7.Patch update network.config with the host CIDR to enable externalIP \n")
 		defer patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{}}}}")
@@ -1222,49 +1222,44 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		}
 
 		exutil.By("8.Patch ExternalIP to service\n")
-		patchResourceAsAdmin(oc, "svc/test-service", fmt.Sprintf("{\"spec\":{\"externalIPs\": [\"%s\"]}}", exteranIP), ns1)
+		patchResourceAsAdmin(oc, "svc/test-service", fmt.Sprintf("{\"spec\":{\"externalIPs\": [\"%s\"]}}", externalIP), ns1)
 		svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns1, svc.servicename).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(svcOutput).Should(o.ContainSubstring(exteranIP))
+		o.Expect(svcOutput).Should(o.ContainSubstring(externalIP))
 
 		exutil.By("9.Validate the externalIP service can be accessed from another udn pod. \n")
-		_, err = e2eoutput.RunHostCmdWithRetries(ns1, pod2ns1.name, "curl --connect-timeout 5 -s "+net.JoinHostPort(exteranIP, "27017"), 5*time.Second, 15*time.Second)
+		_, err = e2eoutput.RunHostCmdWithRetries(ns1, pod2ns1.name, "curl --connect-timeout 5 -s "+net.JoinHostPort(externalIP, "27017"), 5*time.Second, 15*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		/*
-			Due to bug https://issues.redhat.com/browse/OCPBUGS-41339, will update below codes once bug fixed.
-			exutil.By("9.Validate the externalIP service can be accessed from same node as service backend pod \n")
-			_, err := exutil.DebugNode(oc, nodeList.Items[0].Name, "curl", net.JoinHostPort(externalIP, "27017"), "-s", "--connect-timeout", "5")
-			o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("9.Validate the externalIP service can be accessed from same node as service backend pod \n")
+		_, err = exutil.DebugNode(oc, nodeList.Items[0].Name, "curl", net.JoinHostPort(externalIP, "27017"), "-s", "--connect-timeout", "5")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
-			exutil.By("10.Validate the externalIP service can be accessed from different node than service backend pod \n")
-			_, err := exutil.DebugNode(oc, nodeList.Items[1].Name, "curl", net.JoinHostPort(externalIP, "27017"), "-s", "--connect-timeout", "5")
-			o.Expect(err).NotTo(o.HaveOccurred())
-		*/
+		exutil.By("10.Validate the externalIP service can be accessed from different node than service backend pod \n")
+		_, err = exutil.DebugNode(oc, nodeList.Items[1].Name, "curl", net.JoinHostPort(externalIP, "27017"), "-s", "--connect-timeout", "5")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		if ipStackType == "dualstack" {
 			exutil.By("10.Retest it with IPv6 address in dualstack cluster\n")
 			exutil.By("11.Patch IPv6 ExternalIP to service\n")
-			exteranIP := nodeIP1
-			patchResourceAsAdmin(oc, "svc/test-service", fmt.Sprintf("{\"spec\":{\"externalIPs\": [\"%s\"]}}", exteranIP), ns1)
+			externalIP := nodeIP1
+			patchResourceAsAdmin(oc, "svc/test-service", fmt.Sprintf("{\"spec\":{\"externalIPs\": [\"%s\"]}}", externalIP), ns1)
 			svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns1, svc.servicename).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(svcOutput).Should(o.ContainSubstring(svc.servicename))
 
 			exutil.By("12.Validate the externalIP service can be accessed from another udn pod. \n")
-			_, err = e2eoutput.RunHostCmdWithRetries(ns1, pod2ns1.name, "curl --connect-timeout 5 -s "+net.JoinHostPort(exteranIP, "27017"), 5*time.Second, 15*time.Second)
+			_, err = e2eoutput.RunHostCmdWithRetries(ns1, pod2ns1.name, "curl --connect-timeout 5 -s "+net.JoinHostPort(externalIP, "27017"), 5*time.Second, 15*time.Second)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			/*
-				Due to bug https://issues.redhat.com/browse/OCPBUGS-41339, will update below codes once bug fixed.
-				exutil.By("14.Validate the externalIP service can be accessed from same node as service backend pod \n")
-				_, err := exutil.DebugNode(oc, nodeList.Items[0].Name, "curl", net.JoinHostPort(externalIP, "27017"), "-s", "--connect-timeout", "5")
-				o.Expect(err).NotTo(o.HaveOccurred())
+			exutil.By("14.Validate the externalIP service can be accessed from same node as service backend pod \n")
+			_, err = exutil.DebugNode(oc, nodeList.Items[0].Name, "curl", net.JoinHostPort(externalIP, "27017"), "-s", "--connect-timeout", "5")
+			o.Expect(err).NotTo(o.HaveOccurred())
 
-				exutil.By("15.Validate the externalIP service can be accessed from different node than service backend pod \n")
-				_, err := exutil.DebugNode(oc, nodeList.Items[1].Name, "curl", net.JoinHostPort(externalIP, "27017"), "-s", "--connect-timeout", "5")
-				o.Expect(err).NotTo(o.HaveOccurred())
-			*/
+			exutil.By("15.Validate the externalIP service can be accessed from different node than service backend pod \n")
+			_, err = exutil.DebugNode(oc, nodeList.Items[1].Name, "curl", net.JoinHostPort(externalIP, "27017"), "-s", "--connect-timeout", "5")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
 		}
 	})
 
@@ -1454,7 +1449,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		}
 
 		nodeIP1, nodeIP2 := getNodeIP(oc, nodeList.Items[0].Name)
-		exteranIP := nodeIP2
+		externalIP := nodeIP2
 
 		exutil.By("7.Patch update network.config with the host CIDR to enable externalIP \n")
 		defer patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{}}}}")
@@ -1466,49 +1461,44 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		}
 
 		exutil.By("8.Patch ExternalIP to service\n")
-		patchResourceAsAdmin(oc, "svc/test-service", fmt.Sprintf("{\"spec\":{\"externalIPs\": [\"%s\"]}}", exteranIP), ns1)
+		patchResourceAsAdmin(oc, "svc/test-service", fmt.Sprintf("{\"spec\":{\"externalIPs\": [\"%s\"]}}", externalIP), ns1)
 		svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns1, svc.servicename).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(svcOutput).Should(o.ContainSubstring(exteranIP))
+		o.Expect(svcOutput).Should(o.ContainSubstring(externalIP))
 
 		exutil.By("9.Validate the externalIP service can be accessed from another udn pod. \n")
-		_, err = e2eoutput.RunHostCmdWithRetries(ns1, pod2ns1.name, "curl --connect-timeout 5 -s "+net.JoinHostPort(exteranIP, "27017"), 5*time.Second, 15*time.Second)
+		_, err = e2eoutput.RunHostCmdWithRetries(ns1, pod2ns1.name, "curl --connect-timeout 5 -s "+net.JoinHostPort(externalIP, "27017"), 5*time.Second, 15*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		/*
-			Due to bug https://issues.redhat.com/browse/OCPBUGS-41339, will update below codes once bug fixed.
-			exutil.By("9.Validate the externalIP service can be accessed from same node as service backend pod \n")
-			_, err := exutil.DebugNode(oc, nodeList.Items[0].Name, "curl", net.JoinHostPort(externalIP, "27017"), "-s", "--connect-timeout", "5")
-			o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("9.Validate the externalIP service can be accessed from same node as service backend pod \n")
+		_, err = exutil.DebugNode(oc, nodeList.Items[0].Name, "curl", net.JoinHostPort(externalIP, "27017"), "-s", "--connect-timeout", "5")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
-			exutil.By("10.Validate the externalIP service can be accessed from different node than service backend pod \n")
-			_, err := exutil.DebugNode(oc, nodeList.Items[1].Name, "curl", net.JoinHostPort(externalIP, "27017"), "-s", "--connect-timeout", "5")
-			o.Expect(err).NotTo(o.HaveOccurred())
-		*/
+		exutil.By("10.Validate the externalIP service can be accessed from different node than service backend pod \n")
+		_, err = exutil.DebugNode(oc, nodeList.Items[1].Name, "curl", net.JoinHostPort(externalIP, "27017"), "-s", "--connect-timeout", "5")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		if ipStackType == "dualstack" {
 			exutil.By("10.Retest it with IPv6 address in dualstack cluster\n")
 			exutil.By("11.Patch IPv6 ExternalIP to service\n")
-			exteranIP := nodeIP1
-			patchResourceAsAdmin(oc, "svc/test-service", fmt.Sprintf("{\"spec\":{\"externalIPs\": [\"%s\"]}}", exteranIP), ns1)
+			externalIP := nodeIP1
+			patchResourceAsAdmin(oc, "svc/test-service", fmt.Sprintf("{\"spec\":{\"externalIPs\": [\"%s\"]}}", externalIP), ns1)
 			svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns1, svc.servicename).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(svcOutput).Should(o.ContainSubstring(svc.servicename))
 
 			exutil.By("12.Validate the externalIP service can be accessed from another udn pod. \n")
-			_, err = e2eoutput.RunHostCmdWithRetries(ns1, pod2ns1.name, "curl --connect-timeout 5 -s "+net.JoinHostPort(exteranIP, "27017"), 5*time.Second, 15*time.Second)
+			_, err = e2eoutput.RunHostCmdWithRetries(ns1, pod2ns1.name, "curl --connect-timeout 5 -s "+net.JoinHostPort(externalIP, "27017"), 5*time.Second, 15*time.Second)
 			o.Expect(err).NotTo(o.HaveOccurred())
 
-			/*
-				Due to bug https://issues.redhat.com/browse/OCPBUGS-41339, will update below codes once bug fixed.
-				exutil.By("14.Validate the externalIP service can be accessed from same node as service backend pod \n")
-				_, err := exutil.DebugNode(oc, nodeList.Items[0].Name, "curl", net.JoinHostPort(externalIP, "27017"), "-s", "--connect-timeout", "5")
-				o.Expect(err).NotTo(o.HaveOccurred())
+			exutil.By("14.Validate the externalIP service can be accessed from same node as service backend pod \n")
+			_, err = exutil.DebugNode(oc, nodeList.Items[0].Name, "curl", net.JoinHostPort(externalIP, "27017"), "-s", "--connect-timeout", "5")
+			o.Expect(err).NotTo(o.HaveOccurred())
 
-				exutil.By("15.Validate the externalIP service can be accessed from different node than service backend pod \n")
-				_, err := exutil.DebugNode(oc, nodeList.Items[1].Name, "curl", net.JoinHostPort(externalIP, "27017"), "-s", "--connect-timeout", "5")
-				o.Expect(err).NotTo(o.HaveOccurred())
-			*/
+			exutil.By("15.Validate the externalIP service can be accessed from different node than service backend pod \n")
+			_, err = exutil.DebugNode(oc, nodeList.Items[1].Name, "curl", net.JoinHostPort(externalIP, "27017"), "-s", "--connect-timeout", "5")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
 		}
 	})
 
