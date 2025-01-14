@@ -598,6 +598,9 @@ func skipIfRouteUnreachable(oc *exutil.CLI) {
 // createFBC creates the dedicated file-based catalog for cert-manager operator to subscribe
 func createFBC(oc *exutil.CLI, name, namespace, image string) {
 	exutil.SkipNoOLMCore(oc)
+	if exutil.IsHypershiftHostedCluster(oc) {
+		g.Skip("skip since ImageDigestMirrorSet resource cannot be modified in the Hypershift guest (hosted cluster)")
+	}
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 	fbcTemplate := filepath.Join(buildPruningBaseDir, "konflux-fbc.yaml")
 	params := []string{"-f", fbcTemplate, "-p", "NAME=" + name, "NAMESPACE=" + namespace, "IMAGE_INDEX=" + image}
