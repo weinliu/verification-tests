@@ -14,8 +14,8 @@ objects:
     desiredState:
       dns-resolver:
         config:
-          search: 
-          server: 
+          search: []
+          server: []
 
 
 parameters:
