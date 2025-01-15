@@ -283,7 +283,8 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 
 		// rootDeviceTypes included to cover multiple cases
 		rootDeviceTypes := map[string]string{
-			"pd-ssd":      "53100",
+			//	"pd-ssd":      "53100", This is now covered in cluster-actuator-pkg-tests pd-balanced is not possible due to change need to a vendor file"
+			// We can leave rootDeviceTypes as map to accomodate any type like pd-balanced later
 			"pd-balanced": "74794",
 		}
 		for rootDeviceType, machineNameSuffix := range rootDeviceTypes {
