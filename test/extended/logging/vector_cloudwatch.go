@@ -362,11 +362,11 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			g.By("init Cloudwatch test spec")
 			clfNS := oc.Namespace()
 			cw := cloudwatchSpec{
-				collectorSAName: "clf-71448",
-				secretName:      "clf-71448",
+				collectorSAName: "clf-71488",
+				secretName:      "clf-71488",
 				secretNamespace: clfNS,
 				groupName:       "logging-71488-" + infraName + `.{.log_type||"none-typed-logs"}`,
-				logTypes:        []string{"application"},
+				logTypes:        []string{"infrastructure"},
 			}
 			defer cw.deleteResources(oc)
 			cw.init(oc)
@@ -407,7 +407,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 			clf.waitForCollectorPodsReady(oc)
 
 			exutil.By("Check logs in Cloudwatch, should find some logs from openshift* projects")
-			o.Expect(cw.logsFound()).To(o.BeTrue())
+			o.Expect(cw.checkInfraContainerLogs(false)).To(o.BeTrue())
 		})
 
 		// author qitang@redhat.com

@@ -1416,8 +1416,8 @@ func getDataFromKafkaConsumerPod(oc *exutil.CLI, kafkaNS, consumerPod string) ([
 			//exclude those kafka-consumer logs, for exampe:
 			//[2024-11-09 07:25:47,953] WARN [Consumer clientId=consumer-console-consumer-99163-1, groupId=console-consumer-99163] Error while fetching metadata with correlation id 165
 			//: {topic-logging-app=UNKNOWN_TOPIC_OR_PARTITION} (org.apache.kafka.clients.NetworkClient)
-			match, _ := regexp.MatchString(`^{"@timestamp":.*}`, line)
-			if match {
+			r, _ := regexp.Compile(`^{"@timestamp":.*}`)
+			if r.MatchString(line) {
 				var log LogEntity
 				err = json.Unmarshal([]byte(line), &log)
 				if err != nil {
@@ -1436,7 +1436,7 @@ func getDataFromKafkaConsumerPod(oc *exutil.CLI, kafkaNS, consumerPod string) ([
 		}
 	})
 	if err != nil {
-		return logs, fmt.Errorf("can not find consumer logs in 3 minutes.")
+		return logs, fmt.Errorf("can not find consumer logs in 3 minutes")
 	}
 	return logs, nil
 }
