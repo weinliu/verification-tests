@@ -1462,6 +1462,16 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 			g.Skip("Skipping as we at least need one Linux worker node")
 		}
 
+		// make sure the ingress operator is normal
+		jsonPath := `-o=jsonpath={.status.conditions[?(@.type=="Available")].status}{.status.conditions[?(@.type=="Progressing")].status}{.status.conditions[?(@.type=="Degraded")].status}`
+		output := getByJsonPath(oc, "default", "clusteroperator/ingress", jsonPath)
+		if !strings.Contains(output, "TrueFalseFalse") {
+			jsonPath = `-o=jsonpath={.status}`
+			output = getByJsonPath(oc, "openshift-ingress-operator", "ingresscontroller/default", jsonPath)
+			e2e.Logf("check the status of the default ingresscontroller:\n%v", output)
+			ensureClusterOperatorNormal(oc, "ingress", 1, 120)
+		}
+
 		// OCPBUGS-35027
 		extraParas := "    clientTLS:\n      clientCA:\n        name: client-ca-cert\n      clientCertificatePolicy: Required\n"
 		customTemp35027 := addExtraParametersToYamlFile(privateTemp, "spec:", extraParas)
@@ -1476,10 +1486,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		)
 
 		exutil.By("1. Create a configmap with empty configration")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-config", "configmap", "client-ca-cert").Output()
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-config", "configmap", "client-ca-cert").Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-config", "configmap", "custom-ca35027").Output()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-config", "configmap", "custom-ca35027").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("configmap/client-ca-cert created"))
+		o.Expect(output).To(o.ContainSubstring("configmap/custom-ca35027 created"))
 
 		exutil.By("2. Create a ingresscontroller for OCPBUGS-35027")
 		baseDomain := getBaseDomain(oc)
@@ -1489,16 +1499,18 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		err = waitForCustomIngressControllerAvailable(oc, ingctrl35027.name)
 		o.Expect(err).To(o.HaveOccurred())
 
-		exutil.By("3. Check the event of the custom router pod, which should have the secret router-certs-bug35027 not found info")
-		routerpod35027 := getPodListByLabel(oc, "openshift-ingress", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl35027.name)[0]
-		expInfo := `secret "router-certs-bug35027" not found`
-		waitForDescriptionContains(oc, "openshift-ingress", "pod/"+routerpod35027, expInfo)
+		exutil.By("3. Check the custom router pod should not be created for the custom ingresscontroller was abnormal")
+		wait.PollImmediate(5*time.Second, 30*time.Second, func() (bool, error) {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl35027.name, "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-ingress").Output()
+			o.Expect(err).To(o.HaveOccurred())
+			return false, nil
+		})
 
 		exutil.By("4. Delete the custom ingress controller, and then check the logs that clientca-configmap finalizer log should not appear")
 		ingctrl35027.delete(oc)
 		output, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress-operator", "-c", "ingress-operator", "deployments/ingress-operator", "--tail=20").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(output, `failed to add client-ca-configmap finalizer: IngressController.operator.openshift.io \"test-client-ca-configmap\" is invalid`)).NotTo(o.BeTrue())
+		o.Expect(strings.Contains(output, `failed to add custom-ca35027-configmap finalizer: IngressController.operator.openshift.io \"custom-ca35027-configmap\" is invalid`)).NotTo(o.BeTrue())
 
 		// OCPBUGS-35454
 		var (
