@@ -1079,19 +1079,18 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 
 		// author: tagao@redhat.com
 		g.It("Author:tagao-LEVEL0-Medium-46301-Allow OpenShift users to configure query log file for Prometheus", func() {
-			exutil.By("make sure all pods in openshift-monitoring/openshift-user-workload-monitoring are ready")
-			exutil.AssertAllPodsToBeReady(oc, "openshift-monitoring")
-			exutil.AssertAllPodsToBeReady(oc, "openshift-user-workload-monitoring")
-
 			exutil.By("confirm prometheus-k8s-0 pod is ready for check")
 			MONpod, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring").Output()
 			e2e.Logf("the MON pods condition: %s", MONpod)
 			assertPodToBeReady(oc, "prometheus-k8s-0", "openshift-monitoring")
 			ensurePodRemainsReady(oc, "prometheus-k8s-0", "openshift-monitoring", 30*time.Second, 5*time.Second)
+			cmd := "ls /tmp/promethues_query.log"
+			checkConfigInsidePod(oc, "openshift-monitoring", "prometheus", "prometheus-k8s-0", cmd, "promethues_query.log", true)
 
 			exutil.By("check query log file for prometheus in openshift-monitoring")
-			oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "http://localhost:9090/api/v1/query?query=prometheus_build_info").Execute()
-			cmd := "cat /tmp/promethues_query.log | grep prometheus_build_info"
+			queryErr := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", "-c", "prometheus", "prometheus-k8s-0", "--", "curl", "http://localhost:9090/api/v1/query?query=prometheus_build_info").Execute()
+			o.Expect(queryErr).NotTo(o.HaveOccurred())
+			cmd = "cat /tmp/promethues_query.log | grep prometheus_build_info"
 			checkConfigInsidePod(oc, "openshift-monitoring", "prometheus", "prometheus-k8s-0", cmd, "prometheus_build_info", true)
 
 			exutil.By("confirm prometheus-user-workload-0 pod is ready for check")
@@ -1099,9 +1098,12 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			e2e.Logf("the UWM pods condition: %s", UWMpod)
 			assertPodToBeReady(oc, "prometheus-user-workload-0", "openshift-user-workload-monitoring")
 			ensurePodRemainsReady(oc, "prometheus-user-workload-0", "openshift-user-workload-monitoring", 60*time.Second, 5*time.Second)
+			cmd = "ls /tmp/uwm_query.log"
+			checkConfigInsidePod(oc, "openshift-user-workload-monitoring", "prometheus", "prometheus-user-workload-0", cmd, "uwm_query.log", true)
 
 			exutil.By("check query log file for prometheus in openshift-user-workload-monitoring")
-			oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-user-workload-monitoring", "-c", "prometheus", "prometheus-user-workload-0", "--", "curl", "http://localhost:9090/api/v1/query?query=up").Execute()
+			queryErr = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-user-workload-monitoring", "-c", "prometheus", "prometheus-user-workload-0", "--", "curl", "http://localhost:9090/api/v1/query?query=up").Execute()
+			o.Expect(queryErr).NotTo(o.HaveOccurred())
 			cmd = "cat /tmp/uwm_query.log | grep up"
 			checkConfigInsidePod(oc, "openshift-user-workload-monitoring", "prometheus", "prometheus-user-workload-0", cmd, "up", true)
 		})
