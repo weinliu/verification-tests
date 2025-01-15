@@ -160,7 +160,7 @@ func deleteAzureStorageAccount(defaultAzureCred *azidentity.DefaultAzureCredenti
 
 	_, err = clientFactory.NewAccountsClient().Delete(context.Background(), resourceGroupName, storageAccountName, nil)
 	if err != nil {
-		e2e.Logf("Error while deleting storage account. " + err.Error())
+		e2e.Logf("Error while deleting storage account: %s", err.Error())
 	} else {
 		e2e.Logf("storage account deleted successfully..")
 	}
@@ -173,7 +173,7 @@ func deleteManagedIdentityOnAzure(defaultAzureCred *azidentity.DefaultAzureCrede
 
 	_, err = client.Delete(context.Background(), resourceGroupName, identityName, nil)
 	if err != nil {
-		e2e.Logf("Error deleting identity. " + err.Error())
+		e2e.Logf("Error deleting identity: %s", err.Error())
 	} else {
 		e2e.Logf("managed identity deleted successfully...")
 	}
@@ -257,13 +257,13 @@ func validatesIfLogsArePushedToAzureContainer(storageAccountURISuffix, storageAc
 			for _, blob := range page.Segment.BlobItems {
 				for _, tenantName := range tenants {
 					if strings.Contains(*blob.Name, tenantName) {
-						e2e.Logf("Logs " + *blob.Name + " found under the container: " + containerName)
+						e2e.Logf("Logs %s found under the container: %s", *blob.Name, containerName)
 						return true, nil
 					}
 				}
 			}
 		}
-		e2e.Logf("Waiting for data to be available under container: " + containerName)
+		e2e.Logf("Waiting for data to be available under container: %s", containerName)
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Timed out...No data is available under the container: "+containerName)

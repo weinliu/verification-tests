@@ -1569,12 +1569,12 @@ func validatesIfLogsArePushedToGCSBucket(bucketName string, tenants []string) {
 			}
 			for _, tenantName := range tenants {
 				if strings.Contains(objAttrs.Name, tenantName) {
-					e2e.Logf("Logs " + objAttrs.Name + " found under the bucket: " + bucketName)
+					e2e.Logf("Logs %s found under the bucket: %s", objAttrs.Name, bucketName)
 					return true, nil
 				}
 			}
 		}
-		e2e.Logf("Waiting for data to be available under bucket: " + bucketName)
+		e2e.Logf("Waiting for data to be available under bucket: %s", bucketName)
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Timed out...No data is available under the bucket: "+bucketName)

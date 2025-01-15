@@ -682,9 +682,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			allFound := true
 			for _, logIndex := range []string{appProj, "openshift-operator-lifecycle-manager"} {
 				if sp.checkLogs("index=" + logIndex) {
-					e2e.Logf("found logs in index " + logIndex)
+					e2e.Logf("found logs in index %s", logIndex)
 				} else {
-					e2e.Logf("can not find logs in index " + logIndex)
+					e2e.Logf("can not find logs in index %s", logIndex)
 					allFound = false
 				}
 			}
@@ -694,9 +694,9 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			allFound = true
 			for _, logType := range []string{"audit", "infrastructure"} {
 				if sp.checkLogs(`index="main" log_type="` + logType + `"`) {
-					e2e.Logf("found logs %s in index main " + logType)
+					e2e.Logf("found logs %s in index main", logType)
 				} else {
-					e2e.Logf("Can not find logs %s in index main " + logType)
+					e2e.Logf("Can not find logs %s in index main ", logType)
 					allFound = false
 				}
 			}

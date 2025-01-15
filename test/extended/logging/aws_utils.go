@@ -166,11 +166,11 @@ func deleteIAMroleonAWS(iamClient *iam.Client, roleName string) {
 		RoleName: aws.String(roleName),
 	})
 	if err != nil {
-		e2e.Logf("Error listing attached policies of IAM role " + roleName)
+		e2e.Logf("Error listing attached policies of IAM role %s", roleName)
 	}
 
 	if len(listAttachedPoliciesOutput.AttachedPolicies) == 0 {
-		e2e.Logf("No attached policies under IAM role: " + roleName)
+		e2e.Logf("No attached policies under IAM role: %s", roleName)
 	}
 
 	if len(listAttachedPoliciesOutput.AttachedPolicies) != 0 {
@@ -181,9 +181,9 @@ func deleteIAMroleonAWS(iamClient *iam.Client, roleName string) {
 				PolicyArn: policy.PolicyArn,
 			})
 			if err != nil {
-				e2e.Logf("Error detaching policy: " + *policy.PolicyName)
+				e2e.Logf("Error detaching policy: %s", *policy.PolicyName)
 			} else {
-				e2e.Logf("Detached policy: " + *policy.PolicyName)
+				e2e.Logf("Detached policy: %s", *policy.PolicyName)
 			}
 		}
 	}
@@ -193,9 +193,9 @@ func deleteIAMroleonAWS(iamClient *iam.Client, roleName string) {
 		RoleName: aws.String(roleName),
 	})
 	if err != nil {
-		e2e.Logf("Error deleting IAM role: " + roleName)
+		e2e.Logf("Error deleting IAM role: %s", roleName)
 	} else {
-		e2e.Logf("IAM role deleted successfully: " + roleName)
+		e2e.Logf("IAM role deleted successfully: %s", roleName)
 	}
 }
 
@@ -249,12 +249,12 @@ func validatesIfLogsArePushedToS3Bucket(s3Client *s3.Client, bucketName string, 
 		for _, object := range listObjectsOutput.Contents {
 			for _, tenantName := range tenants {
 				if strings.Contains(*object.Key, tenantName) {
-					e2e.Logf("Logs " + *object.Key + " found under the bucket: " + bucketName)
+					e2e.Logf("Logs %s found under the bucket: %s", *object.Key, bucketName)
 					return true, nil
 				}
 			}
 		}
-		e2e.Logf("Waiting for data to be available under bucket: " + bucketName)
+		e2e.Logf("Waiting for data to be available under bucket: %s", bucketName)
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Timed out...No data is available under the bucket: "+bucketName)

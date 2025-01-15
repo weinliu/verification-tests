@@ -2271,7 +2271,7 @@ func doHTTPRequest(header http.Header, address, path, query, method string, quie
 		return nil, err
 	}
 	if !quiet {
-		e2e.Logf(us)
+		e2e.Logf("the URL is: %s", us)
 	}
 
 	req, err := http.NewRequest(strings.ToUpper(method), us, requestBody)

@@ -207,7 +207,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				return false, nil
 			})
 			exutil.AssertWaitPollNoErr(err, "Failed searching for application logs in Loki")
-			e2e.Logf("App logs found with matching LabelKey: " + labelKeys + " and pod Label: " + podLabel)
+			e2e.Logf("App logs found with matching LabelKey: %s and pod Label: %s", labelKeys, podLabel)
 
 			g.By("Searching for Application Logs in Loki using LabelKey - Negative match")
 			labelKeys = "kubernetes_labels_negative"
@@ -222,7 +222,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 				return false, nil
 			})
 			exutil.AssertWaitPollNoErr(err, "Failed searching for application logs in Loki")
-			e2e.Logf("No App logs found with matching LabelKey: " + labelKeys + " and pod Label: " + podLabel)
+			e2e.Logf("No App logs found with matching LabelKey: %s and pod Label: %s", labelKeys, podLabel)
 
 		})
 
@@ -1139,6 +1139,72 @@ exclude_paths_glob_patterns = ["/var/log/pods/*/*/*.gz", "/var/log/pods/*/*/*.lo
 					o.Expect(log.Kubernetes.ContainerIOStream == ioStream).Should(o.BeTrue(), `iostream is wrong, expected: `+ioStream+`, got: `+log.Kubernetes.ContainerIOStream)
 					o.Expect(containSubstring(multilineLogs, log.Message)).Should(o.BeTrue(), fmt.Sprintf("Parse multiline error failed, iostream: %s, message: \n%s", ioStream, log.Message))
 				}
+			}
+		})
+
+		g.It("Author:qitang-CPaasrunOnly-High-78380-Collector should collect logs from all log sources.[Serial]", func() {
+			exutil.By("Deploying LokiStack")
+			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+			ls := lokiStack{
+				name:          "loki-78380",
+				namespace:     loggingNS,
+				tSize:         "1x.demo",
+				storageType:   s,
+				storageSecret: "storage-secret-78380",
+				storageClass:  sc,
+				bucketName:    "logging-loki-78380-" + getInfrastructureName(oc),
+				template:      lokiStackTemplate,
+			}
+			defer ls.removeObjectStorage(oc)
+			err := ls.prepareResourcesForLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer ls.removeLokiStack(oc)
+			err = ls.deployLokiStack(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			ls.waitForLokiStackToBeReady(oc)
+
+			exutil.By("create a CLF to forward to lokistack")
+			clf := clusterlogforwarder{
+				name:                      "clf-78380-" + getRandomString(),
+				namespace:                 loggingNS,
+				serviceAccountName:        "clf-78380",
+				templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
+				secretName:                "lokistack-secret-78380",
+				collectApplicationLogs:    true,
+				collectAuditLogs:          true,
+				collectInfrastructureLogs: true,
+				waitForPodReady:           true,
+			}
+			clf.createServiceAccount(oc)
+			defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
+			ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
+			defer clf.delete(oc)
+			clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
+
+			exutil.By("checking app, infra and audit logs in loki")
+			defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+			err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			bearerToken := getSAToken(oc, "default", oc.Namespace())
+			route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+			lc := newLokiClient(route).withToken(bearerToken).retry(5)
+			lc.waitForLogsAppearByKey("audit", "log_type", "audit")
+
+			exutil.By("Check audit logs, should find logs from each directory")
+			// for OVN audit logs, it's covered in OCP-71143 and OCP-53995
+			for _, q := range []string{
+				`{log_type="audit"} | json | log_source="auditd"`,
+				`{log_type="audit"} | json | log_source="kubeAPI"`,
+				`{log_type="audit"} | json | log_source="openshiftAPI" | requestURI=~"/apis/route.openshift.io.+"`,  //openshift-apiserver
+				`{log_type="audit"} | json | log_source="openshiftAPI" | requestURI=~"/apis/oauth.openshift.io/.+"`, //oauth-apiserver
+				`{log_type="audit"} | json | log_source="openshiftAPI" | requestURI=~"/oauth/authorize.+"`,          //oauth-server
+				`{log_type="audit"} | json | log_source="openshiftAPI" | requestURI=~"/login/.+"`,                   //oauth-server
+			} {
+				err = lc.waitForLogsAppearByQuery("audit", q)
+				exutil.AssertWaitPollNoErr(err, "can't find log with query: "+q)
 			}
 		})
 
@@ -3399,7 +3465,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grai
 		matchDataInResponse := []string{"name: MyAppLogVolumeAlert", "alert: MyAppLogVolumeIsHigh", "tenantId: application"}
 		for _, matchedData := range matchDataInResponse {
 			if !strings.Contains(string(appRules), matchedData) {
-				e2e.Failf("Response is missing " + matchedData)
+				e2e.Failf("Response is missing %s", matchedData)
 			}
 		}
 		e2e.Logf("Rules API response validated succesfully")
@@ -3612,7 +3678,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Efficie
 		o.Expect(err).NotTo(o.HaveOccurred())
 		bearerToken := getSAToken(oc, "default", cloNS)
 		for _, metric := range []string{"loki_rate_store_refresh_failures_total", "loki_rate_store_streams", "loki_rate_store_max_stream_shards", "loki_rate_store_max_stream_rate_bytes", "loki_rate_store_max_unique_stream_rate_bytes", "loki_stream_sharding_count"} {
-			e2e.Logf("Checking metric: " + metric)
+			e2e.Logf("Checking metric: %s", metric)
 			checkMetric(oc, bearerToken, metric, 3)
 		}
 
