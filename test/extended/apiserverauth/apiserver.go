@@ -2936,7 +2936,7 @@ spec:
 
 	// author: zxiao@redhat.com
 	// maintainer: rgangwar@redhat.com
-	g.It("Author:zxiao-ROSA-ARO-OSD_CCS-NonPreRelease-ConnectedOnly-Medium-09853-patch operation should use patched object to check admission control", func() {
+	g.It("Author:zxiao-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-09853-patch operation should use patched object to check admission control", func() {
 		exutil.By("This case is for bug 1297910")
 		exutil.By("1) Create new project required for this test execution")
 		oc.SetupProject()
@@ -6268,7 +6268,7 @@ metadata:
 	})
 
 	// author: rgangwar@redhat.com
-	g.It("Author:rgangwar-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-High-73949-[Apiserver] Update existing alert AuditLogError [Slow] [Disruptive]", func() {
+	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-High-73949-[Apiserver] Update existing alert AuditLogError [Slow] [Disruptive]", func() {
 		var (
 			alertBudget      = "AuditLogError"
 			alertTimeWarning = "1m"
