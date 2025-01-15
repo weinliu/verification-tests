@@ -59,8 +59,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// Currently listing the AWS platforms deployment operators
 		// To do: Include other platform operators when the hypershift operator is supported
 		depNames := map[string][]string{
-			"aws":   {"aws-ebs-csi-driver-controller", "aws-ebs-csi-driver-operator", "cluster-storage-operator", "csi-snapshot-controller", "csi-snapshot-controller-operator", "csi-snapshot-webhook"},
-			"azure": {"azure-disk-csi-driver-operator", "azure-disk-csi-driver-controller", "azure-file-csi-driver-operator", "azure-file-csi-driver-controller", "cluster-storage-operator", "csi-snapshot-controller", "csi-snapshot-controller-operator", "csi-snapshot-webhook"},
+			"aws":   {"aws-ebs-csi-driver-controller", "aws-ebs-csi-driver-operator", "cluster-storage-operator", "csi-snapshot-controller", "csi-snapshot-controller-operator"},
+			"azure": {"azure-disk-csi-driver-operator", "azure-disk-csi-driver-controller", "azure-file-csi-driver-operator", "azure-file-csi-driver-controller", "cluster-storage-operator", "csi-snapshot-controller", "csi-snapshot-controller-operator"},
 		}
 
 		exutil.By("# Check the deployment operator status in hosted control ns")
@@ -140,7 +140,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		}
 
 		// Append general operator csi-snapshot-controller to all platforms
-		operatorNames[cloudProvider] = append(operatorNames[cloudProvider], "csi-snapshot-controller", "csi-snapshot-webhook")
+		operatorNames[cloudProvider] = append(operatorNames[cloudProvider], "csi-snapshot-controller")
 
 		exutil.By("# Check hcp storage operator's pods should have specific priorityClass")
 		for _, operatorName := range operatorNames[cloudProvider] {
