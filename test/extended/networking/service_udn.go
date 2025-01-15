@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
@@ -968,18 +967,11 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		}
 
 		exutil.By("4. Validate pod/host to nodeport service with externalTrafficPolicy=Local traffic")
-		var wg sync.WaitGroup
 		for i := 0; i < 2; i++ {
-			wg.Add(1)
-			go func() {
-				defer g.GinkgoRecover()
-				defer wg.Done()
-				exutil.By(fmt.Sprintf("4.1.%d Validate pod to nodeport service with externalTrafficPolicy=Local traffic in %s", i, ns[i]))
-				CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[0].Name, nodeportsLocal[i])
-				CurlPod2NodePortFail(oc, ns[i], pods[i].name, nodeList.Items[1].Name, nodeportsLocal[i])
-			}()
+			exutil.By(fmt.Sprintf("4.1.%d Validate pod to nodeport service with externalTrafficPolicy=Local traffic in %s", i, ns[i]))
+			CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[0].Name, nodeportsLocal[i])
+			CurlPod2NodePortFail(oc, ns[i], pods[i].name, nodeList.Items[1].Name, nodeportsLocal[i])
 		}
-		wg.Wait()
 		exutil.By("4.2 Validate host to nodeport service with externalTrafficPolicy=Local traffic on default network")
 		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodeportsLocal[0])
 		CurlNodePortFail(oc, masterNode, nodeList.Items[1].Name, nodeportsLocal[0])
@@ -1001,16 +993,10 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 
 		exutil.By("6. Validate pod/host to nodeport service with externalTrafficPolicy=Cluster traffic")
 		for i := 0; i < 2; i++ {
-			wg.Add(1)
-			go func() {
-				defer g.GinkgoRecover()
-				defer wg.Done()
-				exutil.By(fmt.Sprintf("6.1.%d Validate pod to nodeport service with externalTrafficPolicy=Cluster traffic in %s", i, ns[i]))
-				CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[0].Name, nodeportsCluster[i])
-				CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[1].Name, nodeportsCluster[i])
-			}()
+			exutil.By(fmt.Sprintf("6.1.%d Validate pod to nodeport service with externalTrafficPolicy=Cluster traffic in %s", i, ns[i]))
+			CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[0].Name, nodeportsCluster[i])
+			CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[1].Name, nodeportsCluster[i])
 		}
-		wg.Wait()
 		exutil.By("6.2 Validate host to nodeport service with externalTrafficPolicy=Cluster traffic on default network")
 		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodeportsCluster[0])
 		CurlNodePortPass(oc, masterNode, nodeList.Items[1].Name, nodeportsCluster[0])

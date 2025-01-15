@@ -1816,7 +1816,7 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 			waitPodReady(oc, ns, pods[i].name)
 
 			defer exutil.LabelPod(oc, ns, pods[i].name, "name-")
-			err = exutil.LabelPod(oc, ns, pods[i].name, fmt.Sprintf("name=hello-pod-%d", i))
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", ns, "pod", pods[i].name, fmt.Sprintf("name=hello-pod-%d", i), "--overwrite=true").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
