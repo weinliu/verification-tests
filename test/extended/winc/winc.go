@@ -2470,4 +2470,86 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 	})
 
+	// author: rrasouli@redhat.com
+	g.It("Author:rrasouli-Smokerun-High-77313-Verify wmco monitors rendered-worker configmap changes [Serial]", func() {
+		defer g.GinkgoRecover()
+
+		g.By("Step 1: Getting initial services configuration")
+		windowsServicesCM, err := popItemFromList(oc, "cm", wicdConfigMap, wmcoNamespace)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to find windows-services configmap")
+
+		initialServicesData := getConfigMapData(oc, windowsServicesCM, "services", wmcoNamespace)
+		o.Expect(initialServicesData).NotTo(o.BeEmpty(), "Initial services data should not be empty")
+
+		// Step 2: Create a MachineConfig that modifies a service parameter
+		g.By("Step 2: Creating MachineConfig with service modification")
+		manifestFile, err := exutil.GenerateManifestFile(oc, "winc", "service_change_machineconfig.yaml", nil)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to generate MachineConfig manifest")
+		defer os.Remove(manifestFile)
+
+		// Apply the MachineConfig
+		_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to create MachineConfig")
+
+		// Step 3: Monitor WMCO reconciliation and verify service changes
+		g.By("Step 3: Monitoring WMCO reconciliation and service changes")
+		waitErr := wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+			currentServicesData := getConfigMapData(oc, windowsServicesCM, "services", wmcoNamespace)
+			if currentServicesData == "" {
+				return false, nil
+			}
+
+			var currentServices []Service
+			if err := json.Unmarshal([]byte(currentServicesData), &currentServices); err != nil {
+				return false, nil
+			}
+
+			// Verify specific service changes
+			for _, svc := range currentServices {
+				if svc.Name == "kubelet" {
+					// Check for expected service parameter changes
+					if strings.Contains(svc.Path, "--expected-parameter=new-value") {
+						e2e.Logf("Service parameter change detected")
+						return true, nil
+					}
+				}
+			}
+			return false, nil
+		})
+		o.Expect(waitErr).NotTo(o.HaveOccurred(), "Timeout waiting for service changes")
+
+		// Step 4: Verify Windows nodes remain Ready
+		g.By("Step 4: Verifying Windows nodes remain in Ready state")
+		waitWindowsNodesReady(oc, 2, 5*time.Minute)
+
+		// Step 5: Clean up the MachineConfig
+		g.By("Step 5: Cleaning up test MachineConfig")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile).Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to delete test MachineConfig")
+
+		// Verify cleanup was successful
+		waitErr = wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+			currentServicesData := getConfigMapData(oc, windowsServicesCM, "services", wmcoNamespace)
+			if currentServicesData == "" {
+				return false, nil
+			}
+
+			var currentServices []Service
+			if err := json.Unmarshal([]byte(currentServicesData), &currentServices); err != nil {
+				return false, nil
+			}
+
+			// Verify the service parameter is removed
+			for _, svc := range currentServices {
+				if svc.Name == "kubelet" {
+					if !strings.Contains(svc.Path, "--expected-parameter=new-value") {
+						e2e.Logf("Service parameter successfully removed")
+						return true, nil
+					}
+				}
+			}
+			return false, nil
+		})
+		o.Expect(waitErr).NotTo(o.HaveOccurred(), "Timeout waiting for service changes cleanup")
+	})
 })
