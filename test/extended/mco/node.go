@@ -574,7 +574,12 @@ func (n Node) PollMCDaemonLogs(filter string) func() string {
 
 // CaptureMCDaemonLogsUntilRestartWithTimeout captures all the logs in the MachineConfig daemon pod for this node until the daemon pod is restarted
 func (n *Node) CaptureMCDaemonLogsUntilRestartWithTimeout(timeout string) (string, error) {
-	machineConfigDaemon := n.GetMachineConfigDaemon()
+	var (
+		logs                = ""
+		err                 error
+		machineConfigDaemon = n.GetMachineConfigDaemon()
+	)
+
 	duration, err := time.ParseDuration(timeout)
 	if err != nil {
 		return "", err
@@ -583,9 +588,17 @@ func (n *Node) CaptureMCDaemonLogsUntilRestartWithTimeout(timeout string) (strin
 	c := make(chan string, 1)
 
 	go func() {
-		logs, err := n.oc.WithoutNamespace().Run("logs").Args("-n", MachineConfigNamespace, machineConfigDaemon, "-c", "machine-config-daemon", "-f").Output()
+		err = Retry(5, 5*time.Second, func() error {
+			var err error
+			logs, err = n.oc.WithoutNamespace().Run("logs").Args("-n", MachineConfigNamespace, machineConfigDaemon, "-c", "machine-config-daemon", "-f").Output()
+			if err != nil {
+				logger.Errorf("Retrying because: Error getting %s logs. Error: %s\nOutput: %s", machineConfigDaemon, err, logs)
+			}
+			return err
+		})
+
 		if err != nil {
-			logger.Errorf("Error getting %s logs: %s", machineConfigDaemon, err)
+			logger.Errorf("Error getting %s logs. Error: %s", machineConfigDaemon, err)
 		}
 		c <- logs
 	}()
