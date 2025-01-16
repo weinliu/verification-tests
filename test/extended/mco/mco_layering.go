@@ -1102,6 +1102,7 @@ RUN touch %s
 			mMcp = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolMaster)
 		)
 
+		SkipTestIfCannotUseInternalRegistry(oc.AsAdmin())
 		architecture.SkipArchitectures(oc, architecture.MULTI, architecture.S390X, architecture.PPC64LE)
 
 		// Select the nodes
