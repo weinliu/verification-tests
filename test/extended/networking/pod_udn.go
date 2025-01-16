@@ -2948,4 +2948,80 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		//default network connectivity should also be isolated
 		CurlPod2PodFail(oc, nadNS[0], pod[0].name, nadNS[1], pod[1].name)
 	})
+
+	g.It("Author:meinli-Medium-79003-[CUDN layer3] Verify that patching namespaces for existing CUDN functionality operate as intended", func() {
+		var (
+			udnPodTemplate = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
+			key            = "test.cudn.layer3"
+			crdName        = "cudn-network-79003"
+			values         = []string{"value-79003-1", "value-79003-2"}
+		)
+
+		exutil.By("1. create two namespaces and label them")
+		allNS := []string{oc.Namespace()}
+		oc.SetupProject()
+		allNS = append(allNS, oc.Namespace())
+		for i := 0; i < 2; i++ {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", allNS[i], fmt.Sprintf("%s-", key)).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", allNS[i], fmt.Sprintf("%s=%s", key, values[i])).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("2. create CUDN in ns1")
+		ipStackType := checkIPStackType(oc)
+		var cidr, ipv4cidr, ipv6cidr string
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/60"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/60"
+			}
+		}
+
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", crdName)
+		cudncrd, err := createCUDNCRD(oc, key, crdName, ipv4cidr, ipv6cidr, cidr, "layer3", []string{values[0], ""})
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3. patch namespaces for CUDN")
+		patchCmd := fmt.Sprintf("{\"spec\":{\"namespaceSelector\":{\"matchExpressions\":[{\"key\": \"%s\", \"operator\": \"In\", \"values\": [\"%s\", \"%s\"]}]}}}", key, values[0], values[1])
+		patchResourceAsAdmin(oc, fmt.Sprintf("clusteruserdefinednetwork.k8s.ovn.org/%s", cudncrd.crdname), patchCmd)
+
+		err = waitCUDNCRDApplied(oc, cudncrd.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteruserdefinednetwork.k8s.ovn.org", cudncrd.crdname, "-ojsonpath={.status.conditions[*].message}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring(allNS[1]))
+
+		exutil.By("4. create pods in ns1 and ns2")
+		pods := make([]udnPodResource, 2)
+		for i, ns := range allNS {
+			pods[i] = udnPodResource{
+				name:      "hello-pod-" + ns,
+				namespace: ns,
+				label:     "hello-pod",
+				template:  udnPodTemplate,
+			}
+			defer removeResource(oc, true, true, "pod", pods[i].name, "-n", pods[i].namespace)
+			pods[i].createUdnPod(oc)
+			waitPodReady(oc, pods[i].namespace, pods[i].name)
+		}
+
+		exutil.By("5. validate connection from CUDN pod to CUDN pod")
+		CurlPod2PodPassUDN(oc, pods[0].namespace, pods[0].name, pods[1].namespace, pods[1].name)
+
+		exutil.By("6. unlabel ns2")
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", allNS[1], fmt.Sprintf("%s-", key)).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitCUDNCRDApplied(oc, cudncrd.crdname)
+		o.Expect(err).To(o.HaveOccurred())
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusteruserdefinednetwork.k8s.ovn.org", cudncrd.crdname, "-ojsonpath={.status.conditions[*].message}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring(fmt.Sprintf("failed to delete NetworkAttachmentDefinition [%s/%s]", allNS[1], cudncrd.crdname)))
+
+		exutil.By("7. validate connection from CUDN pod to CUDN pod")
+		CurlPod2PodPassUDN(oc, pods[0].namespace, pods[0].name, pods[1].namespace, pods[1].name)
+	})
 })
