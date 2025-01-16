@@ -243,15 +243,15 @@ func (fi1 *fileintegrity) checkKeywordExistInLog(oc *exutil.CLI, podName string,
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("pod %s does not include %s", podName, expected))
 }
 
-func (fi1 *fileintegrity) checkErrorsExistInLog(oc *exutil.CLI, podName string, expected string) {
+func (fi1 *fileintegrity) checkErrorsExistInLog(oc *exutil.CLI, podName string, timeout int, expected string) {
 	var logs []byte
 	var errGrep error
-	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
-		logFile, errLogs := oc.AsAdmin().WithoutNamespace().Run("logs").Args("pod/"+podName, "-n", fi1.namespace).OutputToFile(getRandomString() + "isc-audit.log")
+	err := wait.Poll(5*time.Second, time.Duration(timeout)*time.Second, func() (bool, error) {
+		logFile, errLogs := oc.AsAdmin().WithoutNamespace().Run("logs").Args("pod/"+podName, "-n", fi1.namespace, "--since=5m").OutputToFile(getRandomString() + "isc-audit.log")
 		if errLogs != nil {
 			return false, errLogs
 		}
-		logs, errGrep = exec.Command("bash", "-c", "cat "+logFile+" | grep -i error; rm -rf "+logFile).Output()
+		logs, errGrep = exec.Command("bash", "-c", "cat "+logFile+"; rm -rf "+logFile).Output()
 		if errGrep != nil {
 			return false, errGrep
 		}
@@ -538,6 +538,7 @@ func (fi1 *fileintegrity) getDBBackupLists(oc *exutil.CLI, nodeName string, dbRe
 		isNewFIO       bool
 	)
 	isNewFIO = false
+	e2e.Logf("The fi1.maxbackups is: %v", fi1.maxbackups)
 	if fi1.maxbackups == 0 {
 		maxBackups, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.spec.config.maxBackups}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())

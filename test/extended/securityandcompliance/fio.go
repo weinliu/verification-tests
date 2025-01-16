@@ -32,6 +32,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 		configFile          string
 		configErrFile       string
 		configFile1         string
+		machineconfigTest   string
 		maxBackupsFile      string
 		md5configFile       string
 		og                  operatorGroupDescription
@@ -54,6 +55,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 		configFile = filepath.Join(buildPruningBaseDir, "aide.conf.rhel8")
 		configErrFile = filepath.Join(buildPruningBaseDir, "aide.conf.rhel8.err")
 		configFile1 = filepath.Join(buildPruningBaseDir, "aide.conf.rhel8.1")
+		machineconfigTest = filepath.Join(buildPruningBaseDir, "machineconfig-fio-test.yaml")
 		maxBackupsFile = filepath.Join(buildPruningBaseDir, "fileintegrity-maxbackup.yaml")
 		md5configFile = filepath.Join(buildPruningBaseDir, "md5aide.conf.rhel8")
 
@@ -704,7 +706,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 		if strings.Contains(fipsOut, "FIPS mode is enabled.") {
 			fi1.checkFileintegritynodestatus(oc, nodeName, "Errored")
 			var podName = fi1.getOneFioPodName(oc)
-			fi1.checkErrorsExistInLog(oc, podName, "Use of FIPS disallowed algorithm under FIPS mode exit status 255")
+			fi1.checkErrorsExistInLog(oc, podName, 20, "Use of FIPS disallowed algorithm under FIPS mode exit status 255")
 		} else {
 			fileintegrityNodeStatusName := fi1.name + "-" + nodeName
 			output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace, fileintegrityNodeStatusName,
@@ -956,6 +958,74 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 		fi1.assertNodesConditionNotEmpty(oc)
 		checkDBFilesUpdated(oc, fi1, dbInitialBackupList, nodeName, dbReinit, isNewFIO)
+	})
+
+	//author: xiyuan@redhat.com
+	g.It("Author:xiyuan-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-CPaasrunOnly-Medium-32048-the mc updates should be handled and the database should be re-initialized appropriately [Serial][Slow]", func() {
+		var (
+			machineConfigPoolYAML = filepath.Join(buildPruningBaseDir, "machineConfigPool.yaml")
+			mcName                = "isc-fio-test-" + getRandomString()
+			nodes                 []string
+			role                  = "wrscan"
+		)
+
+		g.By("Create custom mcp")
+		workerNodeName := getOneRhcosWorkerNodeName(oc)
+		setLabelToOneWorkerNode(oc, workerNodeName)
+		defer func() {
+			g.By("Delete custom mcp")
+			removeLabelFromWorkerNode(oc, workerNodeName)
+			checkMachineConfigPoolStatus(oc, "worker")
+			newCheck("expect", asAdmin, withoutNamespace, compare, "0", ok, []string{"machineconfigpool", role, "-n", fi1.namespace, "-o=jsonpath={.status.machineCount}"}).check(oc)
+			cleanupObjects(oc, objectTableRef{"mcp", sub.namespace, role})
+		}()
+		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", sub.namespace, "-f", machineConfigPoolYAML).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkMachineConfigPoolStatus(oc, role)
+
+		g.By("Create fileintegrity with configmap and gracePeriod")
+		fi1.configname = "myconf"
+		fi1.configkey = "aide-conf"
+		fi1.nodeselectorkey = "node-role.kubernetes.io/" + role
+		fi1.nodeselectorvalue = ""
+		defer cleanupObjectsIgnoreNotFound(oc, objectTableRef{"configmap", sub.namespace, fi1.configname},
+			objectTableRef{"fileintegrity", sub.namespace, fi1.name})
+		fi1.createConfigmapFromFile(oc, fi1.configname, fi1.configkey, configFile, "created")
+		fi1.checkConfigmapCreated(oc)
+		fi1.createFIOWithConfig(oc)
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		fi1.assertNodesConditionNotEmpty(oc)
+
+		g.By("Check fileintegritynodestatus")
+		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", fi1.namespace, "-l app=aide-"+fi1.name, "-o=jsonpath={.items[*].spec.nodeName}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodes = strings.Fields(out)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("fileintegritynodestatuses", "-n", fi1.namespace,
+			"-o=jsonpath={.items[*].lastResult.condition}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if strings.Contains(output, "Failed") {
+			fi1.reinitFileintegrity(oc, "fileintegrity.fileintegrity.openshift.io/"+fi1.name+" annotate")
+			newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+			fi1.checkFileintegritynodestatus(oc, nodes[0], "Succeeded")
+
+		}
+		dbReinit := false
+		dbInitialBackupList, isNewFIO := fi1.getDBBackupLists(oc, nodes[0], dbReinit)
+
+		g.By("Create a machineconfig")
+		defer cleanupObjects(oc, objectTableRef{"mc", sub.namespace, mcName})
+		errEnableAudit := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", machineconfigTest, "-p", "NAME="+mcName, "ROLE="+role)
+		o.Expect(errEnableAudit).NotTo(o.HaveOccurred())
+		checkMachineConfigPoolStatus(oc, role)
+		clusterOperatorHealthcheck(oc, 1500)
+
+		g.By("Check AIDE database re-initialized")
+		newCheck("expect", asAdmin, withoutNamespace, compare, "Active", ok, []string{"fileintegrity", fi1.name, "-n", fi1.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+		dbReinit = true
+		checkDBFilesUpdated(oc, fi1, dbInitialBackupList, nodes[0], dbReinit, isNewFIO)
+		podName := fi1.getOneFioPodName(oc)
+		fi1.checkErrorsExistInLog(oc, podName, 200, "aide check returned status 0")
+		fi1.checkFileintegritynodestatus(oc, nodes[0], "Succeeded")
 	})
 
 	// author: xiyuan@redhat.com
