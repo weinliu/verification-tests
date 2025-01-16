@@ -177,7 +177,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		exutil.SkipNoOLMCore(oc)
 		subD.skipMissingCatalogsources(oc)
 		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
-		SkipMissingDefaultSC(oc)
+		skipMissingOrNotApplicableDefaultSC(oc)
 		SkipMissingRhcosWorkers(oc)
 		SkipClustersWithRhelNodes(oc)
 
@@ -7490,7 +7490,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance The Compliance Operator on
 		SkipNonHypershiftHostedClusters(oc)
 		sub.skipMissingCatalogsources(oc)
 		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
-		SkipMissingDefaultSC(oc)
+		skipMissingOrNotApplicableDefaultSC(oc)
 		SkipMissingRhcosWorkers(oc)
 
 		g.By("Install Compliance Operator and check it is sucessfully installed !!! ")
@@ -7672,7 +7672,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_operator The Co
 		SkipNonRosaHcpCluster(oc)
 		sub.skipMissingCatalogsources(oc)
 		architecture.SkipNonAmd64SingleArch(oc)
-		SkipMissingDefaultSC(oc)
+		skipMissingOrNotApplicableDefaultSC(oc)
 	})
 
 	// author: xiyuan@redhat.com

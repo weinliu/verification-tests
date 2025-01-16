@@ -491,13 +491,26 @@ func (sub *subscriptionDescription) skipMissingCatalogsources(oc *exutil.CLI) {
 	}
 }
 
-// SkipMissingDefaultSC mean to skip test when default storageclass is not available
-func SkipMissingDefaultSC(oc *exutil.CLI) {
-	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o=jsonpath={.items[?(@.metadata.annotations.storageclass\\.kubernetes\\.io/is-default-class==\"true\")].metadata.name}", "-n", oc.Namespace()).Output()
+// skipMissingDefaultSC mean to skip test when default storageclass is not available or not applicable
+func skipMissingOrNotApplicableDefaultSC(oc *exutil.CLI) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sc", "-o=jsonpath={.items[?(@.metadata.annotations.storageclass\\.kubernetes\\.io/is-default-class==\"true\")].metadata.name}", "-n", oc.Namespace()).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("This default sc is: %s", output)
+
 	if output == "" {
-		g.Skip("Skip since default storageclass not available")
-	} else {
-		e2e.Logf("This default sc is: %s", output)
+		g.Skip("Skipping test: No default storageclass is available in the cluster")
+	}
+
+	// The 'Hyperdisk' type has a minimum disk size requirement of 4G which is expensive and unnecessary for our scenarios.
+	// xref: https://cloud.google.com/compute/docs/disks/hyperdisks#limits-disk
+	if strings.Contains(strings.ToLower(output), "hyperdisk") {
+		g.Skip("Skipping test: Default storageclass 'Hyperdisk' is not applicable")
+	}
+
+	// Handle multiple default storage classes
+	scNames := strings.Split(output, " ")
+	if len(scNames) > 1 {
+		g.Skip(fmt.Sprintf("Skipping test: Multiple default storageclasses detected: %v", scNames))
 	}
 }
 

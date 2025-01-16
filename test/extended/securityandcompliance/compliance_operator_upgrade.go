@@ -107,7 +107,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator Intra-
 		exutil.SkipNoOLMCore(oc)
 		subD.skipMissingCatalogsources(oc)
 		architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI)
-		SkipMissingDefaultSC(oc)
+		skipMissingOrNotApplicableDefaultSC(oc)
 		SkipMissingRhcosWorkers(oc)
 		SkipClustersWithRhelNodes(oc)
 
