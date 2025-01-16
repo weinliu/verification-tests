@@ -261,7 +261,7 @@ func createCertManagerOperator(oc *exutil.CLI) {
 	}
 
 	// use the default catalogsource if 'qe-app-registry' doesn't exists
-	output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", catalogSourceNamespace, "catalogsource", "redhat-operators").Output()
+	output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", catalogSourceNamespace, "catalogsource", "qe-app-registry").Output()
 	if strings.Contains(output, "NotFound") || err != nil {
 
 		// skip if the default catalogsource doesn't contain subscription's packagemanifest
