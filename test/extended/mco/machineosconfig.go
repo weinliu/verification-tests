@@ -86,7 +86,7 @@ func CopySecretToMCONamespace(secret *Secret, newName string) (*Secret, error) {
 func CreateMachineOSConfigUsingInternalRegistry(oc *exutil.CLI, namespace, name, pool string, containerFile []ContainerFile) (*MachineOSConfig, error) {
 	// We use a copy of the cluster's pull secret to pull the images
 	pullSecret := NewSecret(oc.AsAdmin(), "openshift-config", "pull-secret")
-	baseImagePullSecret, err := CopySecretToMCONamespace(pullSecret, "cloned-pull-secret-"+exutil.GetRandomString())
+	baseImagePullSecret, err := CopySecretToMCONamespace(pullSecret, "cloned-basepull-secret-"+exutil.GetRandomString())
 	if err != nil {
 		return NewMachineOSConfig(oc, name), err
 	}
@@ -101,8 +101,10 @@ func CreateMachineOSConfigUsingInternalRegistry(oc *exutil.CLI, namespace, name,
 	}
 
 	// We use the default SA secret in MCO to pull the current image from the internal registry
-	saDefault := NewNamespacedResource(oc, "sa", namespace, "default")
-	currentImagePullSecret := NewSecret(oc, namespace, saDefault.GetOrFail(`{.secrets[0].name}`))
+	currentImagePullSecret, err := CreateInternalRegistrySecretFromSA(oc, "default", namespace, "cloned-currentpull-secret"+exutil.GetRandomString(), MachineConfigNamespace)
+	if err != nil {
+		return NewMachineOSConfig(oc, name), err
+	}
 	if !currentImagePullSecret.Exists() {
 		return NewMachineOSConfig(oc, name), fmt.Errorf("Current image pull secret does not exist: %s", currentImagePullSecret)
 	}
