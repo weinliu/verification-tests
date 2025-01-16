@@ -3868,7 +3868,7 @@ nulla pariatur.`
 
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Medium-69091-[P1][OnCLayer] Machine-Config-Operator skips reboot when configuration matches during node bootstrap pivot [Serial]", func() {
+	g.It("Author:sregidor-NonPreRelease-Critical-69091-[P1][OnCLayer] Machine-Config-Operator skips reboot when configuration matches during node bootstrap pivot [Serial]", func() {
 		var (
 			MachineConfigDaemonFirstbootService = "machine-config-daemon-firstboot.service"
 		)
