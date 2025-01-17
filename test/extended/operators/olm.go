@@ -912,7 +912,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		exutil.By("1, Create a CatalogSource that in a random project")
 		oc.SetupProject()
 		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-without-interval.yaml")
-		indexImage := "quay.io/openshifttest/etcd-index:latest"
+		indexImage := "quay.io/openshifttest/nginxolm-operator-index:nginxolm99999"
 		cs := catalogSourceDescription{
 			name:        "cs-53758",
 			namespace:   oc.Namespace(),
