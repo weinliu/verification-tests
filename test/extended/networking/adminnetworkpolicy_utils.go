@@ -769,3 +769,38 @@ func getPolicyMetrics(oc *exutil.CLI, metricsName string, expectedValue string, 
 	exutil.AssertWaitPollNoErr(metricsErr, fmt.Sprintf("Fail to get metric and the error is:%s", metricsErr))
 	return result, nil
 }
+
+// Perform nslookup of the url provided with IP address of google DNS server
+func verifyNslookup(oc *exutil.CLI, clientPodName string, clientPodNamespace string, urlToLookup string, resultPass bool) {
+
+	var cmdList = []string{}
+	ipStackType := checkIPStackType(oc)
+	o.Expect(ipStackType).NotTo(o.BeEmpty())
+
+	if ipStackType == "dualstack" {
+		cmdList = append(cmdList, "nslookup "+urlToLookup+" 8.8.8.8")
+		if checkIPv6PublicAccess(oc) {
+			cmdList = append(cmdList, "nslookup "+urlToLookup+" 2001:4860:4860::8888")
+		}
+	} else {
+		if ipStackType == "ipv6single" && checkIPv6PublicAccess(oc) {
+			cmdList = append(cmdList, "nslookup "+urlToLookup+" 2001:4860:4860::8888")
+		} else {
+			cmdList = append(cmdList, "nslookup "+urlToLookup+" 8.8.8.8")
+		}
+
+	}
+	for _, cmd := range cmdList {
+		res, err := exutil.RemoteShPodWithBash(oc, clientPodNamespace, clientPodName, cmd)
+		if resultPass {
+			e2e.Logf("nslookup is allowed")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(res, "www.facebook.com")).Should(o.BeTrue(), fmt.Sprintf("The nslookup did not succeed as expected:%s", res))
+		} else {
+			e2e.Logf("nslookup is blocked")
+			o.Expect(err).To(o.HaveOccurred())
+			o.Expect(strings.Contains(res, "connection timed out; no servers could be reached")).Should(o.BeTrue(), fmt.Sprintf("The nslookup did not fail as expected:%s", res))
+		}
+	}
+
+}

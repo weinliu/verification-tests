@@ -1727,6 +1727,303 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 		}
 
 	})
+
+	g.It("Author:asood-Longduration-NonPreRelease-High-73453-[FdpOvnOvs] Egress traffic works with ANP, BANP and NP with network egress peer. [Serial]", func() {
+		var (
+			testID                      = "73453"
+			testDataDir                 = exutil.FixturePath("testdata", "networking")
+			banpNetworkTemplate         = filepath.Join(testDataDir, "adminnetworkpolicy", "banp-single-rule-cidr-template.yaml")
+			anpNetworkTemplate          = filepath.Join(testDataDir, "adminnetworkpolicy", "anp-single-rule-cidr-template.yaml")
+			anpMultiNetworkTemplate     = filepath.Join(testDataDir, "adminnetworkpolicy", "anp-multi-rule-cidr-template.yaml")
+			pingPodNodeTemplate         = filepath.Join(testDataDir, "ping-for-pod-specific-node-template.yaml")
+			ipBlockEgressTemplateSingle = filepath.Join(testDataDir, "networkpolicy/ipblock/ipBlock-egress-single-CIDR-template.yaml")
+			matchLabelKey               = "team"
+			matchLabelVal               = "ocp"
+			matchLabelKey1              = "kubernetes.io/metadata.name"
+			nsPodMap                    = make(map[string][]string)
+			urlToLookup                 = "www.facebook.com"
+		)
+		var allCIDRs, googleIP1, googleIP2, googleDNSServerIP1, googleDNSServerIP2, patchANPCIDR, patchNP string
+		var allNS, checkIPAccessList []string
+
+		exutil.By("0. Get the workers list ")
+		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ipStackType := checkIPStackType(oc)
+		o.Expect(ipStackType).NotTo(o.BeEmpty())
+
+		exutil.By("1.1 Create another namespace")
+		allNS = append(allNS, oc.Namespace())
+		oc.SetupProject()
+		allNS = append(allNS, oc.Namespace())
+
+		exutil.By("1.2 Label namespaces.")
+		for i := 0; i < len(allNS); i++ {
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", allNS[i], matchLabelKey+"="+matchLabelVal).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		exutil.By("1.3 Create 2 pods in each namespace")
+		pod := pingPodResourceNode{
+			name:      "",
+			namespace: "",
+			nodename:  "",
+			template:  pingPodNodeTemplate,
+		}
+
+		for i := 0; i < len(allNS); i++ {
+			pod.nodename = workerList.Items[0].Name
+			pod.namespace = allNS[i]
+			for j := 0; j < 2; j++ {
+				pod.name = "test-pod-" + testID + "-" + strconv.Itoa(j)
+				pod.createPingPodNode(oc)
+				waitPodReady(oc, allNS[i], pod.name)
+				nsPodMap[allNS[i]] = append(nsPodMap[allNS[i]], pod.name)
+			}
+		}
+
+		exutil.By("2. Get one IP address for domain name www.google.com")
+		ipv4, ipv6 := getIPFromDnsName("www.google.com")
+		o.Expect(len(ipv4) == 0).NotTo(o.BeTrue())
+		checkIPAccessList = append(checkIPAccessList, ipv4)
+		if ipStackType == "dualstack" || ipStackType == "ipv6single" {
+			o.Expect(len(ipv6) == 0).NotTo(o.BeTrue())
+			checkIPAccessList = append(checkIPAccessList, ipv6)
+		}
+		// Set up networks to be used in (B)ANP
+		switch ipStackType {
+		case "ipv4single":
+			allCIDRs = "0.0.0.0/0"
+			googleIP1 = ipv4 + "/32"
+			googleDNSServerIP1 = "8.8.8.8/32"
+		case "ipv6single":
+			allCIDRs = "::/0"
+			googleIP1 = ipv6 + "/128"
+			googleDNSServerIP1 = "2001:4860:4860::8888/128"
+		case "dualstack":
+			allCIDRs = "0.0.0.0/0"
+			googleIP1 = ipv4 + "/32"
+			googleIP2 = ipv6 + "/128"
+			googleDNSServerIP1 = "8.8.8.8/32"
+			googleDNSServerIP2 = "2001:4860:4860::8888/128"
+		default:
+			// Do nothing
+		}
+		exutil.By("3.1 Egress traffic works before BANP is created")
+		for i := 0; i < 2; i++ {
+			for _, ip := range checkIPAccessList {
+				verifyDstIPAccess(oc, nsPodMap[allNS[i]][0], allNS[i], ip, true)
+			}
+		}
+
+		exutil.By("3.2 Create a BANP to deny egress to all networks from all namespaces")
+		banpCIDR := singleRuleCIDRBANPPolicyResource{
+			name:       "default",
+			subjectKey: matchLabelKey,
+			subjectVal: matchLabelVal,
+			ruleName:   "deny egress to all networks",
+			ruleAction: "Deny",
+			cidr:       allCIDRs,
+			template:   banpNetworkTemplate,
+		}
+		defer removeResource(oc, true, true, "banp", banpCIDR.name)
+		banpCIDR.createSingleRuleCIDRBANP(oc)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("banp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, banpCIDR.name)).To(o.BeTrue())
+		if ipStackType == "dualstack" {
+			patchBANPCIDR := `[{"op": "add", "path": "/spec/egress/0/to/0/networks/1", "value":"::/0"}]`
+			patchReplaceResourceAsAdmin(oc, "banp/"+banpCIDR.name, patchBANPCIDR)
+			banpRules, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("banp", banpCIDR.name, "-o=jsonpath={.spec.egress}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("\n BANP Rules after update: %s", banpRules)
+		}
+
+		exutil.By("3.3 Egress traffic does not works after BANP is created")
+		for i := 0; i < 2; i++ {
+			for _, ip := range checkIPAccessList {
+				verifyDstIPAccess(oc, nsPodMap[allNS[i]][0], allNS[i], ip, false)
+			}
+		}
+
+		exutil.By("4.0 Create a ANP to allow egress traffic to TCP port 80 and verify egress traffic works from first namespace")
+		anpCIDR := singleRuleCIDRANPPolicyResource{
+			name:       "anp-network-egress-peer-" + testID,
+			subjectKey: matchLabelKey1,
+			subjectVal: allNS[0],
+			priority:   45,
+			ruleName:   "allow egress network from first namespace",
+			ruleAction: "Allow",
+			cidr:       googleIP1,
+			template:   anpNetworkTemplate,
+		}
+		defer removeResource(oc, true, true, "anp", anpCIDR.name)
+		anpCIDR.createSingleRuleCIDRANP(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anpCIDR.name)).To(o.BeTrue())
+		if ipStackType == "dualstack" {
+			patchANPCIDR = `[{"op": "add", "path": "/spec/egress/0/ports", "value": [{"portNumber": {"protocol": "TCP", "port": 80}}]}, {"op": "add", "path": "/spec/egress/0/to/0/networks/1", "value":"` + googleIP2 + `"} ]`
+		} else {
+			patchANPCIDR = `[{"op": "add", "path": "/spec/egress/0/ports", "value": [{"portNumber": {"protocol": "TCP", "port": 80}}]}]`
+		}
+
+		patchReplaceResourceAsAdmin(oc, "anp/"+anpCIDR.name, patchANPCIDR)
+		anpRules, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("adminnetworkpolicy", anpCIDR.name, "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n ANP Rules after update: %s", anpRules)
+
+		exutil.By("4.1 Egress traffic allowed from first but blocked from second namespace after ANP is created.")
+		resultList := []bool{true, false}
+		for i, ip := range checkIPAccessList {
+			verifyDstIPAccess(oc, nsPodMap[allNS[i]][0], allNS[i], ip, resultList[i])
+		}
+
+		exutil.By("4.2 Egress traffic allowed from newly created pod in first namespace but blocked from second namespace.")
+		for i := 0; i < len(allNS); i++ {
+			pod.nodename = workerList.Items[0].Name
+			pod.namespace = allNS[i]
+			pod.name = "test-pod-" + testID + "-" + "3"
+			pod.createPingPodNode(oc)
+			waitPodReady(oc, allNS[i], pod.name)
+			nsPodMap[allNS[i]] = append(nsPodMap[allNS[i]], pod.name)
+
+		}
+		for i, ip := range checkIPAccessList {
+			verifyDstIPAccess(oc, nsPodMap[allNS[i]][2], allNS[i], ip, resultList[i])
+		}
+
+		exutil.By("5.0 Create a ANP to allow egress traffic to TCP port 80 from pod labeled color=red in second namespace")
+		anpMultiCIDR := MultiRuleCIDRANPPolicyResource{
+			name:        "anp-network-egress-peer-" + testID + "-0",
+			subjectKey:  matchLabelKey1,
+			subjectVal:  allNS[1],
+			priority:    30,
+			ruleName1:   "egress to TCP server",
+			ruleAction1: "Allow",
+			cidr1:       googleIP1,
+			ruleName2:   "egress to UDP server",
+			ruleAction2: "Allow",
+			cidr2:       googleDNSServerIP1,
+			template:    anpMultiNetworkTemplate,
+		}
+		defer removeResource(oc, true, true, "anp", anpMultiCIDR.name)
+		anpMultiCIDR.createMultiRuleCIDRANP(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anpMultiCIDR.name)).To(o.BeTrue())
+
+		exutil.By("5.1 Update the rules to add port & protocol and subject to apply rules to specific pod")
+		if ipStackType == "dualstack" {
+			patchANPCIDR = fmt.Sprintf("[ {\"op\": \"replace\", \"path\": \"/spec/subject\", \"value\": {\"pods\": {\"namespaceSelector\": {\"matchLabels\": {%s: %s}}, \"podSelector\": {\"matchLabels\": {\"color\": \"red\"}}}}}, {\"op\": \"add\", \"path\": \"/spec/egress/0/ports\", \"value\": [{\"portNumber\": {\"protocol\": \"TCP\", \"port\": 80}}]}, {\"op\": \"add\", \"path\": \"/spec/egress/1/ports\", \"value\": [{\"portNumber\": {\"protocol\": \"UDP\", \"port\": 53}}]}, {\"op\": \"add\", \"path\": \"/spec/egress/0/to/0/networks/1\", \"value\":%s}, {\"op\": \"add\", \"path\": \"/spec/egress/1/to/0/networks/1\", \"value\":%s}]", matchLabelKey1, allNS[1], googleIP2, googleDNSServerIP2)
+		} else {
+			patchANPCIDR = fmt.Sprintf("[ {\"op\": \"replace\", \"path\": \"/spec/subject\", \"value\": {\"pods\": {\"namespaceSelector\": {\"matchLabels\": {%s: %s}}, \"podSelector\": {\"matchLabels\": {\"color\": \"red\"}}}}}, {\"op\": \"add\", \"path\": \"/spec/egress/0/ports\", \"value\": [{\"portNumber\": {\"protocol\": \"TCP\", \"port\": 80}}]}, {\"op\": \"add\", \"path\": \"/spec/egress/1/ports\", \"value\": [{\"portNumber\": {\"protocol\": \"UDP\", \"port\": 53}}]}]", matchLabelKey1, allNS[1])
+		}
+		patchReplaceResourceAsAdmin(oc, "anp/"+anpMultiCIDR.name, patchANPCIDR)
+		anpRules, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("adminnetworkpolicy", anpMultiCIDR.name, "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n ANP Rules after update: %s", anpRules)
+		anpSubject, subErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("adminnetworkpolicy", anpMultiCIDR.name, "-o=jsonpath={.spec.subject}").Output()
+		o.Expect(subErr).NotTo(o.HaveOccurred())
+		e2e.Logf("\n ANP Subject after update: %s", anpSubject)
+
+		exutil.By("5.2 Label the pod")
+		_, labelErr := oc.AsAdmin().WithoutNamespace().Run("label").Args("pod", nsPodMap[allNS[1]][2], "-n", allNS[1], "color=red").Output()
+		o.Expect(labelErr).NotTo(o.HaveOccurred())
+
+		exutil.By("7.1 Validate TCP and UDP egress traffic from labelled pod in second namespace")
+		for _, ip := range checkIPAccessList {
+			verifyDstIPAccess(oc, nsPodMap[allNS[1]][2], allNS[1], ip, true)
+		}
+		verifyNslookup(oc, nsPodMap[allNS[1]][2], allNS[1], urlToLookup, true)
+
+		exutil.By("7.2 Validate TCP egress traffic from unlabelled pod in second namespace and from pod in first namespace works is not impacted")
+		for _, ip := range checkIPAccessList {
+			verifyDstIPAccess(oc, nsPodMap[allNS[1]][0], allNS[1], ip, false)
+		}
+		for _, ip := range checkIPAccessList {
+			verifyDstIPAccess(oc, nsPodMap[allNS[0]][2], allNS[0], ip, true)
+		}
+
+		verifyNslookup(oc, nsPodMap[allNS[1]][0], allNS[1], urlToLookup, false)
+		verifyNslookup(oc, nsPodMap[allNS[0]][0], allNS[0], urlToLookup, false)
+
+		exutil.By("8.0 Create third ANP to allow egress traffic from pod labeled color=blue in both namespaces")
+		anpMultiCIDR.name = "anp-network-egress-peer-" + testID + "-1"
+		anpMultiCIDR.priority = 25
+		// Rule 1
+		anpMultiCIDR.ruleName1 = "egress to udp server"
+		anpMultiCIDR.ruleAction1 = "Pass"
+		anpMultiCIDR.cidr1 = googleDNSServerIP1
+		// Rule 2
+		anpMultiCIDR.ruleName2 = "egress to tcp server"
+		anpMultiCIDR.ruleAction2 = "Allow"
+		anpMultiCIDR.cidr2 = googleIP1
+		defer removeResource(oc, true, true, "anp", anpMultiCIDR.name)
+		anpMultiCIDR.createMultiRuleCIDRANP(oc)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("anp").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, anpMultiCIDR.name)).To(o.BeTrue())
+
+		exutil.By("8.1 Update the rules to add port & protocol and subject to apply rules to pods labelled blue")
+		if ipStackType == "dualstack" {
+			patchANPCIDR = fmt.Sprintf("[{\"op\": \"replace\", \"path\": \"/spec/subject\", \"value\": {\"pods\": {\"namespaceSelector\":  {\"matchExpressions\": [{\"key\": %s, \"operator\": \"In\", \"values\": [%s, %s]}]}, \"podSelector\": {\"matchLabels\": {\"color\": \"blue\"}}}}}, {\"op\": \"add\", \"path\": \"/spec/egress/0/ports\", \"value\": [{\"portNumber\": {\"protocol\": \"UDP\", \"port\": 53}}]}, {\"op\": \"add\", \"path\": \"/spec/egress/1/ports\", \"value\": [{\"portNumber\": {\"protocol\": \"TCP\", \"port\": 80}}]}, {\"op\": \"add\", \"path\": \"/spec/egress/0/to/0/networks/1\", \"value\":%s}, {\"op\": \"add\", \"path\": \"/spec/egress/1/to/0/networks/1\", \"value\":%s}]", matchLabelKey1, allNS[0], allNS[1], googleDNSServerIP2, googleIP2)
+		} else {
+			patchANPCIDR = fmt.Sprintf("[{\"op\": \"replace\", \"path\": \"/spec/subject\", \"value\": {\"pods\": {\"namespaceSelector\":  {\"matchExpressions\": [{\"key\": %s, \"operator\": \"In\", \"values\": [%s, %s]}]}, \"podSelector\": {\"matchLabels\": {\"color\": \"blue\"}}}}}, {\"op\": \"add\", \"path\": \"/spec/egress/0/ports\", \"value\": [{\"portNumber\": {\"protocol\": \"UDP\", \"port\": 53}}]}, {\"op\": \"add\", \"path\": \"/spec/egress/1/ports\", \"value\": [{\"portNumber\": {\"protocol\": \"TCP\", \"port\": 80}}]}]", matchLabelKey1, allNS[0], allNS[1])
+		}
+
+		patchReplaceResourceAsAdmin(oc, "anp/"+anpMultiCIDR.name, patchANPCIDR)
+		anpRules, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("adminnetworkpolicy", anpMultiCIDR.name, "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n ANP Rules after update: %s", anpRules)
+		anpRules, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("adminnetworkpolicy", anpMultiCIDR.name, "-o=jsonpath={.spec.subject}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n ANP Subject after update: %s", anpRules)
+
+		exutil.By("8.2 Label first pod in both namespace color=blue")
+		for i := 0; i < 2; i++ {
+			_, labelErr := oc.AsAdmin().WithoutNamespace().Run("label").Args("pod", nsPodMap[allNS[i]][0], "-n", allNS[i], "color=blue").Output()
+			o.Expect(labelErr).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("8.3 Validate only egress to TCP 80 works")
+		for i := 0; i < 2; i++ {
+			for _, ip := range checkIPAccessList {
+				verifyDstIPAccess(oc, nsPodMap[allNS[i]][0], allNS[i], ip, true)
+			}
+			verifyNslookup(oc, nsPodMap[allNS[i]][0], allNS[i], urlToLookup, false)
+		}
+
+		exutil.By("8.4 Create a network policy in first namespace")
+		npIPBlockNS1 := ipBlockCIDRsSingle{
+			name:      "ipblock-single-cidr-egress",
+			template:  ipBlockEgressTemplateSingle,
+			cidr:      googleDNSServerIP1,
+			namespace: allNS[0],
+		}
+		npIPBlockNS1.createipBlockCIDRObjectSingle(oc)
+		if ipStackType == "dualstack" {
+			patchNP = `[{"op": "replace", "path": "/spec/podSelector", "value": {"matchLabels": {"color": "blue"}}}, {"op": "add", "path": "/spec/egress/0/to/1", "value": {"ipBlock":{"cidr":"` + googleDNSServerIP2 + `"}}} ]`
+		} else {
+			patchNP = `[{"op": "replace", "path": "/spec/podSelector", "value": {"matchLabels": {"color": "blue"}}}]`
+		}
+		patchReplaceResourceAsAdmin(oc, "networkpolicy/"+npIPBlockNS1.name, patchNP, allNS[0])
+		npRules, npErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("networkpolicy", npIPBlockNS1.name, "-n", allNS[0], "-o=jsonpath={.spec}").Output()
+		o.Expect(npErr).NotTo(o.HaveOccurred())
+		e2e.Logf("\n Network policy after update: %s", npRules)
+
+		exutil.By("8.5 Validate egress to DNS server at port 53 only works from pod in first namespace")
+		verifyNslookup(oc, nsPodMap[allNS[0]][0], allNS[0], urlToLookup, true)
+		verifyNslookup(oc, nsPodMap[allNS[1]][0], allNS[1], urlToLookup, false)
+
+		exutil.By("8.6 Update rule with pass action to allow to see egress UDP traffic works from with pod label color=blue in second namespace")
+		patchANPCIDR = `[{"op": "replace", "path": "/spec/egress/0/action", "value": "Allow"}]`
+		patchReplaceResourceAsAdmin(oc, "anp/"+anpMultiCIDR.name, patchANPCIDR)
+		anpRules, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("adminnetworkpolicy", anpMultiCIDR.name, "-o=jsonpath={.spec.egress}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n ANP Rules after update: %s", anpRules)
+		verifyNslookup(oc, nsPodMap[allNS[1]][0], allNS[1], urlToLookup, true)
+
+	})
 })
 
 // RDU Test cases
@@ -1961,5 +2258,4 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy rdu", func() {
 		CurlPod2NodeFail(oc, servedNs, nodePodMap[workers[2]], workers[1], strconv.Itoa(int(hostport)))
 
 	})
-
 })

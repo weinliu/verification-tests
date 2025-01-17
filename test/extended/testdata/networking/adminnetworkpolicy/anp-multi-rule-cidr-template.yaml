@@ -1,7 +1,7 @@
 apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
-  name: anp_single_rule_cidr_template
+  name: anp_multi_rule_cidr_template
 objects:
 - kind: AdminNetworkPolicy
   apiVersion: policy.networking.k8s.io/v1alpha1

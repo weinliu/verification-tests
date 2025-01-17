@@ -3977,7 +3977,7 @@ func verifyDstIPAccess(oc *exutil.CLI, podName, podNS, ip string, passOrFail boo
 	}
 
 	if passOrFail {
-		_, err := e2eoutput.RunHostCmdWithRetries(podNS, podName, curlCmd, 10*time.Second, 20*time.Second)
+		_, err := e2eoutput.RunHostCmdWithRetries(podNS, podName, curlCmd, 10*time.Second, 120*time.Second)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else {
 		o.Eventually(func() error {

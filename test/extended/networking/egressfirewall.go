@@ -1856,7 +1856,7 @@ spec:
 		}
 	})
 
-	g.It("Author:asood-ConnectedOnly-High-78162-Egress traffic works with ANP and egress fireall.", func() {
+	g.It("Author:asood-ConnectedOnly-High-78162-Egress traffic works with ANP and egress firewall.", func() {
 		ipStackType := checkIPStackType(oc)
 		platform := exutil.CheckPlatform(oc)
 		acceptedPlatform := strings.Contains(platform, "none")
