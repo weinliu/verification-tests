@@ -710,7 +710,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func(
 		o.Expect(execOutput).To(o.ContainSubstring("t47x6d4lzz1zxm1bakrmiceb0tljzl9n8r19kqu9s3731ectkllp9mezn7cldozt25nlenyh5jus5b9rr687u2icimakjpyf4rsux3c66giulc0d2ipsa6bpa6dykgd0mc25r1m89hvzjcix73sdwfbu5q67t0c131i1fqne0o7we20ve2emh1046h9m854wfxo0spb2gv5d65v9x2ibuiti7rhr2y8u72hil5cutp63sbhi832kf3v4vuxa0"))
 	})
 
-	g.It("Author:mjoseph-NonHyperShiftHOST-Critical-51536-Support CoreDNS forwarding DNS requests over TLS using ForwardPlugin [Disruptive]", func() {
+	g.It("Author:mjoseph-DEPRECATED-NonHyperShiftHOST-Critical-51536-Support CoreDNS forwarding DNS requests over TLS using ForwardPlugin [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			cmFile              = filepath.Join(buildPruningBaseDir, "ca-bundle.pem")

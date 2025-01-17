@@ -188,7 +188,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	})
 
 	// author: mjoseph@redhat.com
-	g.It("Author:mjoseph-Critical-50842-destination-ca-certificate-secret annotation for destination CA Opaque certifcate", func() {
+	g.It("Author:mjoseph-DEPRECATED-Critical-50842-destination-ca-certificate-secret annotation for destination CA Opaque certifcate", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
 		ingressTemp := filepath.Join(buildPruningBaseDir, "ingress-destCA.yaml")
