@@ -540,6 +540,63 @@ func applyL3UDNtoNamespace(oc *exutil.CLI, namespace string, udnSelector int) er
 
 }
 
+func applyCUDNtoMatchLabelNS(oc *exutil.CLI, matchLabelKey, matchValue, crdName, ipv4cidr, ipv6cidr, cidr, topology string) (cudnCRDResource, error) {
+
+	var (
+		testDataDirUDN       = exutil.FixturePath("testdata", "networking/udn")
+		cudnCRDSingleStack   = filepath.Join(testDataDirUDN, "cudn_crd_singlestack_template.yaml")
+		cudnCRDdualStack     = filepath.Join(testDataDirUDN, "cudn_crd_dualstack_template.yaml")
+		cudnCRDL2dualStack   = filepath.Join(testDataDirUDN, "cudn_crd_layer2_dualstack_template.yaml")
+		cudnCRDL2SingleStack = filepath.Join(testDataDirUDN, "cudn_crd_layer2_singlestack_template.yaml")
+	)
+
+	ipStackType := checkIPStackType(oc)
+	cudncrd := cudnCRDResource{
+		crdname:    crdName,
+		labelkey:   matchLabelKey,
+		labelvalue: matchValue,
+		role:       "Primary",
+		mtu:        1300,
+		template:   cudnCRDSingleStack,
+	}
+
+	if topology == "layer3" {
+		if ipStackType == "dualstack" {
+			cudncrd.IPv4cidr = ipv4cidr
+			cudncrd.IPv4prefix = 24
+			cudncrd.IPv6cidr = ipv6cidr
+			cudncrd.IPv6prefix = 64
+			cudncrd.template = cudnCRDdualStack
+			cudncrd.createCUDNCRDDualStack(oc)
+		} else if ipStackType == "ipv6single" {
+			cudncrd.prefix = 64
+			cudncrd.cidr = cidr
+			cudncrd.template = cudnCRDSingleStack
+		} else if ipStackType == "ipv4single" {
+			cudncrd.prefix = 24
+			cudncrd.cidr = cidr
+			cudncrd.template = cudnCRDSingleStack
+			cudncrd.createCUDNCRDSingleStack(oc)
+		}
+	} else if topology == "layer2" {
+		if ipStackType == "dualstack" {
+			cudncrd.IPv4cidr = ipv4cidr
+			cudncrd.IPv6cidr = ipv6cidr
+			cudncrd.template = cudnCRDL2dualStack
+			cudncrd.createLayer2DualStackCUDNCRD(oc)
+		} else {
+			cudncrd.cidr = cidr
+			cudncrd.template = cudnCRDL2SingleStack
+			cudncrd.createLayer2SingleStackCUDNCRD(oc)
+		}
+	}
+	err := waitCUDNCRDApplied(oc, cudncrd.crdname)
+	if err != nil {
+		return cudncrd, err
+	}
+	return cudncrd, nil
+}
+
 func PingPod2PodPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string, namespaceDst string, podNameDst string) {
 	podIP1, podIP2 := getPodIP(oc, namespaceDst, podNameDst)
 	if podIP2 != "" {

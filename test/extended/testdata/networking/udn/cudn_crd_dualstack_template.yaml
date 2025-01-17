@@ -26,7 +26,6 @@ parameters:
 - name: LABELVALUE
 - name: LABELKEY
 - name: MTU
-- name: PREFIX
 - name: ROLE
 - name: IPv4CIDR
 - name: IPv4PREFIX

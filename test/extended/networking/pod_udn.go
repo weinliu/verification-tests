@@ -1829,7 +1829,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
 		}
 
-		exutil.By("2. create CUDN with Secondary role")
+		exutil.By("2. create UDN with Secondary role")
 		var cidr, ipv4cidr, ipv6cidr string
 		var prefix, ipv4prefix, ipv6prefix int32
 		if ipStackType == "ipv4single" {
@@ -1940,7 +1940,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
 		}
 
-		exutil.By("2. create CUDN with Secondary role in ns1")
+		exutil.By("2. create UDN with Secondary role in ns1")
 		var cidr, ipv4cidr, ipv6cidr []string
 		var prefix, ipv4prefix, ipv6prefix int32
 		if ipStackType == "ipv4single" {
@@ -2003,7 +2003,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		o.Expect(waitForPodWithLabelReady(oc, ns1, fmt.Sprintf("name=%s", pod1.podlabel))).NotTo(o.HaveOccurred())
 		podNames = append(podNames, getPodName(oc, pod1.namespace, fmt.Sprintf("name=%s", pod1.podlabel))[0])
 
-		exutil.By("4. create CUDN with secondary role in ns2")
+		exutil.By("4. create UDN with secondary role in ns2")
 		// create 2nd namespace
 		oc.SetupProject()
 		ns2 := oc.Namespace()
@@ -2058,7 +2058,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
 		}
 
-		exutil.By("2. create Layer2 CUDN with Secondary role")
+		exutil.By("2. create Layer2 UDN with Secondary role")
 		ipv4cidr := "10.150.0.0/16"
 		ipv6cidr := "2010:100:200::0/60"
 		udncrd := udnCRDResource{
@@ -2144,7 +2144,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
 		}
 
-		exutil.By("2. Create Layer2 CUDN with Secondary role in ns1")
+		exutil.By("2. Create Layer2 UDN with Secondary role in ns1")
 		ipv4cidr := []string{"10.150.0.0/16", "10.200.0.0/16"}
 		ipv6cidr := []string{"2010:100:200::0/60", "2011:100:200::0/60"}
 		udncrd1 := udnCRDResource{
@@ -2176,7 +2176,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		o.Expect(waitForPodWithLabelReady(oc, ns1, fmt.Sprintf("name=%s", pod1.podlabel))).NotTo(o.HaveOccurred())
 		podNames = append(podNames, getPodName(oc, pod1.namespace, fmt.Sprintf("name=%s", pod1.podlabel))[0])
 
-		exutil.By("4. create Layer2 CUDN with secondary role in ns2")
+		exutil.By("4. create Layer2 UDN with secondary role in ns2")
 		// create 2nd namespace
 		oc.SetupProject()
 		ns2 := oc.Namespace()
@@ -2668,17 +2668,14 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		verifyConnPod2Pod(oc, ns1, pod1Name, ns2, pod2Name, "SCTP", sctpPort, true)
 	})
 
-	g.It("Author:meinli-Medium-78492-[CUDN layer3] Validate CUDN enable creating shared OVN network across multiple namespaces", func() {
+	g.It("Author:meinli-Medium-78492-[CUDN layer3] Validate CUDN enable creating shared OVN network across multiple namespaces.", func() {
 		var (
-			cudnCRDL3dualStack         = filepath.Join(testDataDirUDN, "cudn_crd_dualstack_template.yaml")
-			cudnCRDL3SingleStack       = filepath.Join(testDataDirUDN, "cudn_crd_singlestack_template.yaml")
-			udnPodTemplate             = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
-			matchLabelKey              = "test.io"
-			matchValue                 = "cudn-network"
-			mtu                  int32 = 1300
+			udnPodTemplate = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
+			matchLabelKey  = "test.io"
+			matchValue     = "cudn-network-" + getRandomString()
+			crdName        = "cudn-network-78492"
 		)
 
-		ipStackType := checkIPStackType(oc)
 		exutil.By("1. Create three namespaces and label two of them as cudn selector")
 		var allNS []string
 		for i := 0; i < 3; i++ {
@@ -2697,53 +2694,20 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		}
 
 		exutil.By("2. create CUDN with two namespaces")
-		var cudncrd cudnCRDResource
+		ipStackType := checkIPStackType(oc)
 		var cidr, ipv4cidr, ipv6cidr string
-		var prefix, ipv4prefix, ipv6prefix int32
 		if ipStackType == "ipv4single" {
 			cidr = "10.150.0.0/16"
-			prefix = 24
 		} else {
 			if ipStackType == "ipv6single" {
 				cidr = "2010:100:200::0/60"
-				prefix = 64
 			} else {
 				ipv4cidr = "10.150.0.0/16"
-				ipv4prefix = 24
 				ipv6cidr = "2010:100:200::0/60"
-				ipv6prefix = 64
 			}
 		}
-		if ipStackType == "dualstack" {
-			cudncrd = cudnCRDResource{
-				crdname:    "cudn-network-78492",
-				labelvalue: matchValue,
-				labelkey:   matchLabelKey,
-				role:       "Primary",
-				mtu:        mtu,
-				IPv4cidr:   ipv4cidr,
-				IPv4prefix: ipv4prefix,
-				IPv6cidr:   ipv6cidr,
-				IPv6prefix: ipv6prefix,
-				template:   cudnCRDL3dualStack,
-			}
-			defer removeResource(oc, true, true, "clusteruserdefinednetwork", cudncrd.crdname)
-			cudncrd.createCUDNCRDDualStack(oc)
-		} else {
-			cudncrd = cudnCRDResource{
-				crdname:    "cudn-network-78492",
-				labelvalue: matchValue,
-				labelkey:   matchLabelKey,
-				role:       "Primary",
-				mtu:        mtu,
-				cidr:       cidr,
-				prefix:     prefix,
-				template:   cudnCRDL3SingleStack,
-			}
-			defer removeResource(oc, true, true, "clusteruserdefinednetwork", cudncrd.crdname)
-			cudncrd.createCUDNCRDSingleStack(oc)
-		}
-		err := waitCUDNCRDApplied(oc, cudncrd.crdname)
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", crdName)
+		_, err := applyCUDNtoMatchLabelNS(oc, matchLabelKey, matchValue, crdName, ipv4cidr, ipv6cidr, cidr, "layer3")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("3. create pods in ns1 and ns2, one pod in ns3")
@@ -2773,17 +2737,14 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		CurlPod2PodPassUDN(oc, pods[0].namespace, pods[0].name, pods[1].namespace, pods[1].name)
 	})
 
-	g.It("Author:meinli-Medium-78598-[CUDN layer2] Validate CUDN enable creating shared OVN network across multiple namespaces", func() {
+	g.It("Author:meinli-Medium-78598-[CUDN layer2] Validate CUDN enable creating shared OVN network across multiple namespaces.", func() {
 		var (
-			cudnCRDL2dualStack         = filepath.Join(testDataDirUDN, "cudn_crd_layer2_dualstack_template.yaml")
-			cudnCRDL2SingleStack       = filepath.Join(testDataDirUDN, "cudn_crd_layer2_singlestack_template.yaml")
-			udnPodTemplate             = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
-			matchLabelKey              = "test.io"
-			matchValue                 = "cudn-network"
-			mtu                  int32 = 1300
+			udnPodTemplate = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
+			matchLabelKey  = "test.io"
+			matchValue     = "cudn-network-" + getRandomString()
+			crdName        = "cudn-network-78598"
 		)
 
-		ipStackType := checkIPStackType(oc)
 		exutil.By("1. Create three namespaces and label two of them as cudn selector")
 		var allNS []string
 		for i := 0; i < 3; i++ {
@@ -2802,7 +2763,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		}
 
 		exutil.By("2. create CUDN with two namespaces")
-		var cudncrd cudnCRDResource
+		ipStackType := checkIPStackType(oc)
 		var cidr, ipv4cidr, ipv6cidr string
 		if ipStackType == "ipv4single" {
 			cidr = "10.150.0.0/16"
@@ -2814,33 +2775,8 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 				ipv6cidr = "2010:100:200::0/60"
 			}
 		}
-		if ipStackType == "dualstack" {
-			cudncrd = cudnCRDResource{
-				crdname:    "cudn-network-78598",
-				labelvalue: matchValue,
-				labelkey:   matchLabelKey,
-				role:       "Primary",
-				mtu:        mtu,
-				IPv4cidr:   ipv4cidr,
-				IPv6cidr:   ipv6cidr,
-				template:   cudnCRDL2dualStack,
-			}
-			defer removeResource(oc, true, true, "clusteruserdefinednetwork", cudncrd.crdname)
-			cudncrd.createLayer2DualStackCUDNCRD(oc)
-		} else {
-			cudncrd = cudnCRDResource{
-				crdname:    "cudn-network-78598",
-				labelvalue: matchValue,
-				labelkey:   matchLabelKey,
-				role:       "Primary",
-				mtu:        mtu,
-				cidr:       cidr,
-				template:   cudnCRDL2SingleStack,
-			}
-			defer removeResource(oc, true, true, "clusteruserdefinednetwork", cudncrd.crdname)
-			cudncrd.createLayer2SingleStackCUDNCRD(oc)
-		}
-		err := waitCUDNCRDApplied(oc, cudncrd.crdname)
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", crdName)
+		_, err := applyCUDNtoMatchLabelNS(oc, matchLabelKey, matchValue, crdName, ipv4cidr, ipv6cidr, cidr, "layer3")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("3. create pods in ns1 and ns2, one pod in ns3")
@@ -3103,6 +3039,140 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		exutil.By("5. Validate pod2pod isolation between CUDN and UDN NAD pod in ns3")
 		CurlPod2PodFailUDN(oc, pods[2].namespace, pods[2].name, pods[0].namespace, pods[0].name)
 		CurlPod2PodFailUDN(oc, pods[2].namespace, pods[2].name, pods[1].namespace, pods[1].name)
+
+		exutil.By("6. Validate pod2pod connection among CUDN pods")
+		CurlPod2PodPassUDN(oc, pods[0].namespace, pods[0].name, pods[1].namespace, pods[1].name)
+	})
+
+	g.It("Author:meinli-Medium-78496-[CUDN layer3] Validate conflicted creation when CUDN and UDN created in the same namespace.", func() {
+		var (
+			udnPodTemplate = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
+			matchLabelKey  = "test.io"
+			matchValue     = "cudn-network-" + getRandomString()
+			crdName        = "cudn-network-78496"
+		)
+
+		exutil.By("1. create two namespaces")
+		allNS := []string{oc.Namespace()}
+		oc.SetupProject()
+		allNS = append(allNS, oc.Namespace())
+		for _, ns := range allNS {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, fmt.Sprintf("%s-", matchLabelKey)).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, fmt.Sprintf("%s=%s", matchLabelKey, matchValue)).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("2. Create UDN CRD and pod in ns1")
+		ipStackType := checkIPStackType(oc)
+		var cidr, ipv4cidr, ipv6cidr string
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/48"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/48"
+			}
+		}
+		createGeneralUDNCRD(oc, allNS[0], "udn-network-78496-ns1", ipv4cidr, ipv6cidr, cidr, "layer3")
+		udnpod := udnPodResource{
+			name:      "hello-pod-" + allNS[0],
+			namespace: allNS[0],
+			label:     "hello-pod",
+			template:  udnPodTemplate,
+		}
+		defer removeResource(oc, true, true, "pod", udnpod.name, "-n", udnpod.namespace)
+		udnpod.createUdnPod(oc)
+		waitPodReady(oc, udnpod.namespace, udnpod.name)
+
+		exutil.By("3. create CUDN in ns1 and ns2")
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", crdName)
+		cudncrd, err := applyCUDNtoMatchLabelNS(oc, matchLabelKey, matchValue, crdName, ipv4cidr, ipv6cidr, cidr, "layer3")
+		o.Expect(err).To(o.HaveOccurred())
+
+		exutil.By("4. Create pods in ns2")
+		cudnpod := udnPodResource{
+			name:      "hello-pod-" + allNS[1],
+			namespace: allNS[1],
+			label:     "hello-pod",
+			template:  udnPodTemplate,
+		}
+		defer removeResource(oc, true, true, "pod", cudnpod.name, "-n", cudnpod.namespace)
+		cudnpod.createUdnPod(oc)
+		waitPodReady(oc, cudnpod.namespace, cudnpod.name)
+
+		exutil.By("5. validate CUDN in ns1 create failed and CUDN in ns2 create successfully")
+		output, err := oc.AsAdmin().WithoutNamespace().Run("describe").Args("clusteruserdefinednetwork.k8s.ovn.org", cudncrd.crdname).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).Should(o.ContainSubstring(fmt.Sprintf("primary network already exist in namespace \"%s\"", allNS[0])))
+
+		cudnPodIP, _ := getPodIPUDN(oc, cudnpod.namespace, cudnpod.name, "ovn-udn1")
+		o.Expect(cudnPodIP).NotTo(o.BeEmpty())
+
+		exutil.By("6. validate traffic isolation between UDN pod and CUDN pod")
+		CurlPod2PodFailUDN(oc, allNS[0], udnpod.name, allNS[1], cudnpod.name)
+	})
+
+	g.It("Author:meinli-Medium-78741-[CUDN layer3] validate pod2pod traffic between CUDN and UDN CRD.", func() {
+		var (
+			udnPodTemplate = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
+			matchLabelKey  = "test.io"
+			matchValue     = "cudn-network-" + getRandomString()
+			crdName        = "cudn-network-78741"
+		)
+
+		exutil.By("1. create three namespaces, first and second for CUDN, third for UDN")
+		cudnNS := []string{oc.Namespace()}
+		oc.SetupProject()
+		cudnNS = append(cudnNS, oc.Namespace())
+		for _, ns := range cudnNS {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, fmt.Sprintf("%s-", matchLabelKey)).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, fmt.Sprintf("%s=%s", matchLabelKey, matchValue)).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		oc.SetupProject()
+		udnNS := oc.Namespace()
+
+		exutil.By("2. create CUDN in cudnNS")
+		ipStackType := checkIPStackType(oc)
+		var cidr, ipv4cidr, ipv6cidr string
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/60"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/60"
+			}
+		}
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", crdName)
+		_, err := applyCUDNtoMatchLabelNS(oc, matchLabelKey, matchValue, crdName, ipv4cidr, ipv6cidr, cidr, "layer3")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3. create UDN in ns3")
+		createGeneralUDNCRD(oc, udnNS, "udn-network-78741", ipv4cidr, ipv6cidr, cidr, "layer3")
+
+		exutil.By("4. create pods in namespaces")
+		pods := make([]udnPodResource, 3)
+		for i, ns := range append(cudnNS, udnNS) {
+			pods[i] = udnPodResource{
+				name:      "hello-pod-" + ns,
+				namespace: ns,
+				label:     "hello-pod",
+				template:  udnPodTemplate,
+			}
+			defer removeResource(oc, true, true, "pod", pods[i].name, "-n", pods[i].namespace)
+			pods[i].createUdnPod(oc)
+			waitPodReady(oc, pods[i].namespace, pods[i].name)
+		}
+
+		exutil.By("5. Validate isolation from UDN pod to CUDN pod")
+		CurlPod2PodFailUDN(oc, pods[2].namespace, pods[2].name, pods[0].namespace, pods[0].name)
+
+		exutil.By("6. Validate isolation from CUDN pod to UDN pod")
+		CurlPod2PodFailUDN(oc, pods[1].namespace, pods[1].name, pods[2].namespace, pods[2].name)
 
 		exutil.By("6. Validate pod2pod connection among CUDN pods")
 		CurlPod2PodPassUDN(oc, pods[0].namespace, pods[0].name, pods[1].namespace, pods[1].name)
