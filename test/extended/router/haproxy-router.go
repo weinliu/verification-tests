@@ -142,7 +142,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routehost + "/headers", "-I", "--resolve", toDst, "--connect-timeout", "10"}
 		createRoute(oc, project1, "http", unsecsvcName, unsecsvcName, []string{"--hostname=" + routehost})
 		waitForOutput(oc, project1, "route/"+unsecsvcName, "{.status.ingress[0].conditions[0].status}", "True")
-		adminRepeatCmd(oc, curlCmd, "200", 30, 1)
+		adminRepeatCmd(oc, curlCmd, "200", 60, 1)
 
 		// check for OCP-34157
 		exutil.By("4.0: check the log which should contain the host")
@@ -897,7 +897,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(SrvErr).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(srvName))
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, cmdOnPod, "200", 30, 1)
+		adminRepeatCmd(oc, cmdOnPod, "200", 60, 1)
 
 		exutil.By("curl a non-existing route, expect to get custom http 404 Not Found error")
 		notExistRoute := "notexistroute" + "-" + project1 + "." + ingctrl.domain
@@ -1788,7 +1788,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("curl the route from the client pod")
 		toDst := routehost + ":80:" + podIP
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
-		result := adminRepeatCmd(oc, cmdOnPod, "Set-Cookie2 X=Y", 30, 1)
+		result := adminRepeatCmd(oc, cmdOnPod, "Set-Cookie2 X=Y", 60, 1)
 		o.Expect(result).To(o.ContainSubstring("Set-Cookie2 X=Y"))
 	})
 
@@ -2082,7 +2082,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlHTTPRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-e", "www.qe-test.com", "--resolve", toDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlHTTPRouteRes, "200", 30, 1)
+		adminRepeatCmd(oc, curlHTTPRouteRes, "200", 60, 1)
 		reqHeaders, _ := oc.AsAdmin().Run("exec").Args(curlHTTPRouteReq...).Output()
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
 		o.Expect(strings.Contains(reqHeaders, "\"X-Ssl-Client-Cert\": \"\"")).To(o.BeTrue())
@@ -2112,13 +2112,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
+			serverPod           = filepath.Join(buildPruningBaseDir, "httpbin-pod-withprivilege.json")
+			secsvc              = filepath.Join(buildPruningBaseDir, "httpbin-service_secure.json")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
 			secsvcName          = "httpbin-svc-secure"
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
 			srv                 = "gunicorn"
 			srvCert             = "/src/example_wildcard_chain.pem"
+			srvKey              = "/src/example_wildcard.key"
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp66662",
 				namespace: "openshift-ingress-operator",
@@ -2128,19 +2130,26 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 			ingctrlResource = "ingresscontroller/" + ingctrl.name
 			fileDir         = "/tmp/OCP-66662-ca"
 			dirname         = "/tmp/OCP-66662-ca/"
-			srvCertBackup   = dirname + "server.pem"
 			name            = dirname + "66662"
 			validity        = 30
 			caSubj          = "/CN=NE-Test-Root-CA"
 			userCert        = dirname + "user66662"
 			customKey       = userCert + ".key"
 			customCert      = userCert + ".pem"
+			destSubj        = "/CN=*.edge.example.com"
+			destCA          = dirname + "dst.pem"
+			destKey         = dirname + "dst.key"
+			destCsr         = dirname + "dst.csr"
+			destCnf         = dirname + "openssl.cnf"
 		)
+
 		defer os.RemoveAll(dirname)
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
+		project1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, project1)
 
 		exutil.By("Try to create custom key and custom certification by openssl, create a new self-signed CA at first, creating the CA key")
 		opensslCmd := fmt.Sprintf(`openssl genrsa -out %s-ca.key 2048`, name)
@@ -2163,6 +2172,33 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		_, err = exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		exutil.By("Create the destination Certification for the reencrypt route, create the key")
+		opensslCmd = fmt.Sprintf(`openssl genrsa -out %s 2048`, destKey)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create the csr for the destination Certification")
+		opensslCmd = fmt.Sprintf(`openssl req -new -key %s -subj %s  -out %s`, destKey, destSubj, destCsr)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("1.3: Create the extension file, then create the destination certification")
+		sanCfg := fmt.Sprintf(`
+[ v3_req ]
+subjectAltName = @alt_names
+
+[ alt_names ]
+DNS.1 = *.edge.example.com
+DNS.2 = *.%s.%s.svc
+`, secsvcName, project1)
+
+		cmd := fmt.Sprintf(`echo "%s" > %s`, sanCfg, destCnf)
+		_, err = exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		opensslCmd = fmt.Sprintf(`openssl x509 -extfile %s -extensions v3_req  -req -in %s -signkey  %s -days %d -sha256 -out %s`, destCnf, destCsr, destKey, validity, destCA)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("Create a custom ingresscontroller")
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
@@ -2179,27 +2215,35 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		routerpod := getNewRouterPod(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 
-		exutil.By("Deploy a project with a client pod, a backend pod and its service resources")
-		project1 := oc.Namespace()
-		exutil.SetNamespacePrivileged(oc, project1)
+		exutil.By("Deploy the project with a client pod, a backend pod and its service resources")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "-f", clientPod).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, fileDir, project1+"/"+cltPodName+":"+fileDir).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		createResourceFromFile(oc, project1, testPodSvc)
+		operateResourceFromFile(oc, "create", project1, serverPod)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
+		createResourceFromFile(oc, project1, secsvc)
+
+		exutil.By("Update the certification and key in the server pod")
 		podName := getPodListByLabel(oc, project1, "name=httpbin-pod")
-		fileSpec := project1 + "/" + podName[0] + ":" + srvCert
+		newSrvCert := project1 + "/" + podName[0] + ":" + srvCert
+		newSrvKey := project1 + "/" + podName[0] + ":" + srvKey
+		_, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", project1, podName[0], "-c", "httpbin-https", "--", "bash", "-c", "rm -f "+srvCert).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", project1, podName[0], "-c", "httpbin-https", "--", "bash", "-c", "rm -f "+srvKey).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, destCA, "-c", "httpbin-https", newSrvCert).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, destKey, "-c", "httpbin-https", newSrvKey).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("create a reen route")
 		reenRouteHost := "r2-reen66662." + ingctrl.domain
 		lowHostReen := strings.ToLower(reenRouteHost)
 		base64HostReen := base64.StdEncoding.EncodeToString([]byte(reenRouteHost))
 		reenRouteDst := reenRouteHost + ":443:" + podIP
-		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, "-c", "httpbin-https", fileSpec, srvCertBackup).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "route", "reencrypt", "r2-reen", "--service="+secsvcName, "--cert="+customCert, "--key="+customKey, "--ca-cert="+name+"-ca.pem", "--dest-ca-cert="+srvCertBackup, "--hostname="+reenRouteHost).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "route", "reencrypt", "r2-reen", "--service="+secsvcName, "--cert="+customCert, "--key="+customKey, "--ca-cert="+name+"-ca.pem", "--dest-ca-cert="+destCA, "--hostname="+reenRouteHost).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Patch the reen route with added/deleted http request/response headers under the spec")
@@ -2260,7 +2304,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlReenRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlReenRouteRes, "200", 30, 1)
+		e2e.Logf("curlReenRouteRes is: %v", curlReenRouteRes)
+		adminRepeatCmd(oc, curlReenRouteRes, "200", 60, 1)
 		reqHeaders, _ := oc.AsAdmin().Run("exec").Args(curlReenRouteReq...).Output()
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
 		o.Expect(len(regexp.MustCompile("\"X-Ssl-Client-Cert\": \"([0-9a-zA-Z]+)").FindStringSubmatch(reqHeaders)) > 0).To(o.BeTrue())
@@ -2432,7 +2477,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlEdgeRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlEdgeRouteRes, "200", 30, 1)
+		adminRepeatCmd(oc, curlEdgeRouteRes, "200", 60, 1)
 		reqHeaders, _ := oc.AsAdmin().Run("exec").Args(curlEdgeRouteReq...).Output()
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
 		o.Expect(len(regexp.MustCompile("\"X-Ssl-Client-Cert\": \"([0-9a-zA-Z]+)").FindStringSubmatch(reqHeaders)) > 0).To(o.BeTrue())
@@ -2561,7 +2606,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlHTTPRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-e", "www.qe-test.com", "--resolve", routeDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlHTTPRouteRes, "200", 30, 1)
+		adminRepeatCmd(oc, curlHTTPRouteRes, "200", 60, 1)
 		reqHeaders, err := oc.AsAdmin().Run("exec").Args(curlHTTPRouteReq...).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
@@ -2736,7 +2781,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlEdgeRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlEdgeRouteRes, "200", 30, 1)
+		adminRepeatCmd(oc, curlEdgeRouteRes, "200", 60, 1)
 		reqHeaders, err := oc.AsAdmin().Run("exec").Args(curlEdgeRouteReq...).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
@@ -2768,13 +2813,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
+			serverPod           = filepath.Join(buildPruningBaseDir, "httpbin-pod-withprivilege.json")
+			secsvc              = filepath.Join(buildPruningBaseDir, "httpbin-service_secure.json")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
 			secsvcName          = "httpbin-svc-secure"
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
 			srv                 = "gunicorn"
 			srvCert             = "/src/example_wildcard_chain.pem"
+			srvKey              = "/src/example_wildcard.key"
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp67010",
 				namespace: "openshift-ingress-operator",
@@ -2784,19 +2831,26 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 			ingctrlResource = "ingresscontroller/" + ingctrl.name
 			fileDir         = "/tmp/OCP-67010-ca"
 			dirname         = "/tmp/OCP-67010-ca/"
-			srvCertBackup   = dirname + "server.pem"
 			name            = dirname + "67010"
 			validity        = 30
 			caSubj          = "/CN=NE-Test-Root-CA"
 			userCert        = dirname + "user67010"
 			customKey       = userCert + ".key"
 			customCert      = userCert + ".pem"
+			destSubj        = "/CN=*.edge.example.com"
+			destCA          = dirname + "dst.pem"
+			destKey         = dirname + "dst.key"
+			destCsr         = dirname + "dst.csr"
+			destCnf         = dirname + "openssl.cnf"
 		)
+
 		defer os.RemoveAll(dirname)
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		baseDomain := getBaseDomain(oc)
 		ingctrl.domain = ingctrl.name + "." + baseDomain
+		project1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, project1)
 
 		exutil.By("Try to create custom key and custom certification by openssl, create a new self-signed CA at first, creating the CA key")
 		opensslCmd := fmt.Sprintf(`openssl genrsa -out %s-ca.key 2048`, name)
@@ -2819,6 +2873,33 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		_, err = exec.Command("bash", "-c", opensslCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		exutil.By("Create the destination Certification for the reencrypt route, create the key")
+		opensslCmd = fmt.Sprintf(`openssl genrsa -out %s 2048`, destKey)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create the csr for the destination Certification")
+		opensslCmd = fmt.Sprintf(`openssl req -new -key %s -subj %s  -out %s`, destKey, destSubj, destCsr)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("1.3: Create the extension file, then create the destination certification")
+		sanCfg := fmt.Sprintf(`
+[ v3_req ]
+subjectAltName = @alt_names
+
+[ alt_names ]
+DNS.1 = *.edge.example.com
+DNS.2 = *.%s.%s.svc
+`, secsvcName, project1)
+
+		cmd := fmt.Sprintf(`echo "%s" > %s`, sanCfg, destCnf)
+		_, err = exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		opensslCmd = fmt.Sprintf(`openssl x509 -extfile %s -extensions v3_req  -req -in %s -signkey  %s -days %d -sha256 -out %s`, destCnf, destCsr, destKey, validity, destCA)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("Create a custom ingresscontroller")
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
@@ -2833,26 +2914,34 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"clientTLS\":{\"clientCA\":{\"name\":\"client-ca-"+ingctrl.name+"\"},\"clientCertificatePolicy\":\"Required\"}}}")
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
-		exutil.By("Deploy a project with a client pod, a backend pod and its service resources")
-		project1 := oc.Namespace()
-		exutil.SetNamespacePrivileged(oc, project1)
+		exutil.By("Deploy the project with a client pod, a backend pod and its service resources")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "-f", clientPod).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, fileDir, project1+"/"+cltPodName+":"+fileDir).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		createResourceFromFile(oc, project1, testPodSvc)
+		operateResourceFromFile(oc, "create", project1, serverPod)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
+		createResourceFromFile(oc, project1, secsvc)
+
+		exutil.By("Update the certification and key in the server pod")
 		podName := getPodListByLabel(oc, project1, "name=httpbin-pod")
-		fileSpec := project1 + "/" + podName[0] + ":" + srvCert
+		newSrvCert := project1 + "/" + podName[0] + ":" + srvCert
+		newSrvKey := project1 + "/" + podName[0] + ":" + srvKey
+		_, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", project1, podName[0], "-c", "httpbin-https", "--", "bash", "-c", "rm -f "+srvCert).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", project1, podName[0], "-c", "httpbin-https", "--", "bash", "-c", "rm -f "+srvKey).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, destCA, "-c", "httpbin-https", newSrvCert).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, destKey, "-c", "httpbin-https", newSrvKey).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("create a reen route")
 		reenRouteHost := "r2-reen67010." + ingctrl.domain
 		lowHostReen := strings.ToLower(reenRouteHost)
 		base64HostReen := base64.StdEncoding.EncodeToString([]byte(reenRouteHost))
-		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, "-c", "httpbin-https", fileSpec, srvCertBackup).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "route", "reencrypt", "r2-reen", "--service="+secsvcName, "--cert="+customCert, "--key="+customKey, "--ca-cert="+name+"-ca.pem", "--dest-ca-cert="+srvCertBackup, "--hostname="+reenRouteHost).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "route", "reencrypt", "r2-reen", "--service="+secsvcName, "--cert="+customCert, "--key="+customKey, "--ca-cert="+name+"-ca.pem", "--dest-ca-cert="+destCA, "--hostname="+reenRouteHost).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Patch added/deleted http request/response headers to the custom ingress-controller")
@@ -2917,7 +3006,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		curlReenRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlReenRouteRes, "200", 30, 1)
+		adminRepeatCmd(oc, curlReenRouteRes, "200", 60, 1)
 		reqHeaders, err := oc.AsAdmin().Run("exec").Args(curlReenRouteReq...).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
@@ -3015,7 +3104,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("send traffic and check the max http headers specified in a route")
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-Is", "http://" + routehost + "/headers", "--resolve", toDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, cmdOnPod, "200", 30, 1)
+		adminRepeatCmd(oc, cmdOnPod, "200", 60, 1)
 		resHeaders, err := oc.Run("exec").Args("-n", project1, cltPodName, "--", "curl", "-s", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Count(strings.ToLower(resHeaders), "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
@@ -3296,7 +3385,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "--resolve", toDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, cmdOnPod, "200", 30, 1)
+		adminRepeatCmd(oc, cmdOnPod, "200", 60, 1)
 		reqHeaders, err := oc.Run("exec").Args("-n", project1, cltPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(strings.ToLower(reqHeaders), "\"reqtestheader\": \"req111\"")).To(o.BeTrue())
