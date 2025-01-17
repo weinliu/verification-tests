@@ -107,6 +107,15 @@ type Flowlog struct {
 	PktDropPackets         int    `json:"PktDropPackets,omitempty"`
 	PktDropLatestState     string `json:"PktDropLatestState,omitempty"`
 	PktDropLatestDropCause string `json:"PktDropLatestDropCause,omitempty"`
+	XlatDstAddr            string `json:"XlatDstAddr,omitempty"`
+	XlatDstK8S_Name        string `json:"XlatDstK8S_Name,omitempty"`
+	XlatDstK8S_Namespace   string `json:"XlatDstK8S_Namespace,omitempty"`
+	XlatDstK8S_Type        string `json:"XlatDstK8S_Type,omitempty"`
+	XlatDstPort            int    `json:"XlatDstPort,omitempty"`
+	XlatSrcAddr            string `json:"XlatSrcAddr,omitempty"`
+	XlatSrcK8S_Name        string `json:"XlatSrcK8S_Name,omitempty"`
+	XlatSrcK8S_Namespace   string `json:"XlatSrcK8S_Namespace,omitempty"`
+	ZoneId                 int    `json:"ZoneId,omitempty"`
 }
 
 type FlowRecord struct {

@@ -1732,6 +1732,80 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(r.Flowlog.DnsLatencyMs).Should(o.BeNumerically(">=", 0))
 		}
 	})
+
+	g.It("Author:aramesha-NonPreRelease-High-79015-Verify PacketTranslation feature [Serial]", func() {
+		namespace := oc.Namespace()
+
+		g.By("Deploy test server and client pods")
+		template := filePath.Join(baseDir, "test-client-server_template.yaml")
+		testTemplate := TestClientServerTemplate{
+			ServerNS:    "test-server-79015",
+			ClientNS:    "test-client-79015",
+			ServiceType: "ClusterIP",
+			Template:    template,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ClientNS)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ServerNS)
+		err := testTemplate.createTestClientServer(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.AssertAllPodsToBeReady(oc, testTemplate.ClientNS)
+		exutil.AssertAllPodsToBeReady(oc, testTemplate.ServerNS)
+
+		g.By("Deploy FlowCollector with PacketTranslation feature enabled")
+		flow := Flowcollector{
+			Namespace:     namespace,
+			EBPFeatures:   []string{"\"PacketTranslation\""},
+			LokiNamespace: namespace,
+			Template:      flowFixturePath,
+		}
+
+		defer flow.DeleteFlowcollector(oc)
+		flow.CreateFlowcollector(oc)
+
+		g.By("Escalate SA to cluster admin")
+		defer func() {
+			g.By("Remove cluster role")
+			err := removeSAFromAdmin(oc, "netobserv-plugin", namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = addSAToAdmin(oc, "netobserv-plugin", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
+
+		g.By("Wait for 2 mins before logs gets collected and written to loki")
+		startTime := time.Now()
+		time.Sleep(120 * time.Second)
+
+		var nginxPodName []string
+		nginxPodName, err = exutil.GetAllPods(oc, testTemplate.ServerNS)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		nginxPodIP := getPodIPv4(oc, testTemplate.ServerNS, nginxPodName[0])
+		clientPodIP := getPodIPv4(oc, testTemplate.ClientNS, "client")
+
+		lokilabels := Lokilabels{
+			App:              "netobserv-flowcollector",
+			DstK8S_Type:      "Service",
+			DstK8S_Namespace: testTemplate.ServerNS,
+			SrcK8S_Namespace: testTemplate.ClientNS,
+		}
+
+		g.By("Verify PacketTranslation flows")
+		flowRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of PacketTranslation flows > 0")
+		for _, r := range flowRecords {
+			o.Expect(r.Flowlog.XlatDstAddr).To(o.Equal(nginxPodIP))
+			o.Expect(r.Flowlog.XlatDstK8S_Name).To(o.Equal(nginxPodName[0]))
+			o.Expect(r.Flowlog.XlatDstK8S_Type).To(o.Equal("Pod"))
+			o.Expect(r.Flowlog.DstPort).Should(o.BeNumerically("==", 80))
+			o.Expect(r.Flowlog.XlatDstPort).Should(o.BeNumerically("==", 8080))
+			o.Expect(r.Flowlog.XlatSrcAddr).To(o.Equal(clientPodIP))
+			o.Expect(r.Flowlog.XlatSrcK8S_Name).To(o.Equal("client"))
+			o.Expect(r.Flowlog.ZoneId).Should(o.BeNumerically(">=", 0))
+		}
+	})
 	//Add future NetObserv + Loki test-cases here
 
 	g.Context("with Kafka", func() {

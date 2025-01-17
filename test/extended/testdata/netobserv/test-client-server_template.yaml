@@ -52,10 +52,10 @@ objects:
   spec:
     selector:
       app: nginx
-    type: NodePort
+    type: ${SERVICE_TYPE}
     ports:
     - protocol: TCP
-      port: 8080
+      port: 80
       targetPort: 8080
 - apiVersion: route.openshift.io/v1
   kind: Route
@@ -64,7 +64,7 @@ objects:
     name: nginx-route
   spec:
     port:
-      targetPort: 8080
+      targetPort: 80
     to:
       kind: Service
       name: nginx-service
@@ -89,7 +89,7 @@ objects:
         - -c
         - "
           \  while : ; do\n
-          \        curl nginx-service.${SERVER_NS}.svc:8080/data/${OBJECT_SIZE}  2>&1 >  /dev/null ; sleep 5 \n
+          \        curl nginx-service.${SERVER_NS}.svc:80/data/${OBJECT_SIZE}  2>&1 >  /dev/null ; sleep 5 \n
           \  done"
       image: quay.io/openshifttest/hello-openshift:1.2.0
       securityContext:
@@ -110,3 +110,5 @@ parameters:
   value: 100K
 - name: LARGE_BLOB
   value: "no"
+- name: SERVICE_TYPE
+  value: "NodePort"
