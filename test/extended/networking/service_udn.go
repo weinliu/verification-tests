@@ -30,6 +30,11 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 	g.BeforeEach(func() {
 
 		SkipIfNoFeatureGate(oc, "NetworkSegmentation")
+
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
 	})
 
 	g.It("Author:huirwang-High-76017-Service should be able to access for same NAD UDN pods in different namespaces (L3/L2).", func() {
