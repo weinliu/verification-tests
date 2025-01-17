@@ -3024,4 +3024,87 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		exutil.By("7. validate connection from CUDN pod to CUDN pod")
 		CurlPod2PodPassUDN(oc, pods[0].namespace, pods[0].name, pods[1].namespace, pods[1].name)
 	})
+
+	g.It("Author:meinli-Medium-78742-[CUDN layer2] Validate pod2pod traffic between CUDN and UDN NAD", func() {
+		var (
+			udnPodTemplate = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
+			udnNadtemplate = filepath.Join(testDataDirUDN, "udn_nad_template.yaml")
+			key            = "test.cudn.layer2"
+			crdName        = "cudn-network-78742"
+			values         = []string{"value-78742-1", "value-78742-2"}
+		)
+
+		exutil.By("1. create three namespaces, first and second for CUDN, third for UDN NAD")
+		cudnNS := []string{oc.Namespace()}
+		oc.SetupProject()
+		cudnNS = append(cudnNS, oc.Namespace())
+		for i := 0; i < 2; i++ {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", cudnNS[i], fmt.Sprintf("%s-", key)).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", cudnNS[i], fmt.Sprintf("%s=%s", key, values[i])).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+		oc.SetupProject()
+		nadNS := oc.Namespace()
+
+		exutil.By("2. create CUDN in cudnNS")
+		ipStackType := checkIPStackType(oc)
+		var cidr, ipv4cidr, ipv6cidr string
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/60"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/60"
+			}
+		}
+
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", crdName)
+		_, err := createCUDNCRD(oc, key, crdName, ipv4cidr, ipv6cidr, cidr, "layer2", values)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3. create UDN NAD in nadNS")
+		var subnet string
+		if ipStackType == "dualstack" {
+			subnet = "10.150.0.0/16,2010:100:200::0/60"
+		} else {
+			subnet = cidr
+		}
+
+		nadResourcename := "l2-network" + nadNS
+		nad := udnNetDefResource{
+			nadname:             "l2-network-" + nadNS,
+			namespace:           nadNS,
+			nad_network_name:    "l2-network",
+			topology:            "layer2",
+			subnet:              subnet,
+			mtu:                 1300,
+			net_attach_def_name: nadNS + "/" + nadResourcename,
+			role:                "primary",
+			template:            udnNadtemplate,
+		}
+		nad.createUdnNad(oc)
+
+		exutil.By("4. create pods in cudnNS and nadNS")
+		pods := make([]udnPodResource, 3)
+		for i, ns := range append(cudnNS, nadNS) {
+			pods[i] = udnPodResource{
+				name:      "hello-pod-" + ns,
+				namespace: ns,
+				label:     "hello-pod",
+				template:  udnPodTemplate,
+			}
+			defer removeResource(oc, true, true, "pod", pods[i].name, "-n", pods[i].namespace)
+			pods[i].createUdnPod(oc)
+			waitPodReady(oc, pods[i].namespace, pods[i].name)
+		}
+
+		exutil.By("5. Validate pod2pod isolation between CUDN and UDN NAD pod in ns3")
+		CurlPod2PodFailUDN(oc, pods[2].namespace, pods[2].name, pods[0].namespace, pods[0].name)
+		CurlPod2PodFailUDN(oc, pods[2].namespace, pods[2].name, pods[1].namespace, pods[1].name)
+
+		exutil.By("6. Validate pod2pod connection among CUDN pods")
+		CurlPod2PodPassUDN(oc, pods[0].namespace, pods[0].name, pods[1].namespace, pods[1].name)
+	})
 })
