@@ -2429,6 +2429,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	//author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-ConnectedOnly-Author:xiuwang-Medium-29706-Node secret takes effect when common secret is removed", func() {
+		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if platformtype == "BareMetal" || platformtype == "None" {
+			g.Skip("Skip this test on Bare metal cluster")
+		}
 		g.By("Add the secret of registry.redhat.io to project")
 		tempDataDir, err := extractPullSecret(oc)
 		defer os.RemoveAll(tempDataDir)
@@ -2459,6 +2464,11 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	//author: xiuwang@redhat.com
 	g.It("Author:xiuwang-NonHyperShiftHOST-DisconnectedOnly-Critical-29693-Import image from a secure registry using node credentials", func() {
+		platformtype, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.spec.platformSpec.type}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if platformtype == "BareMetal" || platformtype == "None" {
+			g.Skip("Skip this test on Bare metal cluster")
+		}
 		g.By("Check if image-policy-aosqe created")
 		policy, dis := checkDiscPolicy(oc)
 		if dis {
@@ -4030,7 +4040,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "badm"+cmd, "--ignore-not-found").Execute()
 			nsError := oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", "badm"+cmd).Execute()
 			o.Expect(nsError).NotTo(o.HaveOccurred())
-			output, err := oc.AsAdmin().WithoutNamespace().Run(cmd).Args("--image=registry.redhat.io/ubi8/httpd-24:latest~https://github.com/openshift/httpd-ex.git", "--import-mode=DoesNotExist", "--name=isi-bad-mode", "-n", "badm"+cmd).Output()
+			output, err := oc.AsAdmin().WithoutNamespace().Run(cmd).Args("--image=quay.io/openshifttest/httpd-24:multi~https://github.com/openshift/httpd-ex.git", "--import-mode=DoesNotExist", "--name=isi-bad-mode", "-n", "badm"+cmd).Output()
 			o.Expect(err).To(o.HaveOccurred())
 			if !strings.Contains(output, "error: valid ImportMode values are Legacy or PreserveOriginal") {
 				e2e.Failf("The import mode shouldn't be correct")
@@ -4042,13 +4052,13 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "pm"+cmd, "--ignore-not-found").Execute()
 			nsError = oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", "pm"+cmd).Execute()
 			o.Expect(nsError).NotTo(o.HaveOccurred())
-			output, err = oc.AsAdmin().WithoutNamespace().Run(cmd).Args("--image=registry.redhat.io/ubi8/httpd-24:latest~https://github.com/openshift/httpd-ex.git", "--import-mode=PreserveOriginal", "--name=isi-preserve-original-mode", "-n", "pm"+cmd).Output()
+			output, err = oc.AsAdmin().WithoutNamespace().Run(cmd).Args("--image=quay.io/openshifttest/httpd-24:multi~https://github.com/openshift/httpd-ex.git", "--import-mode=PreserveOriginal", "--name=isi-preserve-original-mode", "-n", "pm"+cmd).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !strings.Contains(output, `httpd-24" created`) {
 				e2e.Failf("The application with PreserveOriginal of ManifestList create failed with %s", cmd)
 			}
-			newCheck("expect", asAdmin, withoutNamespace, contain, "httpd-24:latest", ok, []string{"istag", "-n", "pm" + cmd}).check(oc)
-			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("istag", "httpd-24:latest", "-n", "pm"+cmd, "-o=jsonpath={..importMode} {..dockerImageManifests[*].architecture}").Output()
+			newCheck("expect", asAdmin, withoutNamespace, contain, "httpd-24:multi", ok, []string{"istag", "-n", "pm" + cmd}).check(oc)
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("istag", "httpd-24:multi", "-n", "pm"+cmd, "-o=jsonpath={..importMode} {..dockerImageManifests[*].architecture}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !strings.Contains(output, "PreserveOriginal") || !strings.Contains(output, "amd64 arm64") {
 				e2e.Failf("The imagestream with PreserveOriginal of ManifestList imported error with %s", cmd)
@@ -4060,13 +4070,13 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 			defer oc.WithoutNamespace().AsAdmin().Run("delete").Args("ns", "lm"+cmd, "--ignore-not-found").Execute()
 			nsError = oc.WithoutNamespace().AsAdmin().Run("create").Args("ns", "lm"+cmd).Execute()
 			o.Expect(nsError).NotTo(o.HaveOccurred())
-			output, err = oc.AsAdmin().WithoutNamespace().Run(cmd).Args("--image=registry.redhat.io/ubi8/httpd-24:latest~https://github.com/openshift/httpd-ex.git", "--import-mode=Legacy", "--name=isi-legacy", "-n", "lm"+cmd).Output()
+			output, err = oc.AsAdmin().WithoutNamespace().Run(cmd).Args("--image=quay.io/openshifttest/httpd-24:multi~https://github.com/openshift/httpd-ex.git", "--import-mode=Legacy", "--name=isi-legacy", "-n", "lm"+cmd).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !strings.Contains(output, `httpd-24" created`) {
 				e2e.Failf("The application with Legacy of ManifestList create failed with %s", cmd)
 			}
-			newCheck("expect", asAdmin, withoutNamespace, contain, "httpd-24:latest", ok, []string{"istag", "-n", "lm" + cmd}).check(oc)
-			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("istag", "httpd-24:latest", "-n", "lm"+cmd, "-o=jsonpath={..importMode} {..dockerImageManifests[*].architecture}").Output()
+			newCheck("expect", asAdmin, withoutNamespace, contain, "httpd-24:multi", ok, []string{"istag", "-n", "lm" + cmd}).check(oc)
+			output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("istag", "httpd-24:multi", "-n", "lm"+cmd, "-o=jsonpath={..importMode} {..dockerImageManifests[*].architecture}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !strings.Contains(output, "Legacy") || strings.Contains(output, "amd64 arm64") {
 				e2e.Failf("The imagestream with Legacy of ManifestList imported error with %s", cmd)
@@ -4356,7 +4366,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Set infra node nodeAffinity when infra node set - 30419")
-		infraworkers, err := oc.AsAdmin().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker,kubernetes.io/os!=windows,node-role.kubernetes.io/edge!=", `-o=jsonpath={.items[*].metadata.name}`).Output()
+		infraworkers, err := oc.AsAdmin().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker,kubernetes.io/os!=windows,node-role.kubernetes.io/edge!=,node-role.kubernetes.io/outposts!=", `-o=jsonpath={.items[*].metadata.name}`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		infraList := strings.Fields(infraworkers)
 		if len(infraList) < 2 {
