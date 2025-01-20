@@ -22,7 +22,7 @@ describe('Operators related features', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-59410,xiyuan,Security_and_Compliance) Install the Compliance Operator through web console',{tags:['@smoke','@e2e','admin','@osd-ccs']}, () => {
+  it('(OCP-59410,xiyuan,Security_and_Compliance) Install the Compliance Operator through web console',{tags:['@smoke','@e2e','admin','@osd-ccs','@isc']}, () => {
     const params = {
       ns: "openshift-compliance",
       filename: "ssb-cis.yaml",
@@ -37,8 +37,8 @@ describe('Operators related features', () => {
 
     // check the compliance oeprator pods
     cy.checkCommandResult(`oc get pod -l name=compliance-operator -n openshift-compliance`, 'Running', { retries: 6, interval: 10000 });
-    cy.checkCommandResult(`oc get pb ocp4 -n openshift-compliance`, 'VALID', { retries: 30, interval: 10000 });
-    cy.checkCommandResult(`oc get pb rhcos4 -n openshift-compliance`, 'VALID', { retries: 30, interval: 10000 });
+    cy.checkCommandResult(`oc get pb ocp4 -n openshift-compliance -o=jsonpath='{.status.dataStreamStatus}'`, 'VALID', { retries: 30, interval: 10000 });
+    cy.checkCommandResult(`oc get pb rhcos4 -n openshift-compliance -o=jsonpath='{.status.dataStreamStatus}'`, 'VALID', { retries: 30, interval: 10000 });
 
     //create a ssb
     cy.exec(`oc apply -f ./fixtures/securityandcompliance/${params.filename} -n ${params.ns} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: true });

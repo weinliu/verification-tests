@@ -22,7 +22,7 @@ describe('Operators related features', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
 
-  it('(OCP-50400,xiyuan,Security_and_Compliance) Install the Security Profiles Operator through GUI and check metrics on GUI',{tags:['@smoke','@e2e','admin','@osd-ccs','@rosa']}, () => {
+  it('(OCP-50400,xiyuan,Security_and_Compliance) Install the Security Profiles Operator through GUI and check metrics on GUI',{tags:['@smoke','@e2e','admin','@osd-ccs','@rosa','@isc']}, () => {
     // intall security profiles operator
     const params = {
       ns: "openshift-security-profiles",
