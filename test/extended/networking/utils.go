@@ -1954,25 +1954,26 @@ func patchReplaceResourceAsAdmin(oc *exutil.CLI, resource, patch string, nameSpa
 // For SDN plugin returns only IPv4 hostsubnet
 // Dual stack not supported on openshiftSDN
 // IPv6 single stack not supported on openshiftSDN
-func getNodeSubnet(oc *exutil.CLI, nodeName string) string {
+// network can be "default" for the default network or  UDN network name
+func getNodeSubnet(oc *exutil.CLI, nodeName string, network string) string {
 
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.annotations.k8s\\.ovn\\.org/node-subnets}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var data map[string]interface{}
 	json.Unmarshal([]byte(output), &data)
-	hostSubnets := data["default"].([]interface{})
+	hostSubnets := data[network].([]interface{})
 	hostSubnet := hostSubnets[0].(string)
 	return hostSubnet
 
 }
 
-func getNodeSubnetDualStack(oc *exutil.CLI, nodeName string) (string, string) {
+func getNodeSubnetDualStack(oc *exutil.CLI, nodeName string, network string) (string, string) {
 
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.annotations.k8s\\.ovn\\.org/node-subnets}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var data map[string]interface{}
 	json.Unmarshal([]byte(output), &data)
-	hostSubnets := data["default"].([]interface{})
+	hostSubnets := data["network"].([]interface{})
 	hostSubnetIPv4 := hostSubnets[0].(string)
 	hostSubnetIPv6 := hostSubnets[1].(string)
 
@@ -3516,7 +3517,7 @@ func generateKubeConfigFileForContext(oc *exutil.CLI, nodeName string, ovnKubeNo
 func findNodesWithSameSubnet(oc *exutil.CLI, nodeList []string) (bool, []string) {
 	sameSubNode := make(map[string][]string)
 	for _, node := range nodeList {
-		subNet := getNodeSubnet(oc, node)
+		subNet := getNodeSubnet(oc, node, "default")
 		if _, ok := sameSubNode[subNet]; ok {
 			sameSubNode[subNet] = append(sameSubNode[subNet], node)
 			if len(sameSubNode[subNet]) >= 2 {

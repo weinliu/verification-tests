@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -23,6 +24,12 @@ type BGPD struct {
 	NodesIP   []string
 	NodesIPv6 []string
 	Protocol  string
+}
+type routeAdvertisement struct {
+	name              string
+	networkLabelKey   string
+	networkLabelVaule string
+	template          string
 }
 
 type frrconfigurationResource struct {
@@ -102,14 +109,16 @@ func getExternalFRRIP(oc *exutil.CLI, allNodesIP1 []string, host string) string 
 	return externalFRRIP
 }
 
-func getDefaultPodNetwork(oc *exutil.CLI, allNodes []string) (map[string]string, map[string]string) {
+// getHostPodNetwork return each worker subnet from ovn-k,
+// network can be "default" for default network or UDN network with "$namespace.$UDN_name"
+func getHostPodNetwork(oc *exutil.CLI, allNodes []string, network string) (map[string]string, map[string]string) {
 	var hostSubnetCIDRv4, hostSubnetCIDRv6, hostSubnetCIDR string
 	podNetwork1Map := make(map[string]string)
 	podNetwork2Map := make(map[string]string)
 	ipStackType := checkIPStackType(oc)
 	if ipStackType == "dualstack" {
 		for _, node := range allNodes {
-			hostSubnetCIDRv4, hostSubnetCIDRv6 = getNodeSubnetDualStack(oc, node)
+			hostSubnetCIDRv4, hostSubnetCIDRv6 = getNodeSubnetDualStack(oc, node, network)
 			o.Expect(hostSubnetCIDRv4).NotTo(o.BeEmpty())
 			o.Expect(hostSubnetCIDRv6).NotTo(o.BeEmpty())
 			podNetwork1Map[node] = hostSubnetCIDRv4
@@ -117,7 +126,7 @@ func getDefaultPodNetwork(oc *exutil.CLI, allNodes []string) (map[string]string,
 		}
 	} else {
 		for _, node := range allNodes {
-			hostSubnetCIDR = getNodeSubnet(oc, node)
+			hostSubnetCIDR = getNodeSubnet(oc, node, network)
 			o.Expect(hostSubnetCIDR).NotTo(o.BeEmpty())
 			podNetwork1Map[node] = hostSubnetCIDR
 			podNetwork2Map[node] = ""
@@ -598,21 +607,24 @@ func verifyBGPRoutesOnClusterNode(oc *exutil.CLI, thisNode, externalFRRIP string
 	return true
 }
 
-func verifyIPRoutesOnExternalFrr(host, frrContainerID string, allNodes []string, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map map[string]string, expected bool) bool {
+func verifyIPRoutesOnExternalFrr(host string, allNodes []string, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map map[string]string, expected bool) bool {
 	var externalFrrCmd string
 
 	if netutils.IsIPv6String(nodesIP1Map[allNodes[0]]) {
-		externalFrrCmd = "sudo podman exec -it " + frrContainerID + " ip -6 route show | grep bgp"
+		externalFrrCmd = "ip -6 route show | grep bgp"
 	}
 
 	if netutils.IsIPv4String(nodesIP1Map[allNodes[0]]) {
-		externalFrrCmd = "sudo podman exec -it " + frrContainerID + " ip route show | grep bgp"
+		externalFrrCmd = "ip route show | grep bgp"
 	}
 	output, err := sshRunCmdOutPut(host, "root", externalFrrCmd)
 	e2e.Logf("on singlestack, ip or ip -6 route show on external frr, output:\n%s ", output)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, eachNode := range allNodes {
-		expectedBGPRoutePattern := fmt.Sprintf(`%s via %s.*proto bgp`, regexp.QuoteMeta(podNetwork1Map[eachNode]), regexp.QuoteMeta(nodesIP1Map[eachNode]))
+		o.Expect(regexp.QuoteMeta(podNetwork1Map[eachNode])).ShouldNot(o.BeEmpty())
+		o.Expect(regexp.QuoteMeta(nodesIP1Map[eachNode])).ShouldNot(o.BeEmpty())
+		expectedBGPRoutePattern := fmt.Sprintf(`%s .*via %s.*proto bgp`, podNetwork1Map[eachNode], nodesIP1Map[eachNode])
+		e2e.Logf("expected route is: %s", expectedBGPRoutePattern)
 		matched, err := regexp.MatchString(expectedBGPRoutePattern, output)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !matched && expected {
@@ -626,12 +638,15 @@ func verifyIPRoutesOnExternalFrr(host, frrContainerID string, allNodes []string,
 	}
 
 	if nodesIP2Map[allNodes[0]] != "" {
-		externalFrrCmd = "sudo podman exec -it " + frrContainerID + " ip -6 route show | grep bgp"
+		externalFrrCmd = "ip -6 route show | grep bgp"
 		output, err := sshRunCmdOutPut(host, "root", externalFrrCmd)
 		e2e.Logf("on Dualstack, ip -6 route show on external frr, output:\n%s ", output)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, eachNode := range allNodes {
-			expectedBGPRoutePattern := fmt.Sprintf(`%s\s+%s`, regexp.QuoteMeta(podNetwork2Map[eachNode]), regexp.QuoteMeta(nodesIP2Map[eachNode]))
+			o.Expect(regexp.QuoteMeta(podNetwork2Map[eachNode])).ShouldNot(o.BeEmpty())
+			o.Expect(regexp.QuoteMeta(nodesIP2Map[eachNode])).ShouldNot(o.BeEmpty())
+			expectedBGPRoutePattern := fmt.Sprintf(`%s\s+%s`, podNetwork2Map[eachNode], nodesIP2Map[eachNode])
+			e2e.Logf("expected route is: %s", expectedBGPRoutePattern)
 			matched, err := regexp.MatchString(expectedBGPRoutePattern, output)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !matched && expected {
@@ -660,6 +675,7 @@ func verifyIPRoutesOnClusterNode(oc *exutil.CLI, thisNode, externalFRRIP string,
 	for _, eachNode := range allNodes {
 		// Verify external routes are being learned to the cluster node's ip routing table
 		for _, network := range externalNetworks {
+
 			expectedBGPRoutePattern := fmt.Sprintf(`%s.* via %s .* proto bgp`, regexp.QuoteMeta(network), regexp.QuoteMeta(externalFRRIP))
 			matched, err := regexp.MatchString(expectedBGPRoutePattern, routesOutput1)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -689,6 +705,8 @@ func verifyIPRoutesOnClusterNode(oc *exutil.CLI, thisNode, externalFRRIP string,
 	if nodesIP2Map[allNodes[0]] != "" {
 		for _, eachNode := range allNodes {
 			if eachNode != thisNode {
+				o.Expect(regexp.QuoteMeta(podNetwork2Map[eachNode])).ShouldNot(o.BeEmpty())
+				o.Expect(regexp.QuoteMeta(nodesIP2Map[eachNode])).ShouldNot(o.BeEmpty())
 				expectedBGPRoutePattern := fmt.Sprintf(`%s.* via %s .* proto bgp`, regexp.QuoteMeta(podNetwork2Map[eachNode]), regexp.QuoteMeta(nodesIP2Map[eachNode]))
 				matched, err := regexp.MatchString(expectedBGPRoutePattern, routesOutput2)
 				o.Expect(err).NotTo(o.HaveOccurred())
@@ -738,4 +756,81 @@ func getIProutesWithFilterOnClusterNode(oc *exutil.CLI, node, filter string) (st
 		}
 	}
 	return output2, output1, result
+}
+
+// Create routeadvertisement resource
+func (ra *routeAdvertisement) createRA(oc *exutil.CLI) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ra.template, "-p", "NAME="+ra.name, "NETWORKSELECTORKEY="+ra.networkLabelKey, "NETWORKSELECTORVALUE="+ra.networkLabelVaule)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create routeadvertisement %v", ra.name))
+}
+
+func (ra *routeAdvertisement) deleteRA(oc *exutil.CLI) {
+	raList, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ra").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if strings.Contains(raList, ra.name) {
+		_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ra", ra.name).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	raList, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ra").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(raList).ShouldNot(o.ContainSubstring(ra.name))
+}
+
+// Curlexternal2PodPassUDN will check from external router access the udn pod ip when UDN network is advertised
+func Curlexternal2UDNPodPass(oc *exutil.CLI, host string, namespaceDst string, podNameDst string) {
+	// getPodIPUDN will returns IPv6 and IPv4 in vars in order on dual stack respectively and main IP in case of single stack (v4 or v6) in 1st var, and nil in 2nd var
+	podIP1, podIP2 := getPodIPUDN(oc, namespaceDst, podNameDst, "ovn-udn1")
+
+	if podIP2 != "" {
+		curl_command := "curl --connect-timeout 5 -s " + net.JoinHostPort(podIP1, "8080")
+		_, err := sshRunCmdOutPut(host, "root", curl_command)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		curl_command = "curl --connect-timeout 5 -s " + net.JoinHostPort(podIP2, "8080")
+		_, err = sshRunCmdOutPut(host, "root", curl_command)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		curl_command := "curl --connect-timeout 5 -s " + net.JoinHostPort(podIP1, "8080")
+		_, err := sshRunCmdOutPut(host, "root", curl_command)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	e2e.Logf("curl from external to UDN pod ip PASS")
+}
+
+func Curlexternal2UDNPodFail(oc *exutil.CLI, host string, namespaceDst string, podNameDst string) {
+	// getPodIPUDN will returns IPv6 and IPv4 in vars in order on dual stack respectively and main IP in case of single stack (v4 or v6) in 1st var, and nil in 2nd var
+	podIP1, podIP2 := getPodIPUDN(oc, namespaceDst, podNameDst, "ovn-udn1")
+
+	if podIP2 != "" {
+		curl_command := "curl --connect-timeout 5 -s " + net.JoinHostPort(podIP1, "8080")
+		_, err := sshRunCmdOutPut(host, "root", curl_command)
+		o.Expect(err).To(o.HaveOccurred())
+		curl_command = "curl --connect-timeout 5 -s " + net.JoinHostPort(podIP2, "8080")
+		_, err = sshRunCmdOutPut(host, "root", curl_command)
+		o.Expect(err).To(o.HaveOccurred())
+	} else {
+		curl_command := "curl --connect-timeout 5 -s " + net.JoinHostPort(podIP1, "8080")
+		_, err := sshRunCmdOutPut(host, "root", curl_command)
+		o.Expect(err).To(o.HaveOccurred())
+	}
+	e2e.Logf("curl from external to UDN pod ip Failed")
+}
+
+func setUDNLabel(oc *exutil.CLI, namespace string, name string, label string) {
+	err := oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", namespace, "UserDefinedNetwork", name, label, "--overwrite=true").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "UserDefinedNetwork", name, "--show-labels").Output()
+	if err != nil {
+		e2e.Failf("fail to get UserDefinedNetwork labels, error:%v", err)
+	}
+	if !strings.Contains(labels, label) {
+		e2e.Failf("UserDefinedNetwork do not have correct label: %s", label)
+	}
+
 }

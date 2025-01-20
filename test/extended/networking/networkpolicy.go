@@ -842,7 +842,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 
 		helloPod2ns1IP1, helloPod2ns1IP2 := getPodIP(oc, ns1, pod2ns1.name)
 		if ipStackType == "dualstack" {
-			hostSubnetCIDRIPv4, hostSubnetCIDRIPv6 := getNodeSubnetDualStack(oc, nodeList.Items[0].Name)
+			hostSubnetCIDRIPv4, hostSubnetCIDRIPv6 := getNodeSubnetDualStack(oc, nodeList.Items[0].Name, "default")
 			o.Expect(hostSubnetCIDRIPv6).NotTo(o.BeEmpty())
 			o.Expect(hostSubnetCIDRIPv4).NotTo(o.BeEmpty())
 			helloPod2ns1IPv6WithCidr := helloPod2ns1IP1 + "/128"
@@ -863,7 +863,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 			o.Expect(output).To(o.ContainSubstring("ipblock-dual-cidrs-egress-except"))
 		} else {
 			if ipStackType == "ipv6single" {
-				hostSubnetCIDRIPv6 := getNodeSubnet(oc, nodeList.Items[0].Name)
+				hostSubnetCIDRIPv6 := getNodeSubnet(oc, nodeList.Items[0].Name, "default")
 				o.Expect(hostSubnetCIDRIPv6).NotTo(o.BeEmpty())
 				helloPod2ns1IPv6WithCidr := helloPod2ns1IP1 + "/128"
 				g.By("create ipBlock Egress CIDRs with except rule Policy in ns1 on IPv6 singlestack")
@@ -876,7 +876,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 				}
 				npIPBlockNS1.createipBlockExceptObjectSingle(oc, true)
 			} else {
-				hostSubnetCIDRIPv4 := getNodeSubnet(oc, nodeList.Items[0].Name)
+				hostSubnetCIDRIPv4 := getNodeSubnet(oc, nodeList.Items[0].Name, "default")
 				o.Expect(hostSubnetCIDRIPv4).NotTo(o.BeEmpty())
 				helloPod2ns1IPv4WithCidr := helloPod2ns1IP1 + "/32"
 				g.By("create ipBlock Egress CIDRs with except rule Policy in ns1 on IPv4 singlestack")

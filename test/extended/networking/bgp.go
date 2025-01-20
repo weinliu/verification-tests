@@ -82,7 +82,7 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 		}
 
 		exutil.By("Get default podNetworks of all cluster nodes")
-		podNetwork2Map, podNetwork1Map = getDefaultPodNetwork(oc, allNodes)
+		podNetwork2Map, podNetwork1Map = getHostPodNetwork(oc, allNodes, "default")
 		o.Expect(len(podNetwork2Map)).NotTo(o.BeEquivalentTo(0))
 		o.Expect(len(podNetwork1Map)).NotTo(o.BeEquivalentTo(0))
 
@@ -128,7 +128,7 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-High-78338-route advertisement and route leaking through VRF-default on default network [Serial]", func() {
 
 		exutil.By("1. From IP routing table, verify cluster default podnetwork routes are advertised to external frr router")
-		result := verifyIPRoutesOnExternalFrr(host, frrContainerID, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+		result := verifyIPRoutesOnExternalFrr(host, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
 		o.Expect(result).To(o.BeTrue(), "Not all podNetwork are advertised to external frr router")
 
 		exutil.By("2. From IP routing table, verify external routes and other cluster nodes' default podnetwork are learned to each cluster node")

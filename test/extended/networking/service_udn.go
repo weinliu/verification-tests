@@ -1195,9 +1195,9 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		exutil.By("6. Find subnet")
 		var hostSubnetIPv4, hostSubnetIPv6, hostSubnet string
 		if ipStackType == "dualstack" {
-			hostSubnetIPv4, hostSubnetIPv6 = getNodeSubnetDualStack(oc, nodeList.Items[0].Name)
+			hostSubnetIPv4, hostSubnetIPv6 = getNodeSubnetDualStack(oc, nodeList.Items[0].Name, "default")
 		} else {
-			hostSubnet = getNodeSubnet(oc, nodeList.Items[0].Name)
+			hostSubnet = getNodeSubnet(oc, nodeList.Items[0].Name, "default")
 		}
 
 		nodeIP1, nodeIP2 := getNodeIP(oc, nodeList.Items[0].Name)
@@ -1434,9 +1434,9 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		exutil.By("6. Find subnet")
 		var hostSubnetIPv4, hostSubnetIPv6, hostSubnet string
 		if ipStackType == "dualstack" {
-			hostSubnetIPv4, hostSubnetIPv6 = getNodeSubnetDualStack(oc, nodeList.Items[0].Name)
+			hostSubnetIPv4, hostSubnetIPv6 = getNodeSubnetDualStack(oc, nodeList.Items[0].Name, "default")
 		} else {
-			hostSubnet = getNodeSubnet(oc, nodeList.Items[0].Name)
+			hostSubnet = getNodeSubnet(oc, nodeList.Items[0].Name, "default")
 		}
 
 		nodeIP1, nodeIP2 := getNodeIP(oc, nodeList.Items[0].Name)
