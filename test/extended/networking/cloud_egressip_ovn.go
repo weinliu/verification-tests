@@ -4209,7 +4209,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		egressIP2Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 
 		platform := exutil.CheckPlatform(oc)
-		ingressVIPs := GetIngressVIPOnPlatform(oc, platform)
+		ingressVIPs := GetVIPOnCluster(oc, platform, "ingressVIP")
 		ipStackType := checkIPStackType(oc)
 		e2e.Logf("\n\nThe platform is %v,   ingressVIP: %s\n\n", platform, ingressVIPs)
 		acceptedPlatform := strings.Contains(platform, "vsphere") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none")
@@ -4224,7 +4224,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		}
 
 		exutil.By("1. Find the node that has ingressVIP address(es), get another node that is not egressIP/ingressVIP node.\n")
-		ingressVIPNode := FindIngressVIPNode(oc, ingressVIPs[0])
+		ingressVIPNode := FindVIPNode(oc, ingressVIPs[0])
 		o.Expect(ingressVIPNode).NotTo(o.Equal(""))
 
 		_, ingressVIPNodeIP := getNodeIP(oc, ingressVIPNode)

@@ -1758,7 +1758,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 		if apiVIP == "" {
 			g.Skip("This case requires API VIP to configured on the cluster")
 		}
-		apiVIPNode := FindIngressVIPNode(oc, apiVIP)
+		apiVIPNode := FindVIPNode(oc, apiVIP)
 		if apiVIPNode == "" {
 			g.Skip("This case requires API VIP to configured on the cluster on one of nodes, found none")
 		}
