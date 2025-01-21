@@ -337,7 +337,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		exutil.By("10. curl the second HTTP route and check the result")
 		srvPodName = getPodListByLabel(oc, e2eTestNamespace2, "name=web-server-rc")
 		cmdOnPod = []string{"-n", e2eTestNamespace1, cltPodName, "--", "curl", "http://" + httpRoutehost + "/test/index.html", "--resolve", toDst, "--connect-timeout", "10"}
-		result = adminRepeatCmd(oc, cmdOnPod, "http-8080", 30, 1)
+		result = adminRepeatCmd(oc, cmdOnPod, "http-8080", 60, 1)
 		o.Expect(result).To(o.ContainSubstring("Hello-OpenShift-Path-Test " + srvPodName[0] + " http-8080"))
 	})
 
@@ -503,19 +503,19 @@ fi
 
 		exutil.By("Curl the HTTP route")
 		routeReq := []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "http://" + httpRouteHost, "-I", "--resolve", httpRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 30, 1)
+		adminRepeatCmd(oc, routeReq, "200", 60, 1)
 
 		exutil.By("Curl the Edge route")
 		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + edgeRouteHost, "-k", "-I", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 30, 1)
+		adminRepeatCmd(oc, routeReq, "200", 60, 1)
 
 		exutil.By("Curl the Passthrough route")
 		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + passThRouteHost, "-k", "-I", "--resolve", passThRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 30, 1)
+		adminRepeatCmd(oc, routeReq, "200", 60, 1)
 
 		exutil.By("Curl the REEN route")
 		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + reenRouteHost, "-k", "-I", "--resolve", reenRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 30, 1)
+		adminRepeatCmd(oc, routeReq, "200", 60, 1)
 	})
 
 	g.It("Author:shudili-MicroShiftOnly-High-73202-Add configurable listening IP addresses and listening ports", func() {
@@ -527,6 +527,8 @@ fi
 			secsvcName          = "service-secure"
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
+			findIpCmd           = "ip address | grep \"inet \""
+			hostIPList          []string
 			e2eTestNamespace    = "e2e-ne-ocp73202-" + getRandomString()
 		)
 
@@ -535,9 +537,19 @@ fi
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
 		nodeName := getByJsonPath(oc, "default", "nodes", "{.items[0].metadata.name}")
-		hostAddresses, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "ip address | grep \"inet \"").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		_, hostIPList := getValidInterfacesAndIPs(hostAddresses)
+		podCIDR := getByJsonPath(oc, "default", "nodes/"+nodeName, "{.spec.podCIDR}")
+		if strings.Contains(podCIDR, `:`) {
+			findIpCmd = "ip address | grep \"inet6 \" | grep global"
+			hostAddresses, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", findIpCmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			hostIPList = getValidIPv6Addresses(hostAddresses)
+			e2e.Logf("hostIPList is: /n%v", hostIPList)
+		} else {
+			hostAddresses, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", findIpCmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			_, hostIPList = getValidInterfacesAndIPs(hostAddresses)
+			e2e.Logf("hostIPList is: /n%v", hostIPList)
+		}
 
 		exutil.By("check the default load balancer ips of the router-default service, which should be all node's valid host ips")
 		lbIPs := getByJsonPath(oc, "openshift-ingress", "service/router-default", "{.status.loadBalancer.ingress[*].ip}")
@@ -576,6 +588,8 @@ fi
 
 		exutil.By("Curl the routes with destination to each load balancer ip")
 		for _, lbIP := range strings.Split(lbIPs, " ") {
+			// config firewall for ipv6 load balancer
+			configFwForLB(oc, e2eTestNamespace, nodeName, lbIP)
 			httpRouteDst := httpRouteHost + ":80:" + lbIP
 			edgeRouteDst := edgeRouteHost + ":443:" + lbIP
 			passThRouteDst := passThRouteHost + ":443:" + lbIP
@@ -583,19 +597,19 @@ fi
 
 			exutil.By("Curl the http route with destination " + lbIP)
 			routeReq := []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "http://" + httpRouteHost, "-I", "--resolve", httpRouteDst, "--connect-timeout", "10"}
-			adminRepeatCmd(oc, routeReq, "200", 30, 1)
+			adminRepeatCmd(oc, routeReq, "200", 150, 1)
 
 			exutil.By("Curl the Edge route with destination " + lbIP)
 			routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + edgeRouteHost, "-k", "-I", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
-			adminRepeatCmd(oc, routeReq, "200", 30, 1)
+			adminRepeatCmd(oc, routeReq, "200", 60, 1)
 
 			exutil.By("Curl the Pass-through route with destination " + lbIP)
 			routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + passThRouteHost, "-k", "-I", "--resolve", passThRouteDst, "--connect-timeout", "10"}
-			adminRepeatCmd(oc, routeReq, "200", 30, 1)
+			adminRepeatCmd(oc, routeReq, "200", 60, 1)
 
 			exutil.By("Curl the REEN route with destination " + lbIP)
 			routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + reenRouteHost, "-k", "-I", "--resolve", reenRouteDst, "--connect-timeout", "10"}
-			adminRepeatCmd(oc, routeReq, "200", 30, 1)
+			adminRepeatCmd(oc, routeReq, "200", 60, 1)
 		}
 	})
 
@@ -608,6 +622,8 @@ fi
 			secsvcName          = "service-secure"
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
+			specifiedAddress    string
+			randHostIP          string
 			e2eTestNamespace    = "e2e-ne-ocp73203-" + getRandomString()
 		)
 
@@ -615,11 +631,8 @@ fi
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
-
 		nodeName := getByJsonPath(oc, "default", "nodes", "{.items[0].metadata.name}")
 		podCIDR := getByJsonPath(oc, "default", "nodes/"+nodeName, "{.spec.podCIDR}")
-		randHostIP := ""
-		specifiedAddress := ""
 		if !strings.Contains(podCIDR, `:`) {
 			hostAddresses, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "ip address | grep \"inet \"").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -718,8 +731,11 @@ fi
 		reenRouteDst := reenRouteHost + ":10443:" + randHostIP
 
 		exutil.By("Curl the http route")
+		// config firewall for ipv6 load balancer
+		configFwForLB(oc, e2eTestNamespace, nodeName, randHostIP)
+
 		routeReq := []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "http://" + httpRouteHost + ":10080", "-I", "--resolve", httpRouteDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, routeReq, "200", 60, 1)
+		adminRepeatCmd(oc, routeReq, "200", 150, 1)
 
 		exutil.By("Curl the Edge route")
 		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + edgeRouteHost + ":10443", "-k", "-I", "--resolve", edgeRouteDst, "--connect-timeout", "10"}

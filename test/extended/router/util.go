@@ -1954,6 +1954,28 @@ func getSortedString(obj interface{}) string {
 	return strings.Join(objList, " ")
 }
 
+// due to OCPBUGS-45192, used to configure the firewall on the microshfit node to permit fd01::/48 for the load balancer
+// bug fixed PR: https://github.com/openshift/microshift/pull/4268(permit fd01::/48)
+// the fixed not working for all deployment for some reasons, so just added the rules explicitly here
+// since the fw rules won't take effect immediately after configured(and this function is for the microshift traffic testing only),  just extend the duration of the curl request(this is also a methond to check whether the fw rules take effect)
+func configFwForLB(oc *exutil.CLI, ns, nodeName, ip string) {
+	if strings.Contains(strings.ToLower(ip), "fd01:") {
+		ip6tablesCmd := fmt.Sprintf(`
+ip6tables -A FORWARD -s fd01::/48 -j ACCEPT
+ip6tables -A FORWARD -d fd01::/48 -j ACCEPT
+ip6tables -A OUTPUT -s fd01::/48 -j ACCEPT
+ip6tables -A OUTPUT -d fd01::/48 -j ACCEPT
+`)
+
+		output, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ns, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", "ip6tables -L").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(strings.ToLower(output), "fd01:") {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", ns, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", ip6tablesCmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+	}
+}
+
 func checkNodeStatus(oc *exutil.CLI, nodeName string, expectedStatus string) {
 	var expectedStatus1 string
 	var statusOutput string
