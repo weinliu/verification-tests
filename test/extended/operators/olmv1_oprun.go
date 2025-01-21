@@ -1881,7 +1881,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	})
 
 	// author: bandrade@redhat.com
-	g.It("Author:bandrade-ConnectedOnly-NonHyperShiftHOST-High-69193-olmv1 major version zero", func() {
+	g.It("Author:bandrade-DEPRECATED-ConnectedOnly-NonHyperShiftHOST-High-69193-olmv1 major version zero", func() {
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -2003,7 +2003,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	})
 
 	// author: bandrade@redhat.com
-	g.It("Author:bandrade-ConnectedOnly-NonHyperShiftHOST-High-70719-olmv1 Upgrade non-zero major version", func() {
+	g.It("Author:bandrade-DEPRECATED-ConnectedOnly-NonHyperShiftHOST-High-70719-olmv1 Upgrade non-zero major version", func() {
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
