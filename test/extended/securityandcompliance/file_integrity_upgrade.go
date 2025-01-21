@@ -75,7 +75,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator in
 			template:          fioInitialdelayTemplate,
 		}
 
-		sub.skipMissingCatalogsources(oc)
+		sub.skipMissingCatalogsources(oc, "file-integrity-operator")
 		g.By("Install File Integrity Operator and check it is sucessfully installed !!! ")
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("fileintegrity", "--all", "-n", sub.namespace, "--ignore-not-found").Execute()
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", sub.namespace, "-n", sub.namespace, "--ignore-not-found").Execute()

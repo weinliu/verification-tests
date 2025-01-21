@@ -90,7 +90,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance File_Integrity_Operator an
 			template:          fioTemplate,
 		}
 
-		sub.skipMissingCatalogsources(oc)
+		sub.skipMissingCatalogsources(oc, "file-integrity-operator")
 		g.By("Install File Integrity Operator and check it is sucessfully installed !!! ")
 		createFileIntegrityOperator(oc, sub, og)
 	})

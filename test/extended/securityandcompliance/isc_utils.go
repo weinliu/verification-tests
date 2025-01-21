@@ -466,28 +466,29 @@ func skipNotelemetryFound(oc *exutil.CLI) {
 	}
 }
 
-// SkipMissingCatalogsource mean to skip test when catalogsource/qe-app-registry not available
-func SkipMissingCatalogsource(oc *exutil.CLI) {
-	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
-	if strings.Contains(output, "NotFound") {
-		g.Skip("Skip since catalogsource/qe-app-registry not available")
-	}
-}
-
-// skipMissingCatalogsources mean to skip test when catalogsources qe-app-registry and redhat-operators not available
-
-func (sub *subscriptionDescription) skipMissingCatalogsources(oc *exutil.CLI) {
-	output, errQeReg := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
-	if errQeReg != nil && strings.Contains(output, "NotFound") {
-		output, errRed := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "redhat-operators").Output()
-		if errRed != nil && strings.Contains(output, "NotFound") {
-			g.Skip("Skip since catalogsources not available")
+func (sub *subscriptionDescription) skipMissingCatalogsources(oc *exutil.CLI, customCatalogsource string) {
+	// Check for the custom catalogsource first
+	output, errCustom := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", customCatalogsource).Output()
+	if errCustom != nil && strings.Contains(output, "NotFound") {
+		// If custom catalogsource is missing, check for "qe-app-registry"
+		output, errQeReg := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
+		if errQeReg != nil && strings.Contains(output, "NotFound") {
+			// If both custom and "qe-app-registry" are missing, check for "redhat-operators"
+			output, errRed := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "redhat-operators").Output()
+			if errRed != nil && strings.Contains(output, "NotFound") {
+				// Skip the test if all catalog sources are missing
+				g.Skip("Skip since catalogsources not available")
+			} else {
+				o.Expect(errRed).NotTo(o.HaveOccurred())
+				sub.catalogSourceName = "redhat-operators"
+			}
 		} else {
-			o.Expect(errRed).NotTo(o.HaveOccurred())
+			o.Expect(errQeReg).NotTo(o.HaveOccurred())
+			sub.catalogSourceName = "qe-app-registry"
 		}
-		sub.catalogSourceName = "redhat-operators"
 	} else {
-		o.Expect(errQeReg).NotTo(o.HaveOccurred())
+		o.Expect(errCustom).NotTo(o.HaveOccurred())
+		sub.catalogSourceName = customCatalogsource
 	}
 }
 
