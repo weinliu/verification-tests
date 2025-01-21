@@ -13,7 +13,7 @@ spec:
         - -c
         - "
           \  while : ; do\n
-          \        curl nginx-service.test-server-68125.svc:8080/data/100K  2>&1 >  /dev/null ; sleep 5 \n
+          \        curl nginx-service.test-server-68125.svc:80/data/100K  2>&1 >  /dev/null ; sleep 5 \n
           \  done"
     image: quay.io/openshifttest/hello-openshift:1.2.0
     securityContext:

@@ -31,12 +31,19 @@ func isFlowCollectorAPIExists(oc *exutil.CLI) (bool, error) {
 func verifyFlowRecordFromLogs(podLog string) {
 	re := regexp.MustCompile("{\"AgentIP\":.*")
 	flowRecords := re.FindAllString(podLog, -3)
+	partialFlowRegex, err := regexp.Compile("DstMac\":\"00:00:00:00:00:00")
 	for _, flow := range flowRecords {
-		o.Expect(flow).Should(o.And(
-			o.MatchRegexp("Bytes.:[0-9]+"),
-			o.MatchRegexp("TimeFlowEndMs.:[1-9][0-9]+"),
-			o.MatchRegexp("TimeFlowStartMs.:[1-9][0-9]+"),
-			o.MatchRegexp("TimeReceived.:[1-9][0-9]+")), flow)
+		// skip assertions and log Partial flows
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if partialFlowRegex.Match([]byte(flow)) {
+			e2e.Logf("Found partial flows %s", flow)
+		} else {
+			o.Expect(flow).Should(o.And(
+				o.MatchRegexp("Bytes.:[0-9]+"),
+				o.MatchRegexp("TimeFlowEndMs.:[1-9][0-9]+"),
+				o.MatchRegexp("TimeFlowStartMs.:[1-9][0-9]+"),
+				o.MatchRegexp("TimeReceived.:[1-9][0-9]+")), flow)
+		}
 	}
 }
 

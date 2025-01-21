@@ -327,17 +327,29 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		namespace := oc.Namespace()
 
 		g.By("Deploying test server and client pods")
-		template := filePath.Join(baseDir, "test-client-server_template.yaml")
-		testTemplate := TestClientServerTemplate{
-			ServerNS:   "test-server-54929",
+		serverTemplate := filePath.Join(baseDir, "test-nginx-server_template.yaml")
+		testServerTemplate := TestServerTemplate{
+			ServerNS: "test-server-54929",
+			Template: serverTemplate,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testServerTemplate.ServerNS)
+		err := testServerTemplate.createServer(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testServerTemplate.ServerNS)
+
+		clientTemplate := filePath.Join(baseDir, "test-nginx-client_template.yaml")
+
+		testClientTemplate := TestClientTemplate{
+			ServerNS:   testServerTemplate.ServerNS,
 			ClientNS:   "test-client-54929",
 			ObjectSize: "100K",
-			Template:   template,
+			Template:   clientTemplate,
 		}
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ClientNS)
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ServerNS)
-		err := testTemplate.createTestClientServer(oc)
+
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClientTemplate.ClientNS)
+		err = testClientTemplate.createClient(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testClientTemplate.ClientNS)
 
 		startTime := time.Now()
 
@@ -364,8 +376,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		g.By("get flowlogs from loki")
 		lokilabels := Lokilabels{
 			App:              "netobserv-flowcollector",
-			SrcK8S_Namespace: testTemplate.ServerNS,
-			DstK8S_Namespace: testTemplate.ClientNS,
+			SrcK8S_Namespace: testServerTemplate.ServerNS,
+			DstK8S_Namespace: testClientTemplate.ClientNS,
 			SrcK8S_OwnerName: "nginx-service",
 			FlowDirection:    "0",
 		}
@@ -378,10 +390,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flowRecords > 0")
 
 		// verify flow correctness
-		verifyFlowCorrectness(testTemplate.ObjectSize, flowRecords)
+		verifyFlowCorrectness(testClientTemplate.ObjectSize, flowRecords)
 
 		// verify inner metrics
-		query := fmt.Sprintf(`sum(rate(netobserv_workload_ingress_bytes_total{SrcK8S_Namespace="%s"}[1m]))`, testTemplate.ClientNS)
+		query := fmt.Sprintf(`sum(rate(netobserv_workload_ingress_bytes_total{SrcK8S_Namespace="%s"}[1m]))`, testClientTemplate.ClientNS)
 		metrics := pollMetrics(oc, query)
 
 		// verfy metric is between 270 and 330
@@ -393,17 +405,30 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		startTime := time.Now()
 
 		g.By("Deploying test server and client pods")
-		template := filePath.Join(baseDir, "test-client-server_template.yaml")
-		testTemplate := TestClientServerTemplate{
-			ServerNS:   "test-server-60701",
+		serverTemplate := filePath.Join(baseDir, "test-nginx-server_template.yaml")
+		testServerTemplate := TestServerTemplate{
+			ServerNS: "test-server-60701",
+			Template: serverTemplate,
+		}
+
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testServerTemplate.ServerNS)
+		err := testServerTemplate.createServer(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testServerTemplate.ServerNS)
+
+		clientTemplate := filePath.Join(baseDir, "test-nginx-client_template.yaml")
+
+		testClientTemplate := TestClientTemplate{
+			ServerNS:   testServerTemplate.ServerNS,
 			ClientNS:   "test-client-60701",
 			ObjectSize: "100K",
-			Template:   template,
+			Template:   clientTemplate,
 		}
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ClientNS)
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ServerNS)
-		err := testTemplate.createTestClientServer(oc)
+
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClientTemplate.ClientNS)
+		err = testClientTemplate.createClient(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testClientTemplate.ClientNS)
 
 		g.By("Deploy FlowCollector with endConversations LogType")
 		flow := Flowcollector{
@@ -432,8 +457,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		lokilabels := Lokilabels{
 			App:              "netobserv-flowcollector",
-			SrcK8S_Namespace: testTemplate.ClientNS,
-			DstK8S_Namespace: testTemplate.ServerNS,
+			SrcK8S_Namespace: testClientTemplate.ClientNS,
+			DstK8S_Namespace: testClientTemplate.ServerNS,
 			RecordType:       "endConnection",
 			DstK8S_OwnerName: "nginx-service",
 		}
@@ -510,16 +535,28 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		flow.CreateFlowcollector(oc)
 
 		g.By("Deploying test server and client pods")
-		template := filePath.Join(baseDir, "test-client-server_template.yaml")
-		testTemplate := TestClientServerTemplate{
-			ServerNS:   "test-server-63839",
+		serverTemplate := filePath.Join(baseDir, "test-nginx-server_template.yaml")
+		testServerTemplate := TestServerTemplate{
+			ServerNS: "test-server-63839",
+			Template: serverTemplate,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testServerTemplate.ServerNS)
+		err = testServerTemplate.createServer(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testServerTemplate.ServerNS)
+
+		clientTemplate := filePath.Join(baseDir, "test-nginx-client_template.yaml")
+
+		testClientTemplate := TestClientTemplate{
+			ServerNS:   testServerTemplate.ServerNS,
 			ClientNS:   "test-client-63839",
 			ObjectSize: "100K",
-			Template:   template,
+			Template:   clientTemplate,
 		}
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ClientNS)
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ServerNS)
-		err = testTemplate.createTestClientServer(oc)
+
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClientTemplate.ClientNS)
+		err = testClientTemplate.createClient(oc)
+		exutil.AssertAllPodsToBeReady(oc, testClientTemplate.ClientNS)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// save original context
@@ -581,8 +618,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		g.By("verify no logs are fetched from an NS that user is not admin for")
 		lokilabels = Lokilabels{
 			App:              "netobserv-flowcollector",
-			SrcK8S_Namespace: testTemplate.ServerNS,
-			DstK8S_Namespace: testTemplate.ClientNS,
+			SrcK8S_Namespace: testClientTemplate.ServerNS,
+			DstK8S_Namespace: testClientTemplate.ClientNS,
 			SrcK8S_OwnerName: "nginx-service",
 			FlowDirection:    "0",
 		}
@@ -826,17 +863,27 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		namespace := oc.Namespace()
 
 		g.By("Deploying test server and client pods")
-		template := filePath.Join(baseDir, "test-client-server_template.yaml")
-		testTemplate := TestClientServerTemplate{
-			ServerNS:   "test-server-68125",
+		serverTemplate := filePath.Join(baseDir, "test-nginx-server_template.yaml")
+		testServerTemplate := TestServerTemplate{
+			ServerNS: "test-server-68125",
+			Template: serverTemplate,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testServerTemplate.ServerNS)
+		err := testServerTemplate.createServer(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testServerTemplate.ServerNS)
+
+		clientTemplate := filePath.Join(baseDir, "test-nginx-client_template.yaml")
+		testClientTemplate := TestClientTemplate{
+			ServerNS:   testServerTemplate.ServerNS,
 			ClientNS:   "test-client-68125",
 			ObjectSize: "100K",
-			Template:   template,
+			Template:   clientTemplate,
 		}
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ClientNS)
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ServerNS)
-		err := testTemplate.createTestClientServer(oc)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClientTemplate.ClientNS)
+		err = testClientTemplate.createClient(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testClientTemplate.ClientNS)
 
 		exutil.By("Check cluster network type")
 		networkType := exutil.CheckNetworkType(oc)
@@ -846,8 +893,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			clientDSCPPath := filePath.Join(networkingDir, "test-client-DSCP.yaml")
 			egressQoSPath := filePath.Join(networkingDir, "egressQoS.yaml")
 			g.By("Deploy nginx client pod and egressQoS")
-			createResourceFromFile(oc, testTemplate.ClientNS, clientDSCPPath)
-			createResourceFromFile(oc, testTemplate.ClientNS, egressQoSPath)
+			createResourceFromFile(oc, testClientTemplate.ClientNS, clientDSCPPath)
+			createResourceFromFile(oc, testClientTemplate.ClientNS, egressQoSPath)
 		}
 
 		g.By("Deploy FlowCollector")
@@ -878,8 +925,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		// Scenario1: Verify default DSCP value=0
 		lokilabels := Lokilabels{
 			App:              "netobserv-flowcollector",
-			SrcK8S_Namespace: testTemplate.ClientNS,
-			DstK8S_Namespace: testTemplate.ServerNS,
+			SrcK8S_Namespace: testClientTemplate.ClientNS,
+			DstK8S_Namespace: testClientTemplate.ServerNS,
 		}
 		parameters := []string{"SrcK8S_Name=\"client\""}
 
@@ -925,11 +972,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Ping loopback address with custom QoS from client pod")
 		startTime = time.Now()
-		e2eoutput.RunHostCmd(testTemplate.ClientNS, "client", "ping -c 10 -Q 0x80 "+destinationIP)
+		e2eoutput.RunHostCmd(testClientTemplate.ClientNS, "client", "ping -c 10 -Q 0x80 "+destinationIP)
 
 		lokilabels = Lokilabels{
 			App:              "netobserv-flowcollector",
-			SrcK8S_Namespace: testTemplate.ClientNS,
+			SrcK8S_Namespace: testClientTemplate.ClientNS,
 		}
 		parameters = []string{"DstAddr=\"" + destinationIP + "\""}
 
@@ -1352,18 +1399,27 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
 
 		g.By("Deploy test server and client pods")
-		template := filePath.Join(baseDir, "test-client-server_template.yaml")
-		testTemplate := TestClientServerTemplate{
-			ServerNS:   "test-server-67782",
-			ClientNS:   "test-client-67782",
-			ObjectSize: "100M",
-			LargeBlob:  "yes",
-			Template:   template,
+		serverTemplate := filePath.Join(baseDir, "test-nginx-server_template.yaml")
+		testServerTemplate := TestServerTemplate{
+			ServerNS: "test-server-67782",
+			Template: serverTemplate,
 		}
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ClientNS)
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ServerNS)
-		err = testTemplate.createTestClientServer(oc)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testServerTemplate.ServerNS)
+		err = testServerTemplate.createServer(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testServerTemplate.ServerNS)
+
+		clientTemplate := filePath.Join(baseDir, "test-nginx-client_template.yaml")
+		testClientTemplate := TestClientTemplate{
+			ServerNS:   testServerTemplate.ServerNS,
+			ClientNS:   "test-client-67782",
+			ObjectSize: "100K",
+			Template:   clientTemplate,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClientTemplate.ClientNS)
+		err = testClientTemplate.createClient(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testClientTemplate.ClientNS)
 
 		g.By("Wait for 2 mins before logs gets collected and written to loki")
 		startTime := time.Now()
@@ -1371,8 +1427,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		lokilabels := Lokilabels{
 			App:              "netobserv-flowcollector",
-			SrcK8S_Namespace: testTemplate.ServerNS,
-			DstK8S_Namespace: testTemplate.ClientNS,
+			SrcK8S_Namespace: testClientTemplate.ServerNS,
+			DstK8S_Namespace: testClientTemplate.ClientNS,
 			SrcK8S_OwnerName: "nginx-service",
 			FlowDirection:    "0",
 		}
@@ -1383,7 +1439,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows written to loki > 0")
 
 		g.By("Verify flow correctness")
-		verifyFlowCorrectness(testTemplate.ObjectSize, flowRecords)
+		verifyFlowCorrectness(testClientTemplate.ObjectSize, flowRecords)
 	})
 
 	g.It("Author:aramesha-High-75656-Verify TCP flags [Disruptive]", func() {
@@ -1448,7 +1504,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		g.By("Deploy test client pod to induce SYN flooding")
 		template := filePath.Join(baseDir, "test-client_template.yaml")
-		testTemplate := TestClientServerTemplate{
+		testTemplate := TestClientTemplate{
 			ClientNS: "test-client-75656",
 			Template: template,
 		}
@@ -1582,8 +1638,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		waitUntilVMReady(oc, "test-vm2", testNS)
 
 		secondaryNetworkConfig := map[string]interface{}{
-			"index": []interface{}{"MAC"},
-			"name":  "test-76537/l2-network",
+			"name": "test-76537/l2-network",
 		}
 
 		config, err := json.Marshal(secondaryNetworkConfig)
@@ -1737,20 +1792,28 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		namespace := oc.Namespace()
 
 		g.By("Deploy test server and client pods")
-		template := filePath.Join(baseDir, "test-client-server_template.yaml")
-		testTemplate := TestClientServerTemplate{
+		servertemplate := filePath.Join(baseDir, "test-nginx-server_template.yaml")
+		testServerTemplate := TestServerTemplate{
 			ServerNS:    "test-server-79015",
-			ClientNS:    "test-client-79015",
 			ServiceType: "ClusterIP",
-			Template:    template,
+			Template:    servertemplate,
 		}
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ClientNS)
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(testTemplate.ServerNS)
-		err := testTemplate.createTestClientServer(oc)
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testServerTemplate.ServerNS)
+		err := testServerTemplate.createServer(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testServerTemplate.ServerNS)
 
-		exutil.AssertAllPodsToBeReady(oc, testTemplate.ClientNS)
-		exutil.AssertAllPodsToBeReady(oc, testTemplate.ServerNS)
+		clientTemplate := filePath.Join(baseDir, "test-nginx-client_template.yaml")
+		testClientTemplate := TestClientTemplate{
+			ServerNS:   testServerTemplate.ServerNS,
+			ClientNS:   "test-client-79015",
+			ObjectSize: "100K",
+			Template:   clientTemplate,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClientTemplate.ClientNS)
+		err = testClientTemplate.createClient(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testClientTemplate.ClientNS)
 
 		g.By("Deploy FlowCollector with PacketTranslation feature enabled")
 		flow := Flowcollector{
@@ -1778,17 +1841,17 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		time.Sleep(120 * time.Second)
 
 		var nginxPodName []string
-		nginxPodName, err = exutil.GetAllPods(oc, testTemplate.ServerNS)
+		nginxPodName, err = exutil.GetAllPods(oc, testServerTemplate.ServerNS)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		nginxPodIP := getPodIPv4(oc, testTemplate.ServerNS, nginxPodName[0])
-		clientPodIP := getPodIPv4(oc, testTemplate.ClientNS, "client")
+		nginxPodIP := getPodIPv4(oc, testServerTemplate.ServerNS, nginxPodName[0])
+		clientPodIP := getPodIPv4(oc, testClientTemplate.ClientNS, "client")
 
 		lokilabels := Lokilabels{
 			App:              "netobserv-flowcollector",
 			DstK8S_Type:      "Service",
-			DstK8S_Namespace: testTemplate.ServerNS,
-			SrcK8S_Namespace: testTemplate.ClientNS,
+			DstK8S_Namespace: testClientTemplate.ServerNS,
+			SrcK8S_Namespace: testClientTemplate.ClientNS,
 		}
 
 		g.By("Verify PacketTranslation flows")
@@ -1806,6 +1869,152 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(r.Flowlog.ZoneId).Should(o.BeNumerically(">=", 0))
 		}
 	})
+
+	// NetworkEvents ebpf hook only supported for OCP >= 4.17
+	g.It("Author:memodi-NonPreRelease-Medium-77894-TechPreview Network Policies Correlation", func() {
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("Skipping because the TechPreviewNoUpgrade is not enabled on the cluster.")
+		}
+		namespace := oc.Namespace()
+
+		g.By("Deploy client-server pods in 2 client NS and one Server NS")
+		serverTemplate := filePath.Join(baseDir, "test-nginx-server_template.yaml")
+		testServerTemplate := TestServerTemplate{
+			ServerNS: "test-server-77894",
+			Template: serverTemplate,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testServerTemplate.ServerNS)
+		err := testServerTemplate.createServer(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testServerTemplate.ServerNS)
+
+		client1Template := filePath.Join(baseDir, "test-nginx-client_template.yaml")
+		testClient1Template := TestClientTemplate{
+			ServerNS:   testServerTemplate.ServerNS,
+			ClientNS:   "test-client1-77894",
+			ObjectSize: "100K",
+			Template:   client1Template,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClient1Template.ClientNS)
+		err = testClient1Template.createClient(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testClient1Template.ClientNS)
+
+		testClient2Template := TestClientTemplate{
+			ServerNS:   testServerTemplate.ServerNS,
+			ClientNS:   "test-client2-77894",
+			ObjectSize: "100K",
+			Template:   client1Template,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClient2Template.ClientNS)
+		err = testClient2Template.createClient(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testClient2Template.ClientNS)
+
+		// create flowcollector with NWEvents.
+		flow := Flowcollector{
+			Namespace:      namespace,
+			Template:       flowFixturePath,
+			LokiNamespace:  namespace,
+			EBPFeatures:    []string{"\"NetworkEvents\""},
+			EBPFPrivileged: "true",
+		}
+		defer flow.DeleteFlowcollector(oc)
+		flow.CreateFlowcollector(oc)
+
+		g.By("Escalate SA to cluster admin")
+		defer func() {
+			g.By("Remove cluster role")
+			err = removeSAFromAdmin(oc, "netobserv-plugin", namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = addSAToAdmin(oc, "netobserv-plugin", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
+
+		g.By("Wait for 60 secs before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		g.By("get flowlogs from loki")
+		lokilabels := Lokilabels{
+			App:              "netobserv-flowcollector",
+			DstK8S_Namespace: testClient1Template.ServerNS,
+			DstK8S_Type:      "Pod",
+			SrcK8S_Type:      "Pod",
+		}
+		lokiParams := []string{"FlowDirection!=1"}
+		lokilabels.SrcK8S_Namespace = testClient1Template.ClientNS
+		flowRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, time.Now().Add(-2*time.Minute), lokiParams...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flowRecords with 'flowDirection != 1' > 0")
+
+		g.By("deploy BANP policy")
+		banpTemplate := filePath.Join(baseDir, "networking", "baselineadminnetworkPolicy.yaml")
+		banpParameters := []string{"--ignore-unknown-parameters=true", "-p", "SERVER_NS=" + testClient1Template.ServerNS, "CLIENT1_NS=" + testClient1Template.ClientNS, "CLIENT2_NS=" + testClient2Template.ClientNS, "-f", banpTemplate}
+
+		// banp is a cluster scoped resource so passing empty string for NS arg.
+		defer deleteResource(oc, "banp", "default", "")
+		err = exutil.ApplyClusterResourceFromTemplateWithError(oc, banpParameters...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for 60 secs before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		g.By("check flows have NW Events")
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, time.Now().Add(-2*time.Minute), lokiParams...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flowRecords with 'flowDirection != 1' > 0")
+		verifyNetworkEvents(flowRecords, "drop", "BaselineAdminNetworkPolicy", "Ingress")
+
+		g.By("deploy NetworkPolicy")
+		netpolTemplate := filePath.Join(baseDir, "networking", "networkPolicy.yaml")
+		netpolName := "allow-ingress"
+		netPolParameters := []string{"--ignore-unknown-parameters=true", "-p", "NAME=" + netpolName, "SERVER_NS=" + testClient1Template.ServerNS, "ALLOW_NS=" + testClient1Template.ClientNS, "-f", netpolTemplate}
+		defer deleteResource(oc, "netpol", netpolName, testClient1Template.ServerNS)
+		err = exutil.ApplyClusterResourceFromTemplateWithError(oc, netPolParameters...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for 60 secs before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		g.By("check flows from server to client1")
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, time.Now().Add(-1*time.Minute), lokiParams...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flowRecords with 'flowDirection != 1' > 0")
+		verifyNetworkEvents(flowRecords, "allow-related", "NetworkPolicy", "Ingress")
+
+		g.By("check flows from server to client2")
+		lokilabels.SrcK8S_Namespace = testClient2Template.ClientNS
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, time.Now().Add(-1*time.Minute), lokiParams...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flowRecords with 'flowDirection != 1' > 0")
+		verifyNetworkEvents(flowRecords, "drop", "NetpolNamespace", "Ingress")
+
+		g.By("deploy ANP policy")
+		anpTemplate := filePath.Join(baseDir, "networking", "adminnetworkPolicy.yaml")
+		anpName := "server-ns"
+		anpParameters := []string{"--ignore-unknown-parameters=true", "-p", "NAM=" + anpName, "SERVER_NS=" + testClient1Template.ServerNS, "ALLOW_NS=" + testClient2Template.ClientNS, "DENY_NS=" + testClient1Template.ClientNS, "-f", anpTemplate}
+		defer deleteResource(oc, "anp", anpName, "")
+		err = exutil.ApplyClusterResourceFromTemplateWithError(oc, anpParameters...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Wait for 60 secs before logs gets collected and written to loki")
+		time.Sleep(60 * time.Second)
+
+		g.By("check flows from server to client2")
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, time.Now().Add(-1*time.Minute), lokiParams...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flowRecords with 'flowDirection != 1' > 0")
+		verifyNetworkEvents(flowRecords, "allow-related", "AdminNetworkPolicy", "Ingress")
+
+		g.By("check flows from server to client1")
+		lokilabels.SrcK8S_Namespace = testClient1Template.ClientNS
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, time.Now().Add(-1*time.Minute), lokiParams...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flowRecords with 'flowDirection != 1' > 0")
+		verifyNetworkEvents(flowRecords, "drop", "AdminNetworkPolicy", "Ingress")
+	})
+
 	//Add future NetObserv + Loki test-cases here
 
 	g.Context("with Kafka", func() {

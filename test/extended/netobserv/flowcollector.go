@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"time"
 
+	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -94,30 +95,39 @@ type Flowlog struct {
 	TimeFlowStartMs        int
 	AgentIP                string
 	IcmpCode               int
-	HashId                 string `json:"_HashId,omitempty"`
-	IsFirst                bool   `json:"_IsFirst,omitempty"`
-	RecordType             string `json:"_RecordType,omitempty"`
-	NumFlowLogs            int    `json:"numFlowLogs,omitempty"`
-	K8S_ClusterName        string `json:"K8S_ClusterName,omitempty"`
-	SrcK8S_Zone            string `json:"SrcK8S_Zone,omitempty"`
-	DstK8S_Zone            string `json:"DstK8S_Zone,omitempty"`
-	DnsLatencyMs           int    `json:"DnsLatencyMs,omitempty"`
-	DnsFlagsResponseCode   string `json:"DnsFlagsResponseCode,omitempty"`
-	PktDropBytes           int    `json:"PktDropBytes,omitempty"`
-	PktDropPackets         int    `json:"PktDropPackets,omitempty"`
-	PktDropLatestState     string `json:"PktDropLatestState,omitempty"`
-	PktDropLatestDropCause string `json:"PktDropLatestDropCause,omitempty"`
-	XlatDstAddr            string `json:"XlatDstAddr,omitempty"`
-	XlatDstK8S_Name        string `json:"XlatDstK8S_Name,omitempty"`
-	XlatDstK8S_Namespace   string `json:"XlatDstK8S_Namespace,omitempty"`
-	XlatDstK8S_Type        string `json:"XlatDstK8S_Type,omitempty"`
-	XlatDstPort            int    `json:"XlatDstPort,omitempty"`
-	XlatSrcAddr            string `json:"XlatSrcAddr,omitempty"`
-	XlatSrcK8S_Name        string `json:"XlatSrcK8S_Name,omitempty"`
-	XlatSrcK8S_Namespace   string `json:"XlatSrcK8S_Namespace,omitempty"`
-	ZoneId                 int    `json:"ZoneId,omitempty"`
+	HashId                 string         `json:"_HashId,omitempty"`
+	IsFirst                bool           `json:"_IsFirst,omitempty"`
+	RecordType             string         `json:"_RecordType,omitempty"`
+	NumFlowLogs            int            `json:"numFlowLogs,omitempty"`
+	K8S_ClusterName        string         `json:"K8S_ClusterName,omitempty"`
+	SrcK8S_Zone            string         `json:"SrcK8S_Zone,omitempty"`
+	DstK8S_Zone            string         `json:"DstK8S_Zone,omitempty"`
+	DnsLatencyMs           int            `json:"DnsLatencyMs,omitempty"`
+	DnsFlagsResponseCode   string         `json:"DnsFlagsResponseCode,omitempty"`
+	PktDropBytes           int            `json:"PktDropBytes,omitempty"`
+	PktDropPackets         int            `json:"PktDropPackets,omitempty"`
+	PktDropLatestState     string         `json:"PktDropLatestState,omitempty"`
+	PktDropLatestDropCause string         `json:"PktDropLatestDropCause,omitempty"`
+	XlatDstAddr            string         `json:"XlatDstAddr,omitempty"`
+	XlatDstK8S_Name        string         `json:"XlatDstK8S_Name,omitempty"`
+	XlatDstK8S_Namespace   string         `json:"XlatDstK8S_Namespace,omitempty"`
+	XlatDstK8S_Type        string         `json:"XlatDstK8S_Type,omitempty"`
+	XlatDstPort            int            `json:"XlatDstPort,omitempty"`
+	XlatSrcAddr            string         `json:"XlatSrcAddr,omitempty"`
+	XlatSrcK8S_Name        string         `json:"XlatSrcK8S_Name,omitempty"`
+	XlatSrcK8S_Namespace   string         `json:"XlatSrcK8S_Namespace,omitempty"`
+	ZoneId                 int            `json:"ZoneId,omitempty"`
+	NetworkEvents          []NetworkEvent `json:"NetworkEvents,omitempty"`
 }
 
+type NetworkEvent struct {
+	Action    string `json:"Action,omitempty"`
+	Type      string `json:"Type,omitempty"`
+	Name      string `json:"Name,omitempty"`
+	Namespace string `json:"Namespace,omitempty"`
+	Direction string `json:"Direction,omitempty"`
+	Feature   string `json:"Feature,omitempty"`
+}
 type FlowRecord struct {
 	Timestamp int64
 	Flowlog   Flowlog
@@ -196,4 +206,23 @@ func (flow *Flowcollector) WaitForFlowcollectorReady(oc *exutil.CLI) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "Flowcollector did not become Ready")
+}
+
+func verifyNetworkEvents(flowRecords []FlowRecord, action, policytype, direction string) {
+	nNWEventsLogs := 0
+	for _, flow := range flowRecords {
+		nwevent := flow.Flowlog.NetworkEvents
+		if len(nwevent) >= 1 {
+			e2e.Logf("found nwevent %v", nwevent)
+			// usually for our scenario we expect only one nw event
+			// but there could be more than 1.
+			o.Expect(nwevent[0].Action).Should(o.Equal(action))
+			o.Expect(nwevent[0].Type).Should(o.Equal(policytype))
+			o.Expect(nwevent[0].Direction).Should(o.Equal(direction))
+			nNWEventsLogs += 1
+		} else {
+			e2e.Logf("nwevent missing %v", flow.Flowlog)
+		}
+	}
+	o.Expect(nNWEventsLogs).Should(o.BeNumerically(">=", 1), "Found no logs with Network Events")
 }

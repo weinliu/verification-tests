@@ -22,13 +22,18 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-type TestClientServerTemplate struct {
+type TestServerTemplate struct {
 	ServerNS    string
-	ClientNS    string
-	ObjectSize  string
 	LargeBlob   string
 	ServiceType string
 	Template    string
+}
+
+type TestClientTemplate struct {
+	ServerNS   string
+	ClientNS   string
+	ObjectSize string
+	Template   string
 }
 
 func getRandomString() string {
@@ -358,8 +363,26 @@ func doHTTPRequest(header http.Header, address, path, query, method string, quie
 	return io.ReadAll(resp.Body)
 }
 
-func (testTemplate *TestClientServerTemplate) createTestClientServer(oc *exutil.CLI) error {
-	configFile := exutil.ProcessTemplate(oc, "--ignore-unknown-parameters=true", "-f", testTemplate.Template, "-p", "SERVER_NS="+testTemplate.ServerNS, "-p", "CLIENT_NS="+testTemplate.ClientNS, "-p", "OBJECT_SIZE="+testTemplate.ObjectSize, "-p", "LARGE_BLOB="+testTemplate.LargeBlob, "-p", "SERVICE_TYPE="+testTemplate.ServiceType)
+func (testTemplate *TestServerTemplate) createServer(oc *exutil.CLI) error {
+	templateParams := []string{"--ignore-unknown-parameters=true", "-f", testTemplate.Template, "-p", "SERVER_NS=" + testTemplate.ServerNS}
+
+	if testTemplate.LargeBlob != "" {
+		templateParams = append(templateParams, "-p", "LARGE_BLOB="+testTemplate.LargeBlob)
+	}
+	if testTemplate.ServiceType != "" {
+		templateParams = append(templateParams, "-p", "SERVICE_TYPE="+testTemplate.ServiceType)
+	}
+	configFile := exutil.ProcessTemplate(oc, templateParams...)
+
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", configFile).Execute()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (testTemplate *TestClientTemplate) createClient(oc *exutil.CLI) error {
+	configFile := exutil.ProcessTemplate(oc, "--ignore-unknown-parameters=true", "-f", testTemplate.Template, "-p", "SERVER_NS="+testTemplate.ServerNS, "-p", "CLIENT_NS="+testTemplate.ClientNS, "-p", "OBJECT_SIZE="+testTemplate.ObjectSize)
 
 	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", configFile).Execute()
 	if err != nil {
