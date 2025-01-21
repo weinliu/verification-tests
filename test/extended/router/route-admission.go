@@ -10,7 +10,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
-var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", func() {
+var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("router-admission", exutil.KubeConfigPath())

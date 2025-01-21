@@ -14,7 +14,7 @@ import (
 	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 )
 
-var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", func() {
+var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLI("routes", exutil.KubeConfigPath())

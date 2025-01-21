@@ -13,7 +13,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
+var _ = g.Describe("[sig-network-edge] Network_Edge", func() {
 	defer g.GinkgoRecover()
 
 	var oc = exutil.NewCLIWithoutNamespace("router-microshift")

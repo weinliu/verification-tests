@@ -15,7 +15,7 @@ import (
 	netutils "k8s.io/utils/net"
 )
 
-var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS should", func() {
+var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 	defer g.GinkgoRecover()
 	var oc = exutil.NewCLI("coredns", exutil.KubeConfigPath())
 
