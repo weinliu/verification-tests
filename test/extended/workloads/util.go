@@ -2425,3 +2425,19 @@ func validateConfigmapAndSignatureContent(oc *exutil.CLI, dirname string, filePr
 		e2e.Failf("Content from signatures directory %s and the configmap json are not the same %s", signatureContent, configmapJsonContent)
 	}
 }
+
+func waitForPodWithLabelReady(oc *exutil.CLI, ns, label string) error {
+	return wait.Poll(5*time.Second, 3*time.Minute, func() (bool, error) {
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, `-ojsonpath={.items[*].status.conditions[?(@.type=="Ready")].status}`).Output()
+		e2e.Logf("the Ready status of pod is %v", status)
+		if err != nil || status == "" {
+			e2e.Logf("failed to get pod status: %v, retrying...", err)
+			return false, nil
+		}
+		if strings.Contains(status, "False") {
+			e2e.Logf("the pod Ready status not met; wanted True but got %v, retrying...", status)
+			return false, nil
+		}
+		return true, nil
+	})
+}
