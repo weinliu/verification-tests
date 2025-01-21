@@ -656,3 +656,15 @@ func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, 
 	}
 	return true, nil
 }
+
+func ifMonitoringStackCRDExists(oc *exutil.CLI) bool {
+	var monitoringstackCRD = "monitoringstacks.monitoring.rhobs"
+	exutil.By("Check if the monitoringstack crd exists")
+	_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("crd", monitoringstackCRD).Output()
+	if err != nil {
+		e2e.Logf("%s doesn't exist", monitoringstackCRD)
+		return false
+	}
+	e2e.Logf("%s exist", monitoringstackCRD)
+	return true
+}

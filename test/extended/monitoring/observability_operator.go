@@ -27,7 +27,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 		architecture.SkipNonAmd64SingleArch(oc)
 		clID, region = getClusterDetails(oc)
 		exutil.By("Install Observability Operator and check if it is successfully installed") //57234-Observability Operator installation on OCP hypershift management
-		if !exutil.IsROSA() {
+		if !exutil.IsROSA() && !ifMonitoringStackCRDExists(oc) {
 			createObservabilityOperator(oc, oboBaseDir)
 		}
 	})
