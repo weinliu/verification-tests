@@ -1,7 +1,7 @@
 import { guidedTour } from "upstream/views/guided-tour";
 
 describe('login and logout', () => {
-  it('(OCP-73149,yapei,UserInterface)do not reveal system info before login completion and should delete token after user logout', {tags: ['@userinterface','@e2e','@rosa','@osd-ccs','@wrs','V-BR.22','V-BR.48','@hypershift-hosted']}, () => {
+  it('(OCP-73149,yapei,UserInterface)do not reveal system info before login completion and should delete token after user logout', {tags: ['@userinterface','@e2e','@osd-ccs','@wrs','V-BR.22','V-BR.48','@hypershift-hosted']}, () => {
     const up_pair = Cypress.env('LOGIN_USERS').split(',');
     const login_username = up_pair[up_pair.length - 1].split(':')[0]
     const login_password = up_pair[up_pair.length - 1].split(':')[1]
