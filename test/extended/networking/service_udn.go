@@ -2019,4 +2019,185 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		}
 	})
 
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-PreChkUpgrade-High-79034-Validate UDN clusterIP/nodePort service post upgrade.", func() {
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			statefulSetHelloPod    = filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
+			allNS                  = []string{"79034-upgrade-ns1", "79034-upgrade-ns2", "79034-upgrade-ns3", "79034-upgrade-ns4"}
+			rcPingPodTemplate      = filepath.Join(buildPruningBaseDir, "rc-ping-for-pod-template.yaml")
+			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+			ipFamilyPolicy         = "SingleStack"
+		)
+
+		exutil.By("1. create four new namespaces")
+		for i := 0; i < 4; i++ {
+			err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", allNS[i]).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("2. Create CRD for layer3 UDN in namespace ns1, ns2")
+		ipStackType := checkIPStackType(oc)
+		var cidr, ipv4cidr, ipv6cidr string
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/48"
+			} else {
+				ipFamilyPolicy = "PreferDualStack"
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/48"
+			}
+		}
+		for i := 0; i < 2; i++ {
+			createGeneralUDNCRD(oc, allNS[i], "udn-network-"+allNS[i], ipv4cidr, ipv6cidr, cidr, "layer3")
+		}
+
+		exutil.By("3. Create CRD for layer2 UDN in namespace ns3,ns4.")
+		if ipStackType == "ipv4single" {
+			cidr = "10.151.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2011:100:200::0/48"
+			} else {
+				ipFamilyPolicy = "PreferDualStack"
+				ipv4cidr = "10.151.0.0/16"
+				ipv6cidr = "2011:100:200::0/48"
+			}
+		}
+		for i := 2; i < 4; i++ {
+			createGeneralUDNCRD(oc, allNS[i], "udn-network-"+allNS[i], ipv4cidr, ipv6cidr, cidr, "layer2")
+		}
+
+		exutil.By("4. Create test pod in each namespace")
+		podsBackend := make([]replicationControllerPingPodResource, 4)
+		for i := 0; i < 4; i++ {
+			podsBackend[i] = replicationControllerPingPodResource{
+				name:      "hello-pod",
+				replicas:  1,
+				namespace: allNS[i],
+				template:  rcPingPodTemplate,
+			}
+			podsBackend[i].createReplicaController(oc)
+			err := waitForPodWithLabelReady(oc, podsBackend[i].namespace, "name="+podsBackend[i].name)
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Pods with label name=%s not ready", podsBackend[i].name))
+		}
+
+		exutil.By("5. Create ClusterIP service in ns1,ns3,nodePort svc in ns2,ns4")
+		svc := make([]genericServiceResource, 4)
+		var serviceType string
+		for i := 0; i < 4; i++ {
+			if i == 1 || i == 3 {
+				serviceType = "NodePort"
+			} else {
+				serviceType = "ClusterIP"
+			}
+			svc[i] = genericServiceResource{
+				servicename:           "test-service",
+				namespace:             allNS[i],
+				protocol:              "TCP",
+				selector:              "hello-pod",
+				serviceType:           serviceType,
+				ipFamilyPolicy:        ipFamilyPolicy,
+				internalTrafficPolicy: "Cluster",
+				externalTrafficPolicy: "",
+				template:              genericServiceTemplate,
+			}
+			svc[i].createServiceFromParams(oc)
+		}
+
+		exutil.By("6. Create udn clients in each namespace")
+		var udnClient []string
+		for i := 0; i < 4; i++ {
+			createResourceFromFile(oc, allNS[i], statefulSetHelloPod)
+			podErr := waitForPodWithLabelReady(oc, allNS[i], "app=hello")
+			exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
+			udnClient = append(udnClient, getPodName(oc, allNS[i], "app=hello")[0])
+		}
+
+		exutil.By("7. Verify the pod2service connection in ns1 for layer3.")
+		CurlPod2SvcPass(oc, allNS[0], allNS[0], udnClient[0], svc[0].servicename)
+		exutil.By("8. Verify the pod2service connection in ns3 for layer2.")
+		CurlPod2SvcPass(oc, allNS[2], allNS[2], udnClient[2], svc[2].servicename)
+
+		exutil.By("9. Verify the pod2service isolation from ns2 to ns1 for layer3")
+		CurlPod2SvcFail(oc, allNS[1], allNS[0], udnClient[1], svc[0].servicename)
+		exutil.By("10. Verify the pod2service isolation from ns4 to ns3 for layer2")
+		CurlPod2SvcFail(oc, allNS[3], allNS[2], udnClient[3], svc[2].servicename)
+
+		exutil.By("11. Verify the nodePort service in ns2 can be accessed for layer3.")
+		nodePortNS2, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", allNS[1], svc[1].servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("There are less than 2 worker nodes and nodePort service validation will be skipped! ")
+		}
+		clientNode := nodeList.Items[0].Name
+		o.Expect(err).NotTo(o.HaveOccurred())
+		CurlNodePortPass(oc, clientNode, nodeList.Items[0].Name, nodePortNS2)
+		CurlNodePortPass(oc, clientNode, nodeList.Items[1].Name, nodePortNS2)
+
+		exutil.By("12. Verify the nodePort service in ns4 can be accessed for layer2.")
+		nodePortNS4, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", allNS[3], svc[3].servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		CurlNodePortPass(oc, clientNode, nodeList.Items[0].Name, nodePortNS4)
+		CurlNodePortPass(oc, clientNode, nodeList.Items[1].Name, nodePortNS4)
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-PstChkUpgrade-High-79034-Validate UDN clusterIP/nodePort service post upgrade.", func() {
+		var (
+			allNS   = []string{"79034-upgrade-ns1", "79034-upgrade-ns2", "79034-upgrade-ns3", "79034-upgrade-ns4"}
+			svcName = "test-service"
+		)
+		for i := 0; i < 4; i++ {
+			nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", allNS[i]).Execute()
+			if nsErr != nil {
+				g.Skip(fmt.Sprintf("Skip the PstChkUpgrade test as %s namespace does not exist, PreChkUpgrade test did not run", allNS[i]))
+			}
+		}
+		for i := 0; i < 4; i++ {
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", allNS[i], "--ignore-not-found=true").Execute()
+		}
+
+		exutil.By("1. Get udn clients from preserved four namespaces")
+		var udnClient []string
+		for i := 0; i < 4; i++ {
+			podErr := waitForPodWithLabelReady(oc, allNS[i], "app=hello")
+			exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
+			udnClient = append(udnClient, getPodName(oc, allNS[i], "app=hello")[0])
+		}
+
+		exutil.By("2. Verify the pod2service connection in ns1 for layer3.")
+		CurlPod2SvcPass(oc, allNS[0], allNS[0], udnClient[0], svcName)
+		exutil.By("3. Verify the pod2service connection in ns3 for layer2.")
+		CurlPod2SvcPass(oc, allNS[2], allNS[2], udnClient[2], svcName)
+
+		exutil.By("4. Verify the pod2service isolation from ns2 to ns1 for layer3")
+		CurlPod2SvcFail(oc, allNS[1], allNS[0], udnClient[1], svcName)
+		exutil.By("5. Verify the pod2service isolation from ns4 to ns3 for layer2")
+		CurlPod2SvcFail(oc, allNS[3], allNS[2], udnClient[3], svcName)
+
+		exutil.By("6. Verify the nodePort service in ns2 can be accessed for layer3.")
+		nodePortNS2, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", allNS[1], svcName, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("There are less than 2 worker nodes and nodePort service validation will be skipped! ")
+		}
+		clientNode := nodeList.Items[0].Name
+		o.Expect(err).NotTo(o.HaveOccurred())
+		CurlNodePortPass(oc, clientNode, nodeList.Items[0].Name, nodePortNS2)
+		CurlNodePortPass(oc, clientNode, nodeList.Items[1].Name, nodePortNS2)
+
+		exutil.By("7. Verify the nodePort service in ns4 can be accessed for layer2.")
+		nodePortNS4, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", allNS[3], svcName, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		CurlNodePortPass(oc, clientNode, nodeList.Items[0].Name, nodePortNS4)
+		CurlNodePortPass(oc, clientNode, nodeList.Items[1].Name, nodePortNS4)
+	})
+
 })
