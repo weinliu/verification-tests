@@ -7050,6 +7050,147 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 	})
 
 	// author: xiyuan@redhat.com
+	g.It("Author:xiyuan-NonHyperShiftHOST-CPaasrunOnly-NonPreRelease-Medium-33689-Verify the complianceremediation state changes to Outdated if the contents of remediation previously applied get changed [Disruptive][Slow]", func() {
+		var (
+			role  = "wrscan"
+			suite = complianceSuiteDescription{
+				name:         "outdated-suite-" + getRandomString(),
+				namespace:    subD.namespace,
+				schedule:     "0 1 * * *",
+				scanname:     "outdated-scan-" + getRandomString(),
+				profile:      "xccdf_org.ssgproject.content_profile_moderate",
+				content:      "ssg-rhcos4-ds.xml",
+				contentImage: relatedImageProfile,
+				rule:         "xccdf_org.ssgproject.content_rule_no_empty_passwords",
+				nodeSelector: role,
+				debug:        true,
+				template:     csuiteRemTemplate,
+			}
+			suiteApplyCr = complianceSuiteDescription{
+				name:         "apply-cr-suite-" + getRandomString(),
+				namespace:    subD.namespace,
+				schedule:     "0 1 * * *",
+				scanname:     "apply-cr-scan-" + getRandomString(),
+				profile:      "xccdf_org.ssgproject.content_profile_moderate",
+				content:      "ssg-rhcos4-ds.xml",
+				contentImage: relatedImageProfile,
+				rule:         "xccdf_org.ssgproject.content_rule_audit_rules_dac_modification_chmod",
+				nodeSelector: role,
+				debug:        true,
+				template:     csuiteRemTemplate,
+			}
+		)
+		// checking all nodes are in Ready state before the test case starts
+		checkNodeStatus(oc)
+		// adding label to one rhcos worker node to skip rhel and other RHCOS worker nodes
+		g.By("Label one rhcos worker node as wrscan.. !!!\n")
+		workerNodeName := getOneRhcosWorkerNodeName(oc)
+		setLabelToOneWorkerNode(oc, workerNodeName)
+
+		g.By("Cleanup before starting with testcase")
+		cleanupObjectsIgnoreNotFound(oc,
+			objectTableRef{"ssb", subD.namespace, "--all"},
+			objectTableRef{"suite", subD.namespace, "--all"},
+			objectTableRef{"scan", subD.namespace, "--all"})
+
+		defer func() {
+			g.By("Remove scansettingbinding, machineconfig, machineconfigpool objects.. !!!\n")
+			removeLabelFromWorkerNode(oc, workerNodeName)
+			checkMachineConfigPoolStatus(oc, "worker")
+			cleanupObjectsIgnoreNotFound(oc, objectTableRef{"suite", subD.namespace, suite.name},
+				objectTableRef{"suite", subD.namespace, suiteApplyCr.name})
+			checkMachineConfigPoolStatus(oc, "worker")
+			cleanupObjects(oc, objectTableRef{"mcp", subD.namespace, role})
+			checkMachineConfigPoolStatus(oc, "worker")
+			checkNodeStatus(oc)
+			cleanupObjects(oc, objectTableRef{"mc", subD.namespace, "-l compliance.openshift.io/suite=" + suite.name},
+				objectTableRef{"mc", subD.namespace, "-l compliance.openshift.io/suite=" + suiteApplyCr.name})
+		}()
+		defer func() {
+			g.By("Remove lables for the worker nodes !!!\n")
+			removeLabelFromWorkerNode(oc, workerNodeName)
+			checkMachineConfigPoolStatus(oc, "worker")
+			newCheck("expect", asAdmin, withoutNamespace, compare, "0", ok, []string{"machineconfigpool", role, "-n", subD.namespace, "-o=jsonpath={.status.machineCount}"}).check(oc)
+		}()
+		defer func() {
+			g.By("Patch all complianceremediations to false .. !!!\n")
+			patchPaused := fmt.Sprintf("{\"spec\":{\"paused\":true}}")
+			patchResource(oc, asAdmin, withoutNamespace, "mcp", role, "-n", subD.namespace, "--type", "merge", "-p", patchPaused)
+			setApplyToFalseForAllCrs(oc, subD.namespace, suite.name)
+			setApplyToFalseForAllCrs(oc, subD.namespace, suiteApplyCr.name)
+			patchUnpaused := fmt.Sprintf("{\"spec\":{\"paused\":false}}")
+			patchResource(oc, asAdmin, withoutNamespace, "mcp", role, "-n", subD.namespace, "--type", "merge", "-p", patchUnpaused)
+			checkMachineConfigPoolStatus(oc, role)
+		}()
+
+		g.By("Create wrscan machineconfigpool.. !!!\n")
+		_, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", subD.namespace, "-f", machineConfigPoolYAML).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		checkMachineConfigPoolStatus(oc, role)
+
+		g.By("Create compliancesuite and check result... !!!\n")
+		suite.create(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", suite.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		subD.complianceSuiteResult(oc, suite.name, "NON-COMPLIANT COMPLIANT")
+		status, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", subD.namespace, "ccr", suite.scanname+"-no-empty-passwords", "-o=jsonpath={.status}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if status == "Fail" {
+			newCheck("expect", asAdmin, withoutNamespace, contain, "Applied", ok, []string{"complianceremediations", suite.scanname + "-no-empty-passwords",
+				"-n", suite.namespace, "-o=jsonpath={.status.applicationState}"}).check(oc)
+			g.By("ClusterOperator should be healthy before running rescan")
+			checkMachineConfigPoolStatus(oc, role)
+			clusterOperatorHealthcheck(oc, 1500)
+		}
+
+		g.By("Trigger a round with a new contentImage !!!\n")
+		suite.contentImage = "ghcr.io/complianceascode/test-broken-content-ocp:rem_mod_change"
+		suite.create(oc)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("-n", subD.namespace, "compliancescan", suite.scanname, "compliance.openshift.io/rescan=").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", suite.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", suite.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		subD.complianceSuiteResult(oc, suite.name, "COMPLIANT")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "PASS", ok, []string{"ccr", suite.scanname + "-no-empty-passwords", "-n", subD.namespace,
+			"-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Outdated", ok, []string{"complianceremediations",
+			suite.scanname + "-no-empty-passwords", "-n", suite.namespace, "-o=jsonpath={.status.applicationState}"}).check(oc)
+
+		g.By("Check auto remediation could be applied for a new compliancesuite !!!\n")
+		suiteApplyCr.create(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", suiteApplyCr.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", suiteApplyCr.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		subD.complianceSuiteResult(oc, suiteApplyCr.name, "NON-COMPLIANT")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "FAIL", ok, []string{"ccr",
+			suiteApplyCr.scanname + "-audit-rules-dac-modification-chmod", "-n", subD.namespace, "-o=jsonpath={.status}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Applied", ok, []string{"complianceremediations",
+			suiteApplyCr.scanname + "-audit-rules-dac-modification-chmod", "-n", suite.namespace, "-o=jsonpath={.status.applicationState}"}).check(oc)
+
+		g.By("Check the outdated cr can be applied !!!\n")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("-n", subD.namespace, "compliancesuite/"+suite.name, "compliance.openshift.io/remove-outdated=").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, "Applied", ok, []string{"complianceremediations",
+			suite.scanname + "-no-empty-passwords", "-n", suite.namespace, "-o=jsonpath={.status.applicationState}"}).check(oc)
+		checkMachineConfigPoolStatus(oc, role)
+		clusterOperatorHealthcheck(oc, 1500)
+
+		g.By("Trigger the final rerun and check the test result !!!\n")
+		_, err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("-n", subD.namespace, "compliancescan", suite.scanname, "compliance.openshift.io/rescan=").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.AsAdmin().WithoutNamespace().Run("annotate").Args("-n", subD.namespace, "compliancescan", suiteApplyCr.scanname, "compliance.openshift.io/rescan=").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", suite.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", suiteApplyCr.name, "-n", subD.namespace,
+			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", suite.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", suiteApplyCr.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+		subD.complianceSuiteResult(oc, suite.name, "COMPLIANT")
+		subD.complianceSuiteResult(oc, suiteApplyCr.name, "COMPLIANT")
+	})
+
+	// author: xiyuan@redhat.com
 	g.It("NonHyperShiftHOST-NonPreRelease-ROSA-ARO-OSD_CCS-ConnectedOnly-Author:xiyuan-High-45414-Verify the nodeSelector and tolerations are configurable for result server pod [Slow][Disruptive]", func() {
 		architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
 

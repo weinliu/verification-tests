@@ -264,11 +264,37 @@ func (csuite *complianceSuiteDescription) delete(itName string, dr describerResr
 }
 
 func cleanupObjects(oc *exutil.CLI, objs ...objectTableRef) {
+	var err error
 	for _, v := range objs {
 		e2e.Logf("Start to remove: %v", v)
-		_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, "-n", v.namespace, v.name, "--ignore-not-found").Output()
+		if isClusterScoped(v.kind) {
+			_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, v.name, "--ignore-not-found").Output()
+		} else {
+			_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args(v.kind, "-n", v.namespace, v.name, "--ignore-not-found").Output()
+
+		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
+}
+
+// Function to check if a resource kind is cluster-scoped
+func isClusterScoped(kind string) bool {
+	// List of common cluster-scoped resource kinds
+	clusterScopedKinds := map[string]bool{
+		"clusterrole":        true,
+		"clusterrolebinding": true,
+		"mcp":                true,
+		"mc":                 true,
+		"namespace":          true,
+		"ns":                 true,
+		"project":            true,
+		"storageclass":       true,
+		"sc":                 true,
+		"Node":               true,
+		"node":               true,
+	}
+
+	return clusterScopedKinds[kind]
 }
 
 func (cscan *complianceScanDescription) create(oc *exutil.CLI) {
