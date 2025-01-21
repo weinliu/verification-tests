@@ -1401,8 +1401,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		g.By("Deploy test server and client pods")
 		serverTemplate := filePath.Join(baseDir, "test-nginx-server_template.yaml")
 		testServerTemplate := TestServerTemplate{
-			ServerNS: "test-server-67782",
-			Template: serverTemplate,
+			ServerNS:  "test-server-67782",
+			Template:  serverTemplate,
+			LargeBlob: "yes",
 		}
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(testServerTemplate.ServerNS)
 		err = testServerTemplate.createServer(oc)
@@ -1413,7 +1414,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		testClientTemplate := TestClientTemplate{
 			ServerNS:   testServerTemplate.ServerNS,
 			ClientNS:   "test-client-67782",
-			ObjectSize: "100K",
+			ObjectSize: "100M",
 			Template:   clientTemplate,
 		}
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClientTemplate.ClientNS)

@@ -75,3 +75,4 @@ parameters:
   value: "no"
 - name: SERVICE_TYPE
   value: "NodePort"
+
