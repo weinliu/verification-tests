@@ -41,7 +41,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		// OCP-25703
 		exutil.By("check default TLS config and it should be same to Intermediate profile")
-		newrouterpod := getRouterPod(oc, ingctrl.name)
+		newrouterpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		env := readRouterPodEnv(oc, newrouterpod, "SSL_MIN_VERSION")
 		o.Expect(env).To(o.ContainSubstring(`SSL_MIN_VERSION=TLSv1.2`))
 		env = readRouterPodEnv(oc, newrouterpod, "ROUTER_CIPHER")
@@ -52,7 +52,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("patch custom IC with tls profile Old and check the config")
 		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, `{"spec":{"tlsSecurityProfile":{"type":"Old"}}}`)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		newrouterpod = getNewRouterPod(oc, ingctrl.name)
+		newrouterpod = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		env = readRouterPodEnv(oc, newrouterpod, "SSL_MIN_VERSION")
 		o.Expect(env).To(o.ContainSubstring(`SSL_MIN_VERSION=TLSv1.1`))
 		env = readRouterPodEnv(oc, newrouterpod, "ROUTER_CIPHER")
@@ -63,7 +63,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("patch custom IC with tls profile Intermidiate and check the config")
 		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, `{"spec":{"tlsSecurityProfile":{"type":"Intermediate"}}}`)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
-		newrouterpod = getNewRouterPod(oc, ingctrl.name)
+		newrouterpod = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		env = readRouterPodEnv(oc, newrouterpod, "SSL_MIN_VERSION")
 		o.Expect(env).To(o.ContainSubstring(`SSL_MIN_VERSION=TLSv1.2`))
 		env = readRouterPodEnv(oc, newrouterpod, "ROUTER_CIPHER")
@@ -74,7 +74,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("patch custom IC with tls profile Custom and check the config")
 		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, `{"spec":{"tlsSecurityProfile":{"type":"Custom","custom":{"ciphers":["DHE-RSA-AES256-GCM-SHA384","ECDHE-ECDSA-AES256-GCM-SHA384"],"minTLSVersion":"VersionTLS12"}}}}`)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "4")
-		newrouterpod = getNewRouterPod(oc, ingctrl.name)
+		newrouterpod = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		env = readRouterPodEnv(oc, newrouterpod, "SSL_MIN_VERSION")
 		o.Expect(env).To(o.ContainSubstring(`SSL_MIN_VERSION=TLSv1.2`))
 		env = readRouterPodEnv(oc, newrouterpod, "ROUTER_CIPHER")
@@ -109,7 +109,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("check client certification config after custom router rolled out")
-		newrouterpod := getNewRouterPod(oc, ingctrl.name)
+		newrouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		env := readRouterPodEnv(oc, newrouterpod, "ROUTER_MUTUAL_TLS_AUTH")
 		o.Expect(env).To(o.ContainSubstring(`ROUTER_MUTUAL_TLS_AUTH=optional`))
 		o.Expect(env).To(o.ContainSubstring(`ROUTER_MUTUAL_TLS_AUTH_CA=/etc/pki/tls/client-ca/ca-bundle.pem`))
@@ -143,7 +143,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("check client certification config after custom router rolled out")
-		newrouterpod := getNewRouterPod(oc, ingctrl.name)
+		newrouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		env := readRouterPodEnv(oc, newrouterpod, "ROUTER_MUTUAL_TLS_AUTH")
 		o.Expect(env).To(o.ContainSubstring(`ROUTER_MUTUAL_TLS_AUTH=required`))
 		o.Expect(env).To(o.ContainSubstring(`ROUTER_MUTUAL_TLS_AUTH_CA=/etc/pki/tls/client-ca/ca-bundle.pem`))
@@ -173,7 +173,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("check the env variable of the router pod")
-		newrouterpod := getNewRouterPod(oc, "ocp43284")
+		newrouterpod := getOneNewRouterPodFromRollingUpdate(oc, "ocp43284")
 		tlsProfile := readRouterPodEnv(oc, newrouterpod, "TLS")
 		o.Expect(tlsProfile).To(o.ContainSubstring(`SSL_MIN_VERSION=TLSv1.3`))
 		o.Expect(tlsProfile).To(o.ContainSubstring(`ROUTER_CIPHERSUITES=TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256`))
@@ -221,7 +221,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		custContPod := getNewRouterPod(oc, "ocp50842")
+		custContPod := getOneNewRouterPodFromRollingUpdate(oc, "ocp50842")
 
 		exutil.By("create a secret with destination CA Opaque certificate")
 		createGenericSecret(oc, oc.Namespace(), "service-secret", "tls.crt", caCert)
@@ -285,7 +285,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		custContPod := getNewRouterPod(oc, "ocp51980")
+		custContPod := getOneNewRouterPodFromRollingUpdate(oc, "ocp51980")
 
 		exutil.By("create ingress and get the details")
 		ing.domain = ingctrl.name + "." + baseDomain
@@ -325,7 +325,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		)
 
 		exutil.By("Check the metrics endpoint to get the intial certificate details")
-		routerpod := getRouterPod(oc, "default")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
 		curlCmd := fmt.Sprintf("curl -k -v https://localhost:1936/metrics --connect-timeout 10")
 		statsOut, err := exutil.RemoteShPod(oc, "openshift-ingress", routerpod, "sh", "-c", curlCmd)
 		o.Expect(err).NotTo(o.HaveOccurred())

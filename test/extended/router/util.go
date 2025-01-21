@@ -248,8 +248,8 @@ func getOnePodNameByLabel(oc *exutil.CLI, ns, label string) string {
 	return podName
 }
 
-// getNewRouterPod immediatly after/during deployment rolling update, don't care the previous pod status
-func getNewRouterPod(oc *exutil.CLI, icName string) string {
+// getOneNewRouterPodFromRollingUpdate immediatly after/during deployment rolling update, don't care the previous pod status
+func getOneNewRouterPodFromRollingUpdate(oc *exutil.CLI, icName string) string {
 	ns := "openshift-ingress"
 	deployName := "deployment/router-" + icName
 	rsLabel := ""
@@ -482,9 +482,9 @@ func describePodResource(oc *exutil.CLI, podName, namespace string) string {
 }
 
 // for collecting a single pod name for general use.
-// usage example: podname := getRouterPod(oc, "default/labelname")
+// usage example: podname := getOneRouterPodNameByIC(oc, "default/labelname")
 // note: it might get wrong pod which will be terminated during deployment rolling update
-func getRouterPod(oc *exutil.CLI, icname string) string {
+func getOneRouterPodNameByIC(oc *exutil.CLI, icname string) string {
 	podName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+icname, "-o=jsonpath={.items[0].metadata.name}", "-n", "openshift-ingress").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("the result of router pod name: %v", podName)
@@ -492,7 +492,7 @@ func getRouterPod(oc *exutil.CLI, icname string) string {
 }
 
 // For collecting env details with grep from router pod [usage example: readRouterPodEnv(oc, podname, "search string")] .
-// NOTE: This requires getRouterPod function to collect the podname variable first!
+// NOTE: This requires getOneRouterPodNameByIC function to collect the podname variable first!
 func readRouterPodEnv(oc *exutil.CLI, routername, envname string) string {
 	ns := "openshift-ingress"
 	output := readPodEnv(oc, routername, ns, envname)
@@ -569,7 +569,7 @@ func getBlockConfig(oc *exutil.CLI, routerPodName, searchString string) string {
 // this function is used to get haproxy's version
 func getHAProxyVersion(oc *exutil.CLI) string {
 	var proxyVersion = "notFound"
-	routerpod := getRouterPod(oc, "default")
+	routerpod := getOneRouterPodNameByIC(oc, "default")
 	haproxyOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "haproxy -v | grep version").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	haproxyRe := regexp.MustCompile("([0-9\\.]+)-([0-9a-z]+)")
@@ -581,7 +581,7 @@ func getHAProxyVersion(oc *exutil.CLI) string {
 }
 
 func getHAProxyRPMVersion(oc *exutil.CLI) string {
-	routerpod := getRouterPod(oc, "default")
+	routerpod := getOneRouterPodNameByIC(oc, "default")
 	haproxyOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "rpm -qa | grep haproxy").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return haproxyOutput
@@ -667,7 +667,7 @@ func ensureIpfailoverMasterBackup(oc *exutil.CLI, ns string, podList []string) (
 }
 
 // For collecting information from router pod [usage example: readRouterPodData(oc, podname, executeCmd, "search string")] .
-// NOTE: This requires getRouterPod function to collect the podname variable first!
+// NOTE: This requires getOneRouterPodNameByIC function to collect the podname variable first!
 func readRouterPodData(oc *exutil.CLI, routername, executeCmd string, searchString string) string {
 	output := readPodData(oc, routername, "openshift-ingress", executeCmd, searchString)
 	return output

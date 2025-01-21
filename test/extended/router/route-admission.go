@@ -49,7 +49,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		custContPod := getNewRouterPod(oc, ingctrl.name)
+		custContPod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("3. Check the ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK env variable, which should be true")
 		namespaceOwnershipEnv := readRouterPodEnv(oc, custContPod, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
@@ -103,7 +103,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		// Strict is by default so just need to check in default router
 		exutil.By("2. Check the ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK env variable, which should be false")
-		routerpod := getRouterPod(oc, "default")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
 		namespaceOwnershipEnv := readRouterPodEnv(oc, routerpod, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
 		o.Expect(namespaceOwnershipEnv).To(o.ContainSubstring("ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK=false"))
 
@@ -155,7 +155,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("2. Check the ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK env variable, which should be false")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		namespaceOwnershipEnv := readRouterPodEnv(oc, routerpod, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
 		o.Expect(namespaceOwnershipEnv).To(o.ContainSubstring("ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK=false"))
 
@@ -164,7 +164,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("4. Check the ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK env variable, which should be true")
-		newRouterpod := getNewRouterPod(oc, ingctrl.name)
+		newRouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		namespaceOwnershipEnv = readRouterPodEnv(oc, newRouterpod, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
 		o.Expect(namespaceOwnershipEnv).To(o.ContainSubstring("ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK=true"))
 
@@ -180,7 +180,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
 
 		exutil.By("8. Check the ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK env variable, which should be false")
-		newRouterpod = getNewRouterPod(oc, ingctrl.name)
+		newRouterpod = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		namespaceOwnershipEnv = readRouterPodEnv(oc, newRouterpod, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
 		o.Expect(namespaceOwnershipEnv).To(o.ContainSubstring("ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK=false"))
 
@@ -217,7 +217,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 		routehost := "wildcard." + project1 + "." + ingctrl.domain
 		anyhost := "any." + project1 + "." + ingctrl.domain
-		custContPod := getNewRouterPod(oc, ingctrl.name)
+		custContPod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("2. Check the ROUTER_ALLOW_WILDCARD_ROUTES env variable, which should be true")
 		namespaceOwnershipEnv := readRouterPodEnv(oc, custContPod, "ROUTER_ALLOW_WILDCARD_ROUTES")
@@ -269,7 +269,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 		routehost := "wildcard." + project1 + "." + ingctrl.domain
-		custContPod := getNewRouterPod(oc, ingctrl.name)
+		custContPod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("2. Check the ROUTER_ALLOW_WILDCARD_ROUTES env variable, which should be false")
 		namespaceOwnershipEnv := readRouterPodEnv(oc, custContPod, "ROUTER_ALLOW_WILDCARD_ROUTES")

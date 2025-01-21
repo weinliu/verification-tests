@@ -88,7 +88,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("check the env variable of the router pod to verify the default log length")
-		newrouterpod := getNewRouterPod(oc, ingctrl.name)
+		newrouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		logLength := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOG_MAX_LENGTH")
 		o.Expect(logLength).To(o.ContainSubstring(`ROUTER_LOG_MAX_LENGTH=1024`))
 
@@ -101,7 +101,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("check the env variable of the router pod to verify the minimum log length")
-		newrouterpod = getNewRouterPod(oc, "ocp46287")
+		newrouterpod = getOneNewRouterPodFromRollingUpdate(oc, "ocp46287")
 		minimumlogLength := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOG_MAX_LENGTH")
 		o.Expect(minimumlogLength).To(o.ContainSubstring(`ROUTER_LOG_MAX_LENGTH=480`))
 
@@ -110,7 +110,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
 
 		exutil.By("check the env variable of the router pod to verify the maximum log length")
-		newrouterpod = getNewRouterPod(oc, "ocp46287")
+		newrouterpod = getOneNewRouterPodFromRollingUpdate(oc, "ocp46287")
 		maximumlogLength := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOG_MAX_LENGTH")
 		o.Expect(maximumlogLength).To(o.ContainSubstring(`ROUTER_LOG_MAX_LENGTH=4096`))
 	})
@@ -144,7 +144,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(output2).To(o.ContainSubstring("Invalid value: 4097: spec.logging.access.destination.syslog.maxLength in body should be less than or equal to 4096"))
 
 		exutil.By("check the haproxy config on the router pod to verify the default log length is enabled")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		checkoutput := readRouterPodData(oc, routerpod, "cat haproxy.config", "1024")
 		o.Expect(checkoutput).To(o.ContainSubstring(`log 1.2.3.4:514 len 1024 local1 info`))
 	})
@@ -507,7 +507,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("get router pods and then delete one router pod")
 		podList1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl.name, "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-ingress").Output()
 		o.Expect(err1).NotTo(o.HaveOccurred())
-		routerpod := getRouterPod(oc, ingctrl.name)
+		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", routerpod, "-n", "openshift-ingress").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
@@ -573,7 +573,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Patch the custom ingress-controllers with In matchExpressions routeSelector")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		patchRouteSelector := "{\"spec\":{\"routeSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"In\", \"values\":[\"aaa\", \"bbb\"]}]}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchRouteSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -588,7 +588,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, project1, "route/unsrv-4", jsonPath, "")
 
 		exutil.By("Patch the custom ingress-controllers with NotIn matchExpressions routeSelector")
-		routerpod = getRouterPod(oc, ingctrl.name)
+		routerpod = getOneRouterPodNameByIC(oc, ingctrl.name)
 		patchRouteSelector = "{\"spec\":{\"routeSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"NotIn\", \"values\":[\"aaa\", \"bbb\"]}]}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchRouteSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -602,7 +602,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, project1, "route/unsrv-4", jsonPath, "True")
 
 		exutil.By("Patch the custom ingress-controllers with Exists matchExpressions routeSelector")
-		routerpod = getRouterPod(oc, ingctrl.name)
+		routerpod = getOneRouterPodNameByIC(oc, ingctrl.name)
 		patchRouteSelector = "{\"spec\":{\"routeSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"Exists\"}]}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchRouteSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -616,7 +616,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, project1, "route/unsrv-4", jsonPath, "")
 
 		exutil.By("Patch the custom ingress-controllers with DoesNotExist matchExpressions routeSelector")
-		routerpod = getRouterPod(oc, ingctrl.name)
+		routerpod = getOneRouterPodNameByIC(oc, ingctrl.name)
 		patchRouteSelector = "{\"spec\":{\"routeSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"DoesNotExist\"}]}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchRouteSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -687,7 +687,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Patch the custom ingresscontroller with In matchExpressions namespaceSelector")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		patchNamespaceSelector := "{\"spec\":{\"namespaceSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"In\", \"values\":[\"aaa\", \"bbb\"]}]}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchNamespaceSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -702,7 +702,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, project4, "route/shard-ns4", jsonPath, "")
 
 		exutil.By("Patch the custom ingresscontroller with NotIn matchExpressions namespaceSelector")
-		routerpod = getRouterPod(oc, ingctrl.name)
+		routerpod = getOneRouterPodNameByIC(oc, ingctrl.name)
 		patchNamespaceSelector = "{\"spec\":{\"namespaceSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"NotIn\", \"values\":[\"aaa\", \"bbb\"]}]}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchNamespaceSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -716,7 +716,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, project4, "route/shard-ns4", jsonPath, "True")
 
 		exutil.By("Patch the custom ingresscontroller with Exists matchExpressions namespaceSelector")
-		routerpod = getRouterPod(oc, ingctrl.name)
+		routerpod = getOneRouterPodNameByIC(oc, ingctrl.name)
 		patchNamespaceSelector = "{\"spec\":{\"namespaceSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"Exists\"}]}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchNamespaceSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -730,7 +730,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, project4, "route/shard-ns4", jsonPath, "")
 
 		exutil.By("Patch the custom ingresscontroller with DoesNotExist matchExpressions namespaceSelector")
-		routerpod = getRouterPod(oc, ingctrl.name)
+		routerpod = getOneRouterPodNameByIC(oc, ingctrl.name)
 		patchNamespaceSelector = "{\"spec\":{\"namespaceSelector\":{\"matchExpressions\":[{\"key\": \"test\", \"operator\": \"DoesNotExist\"}]}}}"
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", patchNamespaceSelector, "--type=merge", "-n", ingctrl.namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -762,7 +762,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		defaultRouterpod := getNewRouterPod(oc, "default")
+		defaultRouterpod := getOneRouterPodNameByIC(oc, "default")
 
 		exutil.By("Annotate the ingresses.config/cluster with ingress.operator.openshift.io/hard-stop-after globally")
 		defer oc.AsAdmin().WithoutNamespace().Run("annotate").Args(
@@ -775,8 +775,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("Verify the annotation presence in the cluster gloabl config")
-		newRouterpod := getNewRouterPod(oc, ingctrl.name)
-		newDefaultRouterpod := getNewRouterPod(oc, "default")
+		newRouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
+		newDefaultRouterpod := getOneNewRouterPodFromRollingUpdate(oc, "default")
 		findAnnotation := getAnnotation(oc, oc.Namespace(), "ingress.config.openshift.io", "cluster")
 		o.Expect(findAnnotation).To(o.ContainSubstring(`"ingress.operator.openshift.io/hard-stop-after":"30m"`))
 
@@ -795,7 +795,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
 
 		exutil.By("Verify the annotation presence in the ocp38674 controller config")
-		newRouterpod1 := getNewRouterPod(oc, ingctrl.name)
+		newRouterpod1 := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		findAnnotation2 := getAnnotation(oc, ingctrl.namespace, "ingresscontroller.operator.openshift.io", ingctrl.name)
 		o.Expect(findAnnotation2).To(o.ContainSubstring(`"ingress.operator.openshift.io/hard-stop-after":"45m"`))
 
@@ -1135,7 +1135,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("2. Check the env variable of the router pod to verify the default log length")
-		newrouterpod := getNewRouterPod(oc, ingctrl.name)
+		newrouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		logLength := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOG_MAX_LENGTH")
 		o.Expect(logLength).To(o.ContainSubstring(`ROUTER_LOG_MAX_LENGTH=1024`))
 
@@ -1148,7 +1148,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("5. Check the env variable of the router pod to verify the minimum log length")
-		newrouterpod = getNewRouterPod(oc, ingctrl.name)
+		newrouterpod = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		minimumlogLength := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOG_MAX_LENGTH")
 		o.Expect(minimumlogLength).To(o.ContainSubstring(`ROUTER_LOG_MAX_LENGTH=480`))
 
@@ -1157,7 +1157,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
 
 		exutil.By("7. Check the env variable of the router pod to verify the maximum log length")
-		newrouterpod = getNewRouterPod(oc, ingctrl.name)
+		newrouterpod = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		maximumlogLength := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOG_MAX_LENGTH")
 		o.Expect(maximumlogLength).To(o.ContainSubstring(`ROUTER_LOG_MAX_LENGTH=8192`))
 	})
@@ -1194,12 +1194,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl2.name, "1")
 
 		exutil.By("2. Check the haproxy config on the syslog router pod to verify the default log length")
-		syslogRouterpod := getNewRouterPod(oc, ingctrl1.name)
+		syslogRouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl1.name)
 		checkoutput1 := readRouterPodData(oc, syslogRouterpod, "cat haproxy.config", "1024")
 		o.Expect(checkoutput1).To(o.ContainSubstring(`log 1.2.3.4:514 len 1024 local1 info`))
 
 		exutil.By("3. Check the haproxy config on the sidecar router pod to verify the default log length")
-		sidecarRouterpod := getNewRouterPod(oc, ingctrl2.name)
+		sidecarRouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl2.name)
 		checkoutput2 := readRouterPodData(oc, sidecarRouterpod, "cat haproxy.config", "1024")
 		o.Expect(checkoutput2).To(o.ContainSubstring(`log /var/lib/rsyslog/rsyslog.sock len 1024 local1 info`))
 
@@ -1253,7 +1253,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("3. Check ROUTER_SYSLOG_ADDRESS env in a router pod")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		syslogEnv := readRouterPodEnv(oc, routerpod, "ROUTER_SYSLOG_ADDRESS")
 		syslogEp := syslogPodIP + ":514"
 		if strings.Contains(syslogPodIP, ":") {
@@ -1313,7 +1313,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("2. Check if the a sidecar container with name 'logs' is deployed")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		containerName := getByJsonPath(oc, "openshift-ingress", "pod/"+routerpod, "{.spec.containers[1].name}")
 		o.Expect(containerName).To(o.ContainSubstring("logs"))
 
@@ -1629,7 +1629,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		patchNamespaceSelector := "{\"spec\":{\"namespaceSelector\":{\"matchLabels\":{\"namespace\": \"router-test\"}}}}"
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchNamespaceSelector)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		newCustContPod := getNewRouterPod(oc, ingctrl.name)
+		newCustContPod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("5. Check the haproxy config on the custom router pod to find the backend details of the " + project1 + " route")
 		checkoutput := readRouterPodData(oc, newCustContPod, "cat haproxy.config", "service-unsecure")
@@ -1681,7 +1681,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		patchNamespaceSelector := "{\"spec\":{\"routeSelector\":{\"matchLabels\":{\"route\": \"router-test\"}}}}"
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchNamespaceSelector)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		newCustContPod := getNewRouterPod(oc, ingctrl.name)
+		newCustContPod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("5. Check the haproxy config on the custom router pod to find the backend details of the route for service-unsecure")
 		checkoutput := readRouterPodData(oc, newCustContPod, "cat haproxy.config", "service-unsecure")
@@ -1707,7 +1707,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		)
 
 		exutil.By("1.0: skip for http2 not enabled clusters")
-		routerpod := getNewRouterPod(oc, "default")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
 		disableHttp2 := readRouterPodEnv(oc, routerpod, "ROUTER_DISABLE_HTTP2")
 		if !strings.Contains(disableHttp2, "false") {
 			g.Skip("OCPBUGS-29373 occur on ROSA/OSD cluster, skip for http2 not enabled clusters!")

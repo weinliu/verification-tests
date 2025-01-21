@@ -185,8 +185,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		custContPod := getNewRouterPod(oc, ingctrl.name)
-		defaultContPod := getNewRouterPod(oc, "default")
+		custContPod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
+		defaultContPod := getOneRouterPodNameByIC(oc, "default")
 
 		exutil.By("create routes and get the details")
 		rut.create(oc)
@@ -261,14 +261,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl1.delete(oc)
 		ingctrl1.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl1.name, "1")
-		custContPod1 := getNewRouterPod(oc, ingctrl1.name)
+		custContPod1 := getOneNewRouterPodFromRollingUpdate(oc, ingctrl1.name)
 
 		exutil.By("Create second shard ingresscontroller")
 		ingctrl2.domain = ingctrl2.name + "." + baseDomain
 		defer ingctrl2.delete(oc)
 		ingctrl2.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl2.name, "1")
-		custContPod2 := getNewRouterPod(oc, ingctrl2.name)
+		custContPod2 := getOneNewRouterPodFromRollingUpdate(oc, ingctrl2.name)
 
 		exutil.By("create routes and get the details")
 		rut.create(oc)
@@ -407,7 +407,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, "openshift-console", "route", "{.items..metadata.name}", "downloads-custom")
 
 		exutil.By("Check the router pod and ensure the routes are loaded in haproxy.config")
-		podname := getNewRouterPod(oc, "default")
+		podname := getOneRouterPodNameByIC(oc, "default")
 		backendConfig := pollReadPodData(oc, "openshift-ingress", podname, "cat haproxy.config", "downloads-custom")
 		o.Expect(backendConfig).To(o.ContainSubstring("backend be_edge_http:openshift-console:downloads-custom"))
 

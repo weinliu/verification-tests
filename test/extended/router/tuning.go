@@ -41,7 +41,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("check the haproxy config on the router pod for the tune.maxrewrite buffer value")
-		newrouterpod := getNewRouterPod(oc, ingctrl.name)
+		newrouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		output2, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", newrouterpod, "--", "bash", "-c", "cat haproxy.config | grep tune.maxrewrite").Output()
 		o.Expect(output2).To(o.ContainSubstring(`tune.maxrewrite 8192`))
 	})
@@ -72,7 +72,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("check the haproxy config on the router pod for the tune.bufsize buffer value")
-		newrouterpod := getNewRouterPod(oc, ingctrl.name)
+		newrouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		output2, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", newrouterpod, "--", "bash", "-c", "cat haproxy.config | grep tune.bufsize").Output()
 		o.Expect(output2).To(o.ContainSubstring(`tune.bufsize 18000`))
 	})
@@ -102,7 +102,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("check the haproxy config on the router pod for existing maxrewrite and bufsize value")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "cat haproxy.config | grep -e tune.maxrewrite -e tune.bufsize").Output()
@@ -120,7 +120,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ingctrlResource := "ingresscontrollers/" + ingctrl2.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"tuningOptions\" :{\"headerBufferBytes\": 18000, \"headerBufferMaxRewriteBytes\":10000}}}")
 		ensureRouterDeployGenerationIs(oc, ingctrl2.name, "2")
-		newSecondRouterpod := getNewRouterPod(oc, ingctrl2.name)
+		newSecondRouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl2.name)
 
 		exutil.By("check the haproxy config on the router pod of second ingresscontroller for the tune.bufsize buffer value")
 		output1, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", newSecondRouterpod, "--", "bash", "-c", "cat haproxy.config | grep -e tune.maxrewrite -e tune.bufsize").Output()
@@ -147,7 +147,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("check the existing maxrewrite and bufsize value")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "/usr/bin/env | grep -ie buf -ie rewrite").Output()
@@ -188,7 +188,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("Check the router env to verify the PROXY variable ROUTER_THREADS with " + threadcount + " is applied")
-		newpodname := getNewRouterPod(oc, ingctrl.name)
+		newpodname := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		dssearch := readRouterPodEnv(oc, newpodname, "ROUTER_THREADS")
 		o.Expect(dssearch).To(o.ContainSubstring("ROUTER_THREADS=" + threadcount))
 		exutil.By("check the haproxy config on the router pod to ensure the nbthread is updated")
@@ -240,7 +240,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(output3).To(o.ContainSubstring(`Invalid value: "string": spec.tuningOptions.threadCount in body must be of type integer: "string"`))
 
 		exutil.By("Check the router env to verify the default value of ROUTER_THREADS is applied")
-		podname := getNewRouterPod(oc, ingctrl.name)
+		podname := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		threadValue := readRouterPodEnv(oc, podname, "ROUTER_THREADS")
 		o.Expect(threadValue).To(o.ContainSubstring("ROUTER_THREADS=" + threadcountDefault))
 	})
@@ -282,12 +282,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl2.name, "1")
 
 		exutil.By("Check ROUTER_BACKEND_CHECK_INTERVAL env in a route pod of IC ocp50662one, which should be 20s")
-		podname1 := getNewRouterPod(oc, ingctrl1.name)
+		podname1 := getOneNewRouterPodFromRollingUpdate(oc, ingctrl1.name)
 		hciSearch := readRouterPodEnv(oc, podname1, "ROUTER_BACKEND_CHECK_INTERVAL")
 		o.Expect(hciSearch).To(o.ContainSubstring("ROUTER_BACKEND_CHECK_INTERVAL=20s"))
 
 		exutil.By("Check ROUTER_BACKEND_CHECK_INTERVAL env in a route pod of IC ocp50662two, which should be 100m")
-		podname2 := getNewRouterPod(oc, ingctrl2.name)
+		podname2 := getOneNewRouterPodFromRollingUpdate(oc, ingctrl2.name)
 		hciSearch = readRouterPodEnv(oc, podname2, "ROUTER_BACKEND_CHECK_INTERVAL")
 		o.Expect(hciSearch).To(o.ContainSubstring("ROUTER_BACKEND_CHECK_INTERVAL=100m"))
 
@@ -300,12 +300,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl2.name, "2")
 
 		exutil.By("Check ROUTER_BACKEND_CHECK_INTERVAL env in a route pod of IC ocp50662one, which should be 2147483647ms")
-		podname1 = getNewRouterPod(oc, ingctrl1.name)
+		podname1 = getOneNewRouterPodFromRollingUpdate(oc, ingctrl1.name)
 		hciSearch = readRouterPodEnv(oc, podname1, "ROUTER_BACKEND_CHECK_INTERVAL")
 		o.Expect(hciSearch).To(o.ContainSubstring("ROUTER_BACKEND_CHECK_INTERVAL=2147483647ms"))
 
 		exutil.By("Try to find the ROUTER_BACKEND_CHECK_INTERVAL env in a route pod which shouldn't be seen by default")
-		podname2 = getNewRouterPod(oc, ingctrl2.name)
+		podname2 = getOneNewRouterPodFromRollingUpdate(oc, ingctrl2.name)
 		cmd := fmt.Sprintf("/usr/bin/env | grep %s", "ROUTER_BACKEND_CHECK_INTERVAL")
 		_, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname2, "--", "bash", "-c", cmd).Output()
 		o.Expect(err).To(o.HaveOccurred())
@@ -338,7 +338,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("Check ROUTER_BACKEND_CHECK_INTERVAL env in a route pod which should be the max: 2147483647ms")
-		podname := getNewRouterPod(oc, ingctrl.name)
+		podname := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		hciSearch := readRouterPodEnv(oc, podname, "ROUTER_BACKEND_CHECK_INTERVAL")
 		o.Expect(hciSearch).To(o.ContainSubstring("ROUTER_BACKEND_CHECK_INTERVAL=" + "2147483647ms"))
 
@@ -378,7 +378,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("Check ROUTER_MAX_CONNECTIONS env under a router pod of IC ocp50926, which should be 2000")
-		podname := getNewRouterPod(oc, ingctrl.name)
+		podname := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		maxConnSearch := readRouterPodEnv(oc, podname, "ROUTER_MAX_CONNECTIONS")
 		o.Expect(maxConnSearch).To(o.ContainSubstring("ROUTER_MAX_CONNECTIONS=2000"))
 
@@ -391,7 +391,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("Check ROUTER_MAX_CONNECTIONS env under a router pod of IC ocp50926,  which should be 2000000")
-		podname = getNewRouterPod(oc, ingctrl.name)
+		podname = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		maxConnSearch = readRouterPodEnv(oc, podname, "ROUTER_MAX_CONNECTIONS")
 		o.Expect(maxConnSearch).To(o.ContainSubstring("ROUTER_MAX_CONNECTIONS=2000000"))
 
@@ -422,7 +422,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("Check ROUTER_MAX_CONNECTIONS env under a route pod for the configured maxConnections -1,  which should be auto")
-		podname := getNewRouterPod(oc, ingctrl.name)
+		podname := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		maxConnSearch := readRouterPodEnv(oc, podname, "ROUTER_MAX_CONNECTIONS")
 		o.Expect(maxConnSearch).To(o.ContainSubstring("ROUTER_MAX_CONNECTIONS=auto"))
 
@@ -436,7 +436,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("Try to Check ROUTER_MAX_CONNECTIONS env in a route pod set to the default maxConnections by 0")
-		podname = getNewRouterPod(oc, ingctrl.name)
+		podname = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		cmd = fmt.Sprintf("/usr/bin/env | grep %s", "ROUTER_MAX_CONNECTIONS")
 		_, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname, "--", "bash", "-c", cmd).Output()
 		o.Expect(err).To(o.HaveOccurred())
@@ -486,7 +486,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("Check default value of ROUTER_MAX_CONNECTIONS env in a route pod, which shouldn't appear in it")
-		podname := getNewRouterPod(oc, ingctrl.name)
+		podname := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		cmd := fmt.Sprintf("/usr/bin/env | grep %s", "ROUTER_MAX_CONNECTIONS")
 		_, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname, "--", "bash", "-c", cmd).Output()
 		o.Expect(err).To(o.HaveOccurred())
@@ -504,7 +504,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(observedGen1).To(o.ContainSubstring(observedGen2))
 
 		exutil.By("Check ROUTER_MAX_CONNECTIONS env in a route pod which shouldn't appear in it by default")
-		podname = getRouterPod(oc, ingctrl.name)
+		podname = getOneRouterPodNameByIC(oc, ingctrl.name)
 		_, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", podname, "--", "bash", "-c", cmd).Output()
 		o.Expect(err).To(o.HaveOccurred())
 
@@ -518,7 +518,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("Check ROUTER_MAX_CONNECTIONS env in a route pod which should be " + maxConnections)
-		podname = getNewRouterPod(oc, ingctrl.name)
+		podname = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		maxConnSearch := readRouterPodEnv(oc, podname, "ROUTER_MAX_CONNECTIONS")
 		o.Expect(maxConnSearch).To(o.ContainSubstring("ROUTER_MAX_CONNECTIONS=" + maxConnections))
 
@@ -564,12 +564,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl2.name, "1")
 
 		exutil.By("Check RELOAD_INTERVAL env in a route pod of IC ocp53605one, which should be 15s")
-		podname1 := getNewRouterPod(oc, ingctrl1.name)
+		podname1 := getOneNewRouterPodFromRollingUpdate(oc, ingctrl1.name)
 		riSearch := readRouterPodEnv(oc, podname1, "RELOAD_INTERVAL")
 		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=15s"))
 
 		exutil.By("Check RELOAD_INTERVAL env in a route pod of IC ocp53605two, which should be 2m")
-		podname2 := getNewRouterPod(oc, ingctrl2.name)
+		podname2 := getOneNewRouterPodFromRollingUpdate(oc, ingctrl2.name)
 		riSearch = readRouterPodEnv(oc, podname2, "RELOAD_INTERVAL")
 		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=2m"))
 
@@ -580,12 +580,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl2.name, "2")
 
 		exutil.By("Check RELOAD_INTERVAL env in a route pod of IC ocp53605one which should be 1m")
-		podname1 = getNewRouterPod(oc, ingctrl1.name)
+		podname1 = getOneNewRouterPodFromRollingUpdate(oc, ingctrl1.name)
 		riSearch = readRouterPodEnv(oc, podname1, "RELOAD_INTERVAL")
 		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=1m"))
 
 		exutil.By("Check RELOAD_INTERVAL env in a route pod of IC ocp53605two, which is the default 5s")
-		podname2 = getNewRouterPod(oc, ingctrl2.name)
+		podname2 = getOneNewRouterPodFromRollingUpdate(oc, ingctrl2.name)
 		riSearch = readRouterPodEnv(oc, podname2, "RELOAD_INTERVAL")
 		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=5s"))
 	})
@@ -617,7 +617,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("Check RELOAD_INTERVAL env in a route pod which should be the max 2m")
-		podname := getNewRouterPod(oc, ingctrl.name)
+		podname := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		riSearch := readRouterPodEnv(oc, podname, "RELOAD_INTERVAL")
 		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=2m"))
 
@@ -628,7 +628,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
 
 		exutil.By("Check RELOAD_INTERVAL env in a route pod which should be the min 1s")
-		podname = getNewRouterPod(oc, ingctrl.name)
+		podname = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		riSearch = readRouterPodEnv(oc, podname, "RELOAD_INTERVAL")
 		o.Expect(riSearch).To(o.ContainSubstring("RELOAD_INTERVAL=1s"))
 

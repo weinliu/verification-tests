@@ -44,7 +44,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("Check the router env to verify the PROXY variable is applied")
-		podname := getNewRouterPod(oc, ingctrl.name)
+		podname := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		dssearch := readRouterPodEnv(oc, podname, "ROUTER_USE_PROXY_PROTOCOL")
 		o.Expect(dssearch).To(o.ContainSubstring(`ROUTER_USE_PROXY_PROTOCOL=true`))
 	})
@@ -76,7 +76,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("Check the router env to verify the PROXY variable is applied")
-		routername := getNewRouterPod(oc, ingctrl.name)
+		routername := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		pollReadPodData(oc, "openshift-ingress", routername, "/usr/bin/env", `ROUTER_USE_PROXY_PROTOCOL=true`)
 	})
 
@@ -136,7 +136,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("3.0 Create a http route, and then curl the route")
 		routehost := unsecsvcName + "34157" + ".apps." + getBaseDomain(oc)
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
 		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routehost + "/headers", "-I", "--resolve", toDst, "--connect-timeout", "10"}
@@ -181,7 +181,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("Check the router env to verify the PROXY variable is applied")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		pollReadPodData(oc, "openshift-ingress", routerpod, "/usr/bin/env", `ROUTER_USE_PROXY_PROTOCOL=true`)
 
 		exutil.By("Patch the hostNetwork ingresscontroller with protocol TCP")
@@ -190,7 +190,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("Check the configuration and router env for protocol TCP")
-		routerpod = getNewRouterPod(oc, ingctrl.name)
+		routerpod = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		cmd := fmt.Sprintf("/usr/bin/env | grep %s", `ROUTER_USE_PROXY_PROTOCOL`)
 		jsonPath := "{.spec.endpointPublishingStrategy.hostNetwork.protocol}"
 		output := getByJsonPath(oc, ingctrl.namespace, ingctrlResource, jsonPath)
@@ -213,7 +213,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	// author: jechen@redhat.com
 	g.It("Author:jechen-Medium-42878-Errorfile stanzas and dummy default html files have been added to the router", func() {
 		exutil.By("Get pod (router) in openshift-ingress namespace")
-		podname := getNewRouterPod(oc, "default")
+		podname := getOneRouterPodNameByIC(oc, "default")
 
 		exutil.By("Check if there are default 404 and 503 error pages on the router")
 		searchOutput := readRouterPodData(oc, podname, "ls -l", "error-page")
@@ -274,7 +274,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("6. Obtain new router pod created, and check if error_code_pages directory is created on it")
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		newrouterpod := getNewRouterPod(oc, ingctrl.name)
+		newrouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("Check /var/lib/haproxy/conf directory to see if error_code_pages subdirectory is created on the router")
 		searchOutput := readRouterPodData(oc, newrouterpod, "ls -al /var/lib/haproxy/conf", "error_code_pages")
@@ -314,7 +314,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("Verify the default server/client fin and default timeout values")
 		checkoutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", `cat haproxy.config | grep -we "timeout client" -we "timeout client-fin" -we "timeout server" -we "timeout server-fin"`).Output()
@@ -328,7 +328,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"tuningOptions\" :{\"clientFinTimeout\": \"3s\",\"clientTimeout\":\"33s\",\"serverFinTimeout\":\"3s\",\"serverTimeout\":\"33s\"}}}")
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		newrouterpod := getNewRouterPod(oc, ingctrl.name)
+		newrouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("verify the timeout variables from the new router pods")
 		checkenv := readRouterPodEnv(oc, newrouterpod, "TIMEOUT")
@@ -357,7 +357,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("Verify the default tls values")
 		checkoutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", `cat haproxy.config | grep -w "inspect-delay"| uniq`).Output()
@@ -368,7 +368,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"tuningOptions\" :{\"tlsInspectDelay\": \"15s\"}}}")
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		newrouterpod := getNewRouterPod(oc, ingctrl.name)
+		newrouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("verify the new tls inspect timeout value in the router pod")
 		checkenv := readRouterPodEnv(oc, newrouterpod, "ROUTER_INSPECT_DELAY")
@@ -395,7 +395,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		exutil.By("Verify the default tls values")
 		checkoutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", `cat haproxy.config | grep -w "timeout tunnel"`).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -405,7 +405,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"tuningOptions\" :{\"tunnelTimeout\": \"2h\"}}}")
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		newrouterpod := getNewRouterPod(oc, ingctrl.name)
+		newrouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("verify the new tls inspect timeout value in the router pod")
 		checkenv := readRouterPodEnv(oc, newrouterpod, "ROUTER_DEFAULT_TUNNEL_TIMEOUT")
@@ -432,7 +432,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("Patch ingresscontroller with negative values for the tuningOptions settings and check the ingress operator config post the change")
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
@@ -474,7 +474,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"logging\":{\"access\":{\"destination\":{\"type\":\"Container\"},\"logEmptyRequests\":\"Ignore\"}}}}")
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		newrouterpod := getNewRouterPod(oc, ingctrl.name)
+		newrouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("verify the Dontlog variable inside the  router pod")
 		checkenv := readRouterPodEnv(oc, newrouterpod, "ROUTER_DONT_LOG_NULL")
@@ -511,7 +511,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"httpEmptyRequestsPolicy\":\"Ignore\"}}")
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		newrouterpod := getNewRouterPod(oc, ingctrl.name)
+		newrouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		exutil.By("verify the Dontlog variable inside the  router pod")
 		checkenv := readRouterPodEnv(oc, newrouterpod, "ROUTER_HTTP_IGNORE_PROBES")
 		o.Expect(checkenv).To(o.ContainSubstring(`ROUTER_HTTP_IGNORE_PROBES=true`))
@@ -546,7 +546,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"httpCompression\":{\"mimeTypes\":[\"text/html\",\"text/css; charset=utf-8\",\"application/json\"]}}}")
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		newrouterpod := getNewRouterPod(oc, ingctrl.name)
+		newrouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("check the env variable of the router pod")
 		checkenv1 := readRouterPodEnv(oc, newrouterpod, "ROUTER_ENABLE_COMPRESSION")
@@ -579,7 +579,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("Patch ingresscontroller with wrong httpCompression data and check whether it is configurable")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("ingresscontroller/46898", "-p", "{\"spec\":{\"httpCompression\":{\"mimeTypes\":[\"text/\",\"text/css; charset=utf-8\",\"//\"]}}}", "--type=merge", "-n", ingctrl.namespace).Output()
@@ -598,7 +598,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	// author: hongli@redhat.com
 	g.It("Author:hongli-LEVEL0-Critical-47344-check haproxy router v4v6 mode", func() {
 		exutil.By("Get ROUTER_IP_V4_V6_MODE env, if NotFound then v4 is using by default")
-		defaultRouterPod := getNewRouterPod(oc, "default")
+		defaultRouterPod := getOneRouterPodNameByIC(oc, "default")
 		checkEnv := readRouterPodEnv(oc, defaultRouterPod, "ROUTER_IP_V4_V6_MODE")
 		ipStackType := checkIPStackType(oc)
 		e2e.Logf("the cluster IP stack type is: %v", ipStackType)
@@ -619,7 +619,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		exutil.By("show haproxy version(" + haproxyVer + "), and check if it is updated successfully")
 		o.Expect(haproxyVer).To(o.ContainSubstring(expVersion))
 		// in 4.16, OCP-73373 - Bump openshift-router image to RHEL9"
-		routerpod := getNewRouterPod(oc, "default")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "cat /etc/redhat-release").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Red Hat Enterprise Linux release 9"))
@@ -653,7 +653,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		getNewRouterPod(oc, ingctrl.name)
+		getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("check the default liveness probe and readiness probe parameters in the json outut of the router deployment")
 		routerDeploymentName := "router-" + ingctrl.name
@@ -691,7 +691,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(output).To(o.ContainSubstring("\"timeoutSeconds\":2147483647"))
 
 		exutil.By("check liveness probe and readiness probe max 2147483647s in the json output of the router pod")
-		podname := getNewRouterPod(oc, ingctrl.name)
+		podname := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podname, "-o=jsonpath={..livenessProbe}", "-n", "openshift-ingress").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("\"timeoutSeconds\":2147483647"))
@@ -783,7 +783,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("get one custom ingress-controller router pod's IP")
-		podname := getNewRouterPod(oc, ingctrl.name)
+		podname := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, podname, "openshift-ingress")
 
 		exutil.By("Deploy a project with a client pod, a backend pod and its service resources")
@@ -878,7 +878,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("get one custom ingress-controller router pod's IP")
-		podname := getNewRouterPod(oc, ingctrl.name)
+		podname := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, podname, "openshift-ingress")
 
 		exutil.By("Deploy a project with a client pod, a backend pod and its service resources")
@@ -910,7 +910,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("remove the custom error page from the ingress-controller")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, rmHTTPErrorPage)
-		getNewRouterPod(oc, ingctrl.name)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
+		getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("delete the configmap")
 		cmDltErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("configmap", cmName, "-n", "openshift-config").Execute()
@@ -940,7 +941,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	g.It("Author:aiyengar-ROSA-OSD_CCS-ARO-Critical-41186-The Power-of-two balancing features switches to roundrobin mode for REEN/Edge/insecure/passthrough routes with multiple backends configured with weights", func() {
 		var (
 			baseDomain   = getBaseDomain(oc)
-			defaultPod   = getRouterPod(oc, "default")
+			defaultPod   = getOneRouterPodNameByIC(oc, "default")
 			unsecsvcName = "service-unsecure"
 			secsvcName   = "service-secure"
 		)
@@ -1010,7 +1011,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	g.It("Author:aiyengar-ROSA-OSD_CCS-ARO-Author:aiyengar-High-52738-The Power-of-two balancing features switches to source algorithm for passthrough routes", func() {
 		var (
 			baseDomain = getBaseDomain(oc)
-			defaultPod = getRouterPod(oc, "default")
+			defaultPod = getOneRouterPodNameByIC(oc, "default")
 		)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
@@ -1060,7 +1061,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ingctrlResource := "ingresscontrollers/" + ingctrl.name
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"unsupportedConfigOverrides\":{\"loadBalancingAlgorithm\":\"leastconn\"}}}")
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		newrouterpod := getNewRouterPod(oc, ingctrl.name)
+		newrouterpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("verify ROUTER_LOAD_BALANCE_ALGORITHM variable of the deployed router pod")
 		checkenv := readRouterPodEnv(oc, newrouterpod, "ROUTER_LOAD_BALANCE_ALGORITHM")
@@ -1087,7 +1088,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	g.It("Author:aiyengar-ROSA-OSD_CCS-ARO-LEVEL0-High-41042-The Power-of-two balancing features defaults to random LB algorithm instead of leastconn for REEN/Edge/insecure routes", func() {
 		var (
 			baseDomain   = getBaseDomain(oc)
-			defaultPod   = getNewRouterPod(oc, "default")
+			defaultPod   = getOneRouterPodNameByIC(oc, "default")
 			unsecsvcName = "service-unsecure"
 			secsvcName   = "service-secure"
 		)
@@ -1132,7 +1133,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 	g.It("Author:aiyengar-High-41187-The Power of two balancing  honours the per route balancing algorithm defined via haproxy.router.openshift.io/balance annotation", func() {
 		var (
-			defaultPod   = getNewRouterPod(oc, "default")
+			defaultPod   = getOneRouterPodNameByIC(oc, "default")
 			unsecsvcName = "service-unsecure"
 		)
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
@@ -1210,7 +1211,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		}
 
 		exutil.By("Collect nodename of one of the default haproxy pods")
-		defRouterPod := getRouterPod(oc, "default")
+		defRouterPod := getOneRouterPodNameByIC(oc, "default")
 		defNodeName := getNodeNameByPod(oc, ns, defRouterPod)
 
 		exutil.By("Create two custom ingresscontrollers")
@@ -1236,8 +1237,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrlhp2.name, "2")
 
 		exutil.By("Check the node names on which the route pods of the custom ingress-controllers reside on")
-		routerPod1 := getNewRouterPod(oc, ingctrlhp1.name)
-		routerPod2 := getNewRouterPod(oc, ingctrlhp2.name)
+		routerPod1 := getOneNewRouterPodFromRollingUpdate(oc, ingctrlhp1.name)
+		routerPod2 := getOneNewRouterPodFromRollingUpdate(oc, ingctrlhp2.name)
 		routerNodeName1 := getNodeNameByPod(oc, ns, routerPod1)
 		routerNodeName2 := getNodeNameByPod(oc, ns, routerPod2)
 		o.Expect(defNodeName).Should(o.And(
@@ -1432,7 +1433,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(proxyProtocol).To(o.ContainSubstring(`{"name":"ROUTER_USE_PROXY_PROTOCOL","value":"true"}`))
 
 		exutil.By("check the ROUTER_USE_PROXY_PROTOCOL env, which should be true")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		proxyEnv := readRouterPodEnv(oc, routerpod, "ROUTER_USE_PROXY_PROTOCOL")
 		o.Expect(proxyEnv).To(o.ContainSubstring("ROUTER_USE_PROXY_PROTOCOL=true"))
 
@@ -1514,7 +1515,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrlhp.name, "2")
 
 		exutil.By("Check STATS_PORT env under a custom router pod, which should be 17936")
-		routerpod := getNewRouterPod(oc, ingctrlhp.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrlhp.name)
 		jsonPath = `{.spec.containers[].env[?(@.name=="STATS_PORT")].value}`
 		output := getByJsonPath(oc, "openshift-ingress", "pod/"+routerpod, jsonPath)
 		o.Expect(output).To(o.ContainSubstring("17936"))
@@ -1602,7 +1603,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 
 		exutil.By("curl a non-existing route, and then check that Bootstrap portion of the license is removed")
-		podname := getNewRouterPod(oc, ingctrl.name)
+		podname := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, podname, "openshift-ingress")
 		notExistRoute := "notexistroute" + "-" + project1 + "." + ingctrl.domain
 		toDst := notExistRoute + ":80:" + podIP
@@ -1640,7 +1641,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		custContPod := getNewRouterPod(oc, ingctrl.name)
+		custContPod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		custContIP := getPodv4Address(oc, custContPod, "openshift-ingress")
 
 		exutil.By("Deploy a backend pod and its service resources")
@@ -1708,7 +1709,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(output).To(o.ContainSubstring(routeName))
 
 		exutil.By("Check the Haproxy backend configuration and make sure proto h2 is added for the route")
-		podname := getRouterPod(oc, "default")
+		podname := getOneRouterPodNameByIC(oc, "default")
 		backendConfig := pollReadPodData(oc, "openshift-ingress", podname, "cat haproxy.config", svcName)
 		o.Expect(backendConfig).To(o.ContainSubstring("proto h2"))
 	})
@@ -1716,7 +1717,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 	// bug: 1816540 1803001 1816544
 	g.It("Author:shudili-High-57012-Forwarded header includes empty quoted proto-version parameter", func() {
 		exutil.By("Check haproxy-config.template file in a router pod and make sure proto-version is removed from the Forwarded header")
-		podname := getRouterPod(oc, "default")
+		podname := getOneRouterPodNameByIC(oc, "default")
 		templateConfig := readRouterPodData(oc, podname, "cat haproxy-config.template", "http-request add-header Forwarded")
 		o.Expect(templateConfig).To(o.ContainSubstring("proto"))
 		o.Expect(templateConfig).NotTo(o.ContainSubstring("proto-version"))
@@ -1753,7 +1754,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
 
 		exutil.By("get one custom ingress-controller router pod's IP")
-		podname := getNewRouterPod(oc, ingctrl.name)
+		podname := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, podname, "openshift-ingress")
 
 		exutil.By("create an unsecure service and its backend pod")
@@ -1799,7 +1800,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(output).To(o.ContainSubstring(`HAProxy metrics are reporting that HAProxy is down on pod {{ $labels.namespace }} / {{ $labels.pod }}`))
 
 		exutil.By("Check the router pod logs and confirm there is no periodic reper error message  for zombie process")
-		podname := getNewRouterPod(oc, "default")
+		podname := getOneRouterPodNameByIC(oc, "default")
 		log, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress", podname).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(log, "waitid: no child processes") {
@@ -1828,7 +1829,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		custContPod := getNewRouterPod(oc, ingctrl.name)
+		custContPod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		custContIP := getPodv4Address(oc, custContPod, "openshift-ingress")
 
 		exutil.By("Deploy the statefulset and its service resources")
@@ -1891,7 +1892,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(protocol).To(o.ContainSubstring("PROXY"))
 
 		exutil.By("check the ROUTER_USE_PROXY_PROTOCOL env, which should be true")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		pollReadPodData(oc, "openshift-ingress", routerpod, "/usr/bin/env", `ROUTER_USE_PROXY_PROTOCOL=true`)
 
 		exutil.By("Ensure the proxy-protocol annotation is added to the LB service")
@@ -1910,7 +1911,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(protocol).To(o.ContainSubstring("TCP"))
 
 		exutil.By("check the ROUTER_USE_PROXY_PROTOCOL env, which should not present")
-		routerpod = getNewRouterPod(oc, ingctrl.name)
+		routerpod = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		proxyEnv, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "/usr/bin/env | grep ROUTER_USE_PROXY_PROTOCOL").Output()
 		o.Expect(proxyEnv).NotTo(o.ContainSubstring("ROUTER_USE_PROXY_PROTOCOL"))
 
@@ -1943,7 +1944,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		custContPod := getNewRouterPod(oc, ingctrl.name)
+		custContPod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 
 		exutil.By("Deploy a backend pod and its service resources")
 		project1 := oc.Namespace()
@@ -2052,7 +2053,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(output).To(o.ContainSubstring("patched"))
 
 		exutil.By("check backend edge route in haproxy that headers to be set or deleted")
-		routerpod := getRouterPod(oc, ingctrl.name)
+		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		readHaproxyConfig(oc, routerpod, "be_http:"+project1+":"+unsecsvcName, "-A33", "X-SSL-Client-Cert")
 		routeBackendCfg := getBlockConfig(oc, routerpod, "be_http:"+project1+":"+unsecsvcName)
 		o.Expect(strings.Contains(routeBackendCfg, "http-request set-header 'X-SSL-Client-Cert' '%{+Q}[ssl_c_der,base64]'")).To(o.BeTrue())
@@ -2212,7 +2213,7 @@ DNS.2 = *.%s.%s.svc
 		exutil.By("patch the ingresscontroller to enable client certificate with required policy")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, "{\"spec\":{\"clientTLS\":{\"clientCA\":{\"name\":\"client-ca-"+ingctrl.name+"\"},\"clientCertificatePolicy\":\"Required\"}}}")
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 
 		exutil.By("Deploy the project with a client pod, a backend pod and its service resources")
@@ -2410,7 +2411,7 @@ DNS.2 = *.%s.%s.svc
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
 
 		exutil.By("create an edge route")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		edgeRouteHost := "r3-edge62528." + ingctrl.domain
 		lowHostEdge := strings.ToLower(edgeRouteHost)
@@ -2574,7 +2575,7 @@ DNS.2 = *.%s.%s.svc
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("check the configured added/deleted headers under defaults/frontend fe_sni/frontend fe_no_sni in haproxy")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A35", "X-SSL-Client-Cert")
 		for _, backend := range []string{"defaults", "frontend fe_sni", "frontend fe_no_sni"} {
 			haproxyBackendCfg := getBlockConfig(oc, routerpod, backend)
@@ -2748,7 +2749,7 @@ DNS.2 = *.%s.%s.svc
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
 
 		exutil.By("check the configured added/deleted headers under defaults/frontend fe_sni/frontend fe_no_sni in haproxy")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A35", "X-SSL-Client-Cert")
 		for _, backend := range []string{"defaults", "frontend fe_sni", "frontend fe_no_sni"} {
 			haproxyBackendCfg := getBlockConfig(oc, routerpod, backend)
@@ -2973,7 +2974,7 @@ DNS.2 = *.%s.%s.svc
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
 
 		exutil.By("check the configured added/deleted headers under defaults/frontend fe_sni/frontend fe_no_sni in haproxy")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A35", "X-SSL-Client-Cert")
 		for _, backend := range []string{"defaults", "frontend fe_sni", "frontend fe_no_sni"} {
 			haproxyBackendCfg := getBlockConfig(oc, routerpod, backend)
@@ -3095,7 +3096,7 @@ DNS.2 = *.%s.%s.svc
 		negPatchHeaders := negMaxCfg.String()
 		patchResourceAsAdmin(oc, project1, "route/"+unsecsvcName, patchHeaders)
 		routeBackend := "be_http:" + project1 + ":" + unsecsvcName
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
 		readHaproxyConfig(oc, routerpod, routeBackend, "-A35", "testheader1")
@@ -3184,7 +3185,7 @@ DNS.2 = *.%s.%s.svc
 		negPatchHeaders = negMaxCfg.String()
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchHeaders)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		routerpod = getNewRouterPod(oc, ingctrl.name)
+		routerpod = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		podIP = getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst = routehost + ":80:" + podIP
 		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A35", "testheader1")
@@ -3216,7 +3217,7 @@ DNS.2 = *.%s.%s.svc
 		negPatchHeaders = negMaxCfg.String()
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchHeaders)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
-		routerpod = getNewRouterPod(oc, ingctrl.name)
+		routerpod = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		podIP = getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst = routehost + ":80:" + podIP
 		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A35", maxHeaderName)
@@ -3250,7 +3251,7 @@ DNS.2 = *.%s.%s.svc
 		negPatchHeaders = negMaxCfg.String()
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, patchHeaders)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "4")
-		routerpod = getNewRouterPod(oc, ingctrl.name)
+		routerpod = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A35", "header123abc")
 		routeBackendCfg = getBlockConfig(oc, routerpod, "defaults")
 		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'header123abc' '"+maxHeaderValue+"'")).To(o.BeTrue())
@@ -3381,7 +3382,7 @@ DNS.2 = *.%s.%s.svc
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
 
 		exutil.By("send traffic, check the request header reqtestheader which should be set to req111 by the route")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "--resolve", toDst, "--connect-timeout", "10"}
@@ -3436,7 +3437,7 @@ DNS.2 = *.%s.%s.svc
 		exutil.By("patch http headers with valid number, alphabet, a combination of both header names and header values to a route, and then check the added headers in haproxy.conf")
 		validHeaders := "{\"spec\": {\"httpHeaders\": {\"actions\": {\"request\": [{\"name\": \"001\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"20230906\"}}}, {\"name\": \"aBc\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"Wednesday\"}}}, {\"name\": \"test01\", \"action\": {\"type\": \"Set\", \"set\": {\"value\": \"value01\"}}}]}}}}"
 		patchResourceAsAdmin(oc, project1, routeResource, validHeaders)
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		routeBackend := "be_http:" + project1 + ":" + unsecsvcName
 		readHaproxyConfig(oc, routerpod, routeBackend, "-A35", "test01")
 		routeBackendCfg := getBlockConfig(oc, routerpod, routeBackend)
@@ -3477,7 +3478,7 @@ DNS.2 = *.%s.%s.svc
 		exutil.By("patch http headers with valid number, alphabet, a combination of both header names and header values to an ingress controller, then check the added headers in haproxy.conf")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, validHeaders)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
-		routerpod = getNewRouterPod(oc, ingctrl.name)
+		routerpod = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A35", "test01")
 		for _, backend := range []string{"defaults", "frontend fe_sni", "frontend fe_no_sni"} {
 			routeBackendCfg = getBlockConfig(oc, routerpod, backend)
@@ -3495,7 +3496,7 @@ DNS.2 = *.%s.%s.svc
 		exutil.By("patch http header with #$* in the header name to an ingress controller")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, specialHeaderName1)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "3")
-		routerpod = getNewRouterPod(oc, ingctrl.name)
+		routerpod = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A20", "aabbccdd")
 		for _, backend := range []string{"defaults", "frontend fe_sni", "frontend fe_no_sni"} {
 			routeBackendCfg = getBlockConfig(oc, routerpod, backend)
@@ -3505,7 +3506,7 @@ DNS.2 = *.%s.%s.svc
 		exutil.By("patch http header with ' in the header name to an ingress controller")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, specialHeaderName2)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "4")
-		routerpod = getNewRouterPod(oc, ingctrl.name)
+		routerpod = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A20", "aabbccdd")
 		for _, backend := range []string{"defaults", "frontend fe_sni", "frontend fe_no_sni"} {
 			routeBackendCfg = getBlockConfig(oc, routerpod, backend)
@@ -3520,7 +3521,7 @@ DNS.2 = *.%s.%s.svc
 		exutil.By("patch http header with specical characters in header value to an ingress controller")
 		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, specialHeaderValues)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "5")
-		routerpod = getNewRouterPod(oc, ingctrl.name)
+		routerpod = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		readHaproxyConfig(oc, routerpod, "frontend fe_sni", "-A20", "aabbccdd")
 		for _, backend := range []string{"defaults", "frontend fe_sni", "frontend fe_no_sni"} {
 			routeBackendCfg = getBlockConfig(oc, routerpod, backend)
@@ -3570,7 +3571,7 @@ DNS.2 = *.%s.%s.svc
 		waitForOutput(oc, project1, "route/"+unsecsvcName, "{.status.ingress[0].conditions[0].status}", "True")
 
 		exutil.By("4.0: Curl the http route with two same headers in the http request, expect to get a 400 bad request if the backend server does not support such an invalid http request")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "-H", `"transfer-encoding: chunked"`, "-H", `"transfer-encoding: chunked"`, "--resolve", toDst, "--connect-timeout", "10"}
@@ -3637,7 +3638,7 @@ DNS.2 = *.%s.%s.svc
 
 		// the below test step was for [OCPBUGS-29690] haproxy shouldn't be oom
 		exutil.By("check the default weights for the selected routes are 1")
-		routerpod := getRouterPod(oc, "default")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
 		srvPod1Name, err := oc.Run("get").Args("pods", "-l", srv1Label, "-o=jsonpath=\"{.items[0].metadata.name}\"").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		srvPod2Name, err := oc.Run("get").Args("pods", "-l", srv2Label, "-o=jsonpath=\"{.items[0].metadata.name}\"").Output()
@@ -3702,8 +3703,8 @@ DNS.2 = *.%s.%s.svc
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
 		ensureRouterDeployGenerationIs(oc, ingctrl.name, "1")
-		podname := getNewRouterPod(oc, ingctrl.name)
-		defaultPodname := getNewRouterPod(oc, "default")
+		podname := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
+		defaultPodname := getOneRouterPodNameByIC(oc, "default")
 
 		exutil.By("2. Create an unsecure service and its backend pod")
 		createResourceFromFile(oc, project1, testPodSvc)
@@ -3826,7 +3827,7 @@ DNS.2 = *.%s.%s.svc
 
 		exutil.By("7.0 Check the haproxy.config, make sure alpn is enabled for the reencrypt route's backend endpoint")
 		backend := "be_secure:" + project1 + ":route-reen"
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		ep := readHaproxyConfig(oc, routerpod, backend, "-A20", "server pod:")
 		o.Expect(ep).To(o.ContainSubstring("ssl alpn h2,http/1.1"))
 
@@ -3871,7 +3872,7 @@ DNS.2 = *.%s.%s.svc
 		routehost := "unsecure77892" + "." + ingctrl.domain
 		defer func() {
 			// added debug info, in case the original router pod was terminated
-			routerpod2 := getNewRouterPod(oc, ingctrl.name)
+			routerpod2 := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 			e2e.Logf("Before end of testing, the routerpod is: %s", routerpod2)
 			ingctrl.delete(oc)
 		}()
@@ -3888,7 +3889,7 @@ DNS.2 = *.%s.%s.svc
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 
 		exutil.By("3.0 Curl the HTTP route")
-		routerpod := getRouterPod(oc, ingctrl.name)
+		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		e2e.Logf("init routerpod is: %s", routerpod)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
@@ -4034,7 +4035,7 @@ DNS.2 = *.%s.%s.svc
 		waitForOutput(oc, project1, "deployment/"+srvdmInfo, "{.status.availableReplicas}", strconv.Itoa(desiredReplicas))
 
 		exutil.By("6.0 Keep curing the http route, make sure all backend endpoints are hit")
-		routerpod := getNewRouterPod(oc, ingctrl.name)
+		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := httpRoutehost + ":80:" + podIP
 		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "http://" + httpRoutehost, "-s", "--resolve", toDst, "--connect-timeout", "10"}
@@ -4076,7 +4077,7 @@ DNS.2 = *.%s.%s.svc
 		routehost := "edge77973" + "." + ingctrl.domain
 		defer func() {
 			// added debug info, in case the original router pod was terminated
-			routerpod2 := getNewRouterPod(oc, ingctrl.name)
+			routerpod2 := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 			e2e.Logf("Before end of testing, the routerpod is: %s", routerpod2)
 			ingctrl.delete(oc)
 		}()
@@ -4093,7 +4094,7 @@ DNS.2 = *.%s.%s.svc
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 
 		exutil.By("3.0 Curl the edge route")
-		routerpod := getRouterPod(oc, ingctrl.name)
+		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		e2e.Logf("init routerpod is: %s", routerpod)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":443:" + podIP
@@ -4213,7 +4214,7 @@ DNS.2 = *.%s.%s.svc
 		routehost := "passth77974" + "." + ingctrl.domain
 		defer func() {
 			// added debug info, in case the original router pod was terminated
-			routerpod2 := getNewRouterPod(oc, ingctrl.name)
+			routerpod2 := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 			e2e.Logf("Before end of testing, the routerpod is: %s", routerpod2)
 			ingctrl.delete(oc)
 		}()
@@ -4230,7 +4231,7 @@ DNS.2 = *.%s.%s.svc
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 
 		exutil.By("3.0 Curl the passthrough route")
-		routerpod := getRouterPod(oc, ingctrl.name)
+		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		e2e.Logf("init routerpod is: %s", routerpod)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":443:" + podIP
@@ -4350,7 +4351,7 @@ DNS.2 = *.%s.%s.svc
 		routehost := "reen77975" + "." + ingctrl.domain
 		defer func() {
 			// added debug info, in case the original router pod was terminated
-			routerpod2 := getNewRouterPod(oc, ingctrl.name)
+			routerpod2 := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 			e2e.Logf("Before end of testing, the routerpod is: %s", routerpod2)
 			ingctrl.delete(oc)
 		}()
@@ -4367,7 +4368,7 @@ DNS.2 = *.%s.%s.svc
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 
 		exutil.By("3.0 Curl the reencrypt route")
-		routerpod := getRouterPod(oc, ingctrl.name)
+		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		e2e.Logf("init routerpod is: %s", routerpod)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":443:" + podIP

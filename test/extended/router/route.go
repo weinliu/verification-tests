@@ -67,7 +67,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, project1, "route/route-edge10207", "{.status.ingress[0].conditions[0].status}", "True")
 
 		exutil.By("4.0: Curl the edge route for two times, one with saving the cookie for the second server")
-		routerpod := getRouterPod(oc, ingctrl.name)
+		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":443:" + podIP
 		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
@@ -144,7 +144,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout":"-2s`))
 
 		exutil.By("4.0: Check HAProxy file for timeout tunnel")
-		routerpod := getNewRouterPod(oc, "default")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
 		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", unSecSvcName)
 		o.Expect(searchOutput).NotTo(o.ContainSubstring(`timeout server  -2s`))
 
@@ -357,7 +357,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutput(oc, project1, "route/route-edge11130", "{.status.ingress[0].conditions[0].status}", "True")
 
 		exutil.By("4.0: Curl the edge route, make sure saving the cookie for server 1")
-		routerpod := getRouterPod(oc, ingctrl.name)
+		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":443:" + podIP
 		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "-c", fileDir + "/cookie-11130", "--resolve", toDst, "--connect-timeout", "10"}
@@ -432,7 +432,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(findAnnotation).NotTo(o.ContainSubstring(`haproxy.router.openshift.io/rate-limit-connections.rate-tcp: "2"`))
 
 		exutil.By("5. Verify the haproxy configuration to ensure the tcp rate limit is configured")
-		podName := getNewRouterPod(oc, "default")
+		podName := getOneRouterPodNameByIC(oc, "default")
 		backendName := "be_tcp:" + project1 + ":mypass"
 		output2 := readHaproxyConfig(oc, podName, backendName, "-A10", "src_conn_rate")
 		o.Expect(output2).To(o.ContainSubstring(`tcp-request content reject if { src_conn_rate ge 2 }`))
@@ -502,7 +502,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutsideCurlContains("https://"+routehost+"/delay/5", "-kI", `exit status`)
 
 		exutil.By("5.0: Check HAProxy file for timeout tunnel")
-		routerpod := getRouterPod(oc, "default")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
 		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", routeName)
 		o.Expect(searchOutput).To(o.ContainSubstring(`timeout tunnel  3s`))
 	})
@@ -543,7 +543,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		waitForOutsideCurlContains("http://"+routehost+"/delay/5", "-I", `504 Gateway Time`)
 
 		exutil.By("5.0: Check HAProxy file for timeout tunnel")
-		routerpod := getRouterPod(oc, "default")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
 		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", routeName)
 		o.Expect(searchOutput).To(o.ContainSubstring(`timeout server  2s`))
 	})
@@ -558,7 +558,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("1.0: Deploy a project with Pod and Services")
 		project1 := oc.Namespace()
-		routerpod := getRouterPod(oc, "default")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
 		createResourceFromFile(oc, project1, signedPod)
 		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
 
@@ -651,7 +651,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("1.0: Deploy a project with Pod and Services")
 		project1 := oc.Namespace()
-		routerpod := getNewRouterPod(oc, "default")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
 		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
 
@@ -733,7 +733,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("5.0: Curl the edge route, and check the Set-Cookie header is set")
-		routerpod := getRouterPod(oc, ingctrl.name)
+		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":443:" + podIP
 		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-kvs", "--resolve", toDst, "--connect-timeout", "10"}
@@ -810,7 +810,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout":"5s`))
 
 		exutil.By("4.0: Check HAProxy file for timeout server")
-		routerpod := getNewRouterPod(oc, "default")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
 		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+routeName)
 		o.Expect(searchOutput).To(o.ContainSubstring(`timeout server  5s`))
 
@@ -865,7 +865,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout":"15s`))
 
 		exutil.By("4.0: Check HAProxy file for timeout server on the routes")
-		routerpod := getNewRouterPod(oc, "default")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
 		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+routeName)
 		o.Expect(searchOutput).To(o.ContainSubstring(`timeout server  15s`))
 
@@ -925,7 +925,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(output).To(o.ContainSubstring("haproxy.router.openshift.io/ip_whitelist"))
 
 		exutil.By("verify the acl whitelist parameter inside router pod for whitelist with 61 CIDR values")
-		podName := getNewRouterPod(oc, "default")
+		podName := getOneRouterPodNameByIC(oc, "default")
 		//backendName is the leading context of the route
 		backendName := "be_http:" + oc.Namespace() + ":service-unsecure"
 		output = readHaproxyConfig(oc, podName, backendName, "-A10", "acl allowlist")
@@ -971,7 +971,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(output).To(o.ContainSubstring(`haproxy.router.openshift.io/timeout":"9999d`))
 
 		exutil.By("Verify the haproxy configuration for the set timeout value")
-		podName := getNewRouterPod(oc, "default")
+		podName := getOneRouterPodNameByIC(oc, "default")
 		output = readHaproxyConfig(oc, podName, oc.Namespace(), "-A6", `timeout`)
 		o.Expect(output).To(o.ContainSubstring(`timeout server  2147483647ms`))
 
@@ -1016,7 +1016,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
 		podName := getPodListByLabel(oc, project1, "name=web-server-rc")
-		defaultContPod := getNewRouterPod(oc, "default")
+		defaultContPod := getOneRouterPodNameByIC(oc, "default")
 
 		exutil.By("create routes and get the details")
 		rut.namespace = project1
@@ -1090,7 +1090,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		getRouteDetails(oc, "openshift-ingress-canary", "canary", `{.status.ingress[?(@.routerName=="ocp53696")].conditions[*].status}`, "True", false)
 
 		exutil.By("delete the shard and check the status")
-		custContPod := getNewRouterPod(oc, ingctrl.name)
+		custContPod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		ingctrl.delete(oc)
 		err3 := waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+custContPod)
 		exutil.AssertWaitPollNoErr(err3, fmt.Sprintf("Router  %v failed to fully terminate", "pod/"+custContPod))
@@ -1225,7 +1225,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 		o.Expect(output).To(o.ContainSubstring(`"haproxy.router.openshift.io/ip_whitelist":"2600:14a0::/40"`))
 
 		exutil.By("Verify the acl whitelist parameter inside router pod with Ipv6 address")
-		defaultPod := getNewRouterPod(oc, "default")
+		defaultPod := getOneRouterPodNameByIC(oc, "default")
 		backendName := "be_http:" + project1 + ":service-unsecure"
 		output = readHaproxyConfig(oc, defaultPod, backendName, "-A5", "acl allowlist src")
 		o.Expect(output).To(o.ContainSubstring(`acl allowlist src 2600:14a0::/40`))
@@ -1339,7 +1339,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("1.0: Deploy a project with Pod and Services")
 		project1 := oc.Namespace()
-		routerpod := getRouterPod(oc, "default")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
 		srvPodList := createResourceFromWebServer(oc, project1, signedPod, "web-server-deploy")
 
 		exutil.By("2.0: Create an unsecure, edge, reencrypt and passthrough route")
@@ -1430,7 +1430,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("1.0: Deploy a project with Pod and Services")
 		project1 := oc.Namespace()
-		routerpod := getNewRouterPod(oc, "default")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
 		srvPodList := createResourceFromWebServer(oc, project1, testPod, "web-server-rc")
 		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
 
@@ -1491,7 +1491,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router should", fu
 
 		exutil.By("1.0: Deploy a project with Pod and Services")
 		project1 := oc.Namespace()
-		routerpod := getNewRouterPod(oc, "default")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
 		srvPodList := createResourceFromWebServer(oc, project1, testPod, "web-server-rc")
 		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
 

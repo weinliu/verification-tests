@@ -35,7 +35,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
 		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-deploy")
 		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-deploy")
-		ingressPod := getRouterPod(oc, "default")
+		ingressPod := getOneRouterPodNameByIC(oc, "default")
 
 		exutil.By("create ingress using the file and get the route details")
 		defer operateResourceFromFile(oc, "delete", e2eTestNamespace, ingressFile)
@@ -77,7 +77,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
 		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
 		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-rc")
-		ingressPod := getRouterPod(oc, "default")
+		ingressPod := getOneRouterPodNameByIC(oc, "default")
 
 		exutil.By("create a passthrough route")
 		createRoute(oc, e2eTestNamespace, "passthrough", "ms-pass", "service-secure", []string{"--hostname=" + passRouteHost})
@@ -135,7 +135,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
 		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-deploy")
 		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-deploy")
-		ingressPod := getRouterPod(oc, "default")
+		ingressPod := getOneRouterPodNameByIC(oc, "default")
 
 		exutil.By("create a http route")
 		_, err := oc.WithoutNamespace().Run("expose").Args("-n", e2eTestNamespace, "--name=ms-http", "service", "service-unsecure", "--hostname="+httpRouteHost).Output()
@@ -194,7 +194,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
 		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
 		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-rc")
-		ingressPod := getRouterPod(oc, "default")
+		ingressPod := getOneRouterPodNameByIC(oc, "default")
 
 		exutil.By("create ingress using the file and get the route details")
 		defer operateResourceFromFile(oc, "delete", e2eTestNamespace, ingressFile)
@@ -233,7 +233,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge should", func() {
 		)
 
 		exutil.By("1. check the Env ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK of deployment/default-router, which should be true for the default configuration")
-		routerPodName := getNewRouterPod(oc, "default")
+		routerPodName := getOneRouterPodNameByIC(oc, "default")
 		defaultVal := readRouterPodEnv(oc, routerPodName, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
 		o.Expect(defaultVal).To(o.ContainSubstring("true"))
 
@@ -399,7 +399,7 @@ fi
 		restartMicroshiftService(oc, e2eTestNamespace1, nodeName)
 
 		exutil.By("3. check the Env ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK of deployment/default-router, which should be false")
-		routerPodName := getNewRouterPod(oc, "default")
+		routerPodName := getOneRouterPodNameByIC(oc, "default")
 		// wait some time and make sure the changes are done on the router pod
 		time.Sleep(5 * time.Second)
 		ownershipVal := readRouterPodEnv(oc, routerPodName, "ROUTER_DISABLE_NAMESPACE_OWNERSHIP_CHECK")
@@ -860,7 +860,7 @@ fi
 		}
 
 		exutil.By("3.0 check the haproxy.config that all default vaules of tested parameters are set as expected")
-		routerpod := getNewRouterPod(oc, "default")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
 		for _, routerEntry := range allParas {
 			if routerEntry[3] != "skip for none" {
 				haCfg := readHaproxyConfig(oc, routerpod, routerEntry[3], "-A0", routerEntry[3])
@@ -932,7 +932,7 @@ fi
 		}
 
 		exutil.By("6.0 check the haproxy.config that all updated vaules of tested parameters are set as expected")
-		routerpod = getNewRouterPod(oc, "default")
+		routerpod = getOneRouterPodNameByIC(oc, "default")
 		for _, routerEntry := range allParas {
 			if routerEntry[4] != "skip for none" {
 				haCfg := readHaproxyConfig(oc, routerpod, routerEntry[4], "-A0", routerEntry[4])
