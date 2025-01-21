@@ -6,7 +6,8 @@ mirror:
       full: true
       packages:
         - name: 3scale-operator
+          defaultChannel: threescale-2.13
           channels:
-            - name: threescale-2.11
+            - name: threescale-2.13
           minVersion: 0.8.1
           maxVersion: 0.8.3

@@ -1207,7 +1207,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 	})
 
 	// author: knarra@redhat.com
-	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-73420-Critical-73419-Verify oc-mirror v2 skips and continues if selected bundle does not exist [Serial]", func() {
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-73420-Verify oc-mirror v2 skips and continues if selected bundle does not exist [Serial]", func() {
 		dirname := "/tmp/case73420"
 		defer os.RemoveAll(dirname)
 		err := os.MkdirAll(dirname, 0755)
