@@ -1875,4 +1875,148 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		CurlNodePortFail(oc, thirdNode, nodeList.Items[1].Name, nodePort)
 	})
 
+	g.It("Author:qiowang-ConnectedOnly-PreChkUpgrade-High-79060-Validate UDN LoadBalancer service post upgrade", func() {
+		platform := exutil.CheckPlatform(oc)
+		acceptedPlatform := strings.Contains(platform, "gcp") || strings.Contains(platform, "azure") || strings.Contains(platform, "aws")
+		if !acceptedPlatform {
+			g.Skip("Test cases should be run on connected GCP/Azure/AWS, skip for other platforms or disconnected cluster!!")
+		}
+
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			rcPingPodTemplate      = filepath.Join(buildPruningBaseDir, "rc-ping-for-pod-template.yaml")
+			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+			nadNS                  = []string{"79060-upgrade-ns1", "79060-upgrade-ns2"}
+			servicename            = "test-service"
+		)
+
+		exutil.By("1. Create two namespaces")
+		for i := 0; i < 2; i++ {
+			err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", nadNS[i]).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("2. Create CRD for layer3 UDN in namespace ns1")
+		createGeneralUDNCRD(oc, nadNS[0], "udn-network-"+nadNS[0], "", "", "10.200.0.0/16", "layer3")
+
+		exutil.By("3. Create CRD for layer2 UDN in namespace ns2")
+		createGeneralUDNCRD(oc, nadNS[1], "udn-network-"+nadNS[1], "", "", "10.151.0.0/16", "layer2")
+
+		exutil.By("4. Create pod for service per namespace")
+		pods := make([]replicationControllerPingPodResource, 2)
+		for i := 0; i < 2; i++ {
+			pods[i] = replicationControllerPingPodResource{
+				name:      "hello-pod",
+				replicas:  1,
+				namespace: nadNS[i],
+				template:  rcPingPodTemplate,
+			}
+			pods[i].createReplicaController(oc)
+			err := waitForPodWithLabelReady(oc, pods[i].namespace, "name="+pods[i].name)
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Pods with label name=%s not ready", pods[i].name))
+		}
+
+		exutil.By("5. Create LoadBalancer service per namespace")
+		svc := make([]genericServiceResource, 2)
+		for i := 0; i < 2; i++ {
+			svc[i] = genericServiceResource{
+				servicename:           servicename,
+				namespace:             nadNS[i],
+				protocol:              "TCP",
+				selector:              pods[i].name,
+				serviceType:           "LoadBalancer",
+				ipFamilyPolicy:        "SingleStack",
+				internalTrafficPolicy: "Cluster",
+				externalTrafficPolicy: "Cluster",
+				template:              genericServiceTemplate,
+			}
+			svc[i].createServiceFromParams(oc)
+			svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", nadNS[i], svc[i].servicename).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(svcOutput).Should(o.ContainSubstring(svc[i].servicename))
+		}
+
+		exutil.By("6. Get LoadBalancer service URL")
+		var svcExternalIP [2]string
+		for i := 0; i < 2; i++ {
+			if platform == "aws" {
+				svcExternalIP[i] = getLBSVCHostname(oc, nadNS[i], svc[i].servicename)
+			} else {
+				svcExternalIP[i] = getLBSVCIP(oc, nadNS[i], svc[i].servicename)
+			}
+			e2e.Logf("Got service EXTERNAL-IP %s from namespace %s", svcExternalIP[i], nadNS[i])
+			o.Expect(svcExternalIP[i]).NotTo(o.BeEmpty())
+		}
+
+		exutil.By("7. Curl the service from test runner")
+		for i := 0; i < 2; i++ {
+			svcURL := net.JoinHostPort(svcExternalIP[i], "27017")
+			svcCmd := fmt.Sprintf("curl %s --connect-timeout 30", svcURL)
+			e2e.Logf("svcCmd: %s", svcCmd)
+			err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(cxt context.Context) (bool, error) {
+				output, err1 := exec.Command("bash", "-c", svcCmd).Output()
+				if err1 != nil || !strings.Contains(string(output), "Hello OpenShift") {
+					e2e.Logf("got err: %v, and try next round", err1)
+					return false, nil
+				}
+				e2e.Logf("The service %s access passed!", svcURL)
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Fail to curl the service EXTERNAL-IP %s from test runner", svcURL))
+		}
+	})
+
+	g.It("Author:qiowang-ConnectedOnly-PstChkUpgrade-High-79060-Validate UDN LoadBalancer service post upgrade", func() {
+		platform := exutil.CheckPlatform(oc)
+		acceptedPlatform := strings.Contains(platform, "gcp") || strings.Contains(platform, "azure") || strings.Contains(platform, "aws")
+		if !acceptedPlatform {
+			g.Skip("Test cases should be run on connected GCP/Azure/AWS, skip for other platforms or disconnected cluster!!")
+		}
+
+		var (
+			nadNS       = []string{"79060-upgrade-ns1", "79060-upgrade-ns2"}
+			servicename = "test-service"
+		)
+
+		exutil.By("1. Check the two namespaces are carried over")
+		for i := 0; i < 2; i++ {
+			nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", nadNS[i]).Execute()
+			if nsErr != nil {
+				g.Skip("Skip the PstChkUpgrade test as namespace " + nadNS[i] + " does not exist, PreChkUpgrade test did not run")
+			}
+		}
+		for i := 0; i < 2; i++ {
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", nadNS[i], "--ignore-not-found=true").Execute()
+		}
+
+		exutil.By("2. Get LoadBalancer service URL")
+		var svcExternalIP [2]string
+		for i := 0; i < 2; i++ {
+			if platform == "aws" {
+				svcExternalIP[i] = getLBSVCHostname(oc, nadNS[i], servicename)
+			} else {
+				svcExternalIP[i] = getLBSVCIP(oc, nadNS[i], servicename)
+			}
+			e2e.Logf("Got service EXTERNAL-IP %s from namespace %s", svcExternalIP[i], nadNS[i])
+			o.Expect(svcExternalIP[i]).NotTo(o.BeEmpty())
+		}
+
+		exutil.By("3. Curl the service from test runner")
+		for i := 0; i < 2; i++ {
+			svcURL := net.JoinHostPort(svcExternalIP[i], "27017")
+			svcCmd := fmt.Sprintf("curl %s --connect-timeout 30", svcURL)
+			e2e.Logf("svcCmd: %s", svcCmd)
+			err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(cxt context.Context) (bool, error) {
+				output, err1 := exec.Command("bash", "-c", svcCmd).Output()
+				if err1 != nil || !strings.Contains(string(output), "Hello OpenShift") {
+					e2e.Logf("got err: %v, and try next round", err1)
+					return false, nil
+				}
+				e2e.Logf("The service %s access passed!", svcURL)
+				return true, nil
+			})
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Fail to curl the service EXTERNAL-IP %s from test runner", svcURL))
+		}
+	})
+
 })
