@@ -389,7 +389,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	})
 
 	// bugzilla: 2039256
-	g.It("Author:mjoseph-High-57370-hostname of componentRoutes should be RFC compliant", func() {
+	// Due to bug https://issues.redhat.com/browse/OCPBUGS-43431, this case may not run on HCP cluster.
+	g.It("Author:mjoseph-NonHyperShiftHOST-High-57370-hostname of componentRoutes should be RFC compliant", func() {
 		// Check whether the console operator is present or not
 		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("route", "console", "-n", "openshift-console").Output()
 		if strings.Contains(output, "namespaces \"openshift-console\" not found") || err != nil {
