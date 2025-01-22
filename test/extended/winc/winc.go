@@ -1605,38 +1605,55 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 	// author jfrancoa@redhat.com
 	g.It("Longduration-Author:jfrancoa-NonPreRelease-Medium-37086-Install wmco in a namespace other than recommended [Serial][Disruptive]", func() {
-		//TODO remove this line as soon as OCPBUGS-23121 fixed
-		g.Skip("This test skipped due OCPBUGS-23121 isn't fixed yet")
-		if iaasPlatform == "none" {
-			g.Skip("platform none does not support changing namespace and scaling up machines")
-		}
-
 		customNamespace := "winc-namespace-test"
 		zone := getAvailabilityZone(oc)
 
 		g.By("Scalling down the machineset to 0")
-		defer waitWindowsNodesReady(oc, 2, 3000*time.Second)
-		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 30, 2, false)
 		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 20, 0, false)
 
-		subsSource, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("subscription", "-n", wmcoNamespace, "-o=jsonpath={.items[?(@.spec.name=='"+wmcoDeployment+"')].spec.source}").Output()
+		// Get source before uninstalling
+		subsSource, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("subscription", "-n", wmcoNamespace,
+			"-o=jsonpath={.items[?(@.spec.name=='"+wmcoDeployment+"')].spec.source}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
+		// Uninstall from original namespace
 		g.By(fmt.Sprintf("Uninstall WMCO from current namespace %v", wmcoNamespace))
-		defer installWMCO(oc, wmcoNamespace, subsSource, privateKey)
 		uninstallWMCO(oc, wmcoNamespace)
 
-		g.By(fmt.Sprintf("Install WMCO in new namespace %v", customNamespace))
-		defer uninstallWMCO(oc, customNamespace)
-		installWMCO(oc, customNamespace, subsSource, privateKey)
+		// Create and verify new namespace
+		g.By(fmt.Sprintf("Creating namespace %v", customNamespace))
+		createProject(oc, customNamespace)
 
-		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 20, 0, false)
+		// Install in new namespace and wait for ready
+		g.By(fmt.Sprintf("Installing WMCO in namespace %v", customNamespace))
+		installWMCO(oc, customNamespace, subsSource, privateKey)
+		err = wait.Poll(10*time.Second, 2*time.Minute, func() (bool, error) {
+			return checkWorkloadCreated(oc, wmcoDeployment, customNamespace, 1), nil
+		})
+		o.Expect(err).NotTo(o.HaveOccurred(), "WMCO deployment did not become ready")
+		// resart wmco to make sure the custome namespace is working
+		g.By("Force restart of WMCO for RBAC reconfiguration")
+		scaleDeployment(oc, wmcoDeployment, 0, customNamespace)
+		scaleDeployment(oc, wmcoDeployment, 1, customNamespace)
+		// Scale up only after WMCO is ready
+		g.By("Scaling up Windows machines")
 		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 30, 2, false)
 		waitWindowsNodesReady(oc, 2, 3000*time.Second)
 
 		g.By("Scalling workloads to 10")
 		defer scaleDeployment(oc, windowsWorkloads, 5, defaultNamespace)
 		scaleDeployment(oc, windowsWorkloads, 10, defaultNamespace)
+
+		// Final cleanup
+		defer func() {
+			g.By("Cleaning up and restoring original state")
+			uninstallWMCO(oc, customNamespace)
+			installWMCO(oc, wmcoNamespace, subsSource, privateKey)
+			// Scale up to 2 replicas in original namespace
+			scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 30, 1, false)
+			scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 30, 2, false)
+			waitWindowsNodesReady(oc, 2, 3000*time.Second)
+		}()
 	})
 
 	g.It("Smokerun-Author:rrasouli-Medium-60814-Check containerd version is properly reported", func() {

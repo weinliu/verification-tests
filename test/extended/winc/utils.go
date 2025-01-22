@@ -87,6 +87,12 @@ var (
 )
 
 func createProject(oc *exutil.CLI, namespace string) {
+	exists := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", namespace).Execute()
+	if exists == nil {
+		e2e.Logf("Namespace %s already exists, skipping creation", namespace)
+		return
+	}
+
 	oc.CreateSpecifiedNamespaceAsAdmin(namespace)
 	/* turn off the automatic label synchronization required for PodSecurity admission
 	   set pods security profile to privileged. See
@@ -1078,70 +1084,160 @@ func getMetricsFromCluster(oc *exutil.CLI, metric string) string {
 	return strconv.Itoa(retValue)
 }
 
-func uninstallWMCO(oc *exutil.CLI, namespace string, withoutNamespace ...bool) {
-	// Default behavior is to delete the namespace unless a true value is provided as the first argument of withoutNamespace
-	skipNamespaceDeletion := len(withoutNamespace) > 0 && withoutNamespace[0]
-
-	if !skipNamespaceDeletion {
-		defer func() {
-			// Attempt to delete the namespace and its resources
-			oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", namespace, "--ignore-not-found").Execute()
-
-			// Check that the WMCO deployment does not exist anymore
-			err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", wmcoDeployment, "-n", namespace).Execute()
-			o.Expect(err).To(o.HaveOccurred())
-		}()
-	}
-
-	// Get the installed CSV name
-	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("subscription", wmcoDeployment, "-n", namespace, "-o=jsonpath={.status.installedCSV}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	// Attempt to delete the subscription, CSV, and operatorgroup
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("subscription", "-n", namespace, wmcoDeployment, "--ignore-not-found").Execute()
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("csv", "-n", namespace, csvName).Execute()
-	oc.AsAdmin().WithoutNamespace().Run("delete").Args("operatorgroup", "-n", namespace, wmcoDeployment, "--ignore-not-found").Execute()
-}
-
 func installWMCO(oc *exutil.CLI, namespace string, source string, privateKey string) {
-	// create new namespace
+	e2e.Logf("Installing WMCO in namespace %s with source %s", namespace, source)
+
+	// Create new namespace
 	manifestFile, err := exutil.GenerateManifestFile(oc, "winc", "namespace.yaml", map[string]string{"<namespace>": namespace})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	defer os.Remove(manifestFile)
 	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", manifestFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	// add private key to new namespace
-	cmd := fmt.Sprintf(("oc create secret generic cloud-private-key --from-file=private-key.pem=%s -n %s  --dry-run=client -o yaml | oc replace -f -"), privateKey, namespace)
-	_, err = exec.Command("bash", "-c", cmd).CombinedOutput()
-	o.Expect(err).NotTo(o.HaveOccurred())
 
-	// create new operatorgroup
+	// Wait for namespace to be active
+	err = wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+			"namespace",
+			namespace,
+			"-o=jsonpath={.status.phase}",
+		).Output()
+		if err != nil {
+			e2e.Logf("Waiting for namespace to be active: %v", err)
+			return false, nil
+		}
+		return output == "Active", nil
+	})
+	o.Expect(err).NotTo(o.HaveOccurred(), "Namespace %s did not become active", namespace)
+
+	// Add private key to new namespace
+	e2e.Logf("Creating cloud-private-key secret in namespace %s", namespace)
+	cmd := fmt.Sprintf("oc create secret generic cloud-private-key --from-file=private-key.pem=%s -n %s --dry-run=client -o yaml | oc apply -f -", privateKey, namespace)
+	output, err := exec.Command("bash", "-c", cmd).CombinedOutput()
+	if err != nil {
+		e2e.Logf("Failed to create secret: %s", string(output))
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+
+	// Create new operatorgroup
+	e2e.Logf("Creating operator group in namespace %s", namespace)
 	manifestFile, err = exutil.GenerateManifestFile(oc, "winc", "operatorgroup.yaml", map[string]string{"<namespace>": namespace})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	defer os.Remove(manifestFile)
 	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", manifestFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
-	// create subscription
+	// Wait for operatorgroup
+	err = wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+		_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+			"operatorgroup",
+			wmcoDeployment,
+			"-n",
+			namespace,
+		).Output()
+		return err == nil, nil
+	})
+	o.Expect(err).NotTo(o.HaveOccurred(), "OperatorGroup was not created in namespace %s", namespace)
+
+	// Create subscription
+	e2e.Logf("Creating subscription in namespace %s", namespace)
 	manifestFile, err = exutil.GenerateManifestFile(oc, "winc", "subscription.yaml", map[string]string{"<namespace>": namespace, "<source>": source})
 	o.Expect(err).NotTo(o.HaveOccurred())
 	defer os.Remove(manifestFile)
 	err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", manifestFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
+	// Wait for deployment
+	e2e.Logf("Waiting for WMCO deployment to be ready in namespace %s", namespace)
 	poolErr := wait.Poll(20*time.Second, 5*time.Minute, func() (bool, error) {
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", wmcoDeployment, "-o=jsonpath={.status.readyReplicas}", "-n", namespace).Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+			"deployment",
+			wmcoDeployment,
+			"-o=jsonpath={.status.readyReplicas}",
+			"-n",
+			namespace,
+		).Output()
 		if err != nil {
-			e2e.Logf("Command failed with error: %s .Retrying...", err)
+			e2e.Logf("Waiting for deployment: %v", err)
 			return false, nil
 		}
 		numberOfWorkloads, _ := strconv.Atoi(msg)
 		if numberOfWorkloads == 1 {
+			e2e.Logf("WMCO deployment is ready in namespace %s", namespace)
 			return true, nil
 		}
+		e2e.Logf("Waiting for deployment to be ready. Current replicas: %d", numberOfWorkloads)
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(poolErr, "WMCO deployment did not start up after waiting up to 5 minutes ...")
+	exutil.AssertWaitPollNoErr(poolErr, "WMCO deployment did not start up after waiting up to 5 minutes")
+}
+
+func uninstallWMCO(oc *exutil.CLI, namespace string, withoutNamespace ...bool) {
+	skipNamespaceDeletion := len(withoutNamespace) > 0 && withoutNamespace[0]
+	e2e.Logf("Starting WMCO uninstallation from namespace %s", namespace)
+
+	// Delete subscription first
+	e2e.Logf("Deleting subscription %v from namespace %v", wmcoDeployment, namespace)
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args(
+		"subscription",
+		"-n",
+		namespace,
+		wmcoDeployment,
+		"--ignore-not-found",
+	).Execute()
+
+	// Get and delete CSV more simply
+	csvName, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+		"csv",
+		"-n",
+		namespace,
+		"--selector=operators.coreos.com/windows-machine-config-operator",
+		"-o=jsonpath={.items[*].metadata.name}",
+	).Output()
+
+	if csvName != "" {
+		e2e.Logf("Deleting CSV %v from namespace %v", csvName, namespace)
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args(
+			"csv",
+			"-n",
+			namespace,
+			csvName,
+			"--ignore-not-found",
+		).Execute()
+	}
+
+	// Delete operator group
+	e2e.Logf("Deleting operatorgroup from namespace %v", namespace)
+	oc.AsAdmin().WithoutNamespace().Run("delete").Args(
+		"operatorgroup",
+		"-n",
+		namespace,
+		wmcoDeployment,
+		"--ignore-not-found",
+	).Execute()
+
+	if !skipNamespaceDeletion {
+		// Delete namespace first (it will delete deployment)
+		e2e.Logf("Deleting namespace %v", namespace)
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args(
+			"project",
+			namespace,
+			"--ignore-not-found",
+		).Execute()
+
+		// Wait for namespace deletion
+		err := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+				"namespace",
+				namespace,
+			).Output()
+			if err != nil {
+				e2e.Logf("Namespace %s successfully deleted", namespace)
+				return true, nil
+			}
+			return false, nil
+		})
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to delete namespace %s", namespace)
+	}
 }
 
 func getContainerdVersion(oc *exutil.CLI, nodeIP string) string {
@@ -1424,14 +1520,15 @@ func checkProxyVarsExistsOnWindowsNode(winInternalIP []string, wicdProxies map[s
 }
 
 func getAvailabilityZone(oc *exutil.CLI) string {
-	zone := ""
-	if iaasPlatform == "aws" {
-		zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", "machine.openshift.io/os-id=Windows", "-o=jsonpath={.items[0].spec.providerSpec.value.placement.availabilityZone}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred(), "Could not fetch Zone from the existing machineset")
-		return string(zone)
-	}
-	zone, _ = oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", "machine.openshift.io/os-id=Windows", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
-	return string(zone)
+	// Get zone from any machineset since this is called before Windows machines exist
+	zone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+		"machineset",
+		"-n",
+		mcoNamespace,
+		"-o=jsonpath={.items[0].spec.template.spec.providerSpec.value.placement.availabilityZone}",
+	).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return zone
 }
 
 func readCertificateContent(path string) (string, error) {
