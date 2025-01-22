@@ -39,6 +39,11 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 			nodeErr             error
 		)
 
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
+
 		SkipIfNoFeatureGate(oc, "RouteAdvertisements")
 
 		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
@@ -113,7 +118,7 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 		o.Eventually(func() bool {
 			result := verifyRouteAdvertisement(oc, host, externalFRRIP, frrContainerID, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map)
 			return result
-		}, "60s", "10s").Should(o.BeTrue(), "BGP route advertisement of default network did not succeed!!")
+		}, "90s", "15s").Should(o.BeTrue(), "BGP route advertisement of default network did not succeed!!")
 		e2e.Logf("SUCCESS - BGP enabled, default network is advertised!!!")
 
 	})
@@ -136,6 +141,137 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
 			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes as expected", node))
 		}
+
+	})
+
+	// author: jechen@redhat.com
+	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-Longduration-NonPreRelease-High-78342-route advertisement recovery after node reboot [Disruptive]", func() {
+
+		exutil.By("1. From IP routing table, verify cluster default podnetwork routes are advertised to external frr router")
+		result := verifyIPRoutesOnExternalFrr(host, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+		o.Expect(result).To(o.BeTrue(), "Not all podNetwork are advertised to external frr router")
+
+		exutil.By("2. From IP routing table, verify external routes and other cluster nodes' default podnetwork are learned to each cluster node")
+		for _, node := range allNodes {
+			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes as expected", node))
+		}
+
+		exutil.By("3. Reboot one worker node.\n")
+		workerNodes, err := exutil.GetClusterNodesBy(oc, "worker")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(workerNodes) < 1 {
+			g.Skip("Need at least 1 worker node, not enough worker node, skip the case!!")
+		}
+
+		defer checkNodeStatus(oc, workerNodes[0], "Ready")
+		rebootNode(oc, workerNodes[0])
+		checkNodeStatus(oc, workerNodes[0], "NotReady")
+		checkNodeStatus(oc, workerNodes[0], "Ready")
+
+		exutil.By("4. Verify bgp routes in ip routing table of external frr router after node reboot")
+		o.Eventually(func() bool {
+			result = verifyIPRoutesOnExternalFrr(host, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+			return result
+		}, "120s", "5s").Should(o.BeTrue(), "Not all podNetwork are advertised to external frr router after rebooting a node")
+
+		exutil.By("5. Verify bgp routes in ip routing table of each cluster node after node reboot")
+		overallResult := true
+		o.Eventually(func() bool {
+			for _, node := range allNodes {
+				result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+				overallResult = overallResult && result
+			}
+			return overallResult
+		}, "60s", "10s").Should(o.BeTrue(), "ip routing table check on nodes failed after rebooting a node")
+
+	})
+
+	// author: jechen@redhat.com
+	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-High-78343-route advertisement recovery after OVNK restart [Disruptive]", func() {
+
+		exutil.By("1. From IP routing table, verify cluster default podnetwork routes are advertised to external frr router")
+		result := verifyIPRoutesOnExternalFrr(host, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+		o.Expect(result).To(o.BeTrue(), "Not all podNetwork are advertised to external frr router")
+
+		exutil.By("2. From IP routing table, verify external routes and other cluster nodes' default podnetwork are learned to each cluster node")
+		for _, node := range allNodes {
+			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes as expected", node))
+		}
+
+		exutil.By("3. Restart OVNK.\n")
+		defer waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		delPodErr := oc.AsAdmin().Run("delete").Args("pod", "-l", "app=ovnkube-node", "-n", "openshift-ovn-kubernetes").Execute()
+		o.Expect(delPodErr).NotTo(o.HaveOccurred())
+		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		waitForNetworkOperatorState(oc, 100, 18, "True.*False.*False")
+
+		exutil.By("4. Verify bgp routes in ip routing table of external frr router after OVNK restart")
+		o.Consistently(func() bool {
+			result = verifyIPRoutesOnExternalFrr(host, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+			return result
+		}, "60s", "10s").Should(o.BeTrue(), "Not all podNetwork are advertised to external frr router after OVNK restart")
+
+		exutil.By("5. Verify bgp routes in ip routing table of each cluster node after OVNK restart")
+		overallResult := true
+		o.Consistently(func() bool {
+			for _, node := range allNodes {
+				result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+				overallResult = overallResult && result
+			}
+			return overallResult
+		}, "60s", "10s").Should(o.BeTrue(), "ip routing table check on nodes failed after OVNK restart")
+
+	})
+
+	// author: jechen@redhat.com
+	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-High-78344-route advertisement recovery after frr-k8s pods restart [Disruptive]", func() {
+
+		exutil.By("1. From IP routing table, verify cluster default podnetwork routes are advertised to external frr router")
+		result := verifyIPRoutesOnExternalFrr(host, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+		o.Expect(result).To(o.BeTrue(), "Not all podNetwork are advertised to external frr router")
+
+		exutil.By("2. From IP routing table, verify external routes and other cluster nodes' default podnetwork are learned to each cluster node")
+		for _, node := range allNodes {
+			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes as expected", node))
+		}
+
+		exutil.By("3. Restart frr-k8s pods.\n")
+		defer waitForPodWithLabelReady(oc, frrNamespace, "app=frr-k8s")
+		defer waitForPodWithLabelReady(oc, frrNamespace, "component=frr-k8s-webhook-server")
+		delPodErr := oc.AsAdmin().Run("delete").Args("pod", "-l", "app=frr-k8s", "-n", frrNamespace).Execute()
+		o.Expect(delPodErr).NotTo(o.HaveOccurred())
+		delPodErr = oc.AsAdmin().Run("delete").Args("pod", "-l", "component=frr-k8s-webhook-server", "-n", frrNamespace).Execute()
+		o.Expect(delPodErr).NotTo(o.HaveOccurred())
+
+		result = areFRRPodsReady(oc, frrNamespace)
+		o.Expect(result).To(o.BeTrue(), "Not all frr-k8s pods fully recovered from restart")
+
+		// Make sure frr-k8s ds successfully rolled out after restart
+		o.Consistently(func() bool {
+			status, err := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", frrNamespace, "ds", "frr-k8s", "--timeout", "5m").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return strings.Contains(status, "successfully rolled out")
+		}, "60s", "10s").Should(o.BeTrue(), "frr-k8s ds did not successfully roll out")
+
+		exutil.By("4. Verify bgp routes in ip routing table of external frr router after frr-k8s pods restart")
+		o.Expect(result).To(o.BeTrue(), "Not all podNetwork are advertised to external frr router")
+		o.Consistently(func() bool {
+			result = verifyIPRoutesOnExternalFrr(host, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+			return result
+		}, "60s", "10s").Should(o.BeTrue(), "Not all podNetwork are advertised to external frr router after frr-k8s pods restart")
+
+		exutil.By("5. Verify bgp routes in ip routing table of each cluster node after frr-k8s pods restart")
+		overallResult := true
+		o.Consistently(func() bool {
+			for _, node := range allNodes {
+				result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+				overallResult = overallResult && result
+			}
+			return overallResult
+		}, "60s", "10s").Should(o.BeTrue(), "ip routing table check on nodes failed after frr-k8s pods restart")
 
 	})
 

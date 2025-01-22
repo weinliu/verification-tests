@@ -623,7 +623,7 @@ func verifyIPRoutesOnExternalFrr(host string, allNodes []string, podNetwork1Map,
 	for _, eachNode := range allNodes {
 		o.Expect(regexp.QuoteMeta(podNetwork1Map[eachNode])).ShouldNot(o.BeEmpty())
 		o.Expect(regexp.QuoteMeta(nodesIP1Map[eachNode])).ShouldNot(o.BeEmpty())
-		expectedBGPRoutePattern := fmt.Sprintf(`%s .*via %s.*proto bgp`, podNetwork1Map[eachNode], nodesIP1Map[eachNode])
+		expectedBGPRoutePattern := fmt.Sprintf(`%s .*via %s .*proto bgp`, podNetwork1Map[eachNode], nodesIP1Map[eachNode])
 		e2e.Logf("expected route is: %s", expectedBGPRoutePattern)
 		matched, err := regexp.MatchString(expectedBGPRoutePattern, output)
 		o.Expect(err).NotTo(o.HaveOccurred())
