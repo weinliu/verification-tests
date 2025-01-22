@@ -735,6 +735,12 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-59718-[Nutanix] Support bootType categories and project fields of NutanixMachineProviderConfig [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.Nutanix)
+		// skip zones other than Development-LTS
+		zones, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-o=jsonpath={.items[*].metadata.labels.machine\\.openshift\\.io\\/zone}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if !strings.Contains(zones, "Development-LTS") {
+			g.Skip(fmt.Sprintf("this case can be only run in Development-LTS zone, but is's %s", zones))
+		}
 		g.By("Create a new machineset")
 		machinesetName := infrastructureName + "-59718"
 		ms := clusterinfra.MachineSetDescription{Name: machinesetName, Replicas: 0}
@@ -742,7 +748,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		defer ms.DeleteMachineSet(oc)
 		ms.CreateMachineSet(oc)
 		g.By("Update machineset adding these new fields")
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"bootType":"Legacy","categories":[{"key":"AppType","value":"Kubernetes"},{"key":"Environment","value":"Testing"}],"project":{"type":"name","name":"qe-project"}}}}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"bootType":"Legacy","categories":[{"key":"AppType","value":"Kubernetes"},{"key":"Environment","value":"Testing"}],"project":{"type":"name","name":"qe-project"}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 
