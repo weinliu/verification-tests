@@ -2862,7 +2862,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-NonHyperShiftHOST-High-47021-[FdpOvnOvs] lr-policy-list and snat should be updated correctly after remove pods. [Disruptive]", func() {
+	g.It("Author:huirwang-NonHyperShiftHOST-High-47021-lr-policy-list and snat should be updated correctly after remove pods. [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIP1Template := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
 		testPodFile := filepath.Join(buildPruningBaseDir, "testpod.yaml")
@@ -2984,9 +2984,11 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		if ipStackType == "dualstack" {
 			ovnPod2 = ovnkubeNodePod(oc, egressNode2)
 		}
-		snatCmd := "ovn-nbctl --format=csv --no-heading find nat external_ids:name=" + egressip1.name
+		snatCmd := "ovn-nbctl --format=csv --no-heading find nat | grep " + egressip1.name
 		checkSnatErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
 			snatOutput, snatErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, snatCmd)
+			e2e.Logf(snatOutput)
+			filterStr := "EgressIP:" + egressip1.name
 			if snatErr != nil {
 				e2e.Logf("%v,Waiting for snat to be synced, try next ...,", snatErr)
 				return false, nil
@@ -3001,12 +3003,12 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 				snatOutput = snatOutput + "\n" + snatOutput2
 				e2e.Logf(snatOutput)
 
-				if strings.Contains(snatOutput, testPodIP1) && strings.Contains(snatOutput, testPodIP2) && strings.Count(snatOutput, egressip1.name) == 2 {
+				if strings.Contains(snatOutput, testPodIP1) && strings.Contains(snatOutput, testPodIP2) && strings.Count(snatOutput, filterStr) == 2 {
 					e2e.Logf("The snat for egressip is as expected!")
 					return true, nil
 				}
 			} else {
-				if strings.Contains(snatOutput, testPodIP1) && strings.Count(snatOutput, egressip1.name) == 1 {
+				if strings.Contains(snatOutput, testPodIP1) && strings.Count(snatOutput, filterStr) == 1 {
 					e2e.Logf("The snat for egressip is as expected!")
 					return true, nil
 				}
