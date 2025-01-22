@@ -21,6 +21,7 @@ objects:
       "${PLATFORMTYPE}":
         credentialsSecretRef:
           name: "${CREDREF}"
+        discardLocalSsdOnHibernate: false
         region: "${REGION}"
     provisioning:
       imageSetRef:

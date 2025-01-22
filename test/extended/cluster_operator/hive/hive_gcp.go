@@ -701,9 +701,8 @@ spec:
 	})
 
 	//author: mihuang@redhat.com
-	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "35069"|./bin/extended-platform-tests run --timeout 70m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-35069-Hive supports cluster hibernation for gcp[Serial]", func() {
+	//The case OCP-78499 is supported starting from version 4.19.
+	g.It("Author:mihuang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-35069-High-78499-Hive supports cluster hibernation for gcp[Serial]", func() {
 		testCaseID := "35069"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -742,11 +741,13 @@ spec:
 
 		exutil.By("Check GCP ClusterDeployment installed flag is true")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
+		exutil.By("OCP-78499: Verify whether the discardLocalSsdOnHibernate field exists")
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "false", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.platform.gcp.discardLocalSsdOnHibernate}"}).check(oc)
 		exutil.By("Check CD has Hibernating condition")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "False", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
 		exutil.By("patch the CD to Hibernating...")
 		newCheck("expect", "patch", asAdmin, withoutNamespace, contain, "patched", ok, DefaultTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "--type", "merge", "-p", `{"spec":{"powerState": "Hibernating"}}`}).check(oc)
-		e2e.Logf("Wait for CD to be Hibernating")
+		e2e.Logf("OCP-78499: Wait until the CD successfully reaches the Hibernating state.")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "Hibernating", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.powerState}"}).check(oc)
 		e2e.Logf("Check cd's condition")
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "True", ok, ClusterResumeTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), `-o=jsonpath={.status.conditions[?(@.type=="Hibernating")].status}`}).check(oc)
