@@ -111,7 +111,12 @@ export const operatorHubPage = {
   },
   checkOperatorStatus: (csvName, csvStatus) => {
     cy.get('thead', { timeout: 60000 });
-    cy.get('input[data-test="name-filter-input"]').clear().type(`${csvName}`);
+    cy.get('input[data-test="name-filter-input"]')
+      .clear()
+      .type(`${csvName}`)
+      .then(() => {
+        cy.get('input[data-test="name-filter-input"]').should('have.value', `${csvName}`);
+    });
     cy.get(`[data-test-operator-row="${csvName}"]`, { timeout: 120000 })
       .parents('tr')
       .children()

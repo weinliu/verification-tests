@@ -1,3 +1,4 @@
+import { iscUtils } from "views/isc-utils";
 import { metricsTab } from "views/metrics";
 import { Pages } from "views/pages";
 import { operatorHubPage } from "../../views/operator-hub-page";
@@ -25,24 +26,31 @@ describe('Operators related features', () => {
   it('(OCP-50400,xiyuan,Security_and_Compliance) Install the Security Profiles Operator through GUI and check metrics on GUI',{tags:['@smoke','@e2e','admin','@osd-ccs','@rosa','@isc']}, () => {
     // intall security profiles operator
     const params = {
+      catalogsource: "",
       ns: "openshift-security-profiles",
       operatorName: "Security Profiles Operator"
     }
-    operatorHubPage.installOperatorWithRecomendNamespace('security-profiles-operator','qe-app-registry');
-    cy.get('[aria-valuetext="Loading..."]').should('exist');
-    Pages.gotoInstalledOperatorPage('openshift-security-profiles')
-    operatorHubPage.checkOperatorStatus(params.operatorName, 'Succeed');
 
-    //patch to create a seccompprofile
-    cy.adminCLI(`oc rollout status daemonset spod  -n openshift-security-profiles`,  { timeout: 100000, failOnNonZeroExit: true });
-    cy.adminCLI(`oc patch spod spod --type=merge -p '{"spec":{"enableLogEnricher":true}}' -n openshift-security-profiles`, { failOnNonZeroExit: true });
-    cy.adminCLI(`oc rollout status daemonset spod  -n openshift-security-profiles`,  { timeout: 240000, failOnNonZeroExit: true });
-    cy.adminCLI(`oc wait --for=condition=READY=true sp/log-enricher-trace -n openshift-security-profiles`,  { timeout: 30000, failOnNonZeroExit: true });
+    // Set catalogsource name and install operator
+    iscUtils.setCustomCatalogSource("security-profiles-operator").then((catalogsource) => {
+      params.catalogsource = catalogsource;
+      // Install the operator with the determined catalogsource
+      operatorHubPage.installOperatorWithRecomendNamespace('security-profiles-operator', params.catalogsource);
+      cy.get('[aria-valuetext="Loading..."]').should('exist');
+      Pages.gotoInstalledOperatorPage('openshift-security-profiles')
+      operatorHubPage.checkOperatorStatus(params.operatorName, 'Succeed');
 
-    //check the metrics is available
-    cy.visit(`/monitoring/query-browser?query0=security_profiles_operator_seccomp_profile_total`);
-    cy.get('body').should('be.visible')
-    metricsTab.checkMetricsLoadedWithoutError()
-    cy.get('table[aria-label="query results table"]').should('exist');
+      //patch to create a seccompprofile
+      cy.adminCLI(`oc rollout status daemonset spod  -n openshift-security-profiles`,  { timeout: 100000, failOnNonZeroExit: true });
+      cy.adminCLI(`oc patch spod spod --type=merge -p '{"spec":{"enableLogEnricher":true}}' -n openshift-security-profiles`, { failOnNonZeroExit: true });
+      cy.adminCLI(`oc rollout status daemonset spod  -n openshift-security-profiles`,  { timeout: 240000, failOnNonZeroExit: true });
+      cy.adminCLI(`oc wait --for=condition=READY=true sp/log-enricher-trace -n openshift-security-profiles`,  { timeout: 30000, failOnNonZeroExit: true });
+
+      //check the metrics is available
+      cy.visit(`/monitoring/query-browser?query0=security_profiles_operator_seccomp_profile_total`);
+      cy.get('body').should('be.visible')
+      metricsTab.checkMetricsLoadedWithoutError()
+      cy.get('table[aria-label="query results table"]').should('exist');
+    });
   });
 })

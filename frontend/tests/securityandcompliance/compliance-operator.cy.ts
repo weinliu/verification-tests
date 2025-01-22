@@ -1,3 +1,4 @@
+import { iscUtils } from "views/isc-utils";
 import { metricsTab } from "views/metrics";
 import { Pages } from "views/pages";
 import { operatorHubPage } from "../../views/operator-hub-page";
@@ -24,30 +25,35 @@ describe('Operators related features', () => {
 
   it('(OCP-59410,xiyuan,Security_and_Compliance) Install the Compliance Operator through web console',{tags:['@smoke','@e2e','admin','@osd-ccs','@isc']}, () => {
     const params = {
+      catalogsource: "",
       ns: "openshift-compliance",
       filename: "ssb-cis.yaml",
       operatorName: "Compliance Operator"
     }
 
-    // install compliance operator
-    operatorHubPage.installOperatorWithRecomendNamespace('compliance-operator','qe-app-registry');
-    cy.get('[aria-valuetext="Loading..."]').should('exist');
-    Pages.gotoInstalledOperatorPage('openshift-compliance')
-    operatorHubPage.checkOperatorStatus(params.operatorName, 'Succeed');
+    // Set catalogsource name and install operator
+    iscUtils.setCustomCatalogSource("compliance-operator").then((catalogsource) => {
+      params.catalogsource = catalogsource;
+      // Install the operator with the determined catalogsource
+      operatorHubPage.installOperatorWithRecomendNamespace('compliance-operator', params.catalogsource);
+      cy.get('[aria-valuetext="Loading..."]').should('exist');
+      Pages.gotoInstalledOperatorPage('openshift-compliance')
+      operatorHubPage.checkOperatorStatus(params.operatorName, 'Succeed');
 
-    // check the compliance oeprator pods
-    cy.checkCommandResult(`oc get pod -l name=compliance-operator -n openshift-compliance`, 'Running', { retries: 6, interval: 10000 });
-    cy.checkCommandResult(`oc get pb ocp4 -n openshift-compliance -o=jsonpath='{.status.dataStreamStatus}'`, 'VALID', { retries: 30, interval: 10000 });
-    cy.checkCommandResult(`oc get pb rhcos4 -n openshift-compliance -o=jsonpath='{.status.dataStreamStatus}'`, 'VALID', { retries: 30, interval: 10000 });
+      // check the compliance oeprator pods
+      cy.checkCommandResult(`oc get pod -l name=compliance-operator -n openshift-compliance`, 'Running', { retries: 6, interval: 10000 });
+      cy.checkCommandResult(`oc get pb ocp4 -n openshift-compliance -o=jsonpath='{.status.dataStreamStatus}'`, 'VALID', { retries: 30, interval: 10000 });
+      cy.checkCommandResult(`oc get pb rhcos4 -n openshift-compliance -o=jsonpath='{.status.dataStreamStatus}'`, 'VALID', { retries: 30, interval: 10000 });
 
-    //create a ssb
-    cy.exec(`oc apply -f ./fixtures/securityandcompliance/${params.filename} -n ${params.ns} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: true });
-    cy.checkCommandResult(`oc get compliancesuite/ssb-cis-test -n openshift-compliance  -o=jsonpath='{.status.phase}'`, 'DONE', { retries: 30, interval: 10000 });
+      //create a ssb
+      cy.exec(`oc apply -f ./fixtures/securityandcompliance/${params.filename} -n ${params.ns} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: true });
+      cy.checkCommandResult(`oc get compliancesuite/ssb-cis-test -n openshift-compliance  -o=jsonpath='{.status.phase}'`, 'DONE', { retries: 30, interval: 10000 });
 
-    //check the metrics compliance_operator_compliance_scan_status_total
-    cy.visit(`/monitoring/query-browser?query0=compliance_operator_compliance_scan_status_total`);
-    cy.get('body').should('be.visible')
-    metricsTab.checkMetricsLoadedWithoutError()
-    cy.get('table[aria-label="query results table"]').should('exist');
+      //check the metrics compliance_operator_compliance_scan_status_total
+      cy.visit(`/monitoring/query-browser?query0=compliance_operator_compliance_scan_status_total`);
+      cy.get('body').should('be.visible')
+      metricsTab.checkMetricsLoadedWithoutError()
+      cy.get('table[aria-label="query results table"]').should('exist');
+    });
   });
 })
