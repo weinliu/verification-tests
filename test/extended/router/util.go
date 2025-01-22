@@ -1536,108 +1536,66 @@ func getRouteDetails(oc *exutil.CLI, namespace, resourceName, jsonPath, matchStr
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but the route details are not reachable"))
 }
 
-func adminRepeatCmd(oc *exutil.CLI, cmd []string, expectOutput string, duration time.Duration, repeatTimes int) string {
-	result := ""
-	matchTime := 0
-	waitErr := wait.Poll(5*time.Second, duration*time.Second, func() (bool, error) {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
-		if err != nil {
-			e2e.Logf("failed to execute cmd %v successfully, retrying...", cmd)
-			return false, nil
-		}
-		if strings.Contains(output, expectOutput) {
-			matchTime++
-			e2e.Logf("executed cmd %v successfully for %i times, expect %i times...", cmd, matchTime, repeatTimes)
-			if matchTime == repeatTimes {
-				result = output
-				return true, nil
-			} else {
-				return false, nil
-			}
-		} else {
-			matchTime = 0
-			return false, nil
-		}
+// used to execute a command on the internal or external client for the desired times
+// the return was the output of the last successfully executed command, and a list of counters for the expected output(for example, if one expected item is matched for one time, the mathcing counter will be increased by 1, which is useful to test http cookie cases)
+func repeatCmdOnClient(oc *exutil.CLI, cmd, expectOutput interface{}, duration time.Duration, repeatTimes int) (string, []int) {
+	var (
+		clientType       = "Internal"
+		matchedTimesList = []int{}
+		successCurlCount = 0
+		matchedCount     = 0
+		expectOutputList = []string{}
+		output           = ""
+	)
 
-	})
-	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but can't execute the cmd successfully for the desired times"))
-	return result
-}
-
-// used to execute a command for some times on the external client, the return is a list of counters for successfully get the expected output list
-// for example, if one expected item is matched for one time, the mathcing counter will be increased by 1, which is useful to test http cookie cases
-func repeatCmdOnExternalClient(cmd string, expectOutput []string, duration time.Duration, repeatTimes int) []int {
-	result := []int{}
-	successCurlCount := 0
-	matchedCount := 0
-	for i := 0; i < len(expectOutput); i++ {
-		result = append(result, 0)
+	cmdStr, ok := cmd.(string)
+	if ok {
+		clientType = "External"
 	}
-	e2e.Logf("the command is: %v", cmd)
-	waitErr := wait.Poll(5*time.Second, duration*time.Second, func() (bool, error) {
-		isMatch := false
-		output, err := exec.Command("bash", "-c", cmd).Output()
-		if err != nil {
-			e2e.Logf("failed to execute cmd and got err %v, retrying...", err.Error())
-			return false, nil
-		}
-		successCurlCount++
-		e2e.Logf("executed cmd for %v times on the external client and got result: %s", successCurlCount, output)
-		for i := 0; i < len(expectOutput); i++ {
-			searchInfo := regexp.MustCompile(expectOutput[i]).FindStringSubmatch(string(output))
-			if len(searchInfo) > 0 {
-				isMatch = true
-				matchedCount++
-				result[i] = result[i] + 1
-				break
-			}
-		}
+	cmdList, _ := cmd.([]string)
 
-		if isMatch {
-			e2e.Logf("successfully executed cmd for %v times on the external client, expecting %v times", matchedCount, repeatTimes)
-			if matchedCount == repeatTimes {
-				return true, nil
-			} else {
-				return false, nil
-			}
-		} else {
-			// if after executed the cmd, but could not get a output in the expectOutput list, decrease the successfully executed times
-			successCurlCount--
-			e2e.Logf("failed to find a match in the outout: %s", output)
-			return false, nil
-		}
-	})
-	e2e.Logf("the result is: %v", result)
-	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but can't execute the cmd successfully for the desired times"))
-	return result
-}
-
-// used to execute a command for some times in a cluster pod, the return is a list of counters for successfully get the expected output list
-// for example, if one expected item is matched for one time, the mathcing counter will be increased by 1, if the expected list is a deployment's pod list, the return of the function can tell which pods of list are hit
-func repeatCmdOnInternalClient(oc *exutil.CLI, cmd []string, expectOutput []string, duration time.Duration, repeatTimes int) []int {
-	result := []int{}
-	successCurlCount := 0
-	matchedCount := 0
-	for i := 0; i < len(expectOutput); i++ {
-		result = append(result, 0)
+	expStr, ok := expectOutput.(string)
+	if ok {
+		expectOutputList = append(expectOutputList, expStr)
 	}
+	expList, ok := expectOutput.([]string)
+	if ok {
+		expectOutputList = expList
+	}
+
+	for i := 0; i < len(expectOutputList); i++ {
+		matchedTimesList = append(matchedTimesList, 0)
+	}
+
 	e2e.Logf("the command is: %v", cmd)
+
 	waitErr := wait.Poll(1*time.Second, duration*time.Second, func() (bool, error) {
 		isMatch := false
-		//output, err := exec.Command("bash", "-c", cmd).Output()
-		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmd...).Output()
-		if err != nil {
-			e2e.Logf("failed to execute cmd and got err %v, retrying...", err.Error())
-			return false, nil
+		if clientType == "Internal" {
+			info, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmdList...).Output()
+			output = info
+			if err != nil {
+				e2e.Logf("failed to execute cmd and got err %v, retrying...", err.Error())
+				return false, nil
+			}
+		} else {
+			info, err := exec.Command("bash", "-c", cmdStr).Output()
+			output = string(info)
+			if err != nil {
+				e2e.Logf("failed to execute cmd and got err %v, retrying...", err.Error())
+				return false, nil
+			}
 		}
+
 		successCurlCount++
-		e2e.Logf("executed cmd for %v times on the external client and got result: %s", successCurlCount, output)
-		for i := 0; i < len(expectOutput); i++ {
-			searchInfo := regexp.MustCompile(expectOutput[i]).FindStringSubmatch(output)
+		e2e.Logf("executed cmd for %v times on the external client and got matchedTimesList: %s", successCurlCount, output)
+
+		for i := 0; i < len(expectOutputList); i++ {
+			searchInfo := regexp.MustCompile(expectOutputList[i]).FindStringSubmatch(output)
 			if len(searchInfo) > 0 {
 				isMatch = true
 				matchedCount++
-				result[i] = result[i] + 1
+				matchedTimesList[i] = matchedTimesList[i] + 1
 				break
 			}
 		}
@@ -1656,9 +1614,12 @@ func repeatCmdOnInternalClient(oc *exutil.CLI, cmd []string, expectOutput []stri
 			return false, nil
 		}
 	})
-	e2e.Logf("the result is: %v", result)
+
+	e2e.Logf("the matchedTimesList is: %v", matchedTimesList)
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but can't execute the cmd successfully for the desired times"))
-	return result
+
+	// return the last succecessful curl output and the succecessful curl times list for the expected list
+	return output, matchedTimesList
 }
 
 // this function is to check whether given string is present or not in a list
@@ -2185,7 +2146,7 @@ func checkRouterReloadedLogs(oc *exutil.CLI, routerpod string, initReloadedNum i
 
 // for DCM testing, check whether all the deployment pods are accessible or not
 func checkDcmServersAccessible(oc *exutil.CLI, curlCmd, podList []string, duration time.Duration, repeatTimes int) {
-	result := repeatCmdOnInternalClient(oc, curlCmd, podList, duration, repeatTimes)
+	_, result := repeatCmdOnClient(oc, curlCmd, podList, duration, repeatTimes)
 	for i := 0; i < len(podList); i++ {
 		o.Expect(result[i] > 0).To(o.BeTrue())
 	}

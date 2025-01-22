@@ -1280,7 +1280,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		jsonPath := "{.subsets[0].addresses[0].ip}:{.subsets[0].ports[0].port}"
 		ep := getByJsonPath(oc, project1, "endpoints/"+srvName, jsonPath)
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
-		result := adminRepeatCmd(oc, cmdOnPod, "200", 30, 5)
+		result, _ := repeatCmdOnClient(oc, cmdOnPod, "200", 30, 5)
 		o.Expect(result).To(o.ContainSubstring("200"))
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", project1, syslogPodName).Output()
 		o.Expect(output).To(o.MatchRegexp("haproxy.+" + ep + ".+HTTP/1.1"))
@@ -1338,7 +1338,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		jsonPath := "{.subsets[0].addresses[0].ip}:{.subsets[0].ports[0].port}"
 		ep := getByJsonPath(oc, project1, "endpoints/"+srvName, jsonPath)
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
-		result := adminRepeatCmd(oc, cmdOnPod, "200", 30, 1)
+		result, _ := repeatCmdOnClient(oc, cmdOnPod, "200", 30, 1)
 		o.Expect(result).To(o.ContainSubstring("200"))
 		output := waitRouterLogsAppear(oc, routerpod, ep)
 		log := regexp.MustCompile("haproxy.+" + ep + ".+HTTP/1.1").FindStringSubmatch(output)[0]
@@ -1769,19 +1769,19 @@ spec:
 		exutil.By("7.0: Check console certificate has different SHA1 Fingerprint with OAuth certificate and default certificate, by using openssl command")
 		curlCmd := []string{"-n", "openshift-ingress-operator", "-c", "ingress-operator", ingressOperatorPod, "--", "curl", "https://" + consoleRoute + "/headers", "-kI", "--connect-timeout", "10"}
 		opensslConnectCmd := fmt.Sprintf(`openssl s_client -connect %s:443 </dev/null 2>/dev/null | openssl x509 -sha1 -in /dev/stdin -noout -fingerprint`, consoleRoute)
-		adminRepeatCmd(oc, curlCmd, "200", 30, 1)
+		repeatCmdOnClient(oc, curlCmd, "200", 30, 1)
 		consoleOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress-operator", "-c", "ingress-operator", ingressOperatorPod, "--", "bash", "-c", opensslConnectCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		curlCmd = []string{"-n", "openshift-ingress-operator", "-c", "ingress-operator", ingressOperatorPod, "--", "curl", "https://" + oauthRoute + "/headers", "-kI", "--connect-timeout", "10"}
 		opensslConnectCmd = fmt.Sprintf(`openssl s_client -connect %s:443 </dev/null 2>/dev/null | openssl x509 -sha1 -in /dev/stdin -noout -fingerprint`, oauthRoute)
-		adminRepeatCmd(oc, curlCmd, "403", 30, 1)
+		repeatCmdOnClient(oc, curlCmd, "403", 30, 1)
 		oauthOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress-operator", "-c", "ingress-operator", ingressOperatorPod, "--", "bash", "-c", opensslConnectCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		curlCmd = []string{"-n", "openshift-ingress-operator", "-c", "ingress-operator", ingressOperatorPod, "--", "curl", "https://" + defaultRoute + "/headers", "-kI", "--connect-timeout", "10"}
 		opensslConnectCmd = fmt.Sprintf(`openssl s_client -connect %s:443 </dev/null 2>/dev/null | openssl x509 -sha1 -in /dev/stdin -noout -fingerprint`, defaultRoute)
-		adminRepeatCmd(oc, curlCmd, "503", 30, 1)
+		repeatCmdOnClient(oc, curlCmd, "503", 30, 1)
 		defaultOutput, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress-operator", "-c", "ingress-operator", ingressOperatorPod, "--", "bash", "-c", opensslConnectCmd).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 

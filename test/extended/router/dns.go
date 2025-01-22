@@ -547,14 +547,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 		IPAddress1 := getByJsonPath(oc, project1, "service/"+unsecsvcName, "{.spec.clusterIPs[0]}")
 		IPAddress2 := getByJsonPath(oc, project1, "service/"+unsecsvcName, "{.spec.clusterIPs[1]}")
 		cmdOnPod := []string{"-n", project1, srvPod, "--", "getent", "ahosts", unsecsvcName}
-		adminRepeatCmd(oc, cmdOnPod, IPAddress1, 30, 1)
-		adminRepeatCmd(oc, cmdOnPod, IPAddress2, 30, 1)
+		repeatCmdOnClient(oc, cmdOnPod, IPAddress1, 30, 1)
+		repeatCmdOnClient(oc, cmdOnPod, IPAddress2, 30, 1)
 
 		IPAddress1 = getByJsonPath(oc, project1, "service/"+secsvcName, "{.spec.clusterIPs[0]}")
 		IPAddress2 = getByJsonPath(oc, project1, "service/"+secsvcName, "{.spec.clusterIPs[1]}")
 		cmdOnPod = []string{"-n", project1, srvPod, "--", "getent", "ahosts", secsvcName}
-		adminRepeatCmd(oc, cmdOnPod, IPAddress1, 30, 1)
-		adminRepeatCmd(oc, cmdOnPod, IPAddress2, 30, 1)
+		repeatCmdOnClient(oc, cmdOnPod, IPAddress1, 30, 1)
+		repeatCmdOnClient(oc, cmdOnPod, IPAddress2, 30, 1)
 	})
 
 	// Bug: 2061244

@@ -142,7 +142,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routehost + "/headers", "-I", "--resolve", toDst, "--connect-timeout", "10"}
 		createRoute(oc, project1, "http", unsecsvcName, unsecsvcName, []string{"--hostname=" + routehost})
 		waitForOutput(oc, project1, "route/"+unsecsvcName, "{.status.ingress[0].conditions[0].status}", "True")
-		adminRepeatCmd(oc, curlCmd, "200", 60, 1)
+		repeatCmdOnClient(oc, curlCmd, "200", 60, 1)
 
 		// check for OCP-34157
 		exutil.By("4.0: check the log which should contain the host")
@@ -897,7 +897,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		o.Expect(SrvErr).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(srvName))
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, cmdOnPod, "200", 60, 1)
+		repeatCmdOnClient(oc, cmdOnPod, "200", 60, 1)
 
 		exutil.By("curl a non-existing route, expect to get custom http 404 Not Found error")
 		notExistRoute := "notexistroute" + "-" + project1 + "." + ingctrl.domain
@@ -1789,7 +1789,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("curl the route from the client pod")
 		toDst := routehost + ":80:" + podIP
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
-		result := adminRepeatCmd(oc, cmdOnPod, "Set-Cookie2 X=Y", 60, 1)
+		result, _ := repeatCmdOnClient(oc, cmdOnPod, "Set-Cookie2 X=Y", 60, 1)
 		o.Expect(result).To(o.ContainSubstring("Set-Cookie2 X=Y"))
 	})
 
@@ -2083,7 +2083,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		curlHTTPRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-e", "www.qe-test.com", "--resolve", toDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlHTTPRouteRes, "200", 60, 1)
+		repeatCmdOnClient(oc, curlHTTPRouteRes, "200", 60, 1)
 		reqHeaders, _ := oc.AsAdmin().Run("exec").Args(curlHTTPRouteReq...).Output()
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
 		o.Expect(strings.Contains(reqHeaders, "\"X-Ssl-Client-Cert\": \"\"")).To(o.BeTrue())
@@ -2306,7 +2306,7 @@ DNS.2 = *.%s.%s.svc
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		e2e.Logf("curlReenRouteRes is: %v", curlReenRouteRes)
-		adminRepeatCmd(oc, curlReenRouteRes, "200", 60, 1)
+		repeatCmdOnClient(oc, curlReenRouteRes, "200", 60, 1)
 		reqHeaders, _ := oc.AsAdmin().Run("exec").Args(curlReenRouteReq...).Output()
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
 		o.Expect(len(regexp.MustCompile("\"X-Ssl-Client-Cert\": \"([0-9a-zA-Z]+)").FindStringSubmatch(reqHeaders)) > 0).To(o.BeTrue())
@@ -2478,7 +2478,7 @@ DNS.2 = *.%s.%s.svc
 		curlEdgeRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlEdgeRouteRes, "200", 60, 1)
+		repeatCmdOnClient(oc, curlEdgeRouteRes, "200", 60, 1)
 		reqHeaders, _ := oc.AsAdmin().Run("exec").Args(curlEdgeRouteReq...).Output()
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
 		o.Expect(len(regexp.MustCompile("\"X-Ssl-Client-Cert\": \"([0-9a-zA-Z]+)").FindStringSubmatch(reqHeaders)) > 0).To(o.BeTrue())
@@ -2607,7 +2607,7 @@ DNS.2 = *.%s.%s.svc
 		curlHTTPRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-e", "www.qe-test.com", "--resolve", routeDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlHTTPRouteRes, "200", 60, 1)
+		repeatCmdOnClient(oc, curlHTTPRouteRes, "200", 60, 1)
 		reqHeaders, err := oc.AsAdmin().Run("exec").Args(curlHTTPRouteReq...).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
@@ -2782,7 +2782,7 @@ DNS.2 = *.%s.%s.svc
 		curlEdgeRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlEdgeRouteRes, "200", 60, 1)
+		repeatCmdOnClient(oc, curlEdgeRouteRes, "200", 60, 1)
 		reqHeaders, err := oc.AsAdmin().Run("exec").Args(curlEdgeRouteReq...).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
@@ -3007,7 +3007,7 @@ DNS.2 = *.%s.%s.svc
 		curlReenRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
-		adminRepeatCmd(oc, curlReenRouteRes, "200", 60, 1)
+		repeatCmdOnClient(oc, curlReenRouteRes, "200", 60, 1)
 		reqHeaders, err := oc.AsAdmin().Run("exec").Args(curlReenRouteReq...).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("reqHeaders is: %v", reqHeaders)
@@ -3105,7 +3105,7 @@ DNS.2 = *.%s.%s.svc
 
 		exutil.By("send traffic and check the max http headers specified in a route")
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-Is", "http://" + routehost + "/headers", "--resolve", toDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, cmdOnPod, "200", 60, 1)
+		repeatCmdOnClient(oc, cmdOnPod, "200", 60, 1)
 		resHeaders, err := oc.Run("exec").Args("-n", project1, cltPodName, "--", "curl", "-s", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Count(strings.ToLower(resHeaders), "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
@@ -3386,7 +3386,7 @@ DNS.2 = *.%s.%s.svc
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "--resolve", toDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, cmdOnPod, "200", 60, 1)
+		repeatCmdOnClient(oc, cmdOnPod, "200", 60, 1)
 		reqHeaders, err := oc.Run("exec").Args("-n", project1, cltPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(strings.ToLower(reqHeaders), "\"reqtestheader\": \"req111\"")).To(o.BeTrue())
@@ -3575,7 +3575,7 @@ DNS.2 = *.%s.%s.svc
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
 		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "-H", `"transfer-encoding: chunked"`, "-H", `"transfer-encoding: chunked"`, "--resolve", toDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, cmdOnPod, "400", 60, 1)
+		repeatCmdOnClient(oc, cmdOnPod, "400", 60, 1)
 
 		exutil.By("5.0: Check that the custom router pod is Running, not Terminating")
 		output := getByJsonPath(oc, "openshift-ingress", "pods/"+routerpod, "{.status.phase}")
@@ -3835,11 +3835,11 @@ DNS.2 = *.%s.%s.svc
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":443:" + podIP
 		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-sI", "--cacert", caCrt, "--cert", usrCrt, "--key", usrKey, "--http2", "--resolve", toDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, curlCmd, "HTTP/2 200", 60, 1)
+		repeatCmdOnClient(oc, curlCmd, "HTTP/2 200", 60, 1)
 
 		exutil.By("9.0 Curl the reencrypt route with specified protocol http1.1")
 		curlCmd = []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-sI", "--cacert", caCrt, "--cert", usrCrt, "--key", usrKey, "--http1.1", "--resolve", toDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, curlCmd, "HTTP/1.1 200", 60, 1)
+		repeatCmdOnClient(oc, curlCmd, "HTTP/1.1 200", 60, 1)
 	})
 
 	// author: shudili@redhat.com
@@ -3894,7 +3894,7 @@ DNS.2 = *.%s.%s.svc
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
 		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routehost, "-s", "--resolve", toDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, curlCmd, "Hello-OpenShift", 60, 1)
+		repeatCmdOnClient(oc, curlCmd, "Hello-OpenShift", 60, 1)
 
 		exutil.By("4.0 Check the route's backend configuration including server pod, dynamic pool, dynamic cookie")
 		backend := "be_http:" + project1 + ":unsecure77892"
@@ -4099,7 +4099,7 @@ DNS.2 = *.%s.%s.svc
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":443:" + podIP
 		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, curlCmd, "Hello-OpenShift", 60, 1)
+		repeatCmdOnClient(oc, curlCmd, "Hello-OpenShift", 60, 1)
 
 		exutil.By("4.0 Check the route's backend configuration including server pod, dynamic pool and dynamic cookie")
 		backend := "be_edge_http:" + project1 + ":edge77973"
@@ -4236,7 +4236,7 @@ DNS.2 = *.%s.%s.svc
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":443:" + podIP
 		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, curlCmd, "Hello-OpenShift", 60, 1)
+		repeatCmdOnClient(oc, curlCmd, "Hello-OpenShift", 60, 1)
 
 		exutil.By("4.0 Check the route's backend configuration including server pod and dynamic pool")
 		backend := "be_tcp:" + project1 + ":passth77974"
@@ -4373,7 +4373,7 @@ DNS.2 = *.%s.%s.svc
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":443:" + podIP
 		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, curlCmd, "Hello-OpenShift", 60, 1)
+		repeatCmdOnClient(oc, curlCmd, "Hello-OpenShift", 60, 1)
 
 		exutil.By("4.0 Check the route's backend configuration including server pod, dynamic pool, dynamic cookie")
 		backend := "be_secure:" + project1 + ":reen77975"

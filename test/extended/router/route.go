@@ -72,10 +72,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		toDst := routehost + ":443:" + podIP
 		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
 		expectOutput := []string{"Hello-OpenShift " + srvPodList[0] + " http-8080"}
-		repeatCmdOnInternalClient(oc, curlCmd, expectOutput, 60, 1)
+		repeatCmdOnClient(oc, curlCmd, expectOutput, 60, 1)
 		curlCmd = []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "-c", fileDir + "/cookie-10207", "--resolve", toDst, "--connect-timeout", "10"}
 		expectOutput = []string{"Hello-OpenShift " + srvPodList[1] + " http-8080"}
-		repeatCmdOnInternalClient(oc, curlCmd, expectOutput, 120, 1)
+		repeatCmdOnClient(oc, curlCmd, expectOutput, 120, 1)
 
 		exutil.By("5.0: Open the cookie file and check the contents")
 		// access the cookie file and confirm that the output contains false and false
@@ -86,14 +86,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("6.0: Curl the edge route with the cookie, expect forwarding to the second server")
 		curlCmdWithCookie := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "-b", fileDir + "/cookie-10207", "--resolve", toDst, "--connect-timeout", "10"}
 		expectOutput = []string{"Hello-OpenShift " + srvPodList[0] + " http-8080", "Hello-OpenShift " + srvPodList[1] + " http-8080"}
-		result := repeatCmdOnInternalClient(oc, curlCmdWithCookie, expectOutput, 120, 6)
+		_, result := repeatCmdOnClient(oc, curlCmdWithCookie, expectOutput, 120, 6)
 		o.Expect(result[1]).To(o.Equal(6))
 
 		exutil.By("7.0: Patch the edge route with Redirect tls insecureEdgeTerminationPolicy, then curl the edge route with the cookie, expect forwarding to the second server")
 		patchResourceAsAdmin(oc, project1, "route/route-edge10207", `{"spec":{"tls": {"insecureEdgeTerminationPolicy":"Redirect"}}}`)
 		toDst2 := routehost + ":80:" + podIP
 		curlCmdWithCookie = []string{"-n", project1, cltPodName, "--", "curl", "http://" + routehost, "-ksSL", "-b", fileDir + "/cookie-10207", "--resolve", toDst, "--resolve", toDst2, "--connect-timeout", "10"}
-		result = repeatCmdOnInternalClient(oc, curlCmdWithCookie, expectOutput, 120, 6)
+		_, result = repeatCmdOnClient(oc, curlCmdWithCookie, expectOutput, 120, 6)
 		o.Expect(result[1]).To(o.Equal(6))
 
 		exutil.By("8.0: Create a reencrypt route with Allow policy")
@@ -106,7 +106,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("9.0: Curl the route and generate a cookie file")
 		curlCmdWithCookie = []string{"-n", project1, cltPodName, "--", "curl", "http://" + reenhost, "-ks", "-c", fileDir + "/reen-cookie", "--resolve", toDst, "--resolve", toDst2, "--connect-timeout", "10"}
 		expectOutput = []string{"Hello-OpenShift " + srvPodList[0] + " https-8443"}
-		repeatCmdOnInternalClient(oc, curlCmdWithCookie, expectOutput, 60, 1)
+		repeatCmdOnClient(oc, curlCmdWithCookie, expectOutput, 60, 1)
 
 		exutil.By("10.0: Open the cookie file and check the contents")
 		// access the cookie file and confirm that the output contains false and false
@@ -363,17 +363,17 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "-c", fileDir + "/cookie-11130", "--resolve", toDst, "--connect-timeout", "10"}
 
 		expectOutput := []string{"Hello-OpenShift " + srvPodList[0] + " http-8080"}
-		repeatCmdOnInternalClient(oc, curlCmd, expectOutput, 120, 1)
+		repeatCmdOnClient(oc, curlCmd, expectOutput, 120, 1)
 
 		exutil.By("5.0: Curl the edge route, make sure could get response from server 2")
 		curlCmd = []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
 		expectOutput = []string{"Hello-OpenShift " + srvPodList[1] + " http-8080"}
-		repeatCmdOnInternalClient(oc, curlCmd, expectOutput, 120, 1)
+		repeatCmdOnClient(oc, curlCmd, expectOutput, 120, 1)
 
 		exutil.By("6.0: Curl the edge route with the cookie, expect all are forwarded to the server 1")
 		curlCmdWithCookie := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "-b", fileDir + "/cookie-11130", "--resolve", toDst, "--connect-timeout", "10"}
 		expectOutput = []string{"Hello-OpenShift " + srvPodList[0] + " http-8080", "Hello-OpenShift " + srvPodList[1] + " http-8080"}
-		result := repeatCmdOnInternalClient(oc, curlCmdWithCookie, expectOutput, 120, 6)
+		_, result := repeatCmdOnClient(oc, curlCmdWithCookie, expectOutput, 120, 6)
 		o.Expect(result[0]).To(o.Equal(6))
 
 		// Disable haproxy hash based sticky session for edge termination routes
@@ -384,11 +384,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("8.0: Curl the edge route, and save the cookie for the backend server")
 		curlCmd = []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "-c", fileDir + "/cookie-11130", "--resolve", toDst, "--connect-timeout", "10"}
 		expectOutput = []string{"Hello-OpenShift"}
-		repeatCmdOnInternalClient(oc, curlCmd, expectOutput, 120, 1)
+		repeatCmdOnClient(oc, curlCmd, expectOutput, 120, 1)
 
 		exutil.By("9.0: Curl the edge route with the cookie, expect forwarding to the two server")
 		expectOutput = []string{"Hello-OpenShift " + srvPodList[0] + " http-8080", "Hello-OpenShift " + srvPodList[1] + " http-8080"}
-		result = repeatCmdOnInternalClient(oc, curlCmdWithCookie, expectOutput, 150, 15)
+		_, result = repeatCmdOnClient(oc, curlCmdWithCookie, expectOutput, 150, 15)
 		o.Expect(result[0] > 0).To(o.BeTrue())
 		o.Expect(result[1] > 0).To(o.BeTrue())
 		o.Expect(result[0] + result[1]).To(o.Equal(15))
@@ -422,7 +422,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 
 		exutil.By("3. Check the reachability of the passthrough route")
 		cmdOnPod := []string{cltPodName, "-n", project1, "--", "curl", "-k", "https://mypass-" + project1 + ".apps." + baseDomain, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, cmdOnPod, "Hello-OpenShift", 30, 1)
+		repeatCmdOnClient(oc, cmdOnPod, "Hello-OpenShift", 60, 1)
 
 		exutil.By("4. Annotate the route to limit the TCP nums per ip and verify")
 		setAnnotation(oc, project1, "route/mypass", "haproxy.router.openshift.io/rate-limit-connections=true")
@@ -445,7 +445,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 
 		exutil.By("7. Check the reachability of the http route")
 		cmdOnPod1 := []string{cltPodName, "-n", project1, "--", "curl", "-k", "http://service-unsecure-" + project1 + ".apps." + baseDomain, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, cmdOnPod1, "Hello-OpenShift", 30, 1)
+		repeatCmdOnClient(oc, cmdOnPod1, "Hello-OpenShift", 30, 1)
 
 		exutil.By("8. Annotate the route to limit the concurrent TCP connections rate and verify")
 		setAnnotation(oc, project1, "route/service-unsecure", "haproxy.router.openshift.io/rate-limit-connections=true")
@@ -738,17 +738,17 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		toDst := routehost + ":443:" + podIP
 		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-kvs", "--resolve", toDst, "--connect-timeout", "10"}
 		expectOutput := []string{"set-cookie: 2-edge_cookie=[0-9a-z]+"}
-		repeatCmdOnInternalClient(oc, curlCmd, expectOutput, 60, 1)
+		repeatCmdOnClient(oc, curlCmd, expectOutput, 60, 1)
 
 		exutil.By("6.0: Curl the edge route, saving the cookie for one server")
 		curlCmd = []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "-c" + fileDir + "/cookie-15873", "--resolve", toDst, "--connect-timeout", "10"}
 		expectOutput = []string{"Hello-OpenShift " + srvPodList[1] + " http-8080"}
-		repeatCmdOnInternalClient(oc, curlCmd, expectOutput, 120, 1)
+		repeatCmdOnClient(oc, curlCmd, expectOutput, 120, 1)
 
 		exutil.By("7.0: Curl the edge route with the cookie, expect all are forwarded to the desired server")
 		curlCmdWithCookie := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "-b", fileDir + "/cookie-15873", "--resolve", toDst, "--connect-timeout", "10"}
 		expectOutput = []string{"Hello-OpenShift " + srvPodList[0] + " http-8080", "Hello-OpenShift " + srvPodList[1] + " http-8080"}
-		result := repeatCmdOnInternalClient(oc, curlCmdWithCookie, expectOutput, 120, 6)
+		_, result := repeatCmdOnClient(oc, curlCmdWithCookie, expectOutput, 120, 6)
 		o.Expect(result[1]).To(o.Equal(6))
 
 		// test for NetworkEdge can set cookie name for reencrypt routes by annotation
@@ -765,17 +765,17 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("10.0: Curl the reencrypt route, and check the Set-Cookie header is set")
 		curlCmd = []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-kv", "--resolve", toDst, "--connect-timeout", "10"}
 		expectOutput = []string{"set-cookie: _reen-cookie3=[0-9a-z]+"}
-		repeatCmdOnInternalClient(oc, curlCmd, expectOutput, 60, 1)
+		repeatCmdOnClient(oc, curlCmd, expectOutput, 60, 1)
 
 		exutil.By("11.0: Curl the reen route, saving the cookie for one server")
 		curlCmd = []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-k", "-c", fileDir + "/cookie-15873", "--resolve", toDst, "--connect-timeout", "10"}
 		expectOutput = []string{"Hello-OpenShift " + srvPodList[1] + " https-8443"}
-		repeatCmdOnInternalClient(oc, curlCmd, expectOutput, 120, 1)
+		repeatCmdOnClient(oc, curlCmd, expectOutput, 120, 1)
 
 		exutil.By("12.0: Curl the reen route with the cookie, expect all are forwarded to the desired server")
 		curlCmdWithCookie = []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "-b", fileDir + "/cookie-15873", "--resolve", toDst, "--connect-timeout", "10"}
 		expectOutput = []string{"Hello-OpenShift +" + srvPodList[0] + " +https-8443", "Hello-OpenShift +" + srvPodList[1] + " +https-8443"}
-		result = repeatCmdOnInternalClient(oc, curlCmdWithCookie, expectOutput, 120, 6)
+		_, result = repeatCmdOnClient(oc, curlCmdWithCookie, expectOutput, 120, 6)
 		o.Expect(result[1]).To(o.Equal(6))
 	})
 
@@ -1110,7 +1110,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		operatorPod := getPodListByLabel(oc, "openshift-ingress-operator", "name=ingress-operator")
 		routehost := "canary-openshift-ingress-canary.apps." + baseDomain
 		cmdOnPod := []string{operatorPod[0], "-n", "openshift-ingress-operator", "--", "curl", "-k", "https://" + routehost, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, cmdOnPod, "Healthcheck requested", 30, 1)
+		repeatCmdOnClient(oc, cmdOnPod, "Healthcheck requested", 30, 1)
 
 		exutil.By("Patch the ingress controller and deleting the canary route")
 		actualGen, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/router-default", "-n", "openshift-ingress", "-o=jsonpath={.metadata.generation}").Output()
@@ -1127,7 +1127,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("Check whether the canary route status cleared and confirm the route is not accessible")
 		getRouteDetails(oc, "openshift-ingress-canary", "canary", `{.status.ingress[?(@.routerName=="default")].conditions[*].status}`, "True", true)
 		cmdOnPod = []string{operatorPod[0], "-n", "openshift-ingress-operator", "--", "curl", "-Ik", "https://" + routehost, "--connect-timeout", "10"}
-		adminRepeatCmd(oc, cmdOnPod, "503", 30, 1)
+		repeatCmdOnClient(oc, cmdOnPod, "503", 30, 1)
 
 		// Wait may be about 300 seconds
 		exutil.By("Check the ingress operator status to confirm it is in degraded state cause by canary route")
