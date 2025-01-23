@@ -98,22 +98,39 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 		defer workerMcp.waitForComplete()
 
 		mcn := NewMachineConfigNode(oc.AsAdmin(), workerNode.GetName())
+		logger.Infof("Checking Updated False")
 		o.Eventually(mcn.GetUpdated, "1m", "5s").Should(o.Equal("False"))
+		logger.Infof("Checking UpdatePrepared")
 		o.Eventually(mcn.GetUpdatePrepared, "1m", "3s").Should(o.Equal("True"))
+		logger.Infof("Checking UpdateCompatible")
 		o.Eventually(mcn.GetUpdateCompatible, "3m", "3s").Should(o.Equal("True"))
+		logger.Infof("Checking UpdateExecuted Unknown")
 		o.Eventually(mcn.GetUpdateExecuted, "1m", "3s").Should(o.Equal("Unknown"))
+		logger.Infof("Checking Cordoned")
 		o.Eventually(mcn.GetCordoned, "30s", "3s").Should(o.Equal("True"))
+		logger.Infof("Checking Drained Unknown")
 		o.Eventually(mcn.GetDrained, "30s", "2s").Should(o.Equal("Unknown"))
+		logger.Infof("Checking Drained")
 		o.Eventually(mcn.GetDrained, "5m", "2s").Should(o.Equal("True"))
+		logger.Infof("Checking AppliedFilesAndOS Unknown")
 		o.Eventually(mcn.GetAppliedFilesAndOS, "1m", "1s").Should(o.Equal("Unknown"))
+		logger.Infof("Checking AppliedFilesAndOS")
 		o.Eventually(mcn.GetAppliedFilesAndOS, "3m", "2s").Should(o.Equal("True"))
+		logger.Infof("Checking UpdateExecuted")
 		o.Eventually(mcn.GetUpdateExecuted, "20s", "5s").Should(o.Equal("True"))
+		logger.Infof("Checking UpdatePostActionComplete")
 		o.Eventually(mcn.GetUpdatePostActionComplete, "30m", "5s").Should(o.Equal("Unknown"))
+		logger.Infof("Checking RebootedNode Unknown")
 		o.Eventually(mcn.GetRebootedNode, "15s", "3s").Should(o.Equal("Unknown"))
+		logger.Infof("Checking RebootedNode")
 		o.Eventually(mcn.GetRebootedNode, "5m", "5s").Should(o.Equal("True"))
+		logger.Infof("Checking Resumed")
 		o.Eventually(mcn.GetResumed, "15s", "5s").Should(o.Equal("True"))
+		logger.Infof("Checking UpdateComplete")
 		o.Eventually(mcn.GetUpdateComplete, "10s", "5s").Should(o.Equal("True"))
+		logger.Infof("Checking Uncordoned")
 		o.Eventually(mcn.GetUncordoned, "10s", "2s").Should(o.Equal("True"))
+		logger.Infof("Checking Updated")
 		o.Eventually(mcn.GetUpdated, "1m", "5s").Should(o.Equal("True"))
 
 	})
@@ -162,7 +179,7 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Medium-69205-[P1][OnCLayer] MachineConfigNode corresponding condition status is Unknown when node is degraded [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-Medium-69205-[P1] MachineConfigNode corresponding condition status is Unknown when node is degraded [Disruptive]", func() {
 
 		var (
 			mcName            = "change-workers-extension-usbguard"

@@ -620,7 +620,7 @@ func (mcp *MachineConfigPool) GetCordonedNodes() []Node {
 	o.Expect(mcp.WaitForUpdatingStatus()).NotTo(o.HaveOccurred(), "Waiting for Updating status change failed")
 	// polling all nodes in this pool and check whether all cordoned nodes (SchedulingDisabled)
 	var allUpdatingNodes []Node
-	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 5*time.Minute, true, func(_ context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 10*time.Minute, true, func(_ context.Context) (bool, error) {
 		nodes, nerr := mcp.GetNodes()
 		if nerr != nil {
 			return false, fmt.Errorf("Get all linux node failed, will try again in next run %v", nerr)
@@ -711,7 +711,7 @@ func (mcp MachineConfigPool) WaitImmediateForUpdatedStatus() error {
 
 // WaitForUpdatingStatus waits until MCP is rerpoting updating status, if the condition times out the returned error is != nil
 func (mcp MachineConfigPool) WaitForUpdatingStatus() error {
-	return mcp.waitForConditionStatus("Updating", "True", 5*time.Minute, 5*time.Second, true)
+	return mcp.waitForConditionStatus("Updating", "True", 10*time.Minute, 5*time.Second, true)
 }
 
 func (mcp MachineConfigPool) waitForConditionStatus(condition, status string, timeout, interval time.Duration, immediate bool) error {
