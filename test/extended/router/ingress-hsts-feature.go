@@ -17,7 +17,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	var oc = exutil.NewCLI("router-hsts", exutil.KubeConfigPath())
 
 	// author: aiyengar@redhat.com
-	g.It("Author:aiyengar-Critical-43476-The PreloadPolicy option can be set to be enforced strictly to be present or absent in HSTS preload header checks [Serial]", func() {
+	// https://issues.redhat.com/browse/OCPBUGS-43431
+	g.It("Author:aiyengar-NonHyperShiftHOST-Critical-43476-The PreloadPolicy option can be set to be enforced strictly to be present or absent in HSTS preload header checks [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
@@ -81,7 +82,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	})
 
 	// author: aiyengar@redhat.com
-	g.It("Author:aiyengar-High-43478-The PreloadPolicy option can be configured to be permissive with NoOpinion flag [Serial]", func() {
+	// https://issues.redhat.com/browse/OCPBUGS-43431
+	g.It("Author:aiyengar-NonHyperShiftHOST-High-43478-The PreloadPolicy option can be configured to be permissive with NoOpinion flag [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
@@ -137,7 +139,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	})
 
 	// author: aiyengar@redhat.com
-	g.It("Author:aiyengar-Critical-43474-The includeSubDomainsPolicy parameter can configure subdomain policy to inherit the HSTS policy of parent domain [Serial]", func() {
+	// https://issues.redhat.com/browse/OCPBUGS-43431
+	g.It("Author:aiyengar-NonHyperShiftHOST-Critical-43474-The includeSubDomainsPolicy parameter can configure subdomain policy to inherit the HSTS policy of parent domain [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
@@ -201,7 +204,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	})
 
 	// author: aiyengar@redhat.com
-	g.It("Author:aiyengar-High-43475-The includeSubDomainsPolicy option can be configured to be permissive with NoOpinion flag [Serial]", func() {
+	// https://issues.redhat.com/browse/OCPBUGS-43431
+	g.It("Author:aiyengar-NonHyperShiftHOST-High-43475-The includeSubDomainsPolicy option can be configured to be permissive with NoOpinion flag [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
@@ -257,7 +261,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	})
 
 	// author: aiyengar@redhat.com
-	g.It("Author:aiyengar-High-43479-The Maxage HSTS policy strictly adheres to validation of route based based on largestMaxAge and smallestMaxAge parameter [Serial]", func() {
+	// https://issues.redhat.com/browse/OCPBUGS-43431
+	g.It("Author:aiyengar-NonHyperShiftHOST-High-43479-The Maxage HSTS policy strictly adheres to validation of route based based on largestMaxAge and smallestMaxAge parameter [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
@@ -316,7 +321,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	})
 
 	// author: aiyengar@redhat.com
-	g.It("Author:aiyengar-High-43480-The HSTS domain policy can be configure with multiple domainPatterns options [Disruptive]", func() {
+	// https://issues.redhat.com/browse/OCPBUGS-43431
+	g.It("Author:aiyengar-NonHyperShiftHOST-High-43480-The HSTS domain policy can be configure with multiple domainPatterns options [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
@@ -403,7 +409,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	})
 
 	// author: aiyengar@redhat.com
-	g.It("Author:aiyengar-High-43884-lobal HSTS policy can be enforced strictly on a specific namespace using namespaceSelector for given domain pattern filtering [Serial]", func() {
+	// https://issues.redhat.com/browse/OCPBUGS-43431
+	g.It("Author:aiyengar-NonHyperShiftHOST-High-43884-lobal HSTS policy can be enforced strictly on a specific namespace using namespaceSelector for given domain pattern filtering [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")

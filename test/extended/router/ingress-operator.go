@@ -1346,7 +1346,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	})
 
 	// OCPBUGS-33657(including OCPBUGS-34757, OCPBUGS-34110 and OCPBUGS-34888 in OCP-75909)
-	g.It("Author:shudili-ROSA-OSD_CCS-ARO-High-75909-Ingress Operator should not always remain in the progressing state [Disruptive]", func() {
+	// guest hypershift cluster had not the ingress-operator pod, skipped on it
+	g.It("Author:shudili-NonHyperShiftHOST-ROSA-OSD_CCS-ARO-High-75909-Ingress Operator should not always remain in the progressing state [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		nodePortTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		privateTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-private.yaml")
@@ -1452,7 +1453,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	})
 
 	// OCPBUGS-33657(including OCPBUGS-35027 and OCPBUGS-35454 in OCP-75907)
-	g.It("Author:shudili-ROSA-OSD_CCS-ARO-High-75907-Ingress Operator should not always remain in the progressing state [Disruptive]", func() {
+	// guest hypershift cluster had not the ingress-operator pod, skipped on it
+	g.It("Author:shudili-NonHyperShiftHOST-ROSA-OSD_CCS-ARO-High-75907-Ingress Operator should not always remain in the progressing state [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		privateTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-private.yaml")
 		hostnetworkTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-hostnetwork-only.yaml")
