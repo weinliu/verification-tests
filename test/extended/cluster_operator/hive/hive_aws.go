@@ -103,7 +103,7 @@ var _ = g.Describe("[sig-hive] Cluster_Operator hive should", func() {
 	})
 
 	//author: sguo@redhat.com
-	//example: ./bin/extended-platform-tests run all --dry-run | grep "43974" | ./bin/extended-platform-tests run --timeout 60m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run | grep "43974" | ./bin/extended-platform-tests run --timeout 40m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-Medium-43974-Claims in excess of pool size should work well [Serial]", func() {
 		// Settings
 		var (
@@ -526,7 +526,7 @@ spec:
 	})
 
 	//author: sguo@redhat.com
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "59376"|./bin/extended-platform-tests run --timeout 10m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "59376"|./bin/extended-platform-tests run --timeout 5m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:sguo-Medium-59376-Configure resources on the hive deployment pods [Disruptive]", func() {
 		exutil.By("Check the default spec.resources.requests.memory value of hive controller pod")
 		hiveControllersPod := getHivecontrollersPod(oc, HiveNamespace)
@@ -622,7 +622,7 @@ spec:
 	})
 
 	//author: sguo@redhat.com
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "41809"|./bin/extended-platform-tests run --timeout 20m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "41809"|./bin/extended-platform-tests run --timeout 8m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:sguo-High-41809-Formalize ClusterInstall Deletion Process [Disruptive]", func() {
 		testCaseID := "41809"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
@@ -729,7 +729,7 @@ metadata: {}`
 	})
 
 	//author: sguo@redhat.com
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "39180"|./bin/extended-platform-tests run --timeout 15m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "39180"|./bin/extended-platform-tests run --timeout 5m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:sguo-Low-39180-Hive MUST can modify statefulset spec.selector when given value is non-expected value even if this field is immutable [Disruptive]", func() {
 		testCaseID := "39180"
 		resourceName := "test-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
@@ -787,7 +787,7 @@ spec:
 	})
 
 	//author: sguo@redhat.com
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "41525"|./bin/extended-platform-tests run --timeout 15m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "41525"|./bin/extended-platform-tests run --timeout 5m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:sguo-High-41525-Log diffs when validation rejects immutable modifications [Serial]", func() {
 		testCaseID := "41525"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
@@ -852,8 +852,8 @@ spec:
 	})
 
 	//author: sguo@redhat.com
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "37464"|./bin/extended-platform-tests run --timeout 20m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-High-37464-[HiveSpec] Seperate clustersync controller from hive-controllers, meanwhile make it be able to scale up/down [Serial]", func() {
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "37464"|./bin/extended-platform-tests run --timeout 15m -f -
+	g.It("Author:sguo-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-High-37464- Seperate clustersync controller from hive-controllers, meanwhile make it be able to scale up/down [Serial]", func() {
 		exutil.By("Check the statefulset in hive namespace")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync", ok, DefaultTimeout, []string{"statefulset", "-n", HiveNamespace}).check(oc)
 
@@ -899,7 +899,7 @@ spec:
 	})
 
 	//author: sguo@redhat.com
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "43100"|./bin/extended-platform-tests run --timeout 60m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "43100"|./bin/extended-platform-tests run --timeout 70m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-High-43100-Hive supports hibernating AWS cluster with spot instances [Serial]", func() {
 		testCaseID := "43100"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
@@ -1297,7 +1297,7 @@ spec:
 	})
 
 	//author: sguo@redhat.com
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "28631"|./bin/extended-platform-tests run --timeout 20m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "28631"|./bin/extended-platform-tests run --timeout 10m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:sguo-Critical-28631-[HiveSpec] Hive deprovision controller can be disabled through a hiveconfig option [Serial]", func() {
 		testCaseID := "28631"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
@@ -1378,7 +1378,7 @@ spec:
 	})
 
 	//author: sguo@redhat.com
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "41286"|./bin/extended-platform-tests run --timeout 15m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "41286"|./bin/extended-platform-tests run --timeout 10m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:sguo-Medium-41286-ClusterPool supports provisioning fake cluster [Serial]", func() {
 		testCaseID := "41286"
 		poolName := "pool-" + testCaseID
@@ -1615,7 +1615,7 @@ spec:
 	})
 
 	//author: sguo@redhat.com
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "25443"|./bin/extended-platform-tests run --timeout 70m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "25443"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:sguo-Low-25443-Low-29855-Clusterdeployment contains Status.Condition of SyncSet status in case of syncset is invalid [Serial]", func() {
 		testCaseID := "25443"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
@@ -1820,7 +1820,7 @@ spec:
 	})
 
 	//author: fxie@redhat.com
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "23986"|./bin/extended-platform-tests run --timeout 75m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "23986"|./bin/extended-platform-tests run --timeout 70m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-Critical-23986-Medium-64550-[HiveSpec] Kubeconfig secrets can work with additional CAs[Serial]", func() {
 		testCaseID := "23986"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
@@ -2035,7 +2035,7 @@ spec:
 	})
 
 	//author: fxie@redhat.com
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "25145"|./bin/extended-platform-tests run --timeout 60m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "25145"|./bin/extended-platform-tests run --timeout 45m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-25145-[HiveSpec] Dynamically detect change to global pull secret content [Serial]", func() {
 		testCaseID := "25145"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
@@ -2208,9 +2208,8 @@ spec:
 	})
 
 	//author: jshu@redhat.com sguo@redhat.com
-	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "33832"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-33832-Low-42251-Medium-43033-[HiveSDRosa] [HiveSpec] Hive supports ClusterPool [Serial]", func() {
+	g.It("Author:jshu-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-33832-Low-42251-Medium-43033-[HiveSpec] Hive supports ClusterPool [Serial]", func() {
 		testCaseID := "33832"
 		poolName := "pool-" + testCaseID
 		imageSetName := poolName + "-imageset"
@@ -2360,8 +2359,7 @@ spec:
 	})
 
 	//author: fxie@redhat.com jshu@redhat.com
-	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "23167"|./bin/extended-platform-tests run --timeout 60m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "23167"|./bin/extended-platform-tests run --timeout 55m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-Medium-23167-Critical-73287-The tags created on users in AWS match what the installer did on your instances [Serial]", func() {
 		testCaseID := "23167"
 		cdName := "cd-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
@@ -2521,7 +2519,7 @@ spec:
 
 	//author: jshu@redhat.com fxie@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "25310"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-25310-High-33374-High-39747-Medium-23165-High-22760-Hive ClusterDeployment Check installed and version [Serial]", func() {
+	g.It("Author:jshu-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-25310-High-33374-High-39747-Medium-23165-High-22760- [HiveSDRosa] Hive ClusterDeployment Check installed and version [Serial]", func() {
 		testCaseID := "25310"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -2657,8 +2655,8 @@ spec:
 
 	//author: jshu@redhat.com
 	//OCP-44945, OCP-37528, OCP-37527
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "44945"|./bin/extended-platform-tests run --timeout 45m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-44945-Low-37528-Low-37527-[HiveSpec] Hive supports ClusterPool runningCount and hibernateAfter[Serial]", func() {
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "44945"|./bin/extended-platform-tests run --timeout 35m -f -
+	g.It("Author:jshu-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-44945-Low-37528-Low-37527-[HiveSpec] Hive supports ClusterPool runningCount and hibernateAfter[Serial]", func() {
 		testCaseID := "44945"
 		poolName := "pool-" + testCaseID
 		imageSetName := poolName + "-imageset"
@@ -2784,9 +2782,8 @@ spec:
 
 	//author: jshu@redhat.com lwan@redhat.com
 	//OCP-23040, OCP-42113, OCP-34719, OCP-41250, OCP-25334, OCP-23876
-	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "23040"|./bin/extended-platform-tests run --timeout 60m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-High-23040-Medium-42113-High-34719-Low-41250-High-25334-High-23876-[HiveSDRosa] [HiveSpec] Hive to create SyncSet resource[Serial]", func() {
+	g.It("Author:jshu-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-High-23040-Medium-42113-High-34719-Low-41250-High-25334-High-23876-[HiveSpec] Hive to create SyncSet resource[Serial]", func() {
 		testCaseID := "23040"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -3025,7 +3022,9 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, sourceName, ok, DefaultTimeout, []string{"--kubeconfig=" + kubeconfig, "Secret", sourceName, "-n", configMapNamespace}).check(oc)
 	})
 
+	//author: jshu@redhat.com
 	//For simplicity, replace --simulate-bootstrap-failure with not copying aws-creds to make install failed
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "62158"|./bin/extended-platform-tests run --timeout 5m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:jshu-Medium-35990-[HiveSpec] Hive support limiting install attempt[Serial]", func() {
 		testCaseID := "35990"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
@@ -3467,7 +3466,7 @@ spec:
 
 	// Author: fxie@redhat.com mihuang@redhat.com
 	// ./bin/extended-platform-tests run all --dry-run|grep "41212"|./bin/extended-platform-tests run --timeout 80m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-High-41212-High-43751-Medium-57403-[HiveSDRosa] [HiveSpec] [AWSGov] Hive supports to install private cluster [Disruptive]", func() {
+	g.It("Author:fxie-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-High-41212-High-43751-Medium-57403-[HiveSDRosa] [AWSGov] Hive supports to install private cluster [Disruptive]", func() {
 		// Settings
 		var (
 			testCaseID = "41212"
@@ -4053,7 +4052,6 @@ spec:
 	})
 
 	//author: mihuang@redhat.com
-	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "33642"|./bin/extended-platform-tests run --timeout 70m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-Medium-33642-[HiveSpec] Hive supports cluster hibernation [Serial]", func() {
 		testCaseID := "33642"
@@ -4115,7 +4113,7 @@ spec:
 
 	//author: fxie@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "63275"|./bin/extended-platform-tests run --timeout 70m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:fxie-Medium-63275-[HiveSDRosa] Hive support for AWS IMDSv2 [Serial]", func() {
+	g.It("Author:fxie-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-63275-[HiveSpec] Hive support for AWS IMDSv2 [Serial]", func() {
 		var (
 			testCaseID   = "63275"
 			cdName       = "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
@@ -4258,7 +4256,7 @@ spec:
 
 	//author: mihuang@redhat.com fxie@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "49471"|./bin/extended-platform-tests run --timeout 70m -f -
-	g.It("Author:mihuang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-49471-High-76460-High-23677-[HiveSDRosa] [HiveSpec] Change EC2RootVolume: make IOPS optional [Serial]", func() {
+	g.It("Author:mihuang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-49471-High-76460-High-23677- Change EC2RootVolume: make IOPS optional [Serial]", func() {
 		testCaseID := "49471"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -4438,9 +4436,8 @@ spec:
 	})
 
 	//author: mihuang@redhat.com jshu@redhat.com sguo@redhat.com
-	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "24088"|./bin/extended-platform-tests run --timeout 90m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-High-24088-Medium-33045-[HiveSDRosa] [HiveSpec] Provisioning clusters on AWS with managed dns [Serial]", func() {
+	g.It("Author:mihuang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-High-24088-Medium-33045-[HiveSpec] Provisioning clusters on AWS with managed dns [Serial]", func() {
 		testCaseID := "24088"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -4756,7 +4753,6 @@ spec:
 	})
 
 	//author: fxie@redhat.com
-	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run | grep "22382" | ./bin/extended-platform-tests run --timeout 10m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:fxie-High-22382-ClusterDeployment.spec cannot be changed during an update[Serial]", func() {
 		testCaseID := "22382"
@@ -5097,9 +5093,8 @@ spec:
 	})
 
 	//author: lwan@redhat.com
-	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "28867"|./bin/extended-platform-tests run --timeout 120m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:lwan-High-28867-Medium-41776-[HiveSDRosa] [HiveSpec] Hive Machinepool test for autoscale [Serial]", func() {
+	g.It("Author:lwan-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-High-28867-Medium-41776-[HiveSpec] Hive Machinepool test for autoscale [Serial]", func() {
 		testCaseID := "28867"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		oc.SetupProject()
@@ -5285,7 +5280,6 @@ spec:
 	})
 
 	//author: lwan@redhat.com
-	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//For simplicity, replace --simulate-bootstrap-failure with give an invalid root secret to make install failed
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "23289"|./bin/extended-platform-tests run --timeout 15m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:lwan-High-23289-Medium-39813-Test hive reports install restarts in CD and Metric[Serial]", func() {
@@ -5364,7 +5358,6 @@ spec:
 	})
 
 	//author: mihuang@redhat.com
-	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "27559"|./bin/extended-platform-tests run --timeout 60m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-High-27559-[HiveSpec] hive controllers can be disabled through a hiveconfig option [Disruptive]", func() {
 		e2e.Logf("Add \"maintenanceMode: true\" in hiveconfig.spec")
@@ -5435,7 +5428,6 @@ spec:
 	})
 
 	//author: lwan@redhat.com
-	//default duration is 15m for extended-platform-tests and 35m for jenkins job, need to reset for ClusterPool and ClusterDeployment cases
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "44477"|./bin/extended-platform-tests run --timeout 30m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:lwan-Medium-44477-Medium-44474-Medium-44476-[HiveSpec] Change fields of a steady pool, all unclaimed clusters will be recreated[Serial]", func() {
 		// Expose Hive metrics, and neutralize the effect after finishing the test case
@@ -5746,7 +5738,7 @@ spec:
 
 	//author: kcui@redhat.com
 	//example: ./bin/extended-platform-tests run all --dry-run|grep "32007"|./bin/extended-platform-tests run --timeout 20m -f -
-	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:kcui-32007-[HiveSpec] Hive can prevent cluster deletion accidentally via a set on hiveconfig[Serial]", func() {
+	g.It("Author:kcui-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Medium-32007-Hive can prevent cluster deletion accidentally via a set on hiveconfig[Serial]", func() {
 		exutil.By("Add \"deleteProtection: enabled\"  in hiveconfig.spec")
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig", "hive", "--type=json", "-p", `[{"op":"remove", "path": "/spec/deleteProtection"}]`).Execute()
 		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("hiveconfig/hive", "--type", `merge`, `--patch={"spec": {"deleteProtection": "enabled"}}`).Execute()
@@ -6377,6 +6369,8 @@ spec:
 		o.Expect(getCDlistfromPool(oc, poolName)).To(o.Equal(""))
 	})
 
+	//author: mihuang@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "62158"|./bin/extended-platform-tests run --timeout 5m -f -
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-High-69203-Add annotation to override installer image name. [Serial]", func() {
 		testCaseID := "69203"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
@@ -6427,7 +6421,9 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, installerImage, ok, DefaultTimeout, []string{"clusterdeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.status.installerImage}"}).check(oc)
 	})
 
-	g.It("Author:mihuang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-High-40825-[HiveSDRosa] [HiveSpec] Support AWS AssumeRole credentials cluster. [Disruptive]", func() {
+	//author: mihuang@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "62158"|./bin/extended-platform-tests run --timeout 60m -f -
+	g.It("Author:mihuang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-High-40825-[HiveSDRosa] Support AWS AssumeRole credentials cluster. [Disruptive]", func() {
 		testCaseID := "40825"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 		hiveUserName := "hive_40825user"
@@ -6794,7 +6790,9 @@ role_arn = %s
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "2", ok, DefaultTimeout, []string{"MachinePool", cdName + "-worker", "-n", oc.Namespace(), "-o=jsonpath={.status.replicas}"}).check(oc)
 	})
 
-	g.It("Author:mihuang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-High-78024-[HiveSDRosa] [HiveSpec] Support install cluster with ovn ipv4 subnet configured. [Serial]", func() {
+	//author: mihuang@redhat.com
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "62158"|./bin/extended-platform-tests run --timeout 60m -f -
+	g.It("Author:mihuang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-High-78024-[HiveSpec] Support install cluster with ovn ipv4 subnet configured. [Serial]", func() {
 		testCaseID := "78024"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 
