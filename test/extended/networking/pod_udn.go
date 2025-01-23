@@ -1414,6 +1414,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 			mtu                 int32 = 1300
 			pingIPv4Cmd               = "ping -c 2 8.8.8.8"
 			pingIPv6Cmd               = "ping6 -c 2 2001:4860:4860::8888"
+			pingDNSCmd                = "ping -c 2 www.google.com"
 			udnNS                     = []string{}
 			pingCmds                  = []string{}
 		)
@@ -1428,6 +1429,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 
 		var cidr, ipv4cidr, ipv6cidr []string
 		var prefix, ipv4prefix, ipv6prefix int32
+		pingCmds = append(pingCmds, pingDNSCmd)
 		if ipStackType == "ipv4single" {
 			cidr = []string{"10.150.0.0/16", "10.151.0.0/16"}
 			prefix = 24
