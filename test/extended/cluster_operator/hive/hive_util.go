@@ -633,6 +633,29 @@ func (sub *subscription) createIfNotExist(oc *exutil.CLI) {
 		//wait for pod running
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=hive-operator", "-n",
 			sub.namespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
+		//Check if need to replace with the latest Hive image
+		hiveDeployedImg, _, err := oc.
+			AsAdmin().
+			WithoutNamespace().
+			Run("get").
+			Args("csv", sub.installedCSV, "-n", sub.namespace,
+				"-o", "jsonpath={.spec.install.spec.deployments[0].spec.template.spec.containers[0].image}").
+			Outputs()
+		if err != nil {
+			e2e.Logf("Failed to get Hive image: %v", err)
+		} else {
+			e2e.Logf("Found Hive deployed image = %v", hiveDeployedImg)
+			latestHiveVer := getLatestHiveVersion()
+			if strings.Contains(hiveDeployedImg, latestHiveVer) {
+				e2e.Logf("The deployed Hive image is already the lastest.")
+			} else {
+				e2e.Logf("The deployed Hive image is NOT the lastest, patched to the latest version: %v", latestHiveVer)
+				patchYaml := `[{"op": "replace", "path": "/spec/install/spec/deployments/0/spec/template/spec/containers/0/image", "value": "quay.io/app-sre/hive:versiontobepatched"}]`
+				patchYaml = strings.Replace(patchYaml, "versiontobepatched", latestHiveVer, 1)
+				err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", sub.namespace, "csv", sub.installedCSV, "--type=json", "-p", patchYaml).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}
 	} else {
 		e2e.Logf("hive subscription already exists.")
 	}
@@ -662,7 +685,7 @@ func (hc *hiveconfig) createIfNotExist(oc *exutil.CLI) {
 		err := applyResourceFromTemplate(oc, "--ignore-unknown-parameters=true", "-f", hc.template, "-p", "LOGLEVEL="+hc.logLevel, "TARGETNAMESPACE="+hc.targetNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		//wait for pods running
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=clustersync",
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "hive-clustersync", ok, WaitingForClusterOperatorsTimeout, []string{"pod", "--selector=control-plane=clustersync",
 			"-n", HiveNamespace, "-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 		newCheck("expect", "get", asAdmin, withoutNamespace, compare, "Running", ok, DefaultTimeout, []string{"pod", "--selector=control-plane=clustersync", "-n",
 			HiveNamespace, "-o=jsonpath={.items[0].status.phase}"}).check(oc)
@@ -1822,7 +1845,7 @@ func cleanCD(oc *exutil.CLI, clusterImageSetName string, ns string, secretName s
 	defer cleanupObjects(oc, objectTableRef{"ClusterDeployment", ns, cdName})
 }
 
-// Install Hive Operator if not existent, returns the Hive image deployed.
+// Install Hive Operator if not existent
 func installHiveOperator(oc *exutil.CLI, ns *hiveNameSpace, og *operatorGroup, sub *subscription, hc *hiveconfig, testDataDir string) (string, error) {
 	nsTemp := filepath.Join(testDataDir, "namespace.yaml")
 	ogTemp := filepath.Join(testDataDir, "operatorgroup.yaml")
@@ -1866,23 +1889,7 @@ func installHiveOperator(oc *exutil.CLI, ns *hiveNameSpace, og *operatorGroup, s
 	sub.createIfNotExist(oc)
 	hc.createIfNotExist(oc)
 
-	// Get Hive image deployed
-	sub.findInstalledCSV(oc)
-	hiveImg, _, err := oc.
-		AsAdmin().
-		WithoutNamespace().
-		Run("get").
-		Args("csv", sub.installedCSV, "-n", sub.namespace,
-			"-o", "jsonpath={.spec.install.spec.deployments[0].spec.template.spec.containers[0].image}").
-		Outputs()
-	if err != nil {
-		e2e.Logf("Failed to get Hive image: %v", err)
-		return "", err
-	} else {
-		e2e.Logf("Found Hive image deployed = %v", hiveImg)
-	}
-
-	return hiveImg, nil
+	return "success", nil
 }
 
 // Get hiveadmission pod name
@@ -2064,30 +2071,20 @@ func newLegoDNSProvider(
 
 // Extract hiveutil (from the latest Hive image) into dir and return the executable's path
 func extractHiveutil(oc *exutil.CLI, dir string) string {
-	e2e.Logf("Getting tag of the latest Hive image")
-	cmd := exec.Command(
-		"bash",
-		"-c",
-		fmt.Sprintf("curl -sk https://quay.io/api/v1/repository/%s/hive/tag/ "+
-			"| jq '.tags | sort_by(.start_ts) | reverse | .[0].name'", HiveImgRepoOnQuay),
-	)
-	latestImgTag, err := cmd.CombinedOutput()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	latestImgTagStr := strings.Trim(strings.TrimSuffix(string(latestImgTag), "\n"), "\"")
+	latestImgTagStr := getLatestHiveVersion()
 
 	e2e.Logf("Extracting hiveutil from image %v (latest) ...", latestImgTagStr)
-	err = oc.
+	err := oc.
 		AsAdmin().
 		WithoutNamespace().
 		Run("image", "extract").
 		Args(fmt.Sprintf("quay.io/%s/hive:%s", HiveImgRepoOnQuay, latestImgTagStr), "--path", "/usr/bin/hiveutil:"+dir).
-		// Args(fmt.Sprintf("quay.io/%s/hive:%s", "fxierh", latestImgTagStr), "--path", "/usr/bin/hiveutil:"+dir).
 		Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	hiveutilPath := dir + "/hiveutil"
 
 	e2e.Logf("Making hiveutil executable ...")
-	cmd = exec.Command("chmod", "+x", hiveutilPath)
+	cmd := exec.Command("chmod", "+x", hiveutilPath)
 	_, err = cmd.CombinedOutput()
 	o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -2495,4 +2492,21 @@ func isMCEEnabled(oc *exutil.CLI) bool {
 		}
 	}
 	return strings.Contains(checkMCEOutput, "multiclusterengine-sample")
+}
+
+// Get the latest Hive Version at HiveImgRepoOnQuay
+func getLatestHiveVersion() string {
+	e2e.Logf("Getting tag of the latest Hive image")
+	cmd := exec.Command(
+		"bash",
+		"-c",
+		fmt.Sprintf("curl -sk https://quay.io/api/v1/repository/%s/hive/tag/ "+
+			"| jq '.tags | sort_by(.start_ts) | reverse | .[0].name'", HiveImgRepoOnQuay),
+	)
+	latestImgTag, err := cmd.CombinedOutput()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	latestImgTagStr := strings.Trim(strings.TrimSuffix(string(latestImgTag), "\n"), "\"")
+
+	e2e.Logf("The latest Hive image version is %v ", latestImgTagStr)
+	return latestImgTagStr
 }
