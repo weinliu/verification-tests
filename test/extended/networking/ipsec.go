@@ -82,8 +82,8 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 	g.BeforeEach(func() {
 		platform := exutil.CheckPlatform(oc)
 
-		if !(strings.Contains(platform, "gcp") || strings.Contains(platform, "baremetal") || strings.Contains(platform, "none")) {
-			g.Skip("Test cases should be run on GCP/BJBM/RDU2 cluster with ovn network plugin, skip for other platforms !!")
+		if !(strings.Contains(platform, "gcp") || strings.Contains(platform, "baremetal")) {
+			g.Skip("Test cases should be run on GCP/RDU2 cluster with ovn network plugin, skip for other platforms !!")
 		}
 
 		ipsecState := checkIPsec(oc)
@@ -106,29 +106,16 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 				nodeCert = "10_0_128_2"
 				nodeCert2 = "10_0_128_3"
 			}
-		case "none":
-			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
-			if err != nil || !(strings.Contains(msg, "bm2-zzhao")) {
-				g.Skip("This case needs to be run local BBM cluster, gcp or RDU2 setup, skip other platforms!!!")
-			}
-			ipsecTunnel = "pluto-62-VM"
-			rightIP = "10.73.116.62"
-			rightIP2 = "10.73.116.54"
-			leftIP = "10.1.105.3"
-			nodeCert = "left_server"
-			nodeCert2 = "left_server_54"
-			leftPublicIP = leftIP
-			platformvar = "bjbm"
 
 		case "baremetal":
 			msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
 			if err != nil || !(strings.Contains(msg, "offload.openshift-qe.sdn.com")) {
-				g.Skip("This case needs to be run on gcp, local BBM or RDU2 cluster, skip other platforms!!!")
+				g.Skip("This case needs to be run on GCP or RDU2 cluster, skip other platforms!!!")
 			}
 			ipsecTunnel = "pluto-rdu2-VM"
 			rightIP = "192.168.111.23"
 			rightIP2 = "192.168.111.24"
-			leftIP = "10.1.105.3"
+			leftIP = "10.0.185.155"
 			nodeCert = "proxy_cert"  //on RDU2 setup, since nodes are NAT'd and not accessible from ext VM, IPsec tunnels terminates at proxies and proxy reinitiate tunnels with worker nodes
 			nodeCert2 = "proxy_cert" //so both nodes will have same proxy_cert with extSAN of proxy IP
 			leftPublicIP = leftIP
@@ -176,11 +163,6 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		defer deleteNMStateCR(oc, nmstateCR)
 		createNMstateCR(oc, nmstateCR)
 
-		//need to populate host2host transport config on external host
-		defer func() {
-			err := applyConfigTypeExtHost(leftPublicIP, "host2hostBJBM")
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}()
 		err := applyConfigTypeExtHost(leftPublicIP, "host2hostTransportRDU2")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -226,11 +208,6 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		defer deleteNMStateCR(oc, nmstateCR)
 		createNMstateCR(oc, nmstateCR)
 
-		//need to populate host2host RDU2 tunnel config on external host
-		defer func() {
-			err := applyConfigTypeExtHost(leftPublicIP, "host2hostBJBM")
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}()
 		err := applyConfigTypeExtHost(leftPublicIP, "host2hostTunnelRDU2")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -266,7 +243,7 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 	// author: huirwang@redhat.com
 	g.It("Author:huirwang-High-67472-Transport tunnel can be setup for IPSEC NS, [Serial][Disruptive]", func() {
 		if platformvar == "rdu2" {
-			g.Skip("This case is only applicable to GCP or BJBM cluster, skipping this testcase.")
+			g.Skip("This case is only applicable to GCP, skipping this testcase.")
 		}
 		exutil.By("Configure nmstate ipsec policy")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
@@ -310,7 +287,7 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 	// author: huirwang@redhat.com
 	g.It("Author:huirwang-High-67473-Service nodeport can be accessed with ESP encrypted, [Serial][Disruptive]", func() {
 		if platformvar == "rdu2" {
-			g.Skip("This case is only applicable to GCP or BJBM cluster, skipping this testcase.")
+			g.Skip("This case is only applicable to GCP, skipping this testcase.")
 		}
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
@@ -387,7 +364,7 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 	// author: huirwang@redhat.com
 	g.It("Author:huirwang-Longduration-NonPreRelease-Medium-67474-Medium-69176-IPSec tunnel can be up after restart IPSec service or restart node, [Serial][Disruptive]", func() {
 		if platformvar == "rdu2" {
-			g.Skip("This case is only applicable to GCP or BJBM cluster, skipping this testcase.")
+			g.Skip("This case is only applicable to GCP, skipping this testcase.")
 		}
 		exutil.By("Configure nmstate ipsec policy")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
@@ -451,7 +428,7 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 	// author: huirwang@redhat.com
 	g.It("Author:huirwang-High-67475-Be able to access hostnetwork pod with traffic encrypted,  [Serial][Disruptive]", func() {
 		if platformvar == "rdu2" {
-			g.Skip("This case is only applicable to GCP or BJBM cluster, skipping this testcase.")
+			g.Skip("This case is only applicable to GCP, skipping this testcase.")
 		}
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
@@ -512,7 +489,7 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 	// author: huirwang@redhat.com
 	g.It("Author:huirwang-High-69178-High-38873-Tunnel mode can be setup for IPSec NS,IPSec NS tunnel can be teared down by nmstate config. [Serial][Disruptive]", func() {
 		if platformvar == "rdu2" {
-			g.Skip("This case is only applicable to GCP or BJBM cluster, skipping this testcase.")
+			g.Skip("This case is only applicable to GCP, skipping this testcase.")
 		}
 		exutil.By("Configure nmstate ipsec policy")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
@@ -578,7 +555,7 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 	//author: anusaxen@redhat.com
 	g.It("Author:anusaxen-Longduration-NonPreRelease-High-71465-Multiplexing Tunnel and Transport type IPsec should work with external host. [Serial][Disruptive]", func() {
 		if platformvar == "rdu2" {
-			g.Skip("This case is only applicable to GCP or BJBM cluster, skipping this testcase.")
+			g.Skip("This case is only applicable to GCP, skipping this testcase.")
 		}
 		exutil.By("Configure nmstate ipsec policies for both Transport and Tunnel Type")
 		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
@@ -631,65 +608,6 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 	})
 
 	//author: anusaxen@redhat.com
-	g.It("Author:anusaxen-High-72829-Tunnel mode can be setup for IPSec NS - Host2Net [Serial][Disruptive]", func() {
-		if platformvar != "bjbm" {
-			g.Skip("This case is only applicable to local BJBM BareMetal cluster, skipping this testcase.")
-		}
-		exutil.By("Configure nmstate ipsec policy for host2net Tunnel Type")
-		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
-		nmstateCR := nmstateCRResource{
-			name:     "nmstate",
-			template: nmstateCRTemplate,
-		}
-		defer deleteNMStateCR(oc, nmstateCR)
-		createNMstateCR(oc, nmstateCR)
-
-		var (
-			policyName          = "ipsec-policy-tunnel-host2net-72829"
-			ipsecTunnel         = "plutoTunnelVM_host2net"
-			rightNetworkAddress = "10.1.104.0" //RHEL VM has network address of 10.1.104.0 with IP eth0 IP 10.1.105.3/23
-			rightNetworkCidr    = "/23"
-		)
-
-		//need to populate host2net tunnel config on external host
-		defer func() {
-			err := applyConfigTypeExtHost(leftPublicIP, "host2hostBJBM")
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}()
-		err := applyConfigTypeExtHost(leftPublicIP, "host2netBJBM")
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode2)
-		configIPSecNMSatePolicyHost2net(oc, policyName, rightIP2, rightNode2, ipsecTunnel, leftIP, rightNetworkAddress, rightNetworkCidr, nodeCert2, "tunnel")
-
-		exutil.By("Checking ipsec session was established between worker node and external host")
-		verifyIPSecTunnelUphost2netTunnel(oc, rightNode2, rightIP2, rightNetworkAddress, "tunnel")
-
-		exutil.By("Start tcpdump on ipsec right node")
-		e2e.Logf("Trying to get physical interface on the node,%s", rightNode2)
-		phyInf, nicError := getSnifPhyInf(oc, rightNode2)
-		o.Expect(nicError).NotTo(o.HaveOccurred())
-		ns := oc.Namespace()
-		exutil.SetNamespacePrivileged(oc, ns)
-		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
-		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode2, "--", "bash", "-c", tcpdumpCmd).Background()
-		defer cmdTcpdump.Process.Kill()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
-		time.Sleep(5 * time.Second)
-		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
-		pingCmd := fmt.Sprintf("ping -c4 %s &", leftIP)
-		_, err = exutil.DebugNodeWithChroot(oc, rightNode2, "bash", "-c", pingCmd)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cmdTcpdump.Wait()
-		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
-		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
-		cmdTcpdump.Process.Kill()
-
-	})
-
-	//author: anusaxen@redhat.com
 	g.It("Author:anusaxen-High-74221-[rdu2cluster] Tunnel mode can be setup for IPSec NS in NAT env - Host2Net [Serial][Disruptive]", func() {
 		if platformvar != "rdu2" {
 			g.Skip("This case is only applicable to local RDU2 BareMetal cluster, skipping this testcase.")
@@ -706,15 +624,10 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		var (
 			policyName          = "ipsec-policy-tunnel-host2net-74221"
 			ipsecTunnel         = "plutoTunnelVM_host2net"
-			rightNetworkAddress = "10.1.104.0" ////RHEL VM has network address of 10.1.104.0 with eth0 IP 10.1.105.3/23
-			rightNetworkCidr    = "/23"
+			rightNetworkAddress = "10.0.184.0" //OSP VM has network address of 10.0.184.0 with eth0 IP 10.0.185.155/22
+			rightNetworkCidr    = "/22"
 		)
 
-		//need to populate host2net tunnel RDU2 config on external host
-		defer func() {
-			err := applyConfigTypeExtHost(leftPublicIP, "host2hostBJBM")
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}()
 		err := applyConfigTypeExtHost(leftPublicIP, "host2netTunnelRDU2")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -747,64 +660,6 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 	})
 
 	//author: anusaxen@redhat.com
-	g.It("Author:anusaxen-High-72830-Transport mode can be setup for IPSec NS - Host2Net [Serial][Disruptive]", func() {
-		if platformvar != "bjbm" {
-			g.Skip("This case is only applicable to local BJBM BareMetal cluster, skipping this testcase.")
-		}
-		exutil.By("Configure nmstate ipsec policies for both Transport and Tunnel Type")
-		nmstateCRTemplate := generateTemplateAbsolutePath("nmstate-cr-template.yaml")
-		nmstateCR := nmstateCRResource{
-			name:     "nmstate",
-			template: nmstateCRTemplate,
-		}
-		defer deleteNMStateCR(oc, nmstateCR)
-		createNMstateCR(oc, nmstateCR)
-
-		var (
-			policyName          = "ipsec-policy-transport-host2net-72830"
-			ipsecTunnel         = "plutoTransportVM_host2net"
-			rightNetworkAddress = "10.1.104.0" //RHEL VM has network address of 10.1.104.0 with IP eth0 IP 10.1.105.3/23
-			rightNetworkCidr    = "/23"
-		)
-
-		//need to populate host2net transport config on external host
-		defer func() {
-			err := applyConfigTypeExtHost(leftPublicIP, "host2hostBJBM")
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}()
-		err := applyConfigTypeExtHost(leftPublicIP, "host2netBJBM")
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		defer removeIPSecConfig(oc, policyName, ipsecTunnel, rightNode)
-		configIPSecNMSatePolicyHost2net(oc, policyName, rightIP, rightNode, ipsecTunnel, leftIP, rightNetworkAddress, rightNetworkCidr, nodeCert, "transport")
-
-		exutil.By("Checking ipsec session was established between worker node and external host")
-		verifyIPSecTunnelUp(oc, rightNode, rightIP, leftIP, "transport")
-
-		exutil.By("Start tcpdump on ipsec right node")
-		e2e.Logf("Trying to get physical interface on the node,%s", rightNode)
-		phyInf, nicError := getSnifPhyInf(oc, rightNode)
-		o.Expect(nicError).NotTo(o.HaveOccurred())
-		ns := oc.Namespace()
-		exutil.SetNamespacePrivileged(oc, ns)
-		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s esp and dst %s", phyInf, leftIP)
-		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+rightNode, "--", "bash", "-c", tcpdumpCmd).Background()
-		defer cmdTcpdump.Process.Kill()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
-		time.Sleep(5 * time.Second)
-		exutil.By("Checking icmp between worker node and external host encrypted by ESP")
-		pingCmd := fmt.Sprintf("ping -c4 %s &", leftIP)
-		_, err = exutil.DebugNodeWithChroot(oc, rightNode, "bash", "-c", pingCmd)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		cmdTcpdump.Wait()
-		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
-		o.Expect(cmdOutput.String()).To(o.ContainSubstring("ESP"))
-		cmdTcpdump.Process.Kill()
-	})
-
-	//author: anusaxen@redhat.com
 	g.It("Author:anusaxen-High-74220-[rdu2cluster] Transport mode can be setup for IPSec NS in NAT env - Host2Net [Serial][Disruptive]", func() {
 		if platformvar != "rdu2" {
 			g.Skip("This case is only applicable to local RDU2 BareMetal cluster, skipping this testcase.")
@@ -821,15 +676,10 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 		var (
 			policyName          = "ipsec-policy-transport-host2net-74220"
 			ipsecTunnel         = "plutoTransportVM_host2net"
-			rightNetworkAddress = "10.1.104.0" //RHEL VM has network address of 10.1.104.0 with IP eth0 IP 10.1.105.3/23
-			rightNetworkCidr    = "/23"
+			rightNetworkAddress = "10.0.184.0" //OSP VM has network address of 10.0.184.0 with mgmt IP 10.0.185.155/22
+			rightNetworkCidr    = "/22"
 		)
 
-		//need to populate host2net transport RDU2 config on external host
-		defer func() {
-			err := applyConfigTypeExtHost(leftPublicIP, "host2hostBJBM")
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}()
 		err := applyConfigTypeExtHost(leftPublicIP, "host2netTransportRDU2")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -863,6 +713,9 @@ var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
 
 	// author: anusaxen@redhat.com
 	g.It("Author:ansaxen-Medium-73554-External Traffic should still be IPsec encrypted in presense of Admin Network Policy application at egress node [Disruptive]", func() {
+		if platformvar == "rdu2" {
+			g.Skip("This case is only applicable to GCP, skipping this testcase.")
+		}
 		var (
 			testID         = "73554"
 			testDataDir    = exutil.FixturePath("testdata", "networking")
