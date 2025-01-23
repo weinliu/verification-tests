@@ -246,7 +246,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	})
 
 	// author: kuiwang@redhat.com
-	g.It("Author:kuiwang-ConnectedOnly-NonHyperShiftHOST-Medium-75492-cluster extension can not be installed with wrong sa or insufficient permission sa", func() {
+	g.It("Author:kuiwang-ConnectedOnly-NonHyperShiftHOST-OSD_CCS-Medium-75492-cluster extension can not be installed with wrong sa or insufficient permission sa", func() {
 		exutil.SkipForSNOCluster(oc)
 		var (
 			caseID                       = "75492"
@@ -330,7 +330,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	})
 
 	// author: kuiwang@redhat.com
-	g.It("Author:kuiwang-ConnectedOnly-NonHyperShiftHOST-Medium-75493-cluster extension can be installed with enough permission sa", func() {
+	g.It("Author:kuiwang-ConnectedOnly-NonHyperShiftHOST-OSD_CCS-Medium-75493-cluster extension can be installed with enough permission sa", func() {
 		exutil.SkipForSNOCluster(oc)
 		var (
 			caseID                       = "75493"
@@ -1041,7 +1041,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-68821-olmv1 Supports Version Ranges during Installation", func() {
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-OSD_CCS-High-68821-olmv1 Supports Version Ranges during Installation", func() {
 		var (
 			baseDir                                       = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate                        = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -1123,7 +1123,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-Medium-69196-olmv1 Supports Version Ranges during clusterextension upgrade", func() {
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-OSD_CCS-Medium-69196-olmv1 Supports Version Ranges during clusterextension upgrade", func() {
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -1203,7 +1203,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-74108-olm v1 supports legacy upgrade edges", func() {
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-OSD_CCS-High-74108-olm v1 supports legacy upgrade edges", func() {
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -1382,7 +1382,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-Medium-74923-no two ClusterExtensions can manage the same underlying object", func() {
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-OSD_CCS-Medium-74923-no two ClusterExtensions can manage the same underlying object", func() {
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -1624,7 +1624,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-76685-olm v1 supports selecting catalogs", func() {
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-OSD_CCS-High-76685-olm v1 supports selecting catalogs", func() {
 		var (
 			baseDir                                  = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate                   = filepath.Join(baseDir, "clustercatalog-withlabel.yaml")
@@ -1757,7 +1757,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	})
 
 	// author: xzha@redhat.com
-	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-Medium-77972-olm v1 Supports MaxOCPVersion in properties file", func() {
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-OSD_CCS-Medium-77972-olm v1 Supports MaxOCPVersion in properties file", func() {
 		var (
 			baseDir                  = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate   = filepath.Join(baseDir, "clustercatalog.yaml")

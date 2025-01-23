@@ -670,7 +670,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 	})
 
 	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-74978-CRD upgrade will be prevented if the Scope is switched between Namespaced and Cluster", func() {
+	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-OSD_CCS-High-74978-CRD upgrade will be prevented if the Scope is switched between Namespaced and Cluster", func() {
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
