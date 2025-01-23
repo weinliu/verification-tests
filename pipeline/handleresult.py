@@ -43,13 +43,9 @@ class TestResult:
         "Critical-",
         "High-",
         "Medium-",
-        "Low-"
+        "Low-",
+        "LEVEL0-"
     ]
-
-    # define this variable to store all the framework level
-    # labels that can be exposed to junit files, e.g. LEVEL0, LEVEL1 etc.
-    # so this logic is more extendable
-    exposed_labels = ["LEVEL0"]
 
     coSubteamMap = {
             "authentication": "Authentication",
@@ -342,10 +338,7 @@ class TestResult:
         if author == "unknown":
             tmpTitle = "NOAUTHOR please correct case " + tmpTitle
         else:
-            casepre = name.replace("'","").split(caseids[-1])[0]
-            exposed_labels = [l for l in self.exposed_labels if l in casepre]
-            casepre = casepre.split("Author:")[0]
-            casepre += "-".join(exposed_labels) + "-" if exposed_labels else ""
+            casepre = name.replace("'","").split(caseids[-1])[0].split("Author:")[0]
             for label in self.frameworkLabels:
                 labelWithoutMinus = label.rstrip("-")
                 casepre = casepre.replace(label, "").replace(labelWithoutMinus, "")
