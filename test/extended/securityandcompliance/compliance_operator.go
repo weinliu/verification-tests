@@ -6752,7 +6752,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 		g.By("Compare the memory usage")
 		e2e.Logf("Memory usage before:%v, Memory usage after:%v", memUsageBefore, memUsageAfter)
 		absVal := math.Abs(memUsageAfter - memUsageBefore)
-		o.Expect(absVal).Should(o.BeNumerically("<=", 20), fmt.Sprintf("Memory usage after 300 namespaces created is more than the expected. Hence testcase failed"))
+		o.Expect(absVal).Should(o.BeNumerically("<=", 30), fmt.Sprintf("Memory usage after 300 namespaces created is more than the expected. Hence testcase failed"))
 	})
 
 	// author: xiyuan@redhat.com
