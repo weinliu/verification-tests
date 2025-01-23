@@ -324,6 +324,15 @@ func getAwsVolumeIopsByVolumeID(volumeID string) int64 {
 	return volumeIops
 }
 
+// Get the volume throughput by volume id
+func getAwsVolumeThroughputByVolumeID(volumeID string) int64 {
+	volumeInfo, err := getAwsVolumeInfoByVolumeID(volumeID)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	volumeThroughput := gjson.Get(volumeInfo, `Volumes.0.Throughput`).Int()
+	e2e.Logf("The volume %s Throughput is %d on aws backend", volumeID, volumeThroughput)
+	return volumeThroughput
+}
+
 // Init the aws session
 func newAwsClient() *ec2.EC2 {
 	mySession := session.Must(session.NewSession())

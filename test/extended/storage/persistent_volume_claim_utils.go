@@ -229,6 +229,20 @@ func createMulPVC(oc *exutil.CLI, begin int64, length int64, pvcTemplate string,
 	return pvclist
 }
 
+// Create a new PersistentVolumeClaim with specified Volume Attributes Class (VAC)
+func (pvc *persistentVolumeClaim) createWithSpecifiedVAC(oc *exutil.CLI, vacName string) {
+	if pvc.namespace == "" {
+		pvc.namespace = oc.Namespace()
+	}
+	extraParameters := map[string]interface{}{
+		"jsonPath":                  `items.0.spec.`,
+		"volumeAttributesClassName": vacName,
+	}
+	err := applyResourceFromTemplateWithExtraParametersAsAdmin(oc, extraParameters, "--ignore-unknown-parameters=true", "-f", pvc.template, "-p", "PVCNAME="+pvc.name, "PVCNAMESPACE="+pvc.namespace, "SCNAME="+pvc.scname,
+		"ACCESSMODE="+pvc.accessmode, "VOLUMEMODE="+pvc.volumemode, "PVCCAPACITY="+pvc.capacity)
+	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
 // Delete the PersistentVolumeClaim
 func (pvc *persistentVolumeClaim) delete(oc *exutil.CLI) {
 	err := oc.WithoutNamespace().Run("delete").Args("pvc", pvc.name, "-n", pvc.namespace).Execute()
@@ -562,4 +576,45 @@ func (pvc *persistentVolumeClaim) specifiedLongerTime(specifiedDuring time.Durat
 	newPVC := *pvc
 	newPVC.maxWaitReadyTime = specifiedDuring
 	return &newPVC
+}
+
+// Patch PVC resource with the VolumeAttributesClass
+func applyVolumeAttributesClassPatch(oc *exutil.CLI, pvcName string, namespace string, vacName string) (string, error) {
+	command1 := "{\"spec\":{\"volumeAttributesClassName\":\"" + vacName + "\"}}"
+	command := []string{"pvc", pvcName, "-n", namespace, "-p", command1, "--type=merge"}
+	e2e.Logf("The command is %s", command)
+	msg, err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(command...).Output()
+	if err != nil {
+		e2e.Logf("Execute command failed with err:%v .", err)
+		return msg, err
+	}
+	e2e.Logf("The command executed successfully %s", command)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return msg, nil
+}
+
+// Get the currentVolumeAttributesClassName from the PVC
+func (pvc *persistentVolumeClaim) getCurrentVolumeAttributesClassName(oc *exutil.CLI) string {
+	currentVolumeAttributesClassName, err := oc.AsAdmin().Run("get").Args("pvc", pvc.name, "-n", pvc.namespace, "-o=jsonpath={.status.currentVolumeAttributesClassName}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The PVC's %s current VolumeAttributesClass name is %s", pvc.name, currentVolumeAttributesClassName)
+	return currentVolumeAttributesClassName
+}
+
+// Check PVC & bound PV resource has expected VolumeAttributesClass
+func (pvc *persistentVolumeClaim) checkVolumeAttributesClassAsExpected(oc *exutil.CLI, vacName string) {
+	o.Eventually(func() string {
+		vac := pvc.getCurrentVolumeAttributesClassName(oc)
+		return vac
+	}, 60*time.Second, 5*time.Second).Should(o.Equal(vacName))
+	o.Eventually(func() string {
+		vac := getVolumeAttributesClassFromPV(oc, pvc.getVolumeName(oc))
+		return vac
+	}, 60*time.Second, 5*time.Second).Should(o.Equal(vacName))
+}
+
+// Modify the PVC with specified VolumeAttributesClass
+func (pvc *persistentVolumeClaim) modifyWithVolumeAttributesClass(oc *exutil.CLI, vacName string) {
+	_, err := applyVolumeAttributesClassPatch(oc, pvc.name, pvc.namespace, vacName)
+	o.Expect(err).NotTo(o.HaveOccurred())
 }

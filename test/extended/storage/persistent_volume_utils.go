@@ -574,3 +574,11 @@ func applyVolumeLastPhaseTransitionTimePatch(oc *exutil.CLI, pvName string, cust
 	e2e.Logf("The command executed successfully %s", command)
 	return msg, nil
 }
+
+// Get the volumeAttributesClass name from the PV
+func getVolumeAttributesClassFromPV(oc *exutil.CLI, pvName string) string {
+	volumeAttributesClassName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pv", pvName, "-o=jsonpath={.spec.volumeAttributesClassName}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The PV's %s  VolumeAttributesClass name is %s", pvName, volumeAttributesClassName)
+	return volumeAttributesClassName
+}
