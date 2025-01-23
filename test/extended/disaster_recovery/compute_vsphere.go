@@ -11,10 +11,12 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/vmware/govmomi"
 	"gopkg.in/ini.v1"
+	"gopkg.in/yaml.v3"
 
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	clusterinfra "github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -62,7 +64,7 @@ func VsphereCloudClient(oc *exutil.CLI) (*exutil.Vmware, *govmomi.Client, string
 	o.Expect(err2).NotTo(o.HaveOccurred())
 	vSphereConfigFile, err3 := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm/cloud-provider-config", "-n", "openshift-config", "-o", `jsonpath={.data.config}`).OutputToFile("dr_vsphere_login_" + randomStr + "/server.ini")
 	o.Expect(err3).NotTo(o.HaveOccurred())
-	envURL, vmRelativePath, err4 := getvSphereServerConfig(vSphereConfigFile)
+	envURL, vmRelativePath, err4 := getvSphereServerConfig(oc, vSphereConfigFile)
 	o.Expect(err4).NotTo(o.HaveOccurred())
 	envUsername := string(accessKeyID)
 	envPassword := string(secureKey)
@@ -133,17 +135,50 @@ func (vs *vsphereInstance) State() (string, error) {
 	return strings.ToLower(instanceState), statusErr
 }
 
-func getvSphereServerConfig(vSphereConfigFile string) (string, string, error) {
-	// Load the INI configuration file
-	cfg, err := ini.Load(vSphereConfigFile)
+// vSphereConfig is a struct to represent the YAML structure.
+type vSphereConfig struct {
+	Vcenter map[string]struct {
+		Server      string   `yaml:"server"`
+		Datacenters []string `yaml:"datacenters"`
+	} `yaml:"vcenter"`
+}
+
+// getvSphereServerConfig handles both INI and YAML configurations.
+func getvSphereServerConfig(oc *exutil.CLI, vSphereConfigFile string) (string, string, error) {
+	fileContent, err := os.ReadFile(vSphereConfigFile)
 	if err != nil {
-		return "", "", fmt.Errorf("Error loading configuration: %s", err)
+		return "", "", fmt.Errorf("error reading configuration file: %s", err)
 	}
 
-	// Retrieve the server URL from the [Workspace] section
-	serverURL := cfg.Section("Workspace").Key("server").String()
+	// Try to parse as INI format
+	cfg, err := ini.Load(vSphereConfigFile)
+	if err == nil {
+		// INI parsing succeeded, extract values
+		serverURL := cfg.Section("Workspace").Key("server").String()
+		vmRelativePath := cfg.Section("Workspace").Key("folder").String()
+		return serverURL, vmRelativePath + "/", nil
+	}
 
-	// Retrieve the folder from the [Workspace] section
-	vmRelativePath := cfg.Section("Workspace").Key("folder").String()
-	return serverURL, vmRelativePath + "/", nil
+	// If INI parsing fails, try parsing as YAML
+	var yamlConfig vSphereConfig
+	err = yaml.Unmarshal(fileContent, &yamlConfig)
+	if err != nil {
+		return "", "", fmt.Errorf("error parsing configuration as YAML: %s", err)
+	}
+
+	// Extract values from the YAML structure
+	for _, vcenter := range yamlConfig.Vcenter {
+		if vcenter.Server != "" {
+			serverURL := vcenter.Server
+			var vmRelativePath string
+			if len(vcenter.Datacenters) > 0 {
+				vmRelativePath = vcenter.Datacenters[0]
+			}
+			infrastructureName := clusterinfra.GetInfrastructureName(oc)
+			o.Expect(infrastructureName).ShouldNot(o.BeEmpty(), "The infrastructure name should not be empty")
+			return serverURL, "/" + vmRelativePath + "/vm/" + infrastructureName + "/", nil
+		}
+	}
+
+	return "", "", fmt.Errorf("no valid configuration found")
 }
