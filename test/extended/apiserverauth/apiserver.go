@@ -2461,7 +2461,7 @@ spec:
 
 		exutil.By("7) On all master nodes, check kas audit logs for abnormal (panic/fatal/SHOULD NOT HAPPEN) logs.")
 		keywords = "panic|fatal|SHOULD NOT HAPPEN"
-		exceptions = "W[0-9]{4}|kernel_config_panic|allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*net/http: abort Handler|stage.*Panic|context deadline exceeded - InternalError)|panicked: false|e2e-test-.*|kernel.*panic|(ocp|OCP)[0-9]{4,}|49167-fatal|LogLevelFatal|log.*FATAL|Force kernel panic|\"Fatal\"|fatal conditions|OCP-38865-audit-errors"
+		exceptions = "W[0-9]{4}|kernel_config_panic|allowWatchBookmarks=true.*panic|fieldSelector.*watch=true.*panic|APIServer panic.*net/http: abort Handler|stage.*Panic|context deadline exceeded - InternalError)|panicked: false|e2e-test-.*|kernel.*panic|(ocp|OCP)[0-9]{4,}|49167-fatal|LogLevelFatal|log.*FATAL|Force kernel panic|\"Fatal\"|fatal conditions|OCP-38865-audit-errors|message.*check fatal=true"
 		cmd = fmt.Sprintf(`grep -ihE '(%s)' /var/log/kube-apiserver/audit*.log | grep -Ev '%s' > /tmp/OCP-39601-audit-errors.log
 		echo '%s'
 		while read line; do
