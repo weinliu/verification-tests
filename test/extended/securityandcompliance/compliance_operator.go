@@ -6956,7 +6956,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 				"-o=jsonpath={.status.machineCount}"}).check(oc)
 		}()
 		defer func() {
-			g.By("Patch all complianceremediaiton to false .. !!!\n")
+			g.By("Patch all complianceremediation to false .. !!!\n")
 			patchPaused := fmt.Sprintf("{\"spec\":{\"paused\":true}}")
 			patchResource(oc, asAdmin, withoutNamespace, "mcp", ss.roles1, "-n", subD.namespace, "--type", "merge", "-p", patchPaused)
 			setApplyToFalseForAllCrs(oc, subD.namespace, ssbE8)
