@@ -7817,7 +7817,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_operator The Co
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("Author:xiyuan-High-74182-Install CO without PLATFORM setting in sub and Scan hosted cluster with ocp4-cis-node and ocp4-pci-dss-node profiles on a Rosa hcp cluster [Serial]", func() {
+	g.It("Author:xiyuan-ROSA-High-74182-Install CO without PLATFORM setting in sub and Scan hosted cluster with ocp4-cis-node and ocp4-pci-dss-node profiles on a Rosa hcp cluster [Serial]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "test-cis-" + getRandomString(),
 			namespace:       sub.namespace,
@@ -7884,7 +7884,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_operator The Co
 	})
 
 	// author: xiyuan@redhat.com
-	g.It("Author:xiyuan-Medium-73945-Install CO with PLATFORM set to rosa and Scan hosted cluster with ocp4-cis-node and ocp4-pci-dss-node [Serial]", func() {
+	g.It("Author:xiyuan-ROSA-Medium-73945-Install CO with PLATFORM set to rosa and Scan hosted cluster with ocp4-cis-node and ocp4-pci-dss-node [Serial]", func() {
 		var ssb = scanSettingBindingDescription{
 			name:            "test-cis-" + getRandomString(),
 			namespace:       subwithPlatformEnv.namespace,
