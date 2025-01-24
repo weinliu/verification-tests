@@ -125,10 +125,11 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 		ls.validateExternalObjectStorageForLogs(oc, []string{"application", "audit", "infrastructure"})
 	})
 
-	g.It("CPaasrunOnly-Author:kbharti-Critical-71773-Verify CCO support on Azure WIF cluster and forward logs to default Loki[Serial]", func() {
+	// Case for Microsoft Azure WIF cluster
+	g.It("Author:kbharti-CPaasrunOnly-Critical-71773-Verify CCO support with custom region on a WIF cluster and forward logs to lokiStack logstore[Serial]", func() {
 
 		currentPlatform := exutil.CheckPlatform(oc)
-		if strings.ToLower(currentPlatform) != "azure" {
+		if currentPlatform != "azure" {
 			g.Skip("The platform is not Azure. Skipping case..")
 		}
 
@@ -153,9 +154,103 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ls.waitForLokiStackToBeReady(oc)
 
+		// Validate that credentials request created by LO has same region as the cluster (non-default scenario)
+		clusterRegion, err := getAzureClusterRegion(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		credentialsRequestRegion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("CredentialsRequest", ls.name, "-n", ls.namespace, `-o=jsonpath={.spec.providerSpec.azureRegion}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(credentialsRequestRegion).Should(o.Equal(clusterRegion))
+
 		exutil.By("create a CLF to test forward to lokistack")
 		clf := clusterlogforwarder{
 			name:                      "clf-71773",
+			namespace:                 loggingNS,
+			serviceAccountName:        "logcollector",
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
+			secretName:                "lokistack-secret",
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			waitForPodReady:           true,
+			enableMonitoring:          true,
+		}
+		clf.createServiceAccount(oc)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
+		defer clf.delete(oc)
+		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
+
+		exutil.By("Validate Logs in Loki")
+		defer removeClusterRoleFromServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		err = addClusterRoleToServiceAccount(oc, oc.Namespace(), "default", "cluster-admin")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "default", oc.Namespace())
+		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
+		lc := newLokiClient(route).withToken(bearerToken).retry(5)
+		for _, logType := range []string{"infrastructure", "audit"} {
+			lc.waitForLogsAppearByKey(logType, "log_type", logType)
+		}
+
+		exutil.By("Validate log streams are pushed to external Azure Blob container")
+		ls.validateExternalObjectStorageForLogs(oc, []string{"application", "audit", "infrastructure"})
+	})
+
+	// Case for Microsoft Azure WIF cluster
+	g.It("Author:kbharti-CPaasrunOnly-Critical-71794-Verify CCO support with default region on a WIF cluster and forward logs to lokiStack logstore[Serial]", func() {
+
+		currentPlatform := exutil.CheckPlatform(oc)
+		if currentPlatform != "azure" {
+			g.Skip("The platform is not Azure. Skipping case..")
+		}
+
+		exutil.By("Deploy LokiStack")
+		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+		ls := lokiStack{
+			name:          "lokistack-71794",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-secret-71794",
+			storageClass:  sc,
+			bucketName:    "loki-71794-" + exutil.GetRandomString(),
+			template:      lokiStackTemplate,
+		}
+
+		defer ls.removeObjectStorage(oc)
+		err := ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Patch to remove region from Loki Operator subscription (default case)
+		removeRegion := `[
+				{
+				  "op": "remove",
+				  "path": "/spec/config/env/3"
+				}
+		]`
+
+		err = oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("patch").Args("sub", "loki-operator", "-n", loNS, "-p", removeRegion, "--type=json").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// LO controller pod will restart with new configuration after region is removed
+		waitForPodReadyWithLabel(oc, loNS, "name=loki-operator-controller-manager")
+
+		// Create LokiStack CR
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ls.waitForLokiStackToBeReady(oc)
+
+		// Validate that credentials request created by LO has region as 'centralus' for default case
+		defaultRegion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("CredentialsRequest", ls.name, "-n", ls.namespace, `-o=jsonpath={.spec.providerSpec.azureRegion}`).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(defaultRegion).Should(o.Equal("centralus"))
+
+		exutil.By("create a CLF to test forward to lokistack")
+		clf := clusterlogforwarder{
+			name:                      "clf-71794",
 			namespace:                 loggingNS,
 			serviceAccountName:        "logcollector",
 			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
