@@ -80,14 +80,14 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 	})
 
-	g.It("Author:asood-LEVEL0-StagerunBoth-High-43074-MetalLB-Operator installation ", func() {
+	g.It("Author:asood-NonHyperShiftHOST-LEVEL0-StagerunBoth-High-43074-MetalLB-Operator installation ", func() {
 		g.By("Checking metalLB operator installation")
 		e2e.Logf("Operator install check successfull as part of setup !!!!!")
 		g.By("SUCCESS - MetalLB operator installed")
 
 	})
 
-	g.It("Author:asood-Medium-50950-Verify community creation and webhook validation.", func() {
+	g.It("Author:asood-NonHyperShiftHOST-Medium-50950-Verify community creation and webhook validation.", func() {
 		communityTemplate := filepath.Join(testDataDir, "community-template.yaml")
 		communityCR := communityResource{
 			name:          "community-50950",
@@ -108,7 +108,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 	})
 
-	g.It("Author:asood-Medium-50947-Medium-50948-Verify BGP and L2 Advertisement webhook validation.", func() {
+	g.It("Author:asood-NonHyperShiftHOST-Medium-50947-Medium-50948-Verify BGP and L2 Advertisement webhook validation.", func() {
 		workers := []string{"worker-1", "worker-2", "worker-3"}
 		bgpCommunties := []string{"65001:65500"}
 		ipaddrpools := []string{"ipaddresspool-0", "ipaddresspool-1"}
@@ -210,7 +210,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 
 	})
 
-	g.It("Author:qiowang-High-46124-Verify webhook validation for BGP peer", func() {
+	g.It("Author:qiowang-NonHyperShiftHOST-High-46124-Verify webhook validation for BGP peer", func() {
 		exutil.By("1. Create two BGPPeer")
 		BGPPeerTemplate := filepath.Join(testDataDir, "bgppeer-template.yaml")
 		for i := 1; i < 3; i++ {
