@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-networking] SDN IPSEC", func() {
@@ -25,6 +26,11 @@ var _ = g.Describe("[sig-networking] SDN IPSEC", func() {
 		if !strings.Contains(networkType, "ovn") {
 			g.Skip("Skip case on cluster that has non-OVN network plugin!!")
 		}
+
+		ipsecState := checkIPsec(oc)
+		if ipsecState != "{}" && ipsecState != "Full" {
+			g.Skip("IPsec not enabled, skiping test!")
+		}
 	})
 
 	// author: rbrattai@redhat.com
@@ -34,10 +40,6 @@ var _ = g.Describe("[sig-networking] SDN IPSEC", func() {
 		platform := checkPlatform(oc)
 		if !strings.Contains(platform, "ibmcloud") {
 			g.Skip("Test requires IBMCloud, skip for other platforms!")
-		}
-		ipsecState := checkIPsec(oc)
-		if ipsecState != "{}" {
-			g.Skip("IPsec not enabled, skiping test!")
 		}
 
 		ns := "openshift-ovn-kubernetes"
@@ -61,6 +63,130 @@ var _ = g.Describe("[sig-networking] SDN IPSEC", func() {
 			o.Expect(out).To(o.ContainSubstring(`ipsec_encapsulation="true"`))
 		}
 
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-High-38846-Should be able to send node to node ESP traffic on IPsec clusters", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking/sriov")
+			hostnwPodTmp        = filepath.Join(buildPruningBaseDir, "net-admin-cap-pod-template.yaml")
+		)
+
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		}
+
+		exutil.By("Obtain a namespace.")
+		ns1 := oc.Namespace()
+		//Required for hostnetwork pod
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-group", "privileged", "system:serviceaccounts:"+ns1).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create 1st hello pod in ns1")
+		//create hostnetwork pod on worker0 and worker1, reuse sriov functions for hostnetwork creation which is actually not related to sriov.
+		pod1 := sriovNetResource{
+			name:      "host-pod1",
+			namespace: ns1,
+			tempfile:  hostnwPodTmp,
+			kind:      "pod",
+		}
+
+		pod2 := sriovNetResource{
+			name:      "host-pod2",
+			namespace: ns1,
+			tempfile:  hostnwPodTmp,
+			kind:      "pod",
+		}
+
+		pod1.create(oc, "PODNAME="+pod1.name, "NODENAME="+nodeList.Items[0].Name)
+		defer pod1.delete(oc)
+		pod2.create(oc, "PODNAME="+pod2.name, "NODENAME="+nodeList.Items[1].Name)
+		defer pod2.delete(oc)
+		errPodRdy5 := waitForPodWithLabelReady(oc, ns1, "name="+pod1.name)
+		exutil.AssertWaitPollNoErr(errPodRdy5, "hostnetwork pod isn't ready")
+		errPodRdy6 := waitForPodWithLabelReady(oc, ns1, "name="+pod2.name)
+		exutil.AssertWaitPollNoErr(errPodRdy6, "hostnetwork pod isn't ready")
+
+		exutil.By("Send ESP traffic from pod1")
+		nodeIP1, nodeIP2 := getNodeIP(oc, nodeList.Items[1].Name)
+		socatCmd := fmt.Sprintf("nohup socat /dev/random ip-sendto:%s:50", nodeIP2)
+		e2e.Logf("The socat command is %s", socatCmd)
+		cmdSocat, _, _, _ := oc.Run("exec").Args("-n", ns1, pod2.name, "--", "bash", "-c", socatCmd).Background()
+		defer cmdSocat.Process.Kill()
+
+		exutil.By("Start tcpdump from pod2.")
+		tcpdumpCmd := "timeout  --preserve-status 60 tcpdump -c 2 -i br-ex \"esp and less 1500\" "
+		e2e.Logf("The tcpdump command is %s", tcpdumpCmd)
+		outputTcpdump, err := e2eoutput.RunHostCmd(pod1.namespace, pod1.name, tcpdumpCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Verify ESP packets can be captured on pod2.")
+		o.Expect(outputTcpdump).NotTo(o.ContainSubstring("0 packets captured"))
+
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" {
+			exutil.By("Retest with  IPv6 address")
+			exutil.By("Send ESP traffic from pod1")
+
+			socatCmd := fmt.Sprintf("nohup socat /dev/random ip-sendto:%s:50", nodeIP1)
+			e2e.Logf("The socat command is %s", socatCmd)
+			cmdSocat, _, _, _ := oc.Run("exec").Args("-n", ns1, pod2.name, "--", "bash", "-c", socatCmd).Background()
+			defer cmdSocat.Process.Kill()
+
+			exutil.By("Start tcpdump from pod2.")
+			tcpdumpCmd := "timeout  --preserve-status 60 tcpdump -c 2 -i br-ex \"esp and less 1500\" "
+			e2e.Logf("The tcpdump command is %s", tcpdumpCmd)
+			outputTcpdump, err := e2eoutput.RunHostCmd(pod1.namespace, pod1.name, tcpdumpCmd)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("Verify ESP packets can be captured on pod2.")
+			o.Expect(outputTcpdump).NotTo(o.ContainSubstring("0 packets captured"))
+
+		}
+
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-High-38845-High-37590-Restarting pluto daemon, restarting ovn-ipsec pods, pods connection should not be broken. [Disruptive]", func() {
+		exutil.By("Get one worker node.")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(nodeList.Items) > 0).Should(o.BeTrue())
+
+		exutil.By("kill pluto on one node.")
+		pkillCmd := "pkill -SEGV pluto"
+		_, err = exutil.DebugNodeWithChroot(oc, nodeList.Items[0].Name, "bash", "-c", pkillCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check the ipsec pods ")
+		//Need to give it some hard coded time for ovn-ipsec pod to notice segfault
+		ovnNS := "openshift-ovn-kubernetes"
+		time.Sleep(90 * time.Second)
+		err = waitForPodWithLabelReady(oc, ovnNS, "app=ovn-ipsec")
+		exutil.AssertWaitPollNoErr(err, "ipsec pods are not ready after killing pluto")
+
+		exutil.By("Restart ipsec pods")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", "-n", ovnNS, "-l", "app=ovn-ipsec").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = waitForPodWithLabelReady(oc, ovnNS, "app=ovn-ipsec")
+		exutil.AssertWaitPollNoErr(err, "ipsec pods are not ready after killing pluto")
+
+		exutil.By("Verify pods connection cross nodes after restarting ipsec pods")
+		pass := verifyPodConnCrossNodes(oc)
+		if !pass {
+			g.Fail("Pods connection checking cross nodes failed!!")
+		}
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-Critical-79184-pod2pod cross nodes traffic should work and not broken.", func() {
+		exutil.By("Verify pods to pods connection cross nodes.")
+		pass := verifyPodConnCrossNodes(oc)
+		if !pass {
+			g.Fail("Pods connection checking cross nodes failed!!")
+		}
 	})
 })
 

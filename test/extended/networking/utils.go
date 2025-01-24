@@ -4258,3 +4258,55 @@ func collectMustGather(oc *exutil.CLI, dstDir string, imageStream string, parame
 	}
 	return output, nil
 }
+
+func verifyPodConnCrossNodes(oc *exutil.CLI) bool {
+	buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+	helloDaemonset := filepath.Join(buildPruningBaseDir, "hello-pod-daemonset.yaml")
+	pass := true
+
+	exutil.By("Create a temporay project for pods to pods connection checking.")
+	oc.SetupProject()
+	ns := oc.Namespace()
+
+	exutil.By("Create hello-pod-daemonset in namespace.")
+	createResourceFromFile(oc, ns, helloDaemonset)
+	err := waitForPodWithLabelReady(oc, ns, "name=hello-pod")
+	exutil.AssertWaitPollNoErr(err, "ipsec pods are not ready after killing pluto")
+
+	exutil.By("Checking pods connection")
+	pods := getPodName(oc, ns, "name=hello-pod")
+	for _, srcPod := range pods {
+		for _, targetPod := range pods {
+			if targetPod != srcPod {
+				podIP1, podIP2 := getPodIP(oc, ns, targetPod)
+				e2e.Logf("Curling from pod: %s with IP: %s\n", srcPod, podIP1)
+				_, err := e2eoutput.RunHostCmd(ns, srcPod, "curl --connect-timeout 10 -s "+net.JoinHostPort(podIP1, "8080"))
+				if err != nil {
+					e2e.Logf("pods connection failed from %s to %s:8080", srcPod, podIP1)
+					srcNode, err := exutil.GetPodNodeName(oc, ns, srcPod)
+					o.Expect(err).NotTo(o.HaveOccurred())
+					dstnode, err := exutil.GetPodNodeName(oc, ns, targetPod)
+					o.Expect(err).NotTo(o.HaveOccurred())
+					e2e.Logf("pods connection failed between nodes %s and %s", srcNode, dstnode)
+					pass = false
+				}
+				if podIP2 != "" {
+					e2e.Logf("Curling from pod: %s with IP: %s\n", srcPod, podIP2)
+					_, err := e2eoutput.RunHostCmd(ns, srcPod, "curl --connect-timeout 10 -s "+net.JoinHostPort(podIP2, "8080"))
+					if err != nil {
+						e2e.Logf("pods connection failed from %s to %s:8080", srcPod, podIP2)
+						srcNode, err := exutil.GetPodNodeName(oc, ns, srcPod)
+						o.Expect(err).NotTo(o.HaveOccurred())
+						dstnode, err := exutil.GetPodNodeName(oc, ns, targetPod)
+						o.Expect(err).NotTo(o.HaveOccurred())
+						e2e.Logf("pods connection failed between nodes %s and %s", srcNode, dstnode)
+						pass = false
+					}
+				}
+
+			}
+		}
+	}
+	e2e.Logf("The pods connection pass check is %v ", pass)
+	return pass
+}
