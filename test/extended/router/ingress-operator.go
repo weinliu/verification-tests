@@ -744,7 +744,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		waitForOutput(oc, project3, "route/shard-ns3", jsonPath, "")
 	})
 
-	g.It("Author:mjoseph-High-38674-hard-stop-after annotation can be applied globally on all ingresscontroller [Disruptive]", func() {
+	// Due to bug https://issues.redhat.com/browse/OCPBUGS-43431, this case may not run on HCP cluster.
+	g.It("Author:mjoseph-NonHyperShiftHOST-High-38674-hard-stop-after annotation can be applied globally on all ingresscontroller [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		var (
