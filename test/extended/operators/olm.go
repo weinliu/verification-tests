@@ -2226,7 +2226,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 	})
 
 	// author: jiazha@redhat.com
-	g.It("Author:jiazha-ConnectedOnly-High-37260-should allow to create the default CatalogSource [Disruptive]", func() {
+	g.It("Author:jiazha-ConnectedOnly-NonHyperShiftHOST-High-37260-should allow to create the default CatalogSource [Disruptive]", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		exutil.By("1) Disable the default OperatorHub")
