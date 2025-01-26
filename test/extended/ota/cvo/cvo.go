@@ -1402,6 +1402,30 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		o.Expect(toImageOutput).To(o.ContainSubstring("Unable to retrieve available updates"))
 		o.Expect(toImageOutput).To(o.ContainSubstring("specify --allow-explicit-upgrade to continue with the update"))
 
+		defer func() {
+			o.Expect(recoverReleaseAccepted(oc)).NotTo(o.HaveOccurred())
+		}()
+
+		exutil.By("give appropriate error on CVO for upgrade to invalid payload ")
+		invalidPayload := "quay.io/openshift-release-dev/ocp-release@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+		invalidPayloadOutput, err := oc.AsAdmin().WithoutNamespace().Run("adm").
+			Args("upgrade", "--allow-explicit-upgrade", "--force", "--to-image", invalidPayload).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(invalidPayloadOutput).To(o.ContainSubstring("Updating to release image"))
+		// usually happens quicker, but 8 minutes is safe deadline
+		if err = waitForCondition(oc, 30, 480, "False",
+			"get", "clusterversion", "version", "-o", "jsonpath={.status.conditions[?(@.type=='ReleaseAccepted')].status}"); err != nil {
+			//dump contents to log
+			_ = oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o", "yaml").Execute()
+			exutil.AssertWaitPollNoErr(err, "ReleaseAccepted condition is not false in 8m")
+		}
+		message, err := getCVObyJP(oc, ".status.conditions[?(.type=='ReleaseAccepted')].message")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(message).To(o.ContainSubstring("Retrieving payload failed"))
+		o.Expect(message).To(o.ContainSubstring("status initcontainer cleanup is waiting with reason \"ErrImagePull\""))
+		o.Expect(message).To(o.ContainSubstring(invalidPayload))
+		o.Expect(recoverReleaseAccepted(oc)).NotTo(o.HaveOccurred())
+
 		exutil.By("Find enable-auto-update index in deployment")
 		origAutoState, autoUpdIndex, err := getCVOcontArg(oc, "enable-auto-update")
 		defer func() {
