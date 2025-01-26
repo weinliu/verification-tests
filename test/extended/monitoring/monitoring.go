@@ -2837,6 +2837,15 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		exutil.By("confirm prometheus pod is ready")
 		assertPodToBeReady(oc, "prometheus-k8s-0", "openshift-monitoring")
 
+		exutil.By("confirm thanos-query pod is ready")
+		//% oc get pod -n openshift-monitoring -l app.kubernetes.io/name=thanos-query
+		waitErr := oc.AsAdmin().WithoutNamespace().Run("wait").Args("pod", "-l", "app.kubernetes.io/name=thanos-query", "-n", "openshift-monitoring", "--for=condition=Ready", "--timeout=3m").Execute()
+		o.Expect(waitErr).NotTo(o.HaveOccurred())
+
+		// debug log
+		MONpod, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring").Output()
+		e2e.Logf("the MON pods condition: %s", MONpod)
+
 		exutil.By("check the alert is triggered")
 		token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
 		checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query=ALERTS{alertname="PrometheusKubernetesListWatchFailures"}'`, token, `"alertname":"PrometheusKubernetesListWatchFailures"`, 3*uwmLoadTime)
