@@ -17,7 +17,7 @@ describe('Operators Installed page test', () => {
     });
 
   after(() => {
-    cy.adminCLI(`oc delete ns ${params.project}`);
+    cy.adminCLI(`oc delete ns ${params.project}`, { failOnNonZeroExit: false });
     cy.exec(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false })
     });
 
