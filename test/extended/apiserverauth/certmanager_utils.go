@@ -238,14 +238,13 @@ func isDeploymentReady(oc *exutil.CLI, namespace string, deploymentName string) 
 // Create Cert Manager Operator
 func createCertManagerOperator(oc *exutil.CLI) {
 	var (
-		subscriptionName       = "openshift-cert-manager-operator"
-		subscriptionNamespace  = "cert-manager-operator"
-		catalogSourceName      = "redhat-operators"
-		catalogSourceNamespace = "openshift-marketplace"
-		channelName            = "stable-v1"
-		operandNamespace       = "cert-manager"
-		operandPodLabel        = "app.kubernetes.io/instance=cert-manager"
-		operandPodNum          = 3
+		testMode              = "PROD"
+		subscriptionName      = "openshift-cert-manager-operator"
+		subscriptionNamespace = "cert-manager-operator"
+		channelName           = "stable-v1"
+		operandNamespace      = "cert-manager"
+		operandPodLabel       = "app.kubernetes.io/instance=cert-manager"
+		operandPodNum         = 3
 	)
 	e2e.Logf("=> create the operator namespace")
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
@@ -261,21 +260,30 @@ func createCertManagerOperator(oc *exutil.CLI) {
 	}
 
 	// use the default catalogsource if 'qe-app-registry' doesn't exists
-	output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", catalogSourceNamespace, "catalogsource", "qe-app-registry").Output()
+	output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "openshift-marketplace", "catalogsource", "qe-app-registry").Output()
 	if strings.Contains(output, "NotFound") || err != nil {
+		testMode = "PROD"
+	}
+
+	var catalogSourceName, catalogSourceNamespace string
+	if testMode == "PROD" {
+		catalogSourceName = "redhat-operators"
+		catalogSourceNamespace = "openshift-marketplace"
 
 		// skip if the default catalogsource doesn't contain subscription's packagemanifest
 		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", catalogSourceNamespace, "-l", "catalog="+catalogSourceName, "--field-selector", "metadata.name="+subscriptionName).Output()
 		if !strings.Contains(output, subscriptionName) || err != nil {
 			g.Skip("skip since no available packagemanifest was found")
 		}
-	} else {
+	} else if testMode == "STAGE" {
 		// TODO: until the Konflux pipeline is configured to add a deterministic tag, update this pull spec whenever a new stage build is out
 		fbcImage := "quay.io/redhat-user-workloads/cert-manager-oape-tenant/cert-manager-operator-1-15/cert-manager-operator-fbc-1-15:edb257f20c2c0261200e2f0f7bf8118099567745"
 		catalogSourceName = "konflux-fbc-cert-manager"
 		catalogSourceNamespace = "cert-manager-operator"
 		e2e.Logf("=> create the file-based catalog")
 		createFBC(oc, catalogSourceName, catalogSourceNamespace, fbcImage)
+	} else {
+		e2e.Failf("Invalid Test Mode, it should be 'PROD' or 'STAGE'")
 	}
 	e2e.Logf("=> using catalogsource '%s' from namespace '%s'", catalogSourceName, catalogSourceNamespace)
 
@@ -614,7 +622,7 @@ func createFBC(oc *exutil.CLI, name, namespace, image string) {
 		return false, nil
 	})
 	if err != nil {
-		dumpResource(oc, name, "catalogsource", namespace, "-o=jsonpath={.status}")
+		dumpResource(oc, namespace, "catalogsource", name, "-o=jsonpath={.status}")
 		oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", namespace).Execute()
 		oc.AsAdmin().WithoutNamespace().Run("delete").Args("catalogsource", name, "-n", namespace).Execute()
 	}
