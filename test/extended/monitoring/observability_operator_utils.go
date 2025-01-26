@@ -603,6 +603,9 @@ func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, 
 	if err != nil {
 		return false, err
 	}
+	//remove token from pod logs
+	podLogsNoToken := strings.Replace(podLogs, token, "xxxxxxxx", -1)
+	podLogsNoBearer := strings.Replace(podLogsNoToken, "Bearer ", "bbbbbb ", -1)
 
 	// Copy DAST Report into $ARTIFACT_DIR
 	artifactAvaiable := true
@@ -628,11 +631,11 @@ func rapidastScan(oc *exutil.CLI, ns, configFile string, scanPolicyFile string, 
 		f1, err := os.Create(artifactFile)
 		defer f1.Close()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		_, err = f1.WriteString(podLogs)
+		_, err = f1.WriteString(podLogsNoBearer)
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else {
 		// print pod logs if artifactdirPath is not writable
-		e2e.Logf("#oc logs -n %s %s \n %s", jobPods.Items[0].Name, ns, podLogs)
+		e2e.Logf("#oc logs -n %s %s \n %s", jobPods.Items[0].Name, ns, podLogsNoBearer)
 	}
 
 	//return false, if high risk is reported
