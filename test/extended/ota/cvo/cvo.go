@@ -2000,4 +2000,146 @@ var _ = g.Describe("[sig-updates] OTA cvo should", func() {
 		}
 	})
 
+	g.It("Author:jianl-ConnectedOnly-Medium-77520-oc adm upgrade recommend", func() {
+		exutil.By("Check if it's a GCP cluster")
+		exutil.SkipIfPlatformTypeNot(oc, "gcp")
+
+		exutil.By("export OC_ENABLE_CMD_UPGRADE_RECOMMEND=true")
+		os.Setenv("OC_ENABLE_CMD_UPGRADE_RECOMMEND", "true")
+		defer func() { os.Setenv("OC_ENABLE_CMD_UPGRADE_RECOMMEND", "") }()
+
+		exutil.By("oc adm upgrade recommend --help")
+		help, err := oc.AsAdmin().WithoutNamespace().Run("adm").
+			Args("upgrade", "recommend", "--help").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(help).Should(o.ContainSubstring("This subcommand is read-only and does not affect the state of the cluster. To request an update, use the 'oc adm upgrade' subcommand."))
+		o.Expect(help).Should(o.ContainSubstring("--show-outdated-releases=false"))
+		o.Expect(help).Should(o.ContainSubstring("--version=''"))
+
+		exutil.By("Update graph data")
+		testDataDir := exutil.FixturePath("testdata", "ota/cvo")
+		graphFile := filepath.Join(testDataDir, "cincy-77520.json")
+		e2e.Logf("Origin graph template file path: ", graphFile)
+		dest := filepath.Join(testDataDir, "cincy-77520_bak.json")
+		err = copy(graphFile, dest)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() { os.Remove(dest) }()
+
+		version, err := getCVObyJP(oc, ".status.history[0].version")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Current OCP version is: ", version)
+		major_minor := strings.Split(string(version), ".")
+
+		exutil.By("Update graphFile with real version")
+		err = updateFile(dest, "current_version", version)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = updateFile(dest, "major", major_minor[0])
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = updateFile(dest, "minor", major_minor[1])
+		o.Expect(err).NotTo(o.HaveOccurred())
+		next, _ := strconv.Atoi(major_minor[1])
+		next_minor := strconv.Itoa(next + 1)
+		err = updateFile(dest, "next", next_minor)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("New graph template file path: ", dest)
+
+		exutil.By("Patch upstream and channel")
+		projectID := "openshift-qe"
+		ctx := context.Background()
+		client, err := storage.NewClient(ctx)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() { o.Expect(client.Close()).NotTo(o.HaveOccurred()) }()
+
+		graphURL, bucket, object, _, _, err := buildGraph(
+			client, oc, projectID, dest)
+		defer func() { o.Expect(DeleteBucket(client, bucket)).NotTo(o.HaveOccurred()) }()
+		defer func() { o.Expect(DeleteObject(client, bucket, object)).NotTo(o.HaveOccurred()) }()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = ocJSONPatch(oc, "", "clusterversion/version", []JSONp{
+			{"add", "/spec/upstream", graphURL},
+			{"add", "/spec/channel", "channel-b"},
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		z_stream_version1 := fmt.Sprintf("%s.%s.998", major_minor[0], major_minor[1])
+		z_stream_version2 := fmt.Sprintf("%s.%s.999", major_minor[0], major_minor[1])
+		y_stream_version1 := fmt.Sprintf("%s.%s.997", major_minor[0], next_minor)
+		y_stream_version2 := fmt.Sprintf("%s.%s.998", major_minor[0], next_minor)
+		y_stream_version3 := fmt.Sprintf("%s.%s.999", major_minor[0], next_minor)
+
+		exutil.By("Check oc adm upgrade recommend")
+		// We need to wait some minutes for the first time to get recommend after patch upstream
+		err = wait.Poll(10*time.Second, 1*time.Minute, func() (bool, error) {
+			output, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "recommend").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(output, "Upstream: "+graphURL) {
+				return false, nil
+			}
+			if !strings.Contains(output, "Channel:") {
+				return false, nil
+			}
+			if !strings.Contains(output, z_stream_version1+"    no known issues relevant to this cluster") {
+				return false, nil
+			}
+			if !strings.Contains(output, z_stream_version2+"    no known issues relevant to this cluster") {
+				return false, nil
+			}
+			if !strings.Contains(output, y_stream_version3+"    no known issues relevant to this cluster") {
+				return false, nil
+			}
+			if !strings.Contains(output, "MultipleReasons") {
+				return false, nil
+			}
+			//major.next.997 is older than major.next.998 and major.next.999, so should not display it in output
+			if strings.Contains(output, y_stream_version1) {
+				return false, nil
+			}
+
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "oc adm upgrade recommend fail")
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "recommend").Output()
+		e2e.Logf("output: \n", output)
+
+		exutil.By("Check oc adm upgrade recommend --show-outdated-releases")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "recommend", "--show-outdated-releases").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("output: \n", output)
+		o.Expect(output).Should(o.ContainSubstring("Upstream: " + graphURL))
+		o.Expect(output).Should(o.ContainSubstring("Channel"))
+		o.Expect(output).Should(o.ContainSubstring(fmt.Sprintf("%s    no known issues relevant to this cluster", z_stream_version1)))
+		o.Expect(output).Should(o.ContainSubstring(fmt.Sprintf("%s    no known issues relevant to this cluster", z_stream_version2)))
+		o.Expect(output).Should(o.ContainSubstring(fmt.Sprintf("%s    no known issues relevant to this cluster", y_stream_version1)))
+		o.Expect(output).Should(o.ContainSubstring(fmt.Sprintf("%s    MultipleReasons", y_stream_version2)))
+		o.Expect(output).Should(o.ContainSubstring(fmt.Sprintf("%s    no known issues relevant to this cluster", y_stream_version3)))
+
+		exutil.By("Check oc adm upgrade recommend --version " + y_stream_version2)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "recommend", "--version", y_stream_version2).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("output: \n", output)
+		o.Expect(output).Should(o.ContainSubstring("Upstream: " + graphURL))
+		o.Expect(output).Should(o.ContainSubstring("Channel"))
+		o.Expect(output).Should(o.ContainSubstring(fmt.Sprintf("Update to %s Recommended=False", y_stream_version2)))
+		o.Expect(output).Should(o.ContainSubstring("Reason: MultipleReasons"))
+		o.Expect(output).Should(o.ContainSubstring("On clusters on default invoker user, this imaginary bug can happen"))
+		o.Expect(output).Should(o.ContainSubstring("Too many CI failures on this release, so do not update to it"))
+
+		exutil.By("Check oc adm upgrade recommend --version " + y_stream_version3)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "recommend", "--version", y_stream_version3).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("output: \n", output)
+		o.Expect(output).Should(o.ContainSubstring("Upstream: " + graphURL))
+		o.Expect(output).Should(o.ContainSubstring("Channel"))
+		expected_msg := fmt.Sprintf("Update to %s has no known issues relevant to this cluster.", y_stream_version3)
+		o.Expect(output).Should(o.ContainSubstring(expected_msg))
+		o.Expect(output).Should(o.ContainSubstring("Image: quay.io/openshift-release-dev/ocp-release@sha256:d2d34aafe0adda79953dd928b946ecbda34673180ee9a80d2ee37c123a0f510c"))
+		o.Expect(output).Should(o.ContainSubstring("Release URL: https://amd64.ocp.releases.ci.openshift.org/releasestream/4-dev-preview/release/4.y+1.0"))
+
+		exutil.By("Check oc adm upgrade recommend --version 4.999.999")
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("adm").Args("upgrade", "recommend", "--version", "4.999.999").Output()
+		e2e.Logf("output: \n", output)
+		o.Expect(output).Should(o.ContainSubstring("Upstream: " + graphURL))
+		o.Expect(output).Should(o.ContainSubstring("Channel"))
+		o.Expect(output).Should(o.ContainSubstring("error: no updates to 4.999 available, so cannot display context for the requested release 4.999.999"))
+	})
+
 })

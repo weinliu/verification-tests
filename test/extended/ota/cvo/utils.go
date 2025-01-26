@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -35,6 +37,29 @@ type JSONp struct {
 type annotationCO struct {
 	name       string
 	annotation map[string]string
+}
+
+// copy
+// @Description	Copy a file from src to target
+// @Create 		jianl 	Jan 22 2025
+// @Param 		src 	string 	the origin file path
+// @Param 		target 	string 	the new file path
+// @Return 		nil
+func copy(src, target string) error {
+	bytesRead, err := ioutil.ReadFile(src)
+	if err != nil {
+		return err
+	}
+
+	if exit, _ := PathExists(target); exit {
+		os.Remove(target)
+	}
+
+	err = ioutil.WriteFile(target, bytesRead, 0o755)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // GetDeploymentsYaml dumps out deployment in yaml format in specific namespace
@@ -347,10 +372,7 @@ func GenerateReleasePayload(oc *exutil.CLI) string {
 // return value: string: target version
 // return value: string: target payload
 // return value: error: any error
-func updateGraph(oc *exutil.CLI, graphName string) (string, string, string, error) {
-	graphDataDir := exutil.FixturePath("testdata", "ota/cvo")
-	graphTemplate := filepath.Join(graphDataDir, graphName)
-
+func updateGraph(oc *exutil.CLI, graphTemplate string) (string, string, string, error) {
 	e2e.Logf("Graph Template: %v", graphTemplate)
 
 	// Assume the cluster is not being upgraded, then desired version will be the current version
@@ -371,33 +393,44 @@ func updateGraph(oc *exutil.CLI, graphName string) (string, string, string, erro
 	if targetPayload == "" {
 		return "", "", "", fmt.Errorf("error get target payload")
 	}
-
-	// Give the new graph a unique name
-	// graphFile := fmt.Sprintf("cincy-%d", time.Now().Unix())
-
-	sedCmd := fmt.Sprintf("sed -i -e 's|sourceversion|%s|g; s|sourcepayload|%s|g; s|targetversion|%s|g; s|targetpayload|%s|g' %s", sourceVersion, sourcePayload, targetVersion, targetPayload, graphTemplate)
-	//fmt.Println(sedCmd)
-	if err := exec.Command("bash", "-c", sedCmd).Run(); err == nil {
-		return graphTemplate, targetVersion, targetPayload, nil
+	err = updateFile(graphTemplate, "sourceversion", sourceVersion)
+	if err != nil {
+		return "", "", "", err
 	}
-	e2e.Logf("Error on sed command: %v", err.Error())
-	return "", "", "", err
+	err = updateFile(graphTemplate, "sourcepayload", sourcePayload)
+	if err != nil {
+		return "", "", "", err
+	}
+	err = updateFile(graphTemplate, "targetversion", targetVersion)
+	if err != nil {
+		return "", "", "", err
+	}
+	err = updateFile(graphTemplate, "targetpayload", targetPayload)
+	if err != nil {
+		return "", "", "", err
+	}
+	return graphTemplate, targetVersion, targetPayload, nil
 }
 
-// buildGraph creates a gcs bucket, upload the graph file and make it public for CVO to use
-// projectID := "projectID"
-// return value: string: the public url of the object
-// return value: string: the bucket name
-// return value: string: the object name
-// return value: string: the target version
-// return value: string: the target payload
-// return value: error: any error
+// buildGraph
+// @Description	creates a gcs bucket, upload the graph file and make it public for CVO to use
+// @Create 		jianl Jan 22 2025
+// @Param 		client	storage.Client	Google storage client
+// @Param 		oc		exutil.CLI		Instance of oc CLI
+// @Param 		projectID 	string 		Google storage project ID
+// @Param		graphName	string		Absolute graph file path or graph file name in fixture folder
+// @Return 		the public url of the object
 func buildGraph(client *storage.Client, oc *exutil.CLI, projectID string, graphName string) (
 	url string, bucket string, object string, targetVersion string, targetPayload string, err error) {
 	var graphFile string
 	var resp *http.Response
 	var body []byte
 
+	// If given a full file path, then we use it directly, otherwith find it in fixture folder
+	if exit, _ := PathExists(graphName); !exit {
+		graphDataDir := exutil.FixturePath("testdata", "ota/cvo")
+		graphName = filepath.Join(graphDataDir, graphName)
+	}
 	if graphFile, targetVersion, targetPayload, err = updateGraph(oc, graphName); err != nil {
 		return
 	}
@@ -1046,6 +1079,46 @@ func checkCVOEvents(oc *exutil.CLI, included bool, expected []string) (err error
 				return fmt.Errorf("msg: %s is found in events", exp)
 			}
 		}
+	}
+	return nil
+}
+
+// PathExists
+// @Description	Check if a file exists
+// @Create 		jianl Jan 22 2025
+// @Param 		path	string	the file path
+// @Return		(bool, error)
+func PathExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
+}
+
+// updateFile
+// @Description	Replace oldString in a given file by newString
+// @Create 		jianl Jan 22 2025
+// @Param 		filePath 	string 	the file path
+// @Param 		oldString 	string 	the old string will be replaced
+// @Param 		newString 	string 	new string will used to replace the oldString in file
+// @Return 		nil
+func updateFile(filePath string, oldString string, newString string) (err error) {
+	data, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		log.Panicf("failed reading data from file: %s", err)
+		return err
+	}
+
+	updatedFileData := strings.Replace(string(data), oldString, newString, -1)
+	err = os.WriteFile(filePath, []byte(updatedFileData), 0644)
+
+	if err != nil {
+		log.Panicf("failed to write file: %s", err)
+		return err
 	}
 	return nil
 }
