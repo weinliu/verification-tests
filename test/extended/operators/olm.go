@@ -3410,6 +3410,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
+
 		exutil.By("Start to subscribe the Camel-k operator")
 		sub := subscriptionDescription{
 			subName:                "camel-k",
@@ -3423,7 +3424,11 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			startingCSV:            "camel-k-operator.v1.5.0",
 			template:               subTemplate,
 		}
-
+		exists, err := clusterPackageExists(oc, sub)
+		if !exists {
+			g.Skip("SKIP:PackageMissing camel-k does not exist in catalog community-operators")
+		}
+		o.Expect(err).NotTo(o.HaveOccurred())
 		defer sub.delete(itName, dr)
 		defer func() {
 			if sub.installedCSV == "" {
