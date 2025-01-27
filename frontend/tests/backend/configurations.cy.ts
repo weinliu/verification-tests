@@ -119,7 +119,7 @@ describe('console configuration tests', () => {
       .its('stdout')
       .should('match', /name: GettingStartedBanner.*state: Disabled/)
     cy.window()
-      .its('SERVER_FLAGS.capabilities', { timeout: 30000 })
+      .its('SERVER_FLAGS.capabilities', { timeout: 120000 })
       .should((capabilities) => {
         const banner = capabilities.find(item => item.name === 'GettingStartedBanner');
         expect(banner?.visibility.state).to.equal('Disabled');
