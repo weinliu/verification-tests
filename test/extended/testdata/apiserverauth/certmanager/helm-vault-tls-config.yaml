@@ -5,6 +5,9 @@ global:
   enabled: true
   tlsDisable: false
 server:
+  image:
+    repository: "hashicorp/vault"
+    tag: "latest"
   dataStorage:
     enabled: true
     size: 1Gi
