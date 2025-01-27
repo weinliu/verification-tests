@@ -1639,7 +1639,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		waitUntilVMReady(oc, "test-vm2", testNS)
 
 		secondaryNetworkConfig := map[string]interface{}{
-			"name": "test-76537/l2-network",
+			"index": []interface{}{"MAC"},
+			"name":  "test-76537/l2-network",
 		}
 
 		config, err := json.Marshal(secondaryNetworkConfig)
