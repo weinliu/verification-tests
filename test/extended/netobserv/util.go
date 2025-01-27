@@ -382,7 +382,12 @@ func (testTemplate *TestServerTemplate) createServer(oc *exutil.CLI) error {
 }
 
 func (testTemplate *TestClientTemplate) createClient(oc *exutil.CLI) error {
-	configFile := exutil.ProcessTemplate(oc, "--ignore-unknown-parameters=true", "-f", testTemplate.Template, "-p", "SERVER_NS="+testTemplate.ServerNS, "-p", "CLIENT_NS="+testTemplate.ClientNS, "-p", "OBJECT_SIZE="+testTemplate.ObjectSize)
+	templateParams := []string{"--ignore-unknown-parameters=true", "-f", testTemplate.Template, "-p", "SERVER_NS=" + testTemplate.ServerNS, "-p", "CLIENT_NS=" + testTemplate.ClientNS}
+
+	if testTemplate.ObjectSize != "" {
+		templateParams = append(templateParams, "-p", "OBJECT_SIZE="+testTemplate.ObjectSize)
+	}
+	configFile := exutil.ProcessTemplate(oc, templateParams...)
 
 	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", configFile).Execute()
 	if err != nil {

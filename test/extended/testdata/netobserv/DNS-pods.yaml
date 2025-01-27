@@ -28,7 +28,7 @@ spec:
           \  while : ; do\n
           \  dig www.google.com +tcp ; sleep 5 \n
           \  done"
-      image: tutum/dnsutils
+      image: massenz/dnsutils:2.4.0
       securityContext:
         allowPrivilegeEscalation: false
         capabilities:
@@ -61,7 +61,7 @@ spec:
           \  while : ; do\n
           \  dig www.google.com ; sleep 5 \n
           \  done"
-      image: tutum/dnsutils
+      image: massenz/dnsutils:2.4.0
       securityContext:
         allowPrivilegeEscalation: false
         capabilities:

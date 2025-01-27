@@ -298,11 +298,32 @@ func verifyFlowCorrectness(objectSize string, flowRecords []FlowRecord) {
 	o.Expect(errFlows).Should(o.BeNumerically("<=", tolerance))
 }
 
-func removeSAFromAdmin(oc *exutil.CLI, saName string, namespace string) error {
+// Verify Packet Translation feature flows
+func verifyPacketTranslationFlows(oc *exutil.CLI, serverNS, clientNS string, flowRecords []FlowRecord) {
+	var nginxPodName []string
+	nginxPodName, err := exutil.GetAllPods(oc, serverNS)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	nginxPodIP := getPodIPv4(oc, serverNS, nginxPodName[0])
+	clientPodIP := getPodIPv4(oc, clientNS, "client")
+
+	for _, r := range flowRecords {
+		o.Expect(r.Flowlog.XlatDstAddr).To(o.Equal(nginxPodIP))
+		o.Expect(r.Flowlog.XlatDstK8S_Name).To(o.Equal(nginxPodName[0]))
+		o.Expect(r.Flowlog.XlatDstK8S_Type).To(o.Equal("Pod"))
+		o.Expect(r.Flowlog.DstPort).Should(o.BeNumerically("==", 80))
+		o.Expect(r.Flowlog.XlatDstPort).Should(o.BeNumerically("==", 8080))
+		o.Expect(r.Flowlog.XlatSrcAddr).To(o.Equal(clientPodIP))
+		o.Expect(r.Flowlog.XlatSrcK8S_Name).To(o.Equal("client"))
+		o.Expect(r.Flowlog.ZoneId).Should(o.BeNumerically(">=", 0))
+	}
+}
+
+func removeSAFromAdmin(oc *exutil.CLI, saName, namespace string) error {
 	return oc.WithoutNamespace().AsAdmin().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", "-z", saName, "-n", namespace).Execute()
 
 }
 
-func addSAToAdmin(oc *exutil.CLI, saName string, namespace string) error {
+func addSAToAdmin(oc *exutil.CLI, saName, namespace string) error {
 	return oc.WithoutNamespace().AsAdmin().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-admin", "-z", saName, "-n", namespace).Execute()
 }

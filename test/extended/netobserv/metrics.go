@@ -145,6 +145,26 @@ func verifyEBPFFilterMetrics(oc *exutil.CLI) {
 	pollMetrics(oc, query)
 }
 
+// verify eBPF feature metrics
+func verifyEBPFFeatureMetrics(oc *exutil.CLI, feature string) {
+	query := fmt.Sprintf("100 * sum(rate(netobserv_agent_flows_enrichment_total{has%s=\"true\"}[1m])) / sum(rate(netobserv_agent_flows_enrichment_total[1m]))", feature)
+	metrics := pollMetrics(oc, query)
+	switch feature {
+	case "Drops":
+		// Expected to be around 4
+		o.Expect(metrics).Should(o.BeNumerically("~", 2.5, 7), "Drop metrics are beyond threshold values")
+	case "RTT":
+		// Expected to be around 55
+		o.Expect(metrics).Should(o.BeNumerically("~", 50, 60), "RTT metrics are beyond threshold values")
+	case "DNS":
+		// Expected to be around 1
+		o.Expect(metrics).Should(o.BeNumerically("~", 0.2, 2.5), "DNS metrics are beyond threshold values")
+	case "Xlat":
+		// Expected to be around 18
+		o.Expect(metrics).Should(o.BeNumerically("~", 15, 22), "Xlat metrics are beyond threshold values")
+	}
+}
+
 func getMetricsScheme(oc *exutil.CLI, servicemonitor string, namespace string) (string, error) {
 	out, err := oc.AsAdmin().Run("get").Args("servicemonitor", servicemonitor, "-n", namespace, "-o", "jsonpath='{.spec.endpoints[].scheme}'").Output()
 

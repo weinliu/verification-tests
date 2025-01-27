@@ -419,10 +419,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		clientTemplate := filePath.Join(baseDir, "test-nginx-client_template.yaml")
 
 		testClientTemplate := TestClientTemplate{
-			ServerNS:   testServerTemplate.ServerNS,
-			ClientNS:   "test-client-60701",
-			ObjectSize: "100K",
-			Template:   clientTemplate,
+			ServerNS: testServerTemplate.ServerNS,
+			ClientNS: "test-client-60701",
+			Template: clientTemplate,
 		}
 
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClientTemplate.ClientNS)
@@ -548,10 +547,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		clientTemplate := filePath.Join(baseDir, "test-nginx-client_template.yaml")
 
 		testClientTemplate := TestClientTemplate{
-			ServerNS:   testServerTemplate.ServerNS,
-			ClientNS:   "test-client-63839",
-			ObjectSize: "100K",
-			Template:   clientTemplate,
+			ServerNS: testServerTemplate.ServerNS,
+			ClientNS: "test-client-63839",
+			Template: clientTemplate,
 		}
 
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClientTemplate.ClientNS)
@@ -875,10 +873,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		clientTemplate := filePath.Join(baseDir, "test-nginx-client_template.yaml")
 		testClientTemplate := TestClientTemplate{
-			ServerNS:   testServerTemplate.ServerNS,
-			ClientNS:   "test-client-68125",
-			ObjectSize: "100K",
-			Template:   clientTemplate,
+			ServerNS: testServerTemplate.ServerNS,
+			ClientNS: "test-client-68125",
+			Template: clientTemplate,
 		}
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClientTemplate.ClientNS)
 		err = testClientTemplate.createClient(oc)
@@ -1552,7 +1549,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		waitForAlertToBeActive(oc, "NetObserv-SYNFlood-in")
 	})
 
-	g.It("Author:aramesha-NonPreRelease-Longduration-High-76537-Verify flow enrichment for VM's secondary interfaces [Disruptive]", func() {
+	g.It("Author:aramesha-NonPreRelease-Longduration-High-76537-Verify flow enrichment for VM's secondary interfaces [Disruptive][Slow]", func() {
 		namespace := oc.Namespace()
 		testNS := "test-76537"
 		virtOperatorNS := "openshift-cnv"
@@ -1706,8 +1703,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 	})
 
-	g.It("Author:aramesha-NonPreRelease-Medium-78480-NetObserv with sampling 50 [Serial]", func() {
-		g.Skip("Skip this test until OCPBUGS-42844 is fixed")
+	g.It("Author:aramesha-NonPreRelease-Longduration-Medium-78480-NetObserv with sampling 50 [Serial][Slow]", func() {
 		namespace := oc.Namespace()
 
 		g.By("Deploy DNS pods")
@@ -1717,11 +1713,34 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		applyResourceFromFile(oc, DNSNamespace, DNSTemplate)
 		exutil.AssertAllPodsToBeReady(oc, DNSNamespace)
 
-		g.By("Deploy FlowCollector with DNSTracking and PacketDrop features enabled with sampling 50")
+		g.By("Deploy test server and client pods")
+		servertemplate := filePath.Join(baseDir, "test-nginx-server_template.yaml")
+		testServerTemplate := TestServerTemplate{
+			ServerNS: "test-server-78480",
+			Template: servertemplate,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testServerTemplate.ServerNS)
+		err := testServerTemplate.createServer(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testServerTemplate.ServerNS)
+
+		clientTemplate := filePath.Join(baseDir, "test-nginx-client_template.yaml")
+		testClientTemplate := TestClientTemplate{
+			ServerNS: testServerTemplate.ServerNS,
+			ClientNS: "test-client-78480",
+			Template: clientTemplate,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClientTemplate.ClientNS)
+		err = testClientTemplate.createClient(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testClientTemplate.ClientNS)
+
+		g.By("Deploy FlowCollector with all features enabled with sampling 50")
+		// Bring in the NetworkEvents feature once its GA. Dont want to skip the whole test-case if the tech-preview flag is not set
 		flow := Flowcollector{
 			Namespace:      namespace,
 			EBPFPrivileged: "true",
-			EBPFeatures:    []string{"\"DNSTracking\", \"PacketDrop\""},
+			EBPFeatures:    []string{"\"DNSTracking\", \"PacketDrop\", \"FlowRTT\", \"PacketTranslation\""},
 			Sampling:       "50",
 			LokiNamespace:  namespace,
 			Template:       flowFixturePath,
@@ -1736,7 +1755,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			err := removeSAFromAdmin(oc, "netobserv-plugin", namespace)
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		err := addSAToAdmin(oc, "netobserv-plugin", namespace)
+		err = addSAToAdmin(oc, "netobserv-plugin", namespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
 
@@ -1749,8 +1768,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 
 		g.By("Verify Packet Drop flows")
-		parameters := []string{"PktDropLatestState=\"TCP_INVALID_STATE\"", "Proto=\"6\""}
-		flowRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
+		lokiParams := []string{"PktDropLatestState=\"TCP_INVALID_STATE\"", "Proto=\"6\""}
+		flowRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, lokiParams...)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of TCP Invalid State flows > 0")
 		for _, r := range flowRecords {
@@ -1759,8 +1778,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(r.Flowlog.PktDropPackets).Should(o.BeNumerically(">", 0))
 		}
 
-		parameters = []string{"PktDropLatestDropCause=\"SKB_DROP_REASON_NO_SOCKET\"", "Proto=\"6\""}
-		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
+		lokiParams = []string{"PktDropLatestDropCause=\"SKB_DROP_REASON_NO_SOCKET\"", "Proto=\"6\""}
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, lokiParams...)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of No Socket TCP flows > 0")
 		for _, r := range flowRecords {
@@ -1769,11 +1788,19 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(r.Flowlog.PktDropPackets).Should(o.BeNumerically(">", 0))
 		}
 
-		lokilabels.DstK8S_Namespace = DNSNamespace
+		g.By("Verify flowRTT flows")
+		lokiParams = []string{"Proto=\"6\""}
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, lokiParams...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of TCP flows > 0")
+		for _, r := range flowRecords {
+			o.Expect(r.Flowlog.TimeFlowRttNs).Should(o.BeNumerically(">=", 0))
+		}
 
 		g.By("Verify TCP DNS flows")
-		parameters = []string{"DnsFlagsResponseCode=\"NoError\"", "SrcPort=\"53\"", "DstK8S_Name=\"dnsutils1\"", "Proto=\"6\""}
-		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
+		lokilabels.DstK8S_Namespace = DNSNamespace
+		lokiParams = []string{"DnsFlagsResponseCode=\"NoError\"", "SrcPort=\"53\"", "DstK8S_Name=\"dnsutils1\"", "Proto=\"6\""}
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, lokiParams...)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of TCP DNS flows > 0")
 		for _, r := range flowRecords {
@@ -1781,13 +1808,34 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 
 		g.By("Verify UDP DNS flows")
-		parameters = []string{"DnsFlagsResponseCode=\"NoError\"", "SrcPort=\"53\"", "DstK8S_Name=\"dnsutils2\"", "Proto=\"17\""}
-		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
+		lokiParams = []string{"DnsFlagsResponseCode=\"NoError\"", "SrcPort=\"53\"", "DstK8S_Name=\"dnsutils2\"", "Proto=\"17\""}
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, lokiParams...)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of UDP DNS flows > 0")
 		for _, r := range flowRecords {
 			o.Expect(r.Flowlog.DnsLatencyMs).Should(o.BeNumerically(">=", 0))
 		}
+
+		g.By("Verify Packet Translation flows")
+		lokilabels = Lokilabels{
+			App:              "netobserv-flowcollector",
+			DstK8S_Type:      "Service",
+			DstK8S_Namespace: testClientTemplate.ServerNS,
+			SrcK8S_Namespace: testClientTemplate.ClientNS,
+		}
+		lokiParams = []string{"ZoneId>0"}
+
+		g.By("Verify PacketTranslation flows")
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, lokiParams...)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of PacketTranslation flows > 0")
+		verifyPacketTranslationFlows(oc, testClientTemplate.ServerNS, testClientTemplate.ClientNS, flowRecords)
+
+		g.By("Verify eBPF feature metrics")
+		verifyEBPFFeatureMetrics(oc, "Drops")
+		verifyEBPFFeatureMetrics(oc, "RTT")
+		verifyEBPFFeatureMetrics(oc, "DNS")
+		verifyEBPFFeatureMetrics(oc, "Xlat")
 	})
 
 	g.It("Author:aramesha-NonPreRelease-High-79015-Verify PacketTranslation feature [Serial]", func() {
@@ -1807,10 +1855,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		clientTemplate := filePath.Join(baseDir, "test-nginx-client_template.yaml")
 		testClientTemplate := TestClientTemplate{
-			ServerNS:   testServerTemplate.ServerNS,
-			ClientNS:   "test-client-79015",
-			ObjectSize: "100K",
-			Template:   clientTemplate,
+			ServerNS: testServerTemplate.ServerNS,
+			ClientNS: "test-client-79015",
+			Template: clientTemplate,
 		}
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClientTemplate.ClientNS)
 		err = testClientTemplate.createClient(oc)
@@ -1842,38 +1889,23 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		startTime := time.Now()
 		time.Sleep(120 * time.Second)
 
-		var nginxPodName []string
-		nginxPodName, err = exutil.GetAllPods(oc, testServerTemplate.ServerNS)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		nginxPodIP := getPodIPv4(oc, testServerTemplate.ServerNS, nginxPodName[0])
-		clientPodIP := getPodIPv4(oc, testClientTemplate.ClientNS, "client")
-
 		lokilabels := Lokilabels{
 			App:              "netobserv-flowcollector",
 			DstK8S_Type:      "Service",
 			DstK8S_Namespace: testClientTemplate.ServerNS,
 			SrcK8S_Namespace: testClientTemplate.ClientNS,
 		}
+		lokiParams := []string{"ZoneId>0"}
 
 		g.By("Verify PacketTranslation flows")
-		flowRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime)
+		flowRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, lokiParams...)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of PacketTranslation flows > 0")
-		for _, r := range flowRecords {
-			o.Expect(r.Flowlog.XlatDstAddr).To(o.Equal(nginxPodIP))
-			o.Expect(r.Flowlog.XlatDstK8S_Name).To(o.Equal(nginxPodName[0]))
-			o.Expect(r.Flowlog.XlatDstK8S_Type).To(o.Equal("Pod"))
-			o.Expect(r.Flowlog.DstPort).Should(o.BeNumerically("==", 80))
-			o.Expect(r.Flowlog.XlatDstPort).Should(o.BeNumerically("==", 8080))
-			o.Expect(r.Flowlog.XlatSrcAddr).To(o.Equal(clientPodIP))
-			o.Expect(r.Flowlog.XlatSrcK8S_Name).To(o.Equal("client"))
-			o.Expect(r.Flowlog.ZoneId).Should(o.BeNumerically(">=", 0))
-		}
+		verifyPacketTranslationFlows(oc, testClientTemplate.ServerNS, testClientTemplate.ClientNS, flowRecords)
 	})
 
 	// NetworkEvents ebpf hook only supported for OCP >= 4.17
-	g.It("Author:memodi-NonPreRelease-Medium-77894-TechPreview Network Policies Correlation", func() {
+	g.It("Author:memodi-NonPreRelease-Medium-77894-TechPreview Network Policies Correlation [Serial]", func() {
 		if !exutil.IsTechPreviewNoUpgrade(oc) {
 			g.Skip("Skipping because the TechPreviewNoUpgrade is not enabled on the cluster.")
 		}
@@ -1892,10 +1924,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		client1Template := filePath.Join(baseDir, "test-nginx-client_template.yaml")
 		testClient1Template := TestClientTemplate{
-			ServerNS:   testServerTemplate.ServerNS,
-			ClientNS:   "test-client1-77894",
-			ObjectSize: "100K",
-			Template:   client1Template,
+			ServerNS: testServerTemplate.ServerNS,
+			ClientNS: "test-client1-77894",
+			Template: client1Template,
 		}
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClient1Template.ClientNS)
 		err = testClient1Template.createClient(oc)
@@ -1903,10 +1934,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		exutil.AssertAllPodsToBeReady(oc, testClient1Template.ClientNS)
 
 		testClient2Template := TestClientTemplate{
-			ServerNS:   testServerTemplate.ServerNS,
-			ClientNS:   "test-client2-77894",
-			ObjectSize: "100K",
-			Template:   client1Template,
+			ServerNS: testServerTemplate.ServerNS,
+			ClientNS: "test-client2-77894",
+			Template: client1Template,
 		}
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClient2Template.ClientNS)
 		err = testClient2Template.createClient(oc)
@@ -2016,7 +2046,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flowRecords with 'flowDirection != 1' > 0")
 		verifyNetworkEvents(flowRecords, "drop", "AdminNetworkPolicy", "Ingress")
 	})
-
 	//Add future NetObserv + Loki test-cases here
 
 	g.Context("with Kafka", func() {

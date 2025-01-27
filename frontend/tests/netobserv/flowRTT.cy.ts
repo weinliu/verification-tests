@@ -1,5 +1,5 @@
 import { Operator, project } from "../../views/netobserv"
-import { netflowPage, colSelectors, overviewSelectors, querySumSelectors } from "../../views/netflow-page"
+import { netflowPage, overviewSelectors, querySumSelectors } from "../../views/netflow-page"
 
 describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Observability'] }, function () {
 
@@ -45,27 +45,6 @@ describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Obs
         // verify Query Summary stats for flowRTT
         cy.get(querySumSelectors.avgRTT).should('exist').then(avgRTT => {
             cy.checkQuerySummary(avgRTT)
-        })
-    })
-
-    it("(OCP-68246, aramesha, Network_Observability) Verify flowRTT column values", function () {
-        // go to table view
-        cy.get('#tabs-container li:nth-child(2)').click()
-        cy.byTestID("table-composable").should('exist')
-
-        // verify flowRTT column is present by default
-        cy.byTestID('table-composable').should('exist').within(() => {
-            cy.get(colSelectors.flowRTT).should('exist')
-        })
-
-        // filter on Protocol TCP, all flows should have flowRTT value != n/a
-        cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
-        cy.byTestID('group-2-toggle').click().should('be.visible')
-        cy.byTestID('protocol').click()
-        cy.get('#autocomplete-search').type('TCP' + '{enter}')
-
-        cy.get('[data-test-td-column-id=TimeFlowRttMs]').each((td) => {
-            expect(td).attr("data-test-td-value").to.match(RegExp("^[0-9]*$"))
         })
     })
 

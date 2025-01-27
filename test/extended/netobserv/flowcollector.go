@@ -108,6 +108,7 @@ type Flowlog struct {
 	PktDropPackets         int            `json:"PktDropPackets,omitempty"`
 	PktDropLatestState     string         `json:"PktDropLatestState,omitempty"`
 	PktDropLatestDropCause string         `json:"PktDropLatestDropCause,omitempty"`
+	TimeFlowRttNs          int            `json:"TimeFlowRttNs,omitempty"`
 	XlatDstAddr            string         `json:"XlatDstAddr,omitempty"`
 	XlatDstK8S_Name        string         `json:"XlatDstK8S_Name,omitempty"`
 	XlatDstK8S_Namespace   string         `json:"XlatDstK8S_Namespace,omitempty"`
