@@ -1537,7 +1537,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-PreChkUpgrade-High-56875-High-77893-egressIP on default network and UDN if applicable should still be functional post upgrade (layer3). [Disruptive]", func() {
+	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-PreChkUpgrade-High-56875-High-77893-egressIP on default network and UDN if applicable should still be functional post upgrade (default network, UDN layer3/2 if applicable). [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		statefulSetHelloPod := filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
@@ -1548,10 +1548,12 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		udnEnabled, _ := IsFeaturegateEnabled(oc, "NetworkSegmentation")
 
 		// if NetworkSegmentation featuregate is enabled, define name for a second namespace that will be created in step 1
-		var ns2 string
+		var ns2, ns3 string
 		if udnEnabled {
-			ns2 = "77893-upgrade-ns"
+			ns2 = "77893-upgrade-ns2"
+			ns3 = "77893-upgrade-ns3"
 			allNS = append(allNS, ns2)
+			allNS = append(allNS, ns3)
 		}
 
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
@@ -1571,11 +1573,24 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		// if NetworkSegmentation featuregate is enabled, create UDN
 		if udnEnabled {
-			// Create layer3 UDN in ns2
-			err = applyL3UDNtoNamespace(oc, ns2, 0)
-			o.Expect(err).NotTo(o.HaveOccurred())
+			ipStackType := checkIPStackType(oc)
+			var cidr, ipv4cidr, ipv6cidr string
+			if ipStackType == "ipv4single" {
+				cidr = "10.150.0.0/16"
+			} else {
+				if ipStackType == "ipv6single" {
+					cidr = "2010:100:200::0/48"
+				} else {
+					ipv4cidr = "10.150.0.0/16"
+					ipv6cidr = "2010:100:200::0/48"
+				}
+			}
+			exutil.By("NetworkSegmentation featuregate is enabled, create CRD for layer3 UDN in namespace ns2")
+			createGeneralUDNCRD(oc, ns2, "udn-network-layer3-"+ns2, ipv4cidr, ipv6cidr, cidr, "layer3")
+
+			exutil.By("NetworkSegmentation featuregate is enabled, create CRD for layer2 UDN in namespace ns3")
+			createGeneralUDNCRD(oc, ns3, "udn-network-layer2-"+ns3, ipv4cidr, ipv6cidr, "10.151.0.0/16", "layer2")
 		}
 
 		exutil.By("2. Choose a node as EgressIP node, label the node to be egress assignable")
@@ -1625,7 +1640,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-PstChkUpgrade-High-56875-High-77893-egressIP on default network and UDN if applicable should still be functional post upgrade (layer3). [Disruptive]", func() {
+	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-PstChkUpgrade-High-56875-High-77893-egressIP on default network and UDN if applicable should still be functional post upgrade (default network, UDN layer3/2 if applicable). [Disruptive]", func() {
 
 		exutil.By("0. Check upgrade namespace(s) from PreChkUpgrade still exist. \n")
 		getNsCmd := `oc get ns | grep -E "56875|77893" | awk '{print $1}'`
