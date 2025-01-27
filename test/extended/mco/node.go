@@ -380,7 +380,9 @@ func (n Node) GetCurrentBootOSImage() (string, error) {
 	}
 
 	// remove the "ostree-unverified-registry:" part of the image
-	image := strings.Join(imageSplit[1:], ":")
+	// it can have other modifiers too, like: ostree-unverified-image:containers-storage:quay.io/openshift-.....
+	// so we only take the last 2 fields and ignore the rest
+	image := strings.Join(imageSplit[len(imageSplit)-2:], ":")
 	logger.Infof("Booted image: %s", image)
 
 	return image, nil
