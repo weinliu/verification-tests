@@ -295,6 +295,16 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			if err != nil {
 				e2e.Logf("WARNING: patching peer-pods-cm: %v %v", msg, err)
 			}
+
+			cocoDefaultSize := map[string]string{
+				"aws":   "{\"data\":{\"PODVM_INSTANCE_TYPE\":\"m6a.large\"}}",
+				"azure": "{\"data\":{\"AZURE_INSTANCE_SIZE\":\"Standard_DC2as_v5\"}}",
+			}
+
+			msg, err = oc.AsAdmin().Run("patch").Args("configmap", ppConfigMapName, "-n", opNamespace, "--type", "merge",
+				"--patch", cocoDefaultSize[cloudPlatform]).Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not patch default instance for coco \n error: %v %v", msg, err))
+
 			// oc set env ds/peerpodconfig-ctrl-caa-daemon -n openshift-sandboxed-containers-operator REBOOT="$(date)"
 		}
 
