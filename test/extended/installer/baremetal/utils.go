@@ -256,7 +256,7 @@ func waitForBMHState(oc *exutil.CLI, bmhName string, bmhStatus string) {
 		e2e.Logf("BMH %v state is %v, Trying again", bmhName, statusOp)
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, "The BMH state of is not as expected")
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The BMH state of %v is not as expected", bmhName))
 }
 
 func waitForBMHDeletion(oc *exutil.CLI, bmhName string) {
