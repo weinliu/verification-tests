@@ -281,7 +281,7 @@ var _ = g.Describe("[sig-mco] MCO alerts", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-73841-[P1] KubeletHealthState alert [Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-73841-[P1][OnCLayer] KubeletHealthState alert [Disruptive]", func() {
 		var (
 			node                               = mcp.GetSortedNodesOrFail()[0]
 			fixed                              = false
