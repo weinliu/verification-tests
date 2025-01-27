@@ -969,7 +969,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		if err != nil {
 			e2e.Failf("command %s: %s", commandStr, output)
 		}
-		o.Expect(output).To(o.ContainSubstring("v1.35."))
+		o.Expect(output).To(o.ContainSubstring("v1.36."))
 
 	})
 
@@ -1830,7 +1830,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		e2e.Logf("command %s: %s", commandStr, output)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("Version:"))
-		o.Expect(output).To(o.ContainSubstring("29.0."))
+		o.Expect(output).To(o.ContainSubstring("30.1."))
 
 		e2e.Logf("OCP 42028 SUCCESS")
 	})
@@ -4972,7 +4972,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("Check the default init image")
 		output, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("pod", "quay-io-olmqe-upgradeoperator-bundle-v0-1", "-o=jsonpath={.spec.initContainers[*].image}", "-n", oc.Namespace()).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("registry.access.redhat.com/ubi8:8.9"))
+		o.Expect(output).To(o.ContainSubstring("registry.access.redhat.com/ubi9/ubi:9.4"))
 
 		output, err = operatorsdkCLI.Run("cleanup").Args("upgradeoperator", "-n", oc.Namespace()).Output()
 		if err != nil {
