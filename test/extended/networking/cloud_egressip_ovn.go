@@ -3808,7 +3808,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		exutil.By("Deleting egressip object")
 		egressip1.deleteEgressIPObject1(oc)
 		waitCloudPrivateIPconfigUpdate(oc, egressIPMaps1[0]["egressIP"], false)
-		egressipErr := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+		egressipErr := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 100*time.Second, false, func(cxt context.Context) (bool, error) {
 			randomStr, url := getRequestURL(dstHost)
 			_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, url)
 			if checkMatchedIPs(oc, ns, tcpdumpDS.name, randomStr, egressIPMaps1[0]["egressIP"], false) != nil {
@@ -3821,11 +3821,19 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		exutil.By("Recreating egressip object")
 		egressip1.createEgressIPObject1(oc)
 		egressIPMaps2 := getAssignedEIPInEIPObject(oc, egressip1.name)
-		o.Expect(len(egressIPMaps2) == 1).Should(o.BeTrue(), fmt.Sprintf("The egressIP was not assigned correctly!"))
+		o.Expect(len(egressIPMaps2) == 1).Should(o.BeTrue(), "The egressIP was not assigned correctly!")
 
 		exutil.By("Check source IP is EgressIP")
-		egressErr = verifyEgressIPinTCPDump(oc, pod1.name, pod1.namespace, egressIPMaps2[0]["egressIP"], dstHost, ns, tcpdumpDS.name, true)
-		o.Expect(egressErr).NotTo(o.HaveOccurred())
+		err = wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 60*time.Second, false, func(cxt context.Context) (bool, error) {
+			egressErr := verifyEgressIPinTCPDump(oc, pod1.name, pod1.namespace, egressIPMaps2[0]["egressIP"], dstHost, ns, tcpdumpDS.name, true)
+
+			if egressErr != nil {
+				e2e.Logf("When verifying egressIP, getting err:%v, and try next round", egressErr)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Failed to verify egressIP %s after the egressIP object is re-created", egressIPMaps2[0]["egressIP"]))
 
 		exutil.By("Deleting EgressIP object and recreating it works!!! ")
 
