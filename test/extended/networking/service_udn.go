@@ -50,12 +50,13 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		ipStackType := checkIPStackType(oc)
 
 		exutil.By("Get first namespace")
+		oc.CreateNamespaceUDN()
 		var nadNS []string = make([]string, 0, 4)
 		nadNS = append(nadNS, oc.Namespace())
 
 		exutil.By("Create another 3 namespaces")
 		for i := 0; i < 3; i++ {
-			oc.SetupProject()
+			oc.CreateNamespaceUDN()
 			nadNS = append(nadNS, oc.Namespace())
 		}
 
@@ -172,9 +173,10 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		ipStackType := checkIPStackType(oc)
 
 		exutil.By("1. Create first namespace")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
 		exutil.By("2. Create 2nd namespace")
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
 
 		nadResourcename := []string{"l3-network-" + ns1, "l2-network-" + ns2}
@@ -271,9 +273,10 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		ipStackType := checkIPStackType(oc)
 
 		exutil.By("1.Get first namespace")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
 		exutil.By("2. Create 2nd namespace")
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
 
 		nadResourcename := []string{"l3-network-" + ns1, "l2-network-" + ns2}
@@ -431,6 +434,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		}
 
 		exutil.By("1. Obtain first namespace")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
 
 		exutil.By("2. Create CRD for UDN")
@@ -528,7 +532,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		CurlPod2SvcPass(oc, ns1, ns1, clientPod2.name, svc.servicename)
 
 		exutil.By("8. Create a second namespace")
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
 		exutil.By("9. Create service and pods which are on default network.")
 		createResourceFromFile(oc, ns2, testPodFile)
@@ -542,7 +546,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		CurlPod2SvcFail(oc, ns1, ns2, clientPod1.name, "test-service")
 
 		exutil.By("11. Create third namespace for udn pod")
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns3 := oc.Namespace()
 
 		exutil.By("12. Create CRD in third namespace")
@@ -648,6 +652,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		}
 
 		exutil.By("1. Obtain first namespace")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
 
 		exutil.By("2. Create CRD for UDN")
@@ -753,7 +758,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		CurlPod2SvcPass(oc, ns1, ns1, pod3ns1.name, svc.servicename)
 
 		exutil.By("8. Create second namespace")
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
 		exutil.By("9. Create service and pods which are on default network.")
 		createResourceFromFile(oc, ns2, testPodFile)
@@ -767,7 +772,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		CurlPod2SvcFail(oc, ns1, ns2, pod2ns1.name, "test-service")
 
 		exutil.By("11. Create third namespace for udn pod")
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns3 := oc.Namespace()
 
 		exutil.By("12. Create CRD in third namespace")
@@ -882,8 +887,9 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("1. Create two namespaces and label namespaces")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
 		ns := []string{ns1, ns2}
 		for _, namespace := range ns {
@@ -1025,8 +1031,9 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		}
 
 		exutil.By("1. Get namespaces and create a new namespace ")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
 		nadNS := []string{ns1, ns2}
 
@@ -1137,6 +1144,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		}
 
 		exutil.By("1. Obtain first namespace")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
 
 		exutil.By("2. Create CRD for UDN")
@@ -1263,9 +1271,10 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		)
 
 		exutil.By("1.Get first namespace")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
 		exutil.By("2. Create 2nd namespace")
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
 		nadNS := []string{ns1, ns2}
 
@@ -1376,6 +1385,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		}
 
 		exutil.By("1. Obtain first namespace")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
 
 		exutil.By("2. Create CRD for UDN")
@@ -1534,7 +1544,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 
 		exutil.By("2. Create 2 namespaces and add related values.")
 		cudnNS = append(cudnNS, oc.Namespace())
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		cudnNS = append(cudnNS, oc.Namespace())
 		for i := 0; i < 2; i++ {
 			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", cudnNS[i], fmt.Sprintf("%s-", key)).Execute()
@@ -1597,7 +1607,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		CurlPod2SvcPass(oc, cudnNS[1], cudnNS[0], pod1ns2.name, svc.servicename)
 
 		exutil.By("8. Create third namespace")
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		cudnNS = append(cudnNS, oc.Namespace())
 
 		exutil.By("9. Create service and pods which are on default network.")
@@ -1612,7 +1622,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		CurlPod2SvcFail(oc, cudnNS[1], cudnNS[2], pod2ns1.name, "test-service")
 
 		exutil.By("11. Create fourth namespace for cudn pod")
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		cudnNS = append(cudnNS, oc.Namespace())
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", cudnNS[3], fmt.Sprintf("%s=%s", key, values2[0])).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1725,7 +1735,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 
 		exutil.By("2. Create 2 namespaces and add related values.")
 		cudnNS = append(cudnNS, oc.Namespace())
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		cudnNS = append(cudnNS, oc.Namespace())
 		for i := 0; i < 2; i++ {
 			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", cudnNS[i], fmt.Sprintf("%s-", key)).Execute()
@@ -1788,7 +1798,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		CurlPod2SvcPass(oc, cudnNS[1], cudnNS[0], pod1ns2.name, svc.servicename)
 
 		exutil.By("8. Create third namespace")
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		cudnNS = append(cudnNS, oc.Namespace())
 
 		exutil.By("9. Create service and pods which are on default network.")
@@ -1803,7 +1813,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		CurlPod2SvcFail(oc, cudnNS[1], cudnNS[2], pod2ns1.name, "test-service")
 
 		exutil.By("11. Create fourth namespace for cudn pod")
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		cudnNS = append(cudnNS, oc.Namespace())
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", cudnNS[3], fmt.Sprintf("%s=%s", key, values2[0])).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())

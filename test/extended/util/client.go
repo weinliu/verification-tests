@@ -484,6 +484,27 @@ func (c *CLI) SetupProject() {
 	e2e.Logf("Project %q has been fully provisioned.", newNamespace)
 }
 
+// CreateNamespaceUDN creates a new namespace with required user defined network label during creation time only
+// required for testing networking UDN features on 4.17z+
+func (c *CLI) CreateNamespaceUDN() {
+	newNamespace := names.SimpleNameGenerator.GenerateName(fmt.Sprintf("e2e-test-udn-%s-", c.kubeFramework.BaseName))
+	c.SetNamespace(newNamespace)
+	labelKey := "k8s.ovn.org/primary-user-defined-network"
+	labelValue := "null"
+	e2e.Logf("Creating project %q", newNamespace)
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   newNamespace,
+			Labels: map[string]string{labelKey: labelValue},
+		},
+	}
+	// Create the namespace
+	_, err := c.AdminKubeClient().CoreV1().Namespaces().Create(context.TODO(), namespace, metav1.CreateOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred())
+	c.kubeFramework.AddNamespacesToDelete(&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: newNamespace}})
+	e2e.Logf("Namespace %q has been created successfully.", newNamespace)
+}
+
 // CreateProject creates a new project and assign a random user to the project.
 // All resources will be then created within this project.
 // TODO this should be removed.  It's only used by image tests.

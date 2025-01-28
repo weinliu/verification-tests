@@ -86,6 +86,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes bgp-udn", func() {
 
 		ipStackType := checkIPStackType(oc)
 		exutil.By("Create namespace")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
 
 		exutil.By("Create CRD for UDN")

@@ -93,13 +93,14 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		o.Expect(egressIPMaps1[0]["node"]).Should(o.ContainSubstring(egressNode))
 
 		exutil.By("3.1 Obtain first namespace, create a second namespace, these two namespaces are for two non-overlapping UDNs")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
 		udnNS := []string{ns1, ns2}
 
 		exutil.By("3.2 Create a third namespace, it will be used to validate egressIP from default network")
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns3 := oc.Namespace()
 		allNS := []string{ns1, ns2, ns3}
 
@@ -222,13 +223,14 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		o.Expect(egressIPMaps1[0]["node"]).Should(o.ContainSubstring(egressNode))
 
 		exutil.By("3.1 Obtain first namespace, create a second namespace, these two namespaces are for two non-overlapping UDNs")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
 		udnNS := []string{ns1, ns2}
 
 		exutil.By("3.2 Create a third namespace, it will be used to validate egressIP from default network")
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns3 := oc.Namespace()
 		allNS := []string{ns1, ns2, ns3}
 
@@ -350,10 +352,11 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		o.Expect(egressIPMaps1[0]["node"]).Should(o.ContainSubstring(egressNodes[0]))
 
 		exutil.By("3.1 Obtain first namespace, create two more namespaces")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns3 := oc.Namespace()
 		udnNS := []string{ns1, ns2, ns3}
 
@@ -481,10 +484,11 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
 
 		exutil.By("2. Create 3 namespaces for non-overlapping and overlapping UDNs")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns3 := oc.Namespace()
 		allNS := []string{ns1, ns2, ns3}
 
@@ -592,6 +596,7 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		o.Expect(egressIPMaps1[0]["node"]).Should(o.ContainSubstring(egressNode))
 
 		exutil.By("3 Obtain a namespace, apply a label to the namespace that matches namespaceSelector definied in egressIP object")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
 
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org-").Execute()
@@ -713,6 +718,7 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		o.Expect(egressIPMaps1[0]["node"]).Should(o.ContainSubstring(egressNode))
 
 		exutil.By("3 Obtain a namespace, apply a label to the namespace that matches namespaceSelector definied in egressIP object")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
 
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org-").Execute()
@@ -824,8 +830,9 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
 
 		exutil.By("3. Get a namespace and apply UDN CRD to it")
+		oc.CreateNamespaceUDN()
 		ns := oc.Namespace()
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 
 		exutil.By("4. Apply UDN CRD to each namespace,apply to each namespace with label that matches namespaceSelector definied in egressIP object")
 		err = applyL3UDNtoNamespace(oc, ns, 0)
@@ -907,6 +914,7 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		nodeName1 := clusterinfra.GetNodeNameFromMachine(oc, machineNames[1])
 
 		exutil.By("3. Get a namespace and apply UDN CRD to it, apply to the namespace with a label that matches namespaceSelector in egressIP object in step 5")
+		oc.CreateNamespaceUDN()
 		ns := oc.Namespace()
 		err = applyL3UDNtoNamespace(oc, ns, 0)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1010,6 +1018,7 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel)
 
 		exutil.By("3 Obtain first namespace, apply CRD and label to it ")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
 		err = applyL3UDNtoNamespace(oc, ns1, 0)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1203,13 +1212,14 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP IPv6", func() {
 		}
 
 		exutil.By("3.1 Obtain first namespace, create a second namespace, these two namespaces are for two non-overlapping UDNs")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
 		udnNS := []string{ns1, ns2}
 
 		exutil.By("3.2 Create a third namespace, it will be used to validate egressIP from default network")
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns3 := oc.Namespace()
 		allNS := []string{ns1, ns2, ns3}
 
@@ -1415,12 +1425,12 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP IPv6", func() {
 
 		exutil.By("3.1 Obtain first namespace, create a second namespace, these two namespaces are for two non-overlapping UDNs")
 		ns1 := oc.Namespace()
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
 		udnNS := []string{ns1, ns2}
 
 		exutil.By("3.2 Create a third namespace, it will be used to validate egressIP from default network")
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns3 := oc.Namespace()
 		allNS := []string{ns1, ns2, ns3}
 
@@ -1587,10 +1597,11 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP IPv6", func() {
 		o.Expect(egressIPMaps1[0]["node"]).Should(o.ContainSubstring(egressNodes[0]))
 
 		exutil.By("3.1 Obtain first namespace, create two more namespaces")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
-		oc.SetupProject()
+		oc.CreateNamespaceUDN()
 		ns3 := oc.Namespace()
 		udnNS := []string{ns1, ns2, ns3}
 
@@ -1777,6 +1788,7 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP IPv6", func() {
 		}
 
 		exutil.By("3. Obtain a namespace, apply a label to the namespace that matches namespaceSelector definied in egressIP object")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
 
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
@@ -2010,6 +2022,7 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP IPv6", func() {
 		}
 
 		exutil.By("3. Obtain a namespace, apply a label to the namespace that matches namespaceSelector definied in egressIP object")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
 
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
@@ -2191,10 +2204,11 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP genetic", func() {
 		}
 
 		exutil.By("2.1 Get a namespace for default network, Create two more namespaces for two overlapping UDN")
+		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
 		var udnNS []string
 		for i := 0; i < 2; i++ {
-			oc.SetupProject()
+			oc.CreateNamespaceUDN()
 			ns := oc.Namespace()
 			udnNS = append(udnNS, ns)
 		}
