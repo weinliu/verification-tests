@@ -2544,24 +2544,23 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-56123-Invalid extensions should degrade the machine config pool [Disruptive]", func() {
+	g.It("Author:sregidor-NonPreRelease-Longduration-Medium-56123-[OnCLayer] Invalid extensions should degrade the machine config pool [Disruptive]", func() {
 		var (
 			validExtension   = "usbguard"
 			invalidExtension = "zsh"
 			mcName           = "mco-tc-56123-invalid-extension"
-			mcp              = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
+			mcp              = GetCompactCompatiblePool(oc)
 
-			expectedNDMessage = regexp.QuoteMeta(fmt.Sprintf("invalid extensions found: [%s]", invalidExtension)) // quotemeta to scape regex characters
-			expectedNDReason  = "1 nodes are reporting degraded status on sync"
+			expectedRDMessage = regexp.QuoteMeta(fmt.Sprintf("invalid extensions found: [%s]", invalidExtension)) // quotemeta to scape regex characters
+			expectedRDReason  = ""
 		)
 
 		exutil.By("Create a MC with invalid extensions")
-		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName())
 		mc.parameters = []string{fmt.Sprintf(`EXTENSIONS=["%s", "%s"]`, validExtension, invalidExtension)}
 		mc.skipWaitForMcp = true
 
-		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason, true)
-
+		validateMcpRenderDegraded(mc, mcp, expectedRDMessage, expectedRDReason)
 	})
 
 	g.It("Author:rioliu-NonHyperShiftHOST-Medium-54974-[P1][OnCLayer] silence audit log events for container infra", func() {
@@ -2904,7 +2903,7 @@ nulla pariatur.`
 		mc.parameters = []string{fmt.Sprintf("FILES=[%s]", wrongUserFileConfig)}
 		mc.skipWaitForMcp = true
 
-		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason, false)
+		validateMcpNodeDegraded(mc, mcp, expectedNDMessage, expectedNDReason, true)
 
 	})
 

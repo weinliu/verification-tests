@@ -182,17 +182,18 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 	g.It("Author:rioliu-NonPreRelease-Medium-69205-[P1] MachineConfigNode corresponding condition status is Unknown when node is degraded [Disruptive]", func() {
 
 		var (
-			mcName            = "change-workers-extension-usbguard"
-			mcp               = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
-			expectedMCState   = "Degraded"
-			expectedMCNStatus = "Unknown"
-			degradedNode      Node
+			wrongUserFileConfig              = `{"contents": {"source": "data:text/plain;charset=utf-8;base64,dGVzdA=="},"mode": 420,"path": "/etc/wronguser-test-file.test","user": {"name": "wronguser"}}`
+			mcName                           = "mco-tc-69205-wrong-file-user"
+			mcp                              = GetCompactCompatiblePool(oc.AsAdmin())
+			expectedDegradedReasonAnnotation = `failed to retrieve file ownership for file "/etc/wronguser-test-file.test": failed to retrieve UserID for username: wronguser`
+			expectedMCState                  = "Degraded"
+			expectedMCNStatus                = "Unknown"
+			degradedNode                     Node
 		)
 
 		exutil.By("Create invalid MC")
-		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
-		mc.SetMCOTemplate(GenericMCTemplate)
-		mc.SetParams(`EXTENSIONS=["usbguard","zsh"]`)
+		mc := NewMachineConfig(oc.AsAdmin(), mcName, mcp.GetName())
+		mc.parameters = []string{fmt.Sprintf("FILES=[%s]", wrongUserFileConfig)}
 		mc.skipWaitForMcp = true
 
 		defer func() {
@@ -215,7 +216,7 @@ var _ = g.Describe("[sig-mco] MCO MachineConfigNode", func() {
 			}
 		}
 		o.Expect(degradedNode).NotTo(o.BeNil(), "Degraded node not found")
-		o.Expect(degradedNode.GetMachineConfigReason()).Should(o.ContainSubstring(`invalid extensions found: [zsh]`), "value of annotation machine config reason is not expected")
+		o.Expect(degradedNode.GetMachineConfigReason()).Should(o.ContainSubstring(expectedDegradedReasonAnnotation), "value of annotation machine config reason is not expected")
 		logger.Infof("Found degraded node %s", degradedNode.GetName())
 		logger.Infof("OK\n")
 

@@ -659,48 +659,6 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:ptalgulk-ConnectedOnly-Longduration-NonPreRelease-Medium-78197-Install wrong extension after OCB is enabled[Disruptive]", func() {
-
-		var (
-			moscName = "test-" + GetCurrentTestPolarionIDNumber()
-			mcp      = GetCompactCompatiblePool(oc.AsAdmin())
-			mcName   = "test-install-extenstion-" + GetCurrentTestPolarionIDNumber()
-		)
-
-		exutil.By("Configure OCB functionality for the new worker MCP")
-		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), MachineConfigNamespace, moscName, mcp.GetName(), nil)
-		defer DisableOCL(mosc)
-		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
-		logger.Infof("OK!\n")
-
-		ValidateSuccessfulMOSC(mosc, nil)
-
-		exutil.By("Create a MC")
-		mc := NewMachineConfig(oc.AsAdmin(), mcName, MachineConfigPoolWorker)
-		mc.SetParams(`EXTENSIONS=["zsh"]`)
-		mc.skipWaitForMcp = true
-		defer mc.delete()
-		mc.create()
-
-		exutil.AssertAllPodsToBeReady(oc.AsAdmin(), MachineConfigNamespace)
-		logger.Infof("OK!\n")
-		mOSBuilder := NewNamespacedResource(oc.AsAdmin(), "deployment", MachineConfigNamespace, "machine-os-builder")
-
-		exutil.By("Verify the  wrong extension is detected in machine-os-builder")
-		o.Expect(mOSBuilder.Logs()).To(o.ContainSubstring("invalid extensions found: [zsh]"))
-
-		exutil.By("Delete a MC.")
-		mc.delete()
-		logger.Infof("OK!\n")
-
-		exutil.By("Remove the MachineOSConfig resource")
-		o.Expect(DisableOCL(mosc)).To(o.Succeed(), "Error cleaning up %s", mosc)
-		logger.Infof("OK!\n")
-
-		ValidateMOSCIsGarbageCollected(mosc, mcp)
-
-	})
-
 	g.It("Author:ptalgulk-ConnectedOnly-Longduration-NonPreRelease-Medium-78196-Verify for etc-pki-etitlement secret is removed for  OCB rhel enablement [Disruptive]", func() {
 
 		var (
