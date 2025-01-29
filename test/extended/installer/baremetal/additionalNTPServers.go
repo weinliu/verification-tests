@@ -91,12 +91,6 @@ var _ = g.Describe("[sig-baremetal] INSTALLER IPI for INSTALLER_GENERAL job on B
 			e2e.Logf("Cluster is: %s", iaasPlatform)
 			g.Skip("This feature is not supported for Non-baremetal cluster!")
 		}
-
-		clusterVersion, _, err := exutil.GetClusterVersion(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if CompareVersions(clusterVersion, "<", "4.18") {
-			g.Skip("This feature is not supported for cluster version less than 4.18!")
-		}
 	})
 
 	// author: sgoveas@redhat.com
