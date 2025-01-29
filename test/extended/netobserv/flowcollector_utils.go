@@ -319,6 +319,25 @@ func verifyPacketTranslationFlows(oc *exutil.CLI, serverNS, clientNS string, flo
 	}
 }
 
+func verifyNetworkEvents(flowRecords []FlowRecord, action, policytype, direction string) {
+	nNWEventsLogs := 0
+	for _, flow := range flowRecords {
+		nwevent := flow.Flowlog.NetworkEvents
+		if len(nwevent) >= 1 {
+			e2e.Logf("found nwevent %v", nwevent)
+			// usually for our scenario we expect only one nw event
+			// but there could be more than 1.
+			o.Expect(nwevent[0].Action).Should(o.Equal(action))
+			o.Expect(nwevent[0].Type).Should(o.Equal(policytype))
+			o.Expect(nwevent[0].Direction).Should(o.Equal(direction))
+			nNWEventsLogs += 1
+		} else {
+			e2e.Logf("nwevent missing %v", flow.Flowlog)
+		}
+	}
+	o.Expect(nNWEventsLogs).Should(o.BeNumerically(">=", 1), "Found no logs with Network Events")
+}
+
 func removeSAFromAdmin(oc *exutil.CLI, saName, namespace string) error {
 	return oc.WithoutNamespace().AsAdmin().Run("adm").Args("policy", "remove-cluster-role-from-user", "cluster-admin", "-z", saName, "-n", namespace).Execute()
 

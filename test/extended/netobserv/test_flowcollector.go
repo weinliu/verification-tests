@@ -1700,6 +1700,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			o.Expect(r.Flowlog.SrcK8S_Name).Should(o.ContainSubstring(vm2podname[0]))
 			o.Expect(r.Flowlog.DstK8S_OwnerType).Should(o.ContainSubstring("VirtualMachineInstance"))
 			o.Expect(r.Flowlog.SrcK8S_OwnerType).Should(o.ContainSubstring("VirtualMachineInstance"))
+			o.Expect(r.Flowlog.DstK8S_NetworkName).Should(o.ContainSubstring("test-76537/l2-network"))
+			o.Expect(r.Flowlog.SrcK8S_NetworkName).Should(o.ContainSubstring("test-76537/l2-network"))
 		}
 	})
 
