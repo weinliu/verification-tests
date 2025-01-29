@@ -69,14 +69,14 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 			pullSecret   = NewSecret(oc.AsAdmin(), "openshift-config", "pull-secret")
 
 			fakePullSecretName         = "fake-pull-secret"
-			expectedWrongPullSecretMsg = fmt.Sprintf(`invalid MachineOSConfig %s: could not validate baseImagePullSecret "%s" for MachineOSConfig %s: secret %s from %s is not found. Did you use the right secret name?`,
-				moscName, fakePullSecretName, moscName, fakePullSecretName, moscName)
+			expectedWrongPullSecretMsg = fmt.Sprintf(`could not validate baseImagePullSecret "%s" for MachineOSConfig %s: secret %s from %s is not found. Did you use the right secret name?`,
+				fakePullSecretName, moscName, fakePullSecretName, moscName)
 			fakePushSecretName         = "fake-push-secret"
-			expectedWrongPushSecretMsg = fmt.Sprintf(`invalid MachineOSConfig %s: could not validate renderedImagePushSecret "%s" for MachineOSConfig %s: secret %s from %s is not found. Did you use the right secret name?`,
-				moscName, fakePushSecretName, moscName, fakePushSecretName, moscName)
+			expectedWrongPushSecretMsg = fmt.Sprintf(`could not validate renderedImagePushSecret "%s" for MachineOSConfig %s: secret %s from %s is not found. Did you use the right secret name?`,
+				fakePushSecretName, moscName, fakePushSecretName, moscName)
 
 			fakeBuilderType             = "FakeBuilderType"
-			expectedWrongBuilderTypeMsg = fmt.Sprintf(`Unsupported value: "%s": supported values: "PodImageBuilder"`, fakeBuilderType)
+			expectedWrongBuilderTypeMsg = fmt.Sprintf(`Unsupported value: "%s": supported values: "Job"`, fakeBuilderType)
 		)
 
 		exutil.By("Create custom infra MCP")
@@ -93,12 +93,12 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		logger.Infof("OK!\n")
 
 		// Check behaviour when wrong pullSecret
-		checkMisconfiguredMOSC(oc.AsAdmin(), moscName, infraMcpName, clonedSecret.GetName(), fakePullSecretName, clonedSecret.GetName(), pushSpec, nil,
+		checkMisconfiguredMOSC(oc.AsAdmin(), moscName, infraMcpName, fakePullSecretName, clonedSecret.GetName(), pushSpec, nil,
 			expectedWrongPullSecretMsg,
 			"Check that MOSC using wrong pull secret are failing as expected")
 
 		// Check behaviour when wrong pushSecret
-		checkMisconfiguredMOSC(oc.AsAdmin(), moscName, infraMcpName, clonedSecret.GetName(), clonedSecret.GetName(), fakePushSecretName, pushSpec, nil,
+		checkMisconfiguredMOSC(oc.AsAdmin(), moscName, infraMcpName, clonedSecret.GetName(), fakePushSecretName, pushSpec, nil,
 			expectedWrongPushSecretMsg,
 			"Check that MOSC using wrong push secret are failing as expected")
 
@@ -250,7 +250,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 					Command:  []string{"rpm-ostree", "status"},
 					Matcher:  o.ContainSubstring(fmt.Sprintf("%s/%s/ocb-%s-image", InternalRegistrySvcURL, tmpNamespaceName, mcp.GetName())),
 					ErrorMsg: fmt.Sprintf("The nodes are not using the expected OCL image stored in the internal registry"),
-					Desc:     fmt.Sprintf("Check that the nodes are using the righ OS image"),
+					Desc:     fmt.Sprintf("Check that the nodes are using the right OS image"),
 				},
 			}
 		)
@@ -695,7 +695,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Create the MOSC")
-		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), MachineConfigNamespace, "test-78001-mosc", mcp.GetName(), []ContainerFile{{Content: containerFileContent}})
+		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), MachineConfigNamespace, "test-78196-mosc", mcp.GetName(), []ContainerFile{{Content: containerFileContent}})
 		defer DisableOCL(mosc)
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
 		logger.Infof("OK!\n")
@@ -715,9 +715,14 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 
 		job, err := mosb.GetJob()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		// Currently this kind of resources are leaked. Until the leak is fixed we need to make sure that this job is removed
+		//  because its pods are in "Error" status and there are other test cases checking that no pod is reporting any error.
+		// TODO: remove this once the leak is fixed
+		defer job.Delete()
 		logger.Infof("OK!\n")
 
 		o.Eventually(job.Logs, "5m", "10s").Should(o.ContainSubstring("Found 0 entitlement certificates"), "Error getting the logs")
+		o.Eventually(job, "15m", "20s").Should(HaveConditionField("Failed", "status", TrueString), "Job didn't fail")
 		logger.Infof("OK!\n")
 
 		exutil.By("Remove the MachineOSConfig resource")
@@ -731,22 +736,44 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 func testContainerFile(containerFiles []ContainerFile, imageNamespace string, mcp *MachineConfigPool, checkers []Checker) {
 	var (
 		oc       = mcp.GetOC().AsAdmin()
+		mcpList  = NewMachineConfigPoolList(oc.AsAdmin())
 		moscName = "test-" + GetCurrentTestPolarionIDNumber()
 		mosc     *MachineOSConfig
 		err      error
 	)
-	exutil.By("Configure OCB functionality for the new infra MCP. Create MOSC")
 	switch imageNamespace {
 	case MachineConfigNamespace:
+		exutil.By("Configure OCB functionality for the new infra MCP. Create MOSC")
 		mosc, err = CreateMachineOSConfigUsingExternalOrInternalRegistry(oc, MachineConfigNamespace, moscName, mcp.GetName(), containerFiles)
 	default:
 		SkipTestIfCannotUseInternalRegistry(mcp.GetOC())
 
+		exutil.By("Capture the current pull-secret value")
+		// We don't use the pullSecret resource directly, instead we use auxiliary functions that will
+		// extract and restore the secret's values using a file. Like that we can recover the value of the pull-secret
+		// if our execution goes wrong, without printing it in the logs (for security reasons).
+		secretFile, sErr := getPullSecret(oc)
+		o.Expect(sErr).NotTo(o.HaveOccurred(), "Error getting the pull-secret")
+		logger.Debugf("Pull-secret content stored in file %s", secretFile)
+		defer func() {
+			logger.Infof("Restoring initial pull-secret value")
+			output, sErr := setDataForPullSecret(oc, secretFile)
+			if sErr != nil {
+				logger.Errorf("Error restoring the pull-secret's value. Error: %s\nOutput: %s", err, output)
+			}
+			mcpList.waitForComplete()
+		}()
+		logger.Infof("OK!\n")
+
+		exutil.By("Create namespace to store the osImage")
 		tmpNamespace := NewResource(oc.AsAdmin(), "ns", imageNamespace)
 		if !tmpNamespace.Exists() {
 			defer tmpNamespace.Delete()
 			o.Expect(oc.AsAdmin().WithoutNamespace().Run("new-project").Args(tmpNamespace.GetName(), "--skip-config-write").Execute()).To(o.Succeed(), "Error creating a new project to store the OCL images")
 		}
+		logger.Infof("OK!\n")
+
+		exutil.By("Configure OCB functionality for the new infra MCP. Create MOSC")
 		mosc, err = CreateMachineOSConfigUsingInternalRegistry(oc, tmpNamespace.GetName(), moscName, mcp.GetName(), containerFiles)
 	}
 	defer DisableOCL(mosc)
@@ -762,7 +789,6 @@ func testContainerFile(containerFiles []ContainerFile, imageNamespace string, mc
 	logger.Infof("OK!\n")
 
 	ValidateMOSCIsGarbageCollected(mosc, mcp)
-
 }
 
 func skipTestIfOCBIsEnabled(oc *exutil.CLI) {
@@ -774,7 +800,7 @@ func skipTestIfOCBIsEnabled(oc *exutil.CLI) {
 	}
 }
 
-func checkMisconfiguredMOSC(oc *exutil.CLI, moscName, poolName, currentImagePullSecret, baseImagePullSecret, renderedImagePushSecret, pushSpec string, containerFile []ContainerFile,
+func checkMisconfiguredMOSC(oc *exutil.CLI, moscName, poolName, baseImagePullSecret, renderedImagePushSecret, pushSpec string, containerFile []ContainerFile,
 	expectedMsg, stepMgs string) {
 	var (
 		machineConfigCO = NewResource(oc.AsAdmin(), "co", "machine-config")
@@ -784,7 +810,7 @@ func checkMisconfiguredMOSC(oc *exutil.CLI, moscName, poolName, currentImagePull
 	defer logger.Infof("OK!\n")
 
 	logger.Infof("Create a misconfiugred MOSC")
-	mosc, err := CreateMachineOSConfig(oc, moscName, poolName, currentImagePullSecret, baseImagePullSecret, renderedImagePushSecret, pushSpec, containerFile)
+	mosc, err := CreateMachineOSConfig(oc, moscName, poolName, baseImagePullSecret, renderedImagePushSecret, pushSpec, containerFile)
 	defer mosc.Delete()
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error creating MOSC with wrong pull secret")
 	logger.Infof("OK!")

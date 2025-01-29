@@ -39,7 +39,7 @@ func NewMachineOSConfigList(oc *exutil.CLI) *MachineOSConfigList {
 }
 
 // CreateMachineOSConfig creates a MOSC resource using the information provided in the arguments
-func CreateMachineOSConfig(oc *exutil.CLI, name, pool, currentImagePullSecret, baseImagePullSecret, renderedImagePushSecret, pushSpec string, containerFile []ContainerFile) (*MachineOSConfig, error) {
+func CreateMachineOSConfig(oc *exutil.CLI, name, pool, baseImagePullSecret, renderedImagePushSecret, pushSpec string, containerFile []ContainerFile) (*MachineOSConfig, error) {
 	var (
 		containerFilesString = "[]"
 	)
@@ -55,7 +55,7 @@ func CreateMachineOSConfig(oc *exutil.CLI, name, pool, currentImagePullSecret, b
 	}
 	logger.Infof("Using custom Containerfile %s", containerFilesString)
 
-	err := NewMCOTemplate(oc, "generic-machine-os-config.yaml").Create("-p", "NAME="+name, "POOL="+pool, "CURRENTIMAGEPULLSECRET="+currentImagePullSecret, "BASEIMAGEPULLSECRET="+baseImagePullSecret,
+	err := NewMCOTemplate(oc, "generic-machine-os-config.yaml").Create("-p", "NAME="+name, "POOL="+pool, "BASEIMAGEPULLSECRET="+baseImagePullSecret,
 		"RENDEREDIMAGEPUSHSECRET="+renderedImagePushSecret, "PUSHSPEC="+pushSpec, "CONTAINERFILE="+containerFilesString)
 	return newMOSC, err
 }
@@ -100,26 +100,47 @@ func CreateMachineOSConfigUsingInternalRegistry(oc *exutil.CLI, namespace, name,
 		return NewMachineOSConfig(oc, name), fmt.Errorf("Rendered image push secret does not exist: %s", renderedImagePushSecret)
 	}
 
-	// We use the default SA secret in MCO to pull the current image from the internal registry
-	currentImagePullSecret, err := CreateInternalRegistrySecretFromSA(oc, "default", namespace, "cloned-currentpull-secret"+exutil.GetRandomString(), MachineConfigNamespace)
-	if err != nil {
-		return NewMachineOSConfig(oc, name), err
-	}
-	if !currentImagePullSecret.Exists() {
-		return NewMachineOSConfig(oc, name), fmt.Errorf("Current image pull secret does not exist: %s", currentImagePullSecret)
-	}
-
 	if namespace != MachineConfigNamespace { // If the secret is not in MCO, we copy it there
-		currentImagePullSecret, err = CopySecretToMCONamespace(currentImagePullSecret, currentImagePullSecret.GetName()+"-testcloned")
+
+		// TODO: HERE WE NEED TO ADD THE NAMESPACE PULL SECRET TO THE CLUSTER'S PULL-SECRET SO THAT WE CAN PULL THE RESULTING IMAGE STORED IN A DIFFERENT NAMESPACE THAN MCO
+		// We use the default SA secret in MCO to pull the current image from the internal registry
+		namespacedPullSecret, err := CreateInternalRegistrySecretFromSA(oc, "default", namespace, "cloned-currentpull-secret"+exutil.GetRandomString(), namespace)
 		if err != nil {
 			return NewMachineOSConfig(oc, name), err
 		}
+		if !namespacedPullSecret.Exists() {
+			return NewMachineOSConfig(oc, name), fmt.Errorf("Current image pull secret does not exist: %s", namespacedPullSecret)
+		}
+
+		namespacedDockerConfig, err := namespacedPullSecret.GetDataValue(".dockerconfigjson")
+		if err != nil {
+			return NewMachineOSConfig(oc, name), fmt.Errorf("Could not extract dockerConfig from the namespaced pull secret")
+		}
+
+		pullSecret := GetPullSecret(oc.AsAdmin())
+		pullSecretDockerConfig, err := pullSecret.GetDataValue(".dockerconfigjson")
+		if err != nil {
+			return NewMachineOSConfig(oc, name), fmt.Errorf("Could not extract dockerConfig from the cluster's pull secret")
+		}
+
+		mergedDockerConfig, err := MergeDockerConfigs(pullSecretDockerConfig, namespacedDockerConfig)
+		if err != nil {
+			return NewMachineOSConfig(oc, name), fmt.Errorf("Could not merge the namespaced pull-secret dockerconfig and the cluster's pull-secret docker config")
+		}
+
+		err = pullSecret.SetDataValue(".dockerconfigjson", mergedDockerConfig)
+		if err != nil {
+			return NewMachineOSConfig(oc, name), fmt.Errorf("Could not configure the cluster's pull-secret with the merged dockerconfig")
+		}
+
+		logger.Infof("Waiting for the secret to be updated in all pools")
+		NewMachineConfigPoolList(oc.AsAdmin()).waitForComplete()
 	}
 
 	// We use a push spec stored in the internal registry in the MCO namespace. We use a different image for every pool
 	pushSpec := fmt.Sprintf("%s/%s/ocb-%s-image:latest", InternalRegistrySvcURL, namespace, pool)
 
-	return CreateMachineOSConfig(oc, name, pool, currentImagePullSecret.GetName(), baseImagePullSecret.GetName(), renderedImagePushSecret.GetName(), pushSpec, containerFile)
+	return CreateMachineOSConfig(oc, name, pool, baseImagePullSecret.GetName(), renderedImagePushSecret.GetName(), pushSpec, containerFile)
 }
 
 // CreateMachineOSConfigUsingExternalRegistry creates a new MOSC resource using the mcoqe external registry. The credentials to pull and push images in the mcoqe repo should be previously added to the cluster's pull secret
@@ -151,7 +172,7 @@ func CreateMachineOSConfigUsingExternalRegistry(oc *exutil.CLI, name, pool strin
 		}
 	}
 
-	return CreateMachineOSConfig(oc, name, pool, copyPullSecret.GetName(), copyPullSecret.GetName(), copyPullSecret.GetName(), pushSpec, configuredContainerFile)
+	return CreateMachineOSConfig(oc, name, pool, copyPullSecret.GetName(), copyPullSecret.GetName(), pushSpec, configuredContainerFile)
 }
 
 // CreateMachineOSConfigUsingExternalOrInternalRegistry creates a MOSC using internal registry if possible, if not possible it will use external registry
@@ -166,7 +187,7 @@ func CreateMachineOSConfigUsingExternalOrInternalRegistry(oc *exutil.CLI, namesp
 
 // GetBaseImagePullSecret returns the pull secret configured in this MOSC
 func (mosc MachineOSConfig) GetBaseImagePullSecret() (*Secret, error) {
-	pullSecretName, err := mosc.Get(`{.spec.buildInputs.baseImagePullSecret.name}`)
+	pullSecretName, err := mosc.Get(`{.spec.baseImagePullSecret.name}`)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +201,7 @@ func (mosc MachineOSConfig) GetBaseImagePullSecret() (*Secret, error) {
 
 // GetRenderedImagePushSecret returns the push secret configured in this MOSC
 func (mosc MachineOSConfig) GetRenderedImagePushSecret() (*Secret, error) {
-	pushSecretName, err := mosc.Get(`{.spec.buildInputs.renderedImagePushSecret.name}`)
+	pushSecretName, err := mosc.Get(`{.spec.renderedImagePushSecret.name}`)
 	if err != nil {
 		return nil, err
 	}
@@ -190,20 +211,6 @@ func (mosc MachineOSConfig) GetRenderedImagePushSecret() (*Secret, error) {
 	}
 
 	return NewSecret(mosc.oc, MachineConfigNamespace, pushSecretName), nil
-}
-
-// GetCurrentImagePullSecret returns the pull secret that will be used in the nodes to pull the image when applying it
-func (mosc MachineOSConfig) GetCurrentImagePullSecret() (*Secret, error) {
-	currentImagePullSecretName, err := mosc.Get(`{.spec.buildOutputs.currentImagePullSecret.name}`)
-	if err != nil {
-		return nil, err
-	}
-	if currentImagePullSecretName == "" {
-		logger.Warnf("%s has an empty push secret!! GetCurrentImagePullSecret will return nil", mosc)
-		return nil, nil
-	}
-
-	return NewSecret(mosc.oc, MachineConfigNamespace, currentImagePullSecretName), nil
 }
 
 // CleanupAndDelete removes the secrets in the MachineOSConfig resource and the removes the MachoneOSConfig resource itself
@@ -237,20 +244,6 @@ func (mosc MachineOSConfig) CleanupAndDelete() error {
 		cleanupMOSCSecret(*renderedImagePushSecret)
 		if err != nil {
 			logger.Errorf("An error happened cleaning %s in %s. We continue cleaning.\nErr:%s", renderedImagePushSecret, mosc, err)
-		}
-	}
-
-	currentImagePullSecret, err := mosc.GetCurrentImagePullSecret()
-	if err != nil {
-		logger.Errorf("Error getting %s in %s. We continue cleaning.", currentImagePullSecret, mosc)
-	}
-
-	if currentImagePullSecret == nil {
-		logger.Infof("Push secret is empty in %s, skipping pull secret cleanup", mosc)
-	} else {
-		cleanupMOSCSecret(*currentImagePullSecret)
-		if err != nil {
-			logger.Errorf("An error happened cleaning %s in %s. We continue cleaning.\nErr:%s", currentImagePullSecret, mosc, err)
 		}
 	}
 
@@ -294,12 +287,12 @@ func (mosc MachineOSConfig) GetCurrentMachineOSBuild() (*MachineOSBuild, error) 
 
 // SetRenderedImagePushspec patches the MOSC resource in order to configure a new renderedImagePushspec
 func (mosc MachineOSConfig) SetRenderedImagePushspec(rips string) error {
-	return mosc.Patch("json", `[{"op": "replace", "path": "/spec/buildInputs/renderedImagePushspec", "value":  "`+rips+`"}]`)
+	return mosc.Patch("json", `[{"op": "replace", "path": "/spec/renderedImagePushSpec", "value":  "`+rips+`"}]`)
 }
 
 // GetRenderedImagePushspec returns the current valude of renderedImagePushspec
 func (mosc MachineOSConfig) GetRenderedImagePushspec() (string, error) {
-	return mosc.Get(`{.spec.buildInputs.renderedImagePushspec}`)
+	return mosc.Get(`{.spec.renderedImagePushSpec}`)
 }
 
 // SetContainerfiles sets the container files used by this MOSC
@@ -310,7 +303,7 @@ func (mosc MachineOSConfig) SetContainerfiles(containerFiles []ContainerFile) er
 	}
 	containerFilesString := string(containerFilesBytes)
 
-	return mosc.Patch("json", `[{"op": "replace", "path": "/spec/buildInputs/containerFile", "value":  `+containerFilesString+`}]`)
+	return mosc.Patch("json", `[{"op": "replace", "path": "/spec/containerFile", "value":  `+containerFilesString+`}]`)
 }
 
 // RemoveContainerfiles removes the container files configured in this MOSC
@@ -320,7 +313,7 @@ func (mosc MachineOSConfig) RemoveContainerfiles() error {
 
 // GetStatusCurrentImagePullSpec returns the current image pull spec that is applied and reported in the status
 func (mosc MachineOSConfig) GetStatusCurrentImagePullSpec() (string, error) {
-	return mosc.Get(`{.status.currentImagePullspec}`)
+	return mosc.Get(`{.status.currentImagePullSpec}`)
 }
 
 // Rebuild forces a rebuild of the current image

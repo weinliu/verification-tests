@@ -1502,3 +1502,35 @@ func RemoveDuplicates[T comparable](list []T) []T {
 func GetClusterDesiredReleaseImage(oc *exutil.CLI) (string, error) {
 	return oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o", "jsonpath={.status.desired.image}").Output()
 }
+
+// MergeDockerConfigs accepts two docker configs strings as parameter and merge them
+func MergeDockerConfigs(dockerConfig1, dockerConfig2 string) (string, error) {
+
+	type DockerConfig struct {
+		Auths map[string]interface{} `json:"auths"`
+	}
+
+	var config1, config2 DockerConfig
+	err := json.Unmarshal([]byte(dockerConfig1), &config1)
+	if err != nil {
+		logger.Errorf("Error unmarshalling dockerConfig1")
+		return "", err
+	}
+	err = json.Unmarshal([]byte(dockerConfig2), &config2)
+	if err != nil {
+		logger.Errorf("Error unmarshalling dockerConfig2")
+		return "", err
+	}
+
+	for k, v := range config2.Auths {
+		config1.Auths[k] = v
+	}
+
+	mergedConfig, err := json.Marshal(config1)
+	if err != nil {
+		logger.Errorf("Cannot marshal the merged docker config")
+		return "", err
+	}
+
+	return string(mergedConfig), err
+}

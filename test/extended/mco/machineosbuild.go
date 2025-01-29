@@ -26,17 +26,18 @@ func NewMachineOSBuildList(oc *exutil.CLI) *MachineOSBuildList {
 }
 
 // GetMachineOSConfig returns the MachineOSCOnfig resource linked to this MOSB
-func (mosb MachineOSBuild) GetMachineOSConfig() (string, error) {
-	return mosb.Get(`{.spec.machineOSConfig}`)
+func (mosb MachineOSBuild) GetMachineOSConfig() (*MachineOSConfig, error) {
+	moscName, err := mosb.Get(`{.spec.machineOSConfig.name}`)
+	return NewMachineOSConfig(mosb.GetOC(), moscName), err
 }
 
 // GetJob returns the pod used to build this build
 func (mosb MachineOSBuild) GetJob() (*Job, error) {
-	jobName, err := mosb.Get(`{.status.builderReference.buildPod.name}`)
+	jobName, err := mosb.Get(`{.status.builder.job.name}`)
 	if err != nil {
 		return nil, err
 	}
-	jobNamespace, err := mosb.Get(`{.status.builderReference.buildPod.namespace}`)
+	jobNamespace, err := mosb.Get(`{.status.builder.job.namespace}`)
 	if err != nil {
 		return nil, err
 	}

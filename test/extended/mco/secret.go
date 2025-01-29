@@ -112,6 +112,9 @@ func (s Secret) GetDataValueOrFail(key string) string {
 
 // SetDataValue sets a key/value to store in the secret
 func (s Secret) SetDataValue(key, value string) error {
+	// silently set the value so that we don't print the secret in the logs leaking sensible information
+	s.oc.NotShowInfo()
+	defer s.oc.SetShowInfo()
 	logger.Debugf("Secret %s -n %s. Setting value: %s=%s", s.GetName(), s.GetNamespace(), key, value)
 	// command example: oc secret pull-secret -n openshift-config set data .dockerconfigjson={}
 	return s.oc.AsAdmin().WithoutNamespace().Run("set").Args("data", s.GetKind(), s.GetName(),

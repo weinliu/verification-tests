@@ -3,33 +3,28 @@ kind: Template
 metadata:
   name: generic-machine-os-config
 objects:
-- apiVersion: machineconfiguration.openshift.io/v1alpha1
+- apiVersion: machineconfiguration.openshift.io/v1
   kind: MachineOSConfig
   metadata:
     name: ${NAME}
   spec:
     machineConfigPool:
       name: ${POOL}
-    buildOutputs:
-      currentImagePullSecret:
-        name: ${CURRENTIMAGEPULLSECRET}
-    buildInputs:
-      imageBuilder:
-        imageBuilderType: ${IMAGEBUILDERTYPE}
-      baseImagePullSecret:
-        name: ${BASEIMAGEPULLSECRET}
-      renderedImagePushSecret:
-        name: ${RENDEREDIMAGEPUSHSECRET}
-      renderedImagePushspec: ${PUSHSPEC}
-      containerFile: ${{CONTAINERFILE}}
+    imageBuilder:
+      imageBuilderType: ${IMAGEBUILDERTYPE}
+    baseImagePullSecret:
+      name: ${BASEIMAGEPULLSECRET}
+    renderedImagePushSecret:
+      name: ${RENDEREDIMAGEPUSHSECRET}
+    renderedImagePushSpec: ${PUSHSPEC}
+    containerFile: ${{CONTAINERFILE}}
 parameters:
   - name: NAME
   - name: IMAGES
   - name: POOL
     value: "worker"
-  - name: CURRENTIMAGEPULLSECRET
   - name: IMAGEBUILDERTYPE
-    value: "PodImageBuilder"
+    value: "Job"
   - name: BASEIMAGEPULLSECRET
   - name: RENDEREDIMAGEPUSHSECRET
   - name: PUSHSPEC
