@@ -3,11 +3,11 @@ kind: Subscription
 metadata:
   labels:
     operators.coreos.com/ibm-zcon-zosconnect.openshift-operators: ""
-  name: ibm-zcon-zosconnect
+  name: ibm-bts-operator
   namespace: openshift-operators
 spec:
-  channel: v1.0
+  channel: v3
   installPlanApproval: Automatic
-  name: ibm-zcon-zosconnect
+  name: ibm-bts-operator
   source: cs-ibm-catalog-latest
   sourceNamespace: openshift-marketplace

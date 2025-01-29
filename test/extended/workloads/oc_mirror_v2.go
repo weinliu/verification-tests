@@ -1315,7 +1315,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-73124.yaml")
 
 		exutil.By("Skopeo oci to localhost")
-		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://icr.io/cpopen/ibm-bts-operator-catalog@sha256:866f0212eab7bc70cc7fcf7ebdbb4dfac561991f6d25900bd52f33cd90846adf oci://%s  --remove-signatures --insecure-policy", dirname+"/ibm-catalog")
+		command := fmt.Sprintf("skopeo copy --all --format v2s2 docker://icr.io/cpopen/ibm-bts-operator-catalog@sha256:866f0212eab7bc70cc7fcf7ebdbb4dfac561991f6d25900bd52f33cd90846adf  oci://%s  --remove-signatures --insecure-policy", dirname+"/ibm-catalog")
 		waitErr := wait.Poll(30*time.Second, 180*time.Second, func() (bool, error) {
 			_, err := exec.Command("bash", "-c", command).Output()
 			if err != nil {
@@ -1368,7 +1368,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Wait for the operator pod running")
-		if ok := waitForAvailableRsRunning(oc, "deploy", "ibm-zcon-zosconnect-controller-manager", "openshift-operators", "1"); ok {
+		if ok := waitForAvailableRsRunning(oc, "deploy", "ibm-bts-operator-controller-manager", "openshift-operators", "1"); ok {
 			e2e.Logf("IBM operator with index structure different than RHOCI has been deployed successfully\n")
 		} else {
 			e2e.Failf("All pods related to ibm deployment are not running")
@@ -2258,7 +2258,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		exutil.By("Installing operators from 4.16 catalog")
 		rhkdoSub, rhkdoOG := getOperatorInfo(oc, "cluster-kube-descheduler-operator", "openshift-kube-descheduler-operator", "registry.redhat.io/redhat/redhat-operator-index:v4.16", "cs-redhat-operator-index-v4-16")
 		defer removeOperatorFromCustomCS(oc, rhkdoSub, rhkdoOG, "openshift-kube-descheduler-operator")
-		installOperatorFromCustomCS(oc, rhkdoSub, rhkdoOG, "openshift-kube-descheduler-operator", "cluster-kube-descheduler-operator")
+		installOperatorFromCustomCS(oc, rhkdoSub, rhkdoOG, "openshift-kube-descheduler-operator", "descheduler-operator")
 
 		exutil.By("Installing operators from redhat-operator-index 4.14 catalog")
 		buildPruningBaseDir := exutil.FixturePath("testdata", "workloads")
