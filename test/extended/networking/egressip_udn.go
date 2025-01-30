@@ -53,13 +53,12 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-ConnectedOnly-NonPreRelease-High-77654-Validate egressIP with mixed of multiple non-overlapping UDNs and default network(layer3 and IPv4 only) [Serial]", func() {
+	g.It("Author:jechen-ConnectedOnly-NonPreRelease-High-77654-Validate egressIP with mixed of multiple non-overlapping UDNs and default network(layer3/2 and IPv4 only) [Serial]", func() {
 		var (
-			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
-			egressIP2Template         = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
-			udnCRDSingleStack         = filepath.Join(buildPruningBaseDir, "udn/udn_crd_singlestack_template.yaml")
-			pingPodNodeTemplate       = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
-			mtu                 int32 = 1300
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			egressIP2Template   = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			allNS               []string
 		)
 
 		exutil.By("1 Get node list, apply EgressLabel Key to one node to make it egressNode")
@@ -74,7 +73,34 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
 
-		exutil.By("2 Create an egressip object, verify egressIP is assigned to egress node")
+		exutil.By("2.1 Obtain first namespace, create four more namespaces")
+		// first namespace is used for default network, second and third namespaces will be used for layer3 UDNs, last two namespaces will be used for layer2 UDN
+		ns := oc.Namespace()
+		allNS = append(allNS, ns)
+		for i := 0; i < 4; i++ {
+			oc.CreateNamespaceUDN()
+			ns := oc.Namespace()
+			allNS = append(allNS, ns)
+		}
+
+		exutil.By("2.2 Apply a label to all namespaces that matches namespaceSelector defined in egressIP object")
+		for _, ns := range allNS {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("3 Create two different layer3 UDNs in 2nd and 3rd namespaces, two different layer2 UDN in last two namespaces")
+		cidr := []string{"10.150.0.0/16", "10.151.0.0/16"}
+		ipv4cidr := []string{"10.150.0.0/16", "10.151.0.0/16"}
+		ipv6cidr := []string{"2010:100:200::0/48", "2011:100:200::0/48"}
+
+		for i := 1; i < 3; i++ {
+			createGeneralUDNCRD(oc, allNS[i], "udn-network-layer3-"+allNS[i], ipv4cidr[i-1], ipv6cidr[i-1], cidr[i-1], "layer3")
+			createGeneralUDNCRD(oc, allNS[i+2], "udn-network-layer2-"+allNS[i+2], ipv4cidr[i-1], ipv6cidr[i-1], cidr[i-1], "layer2")
+		}
+
+		exutil.By("4. Create an egressip object, verify egressIP is assigned to egress node")
 		freeIPs := findFreeIPs(oc, nodeList.Items[0].Name, 1)
 		o.Expect(len(freeIPs)).Should(o.Equal(1))
 		egressip1 := egressIPResource1{
@@ -92,49 +118,11 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
 		o.Expect(egressIPMaps1[0]["node"]).Should(o.ContainSubstring(egressNode))
 
-		exutil.By("3.1 Obtain first namespace, create a second namespace, these two namespaces are for two non-overlapping UDNs")
-		oc.CreateNamespaceUDN()
-		ns1 := oc.Namespace()
-		oc.CreateNamespaceUDN()
-		ns2 := oc.Namespace()
-		udnNS := []string{ns1, ns2}
-
-		exutil.By("3.2 Create a third namespace, it will be used to validate egressIP from default network")
-		oc.CreateNamespaceUDN()
-		ns3 := oc.Namespace()
-		allNS := []string{ns1, ns2, ns3}
-
-		exutil.By("3.3 Apply a label to all namespaces that matches namespaceSelector definied in egressIP object")
-		for _, ns := range allNS {
-			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
-			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-
-		exutil.By("4. Create two different UDNs in namesapce ns1 and ns2")
-		udnResourcename := []string{"l3-network-" + ns1, "l3-network-" + ns2}
-		cidr := []string{"10.150.0.0/16", "10.151.0.0/16"}
-		udncrd := make([]udnCRDResource, 2)
-		for i := 0; i < 2; i++ {
-			udncrd[i] = udnCRDResource{
-				crdname:   udnResourcename[i],
-				namespace: udnNS[i],
-				role:      "Primary",
-				mtu:       mtu,
-				cidr:      cidr[i],
-				prefix:    24,
-				template:  udnCRDSingleStack,
-			}
-			udncrd[i].createUdnCRDSingleStack(oc)
-			err := waitUDNCRDApplied(oc, udnNS[i], udncrd[i].crdname)
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-
 		exutil.By("5.1 In each namespace, create two test pods, the first one on egressNode, the second one on nonEgressNode ")
 		exutil.By("5.2 Apply label to all pods that matches podSelector definied in egressIP object")
-		testpods1 := make([]pingPodResourceNode, 3)
-		testpods2 := make([]pingPodResourceNode, 3)
-		for i := 0; i < 3; i++ {
+		testpods1 := make([]pingPodResourceNode, len(allNS))
+		testpods2 := make([]pingPodResourceNode, len(allNS))
+		for i := 0; i < len(allNS); i++ {
 			// testpods1 are local pods that co-locate on egress node
 			testpods1[i] = pingPodResourceNode{
 				name:      "hello-pod1-" + allNS[i],
@@ -162,7 +150,7 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		exutil.By("6. Verify egressIP from each namespace, egress traffic from these pods should use egressIP as their sourceIP regardless it is from UDN or default network")
+		exutil.By("6. Verify egressIP from each namespace, egress traffic from these pods should use egressIP as their sourceIP regardless it is from layer3 UDN, default network or layer2 UDN")
 		var dstHost, primaryInf string
 		var infErr error
 		exutil.By("6.1 Use tcpdump to verify egressIP.")
@@ -174,7 +162,7 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		_, cmdOnPod := getRequestURL(dstHost)
 
 		exutil.By("6.2 Use tcpdump captured on egressNode to verify egressIP from local pods and remote pods")
-		for i := 0; i < 3; i++ {
+		for i := 0; i < len(allNS); i++ {
 			tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, allNS[i], testpods1[i].name, cmdOnPod)
 			o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
 			tcpdumOutput = getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, allNS[i], testpods2[i].name, cmdOnPod)
@@ -183,13 +171,12 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-ConnectedOnly-NonPreRelease-High-77655-Validate egressIP with mixed of multiple overlapping UDNs and default network(layer3 and IPv4 only) [Serial]", func() {
+	g.It("Author:jechen-ConnectedOnly-NonPreRelease-High-77655-Validate egressIP with mixed of multiple overlapping UDNs and default network(layer3/2 and IPv4 only) [Serial]", func() {
 		var (
-			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
-			egressIP2Template         = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
-			udnCRDSingleStack         = filepath.Join(buildPruningBaseDir, "udn/udn_crd_singlestack_template.yaml")
-			pingPodNodeTemplate       = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
-			mtu                 int32 = 1300
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			egressIP2Template   = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			allNS               []string
 		)
 
 		exutil.By("1 Get node list, apply EgressLabel Key to one node to make it egressNode")
@@ -204,7 +191,34 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
 
-		exutil.By("2 Create an egressip object, verify egressIP is assigned to egress node")
+		exutil.By("2.1 Obtain first namespace, create four more namespaces")
+		// first namespace is for default network, 2nd and 3rd namespaces will be used for layer3 UDNs, last two namespaces will be used for layer2 UDN
+		ns := oc.Namespace()
+		allNS = append(allNS, ns)
+		for i := 0; i < 4; i++ {
+			oc.CreateNamespaceUDN()
+			ns := oc.Namespace()
+			allNS = append(allNS, ns)
+		}
+
+		exutil.By("2.2 Apply a label to all namespaces that matches namespaceSelector defined in egressIP object")
+		for _, ns := range allNS {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("3. Create two overlapping layer3 UDNs in 2rd and 3rd namesapces, create two overlapping layer2 UDN in last two namespaces")
+		cidr := []string{"10.150.0.0/16"}
+		ipv4cidr := []string{"10.150.0.0/16"}
+		ipv6cidr := []string{"2010:100:200::0/48"}
+
+		for i := 1; i < 3; i++ {
+			createGeneralUDNCRD(oc, allNS[i], "udn-network-layer3-"+allNS[i], ipv4cidr[0], ipv6cidr[0], cidr[0], "layer3")
+			createGeneralUDNCRD(oc, allNS[i+2], "udn-network-layer2-"+allNS[i+2], ipv4cidr[0], ipv6cidr[0], cidr[0], "layer2")
+		}
+
+		exutil.By("4. Create an egressip object, verify egressIP is assigned to egress node")
 		freeIPs := findFreeIPs(oc, nodeList.Items[0].Name, 1)
 		o.Expect(len(freeIPs)).Should(o.Equal(1))
 		egressip1 := egressIPResource1{
@@ -222,49 +236,11 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
 		o.Expect(egressIPMaps1[0]["node"]).Should(o.ContainSubstring(egressNode))
 
-		exutil.By("3.1 Obtain first namespace, create a second namespace, these two namespaces are for two non-overlapping UDNs")
-		oc.CreateNamespaceUDN()
-		ns1 := oc.Namespace()
-		oc.CreateNamespaceUDN()
-		ns2 := oc.Namespace()
-		udnNS := []string{ns1, ns2}
-
-		exutil.By("3.2 Create a third namespace, it will be used to validate egressIP from default network")
-		oc.CreateNamespaceUDN()
-		ns3 := oc.Namespace()
-		allNS := []string{ns1, ns2, ns3}
-
-		exutil.By("3.3 Apply a label to all namespaces that matches namespaceSelector definied in egressIP object")
-		for _, ns := range allNS {
-			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
-			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-
-		exutil.By("4. Create two overlapping UDNs in namesapce ns1 and ns2")
-		udnResourcename := []string{"l3-network-" + ns1, "l3-network-" + ns2}
-		cidr := []string{"10.150.0.0/16", "10.150.0.0/16"}
-		udncrd := make([]udnCRDResource, 2)
-		for i := 0; i < 2; i++ {
-			udncrd[i] = udnCRDResource{
-				crdname:   udnResourcename[i],
-				namespace: udnNS[i],
-				role:      "Primary",
-				mtu:       mtu,
-				cidr:      cidr[i],
-				prefix:    24,
-				template:  udnCRDSingleStack,
-			}
-			udncrd[i].createUdnCRDSingleStack(oc)
-			err := waitUDNCRDApplied(oc, udnNS[i], udncrd[i].crdname)
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-
 		exutil.By("5.1 In each namespace, create two test pods, the first one on egressNode, the second one on nonEgressNode ")
 		exutil.By("5.2 Apply label to all pods that matches podSelector definied in egressIP object")
-		testpods1 := make([]pingPodResourceNode, 3)
-		testpods2 := make([]pingPodResourceNode, 3)
-		for i := 0; i < 3; i++ {
+		testpods1 := make([]pingPodResourceNode, len(allNS))
+		testpods2 := make([]pingPodResourceNode, len(allNS))
+		for i := 0; i < len(allNS); i++ {
 			// testpods1 are lcaol pods that co-locate on egress node
 			testpods1[i] = pingPodResourceNode{
 				name:      "hello-pod1-" + allNS[i],
@@ -304,7 +280,7 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		_, cmdOnPod := getRequestURL(dstHost)
 
 		exutil.By("6.2 Use tcpdump captured on egressNode to verify egressIP from local pods and remote pods")
-		for i := 0; i < 3; i++ {
+		for i := 0; i < len(allNS); i++ {
 			tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, allNS[i], testpods1[i].name, cmdOnPod)
 			o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
 			tcpdumOutput = getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, allNS[i], testpods2[i].name, cmdOnPod)
@@ -313,16 +289,15 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-ConnectedOnly-Longduration-NonPreRelease-High-77744-Validate egressIP Failover with non-overlapping and overlapping UDNs (layer3 and IPv4 only) [Serial]", func() {
+	g.It("Author:jechen-ConnectedOnly-Longduration-NonPreRelease-High-77744-Validate egressIP Failover with non-overlapping and overlapping UDNs (layer3/2 and IPv4 only) [Serial]", func() {
 		var (
-			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
-			egressIP2Template         = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
-			udnCRDSingleStack         = filepath.Join(buildPruningBaseDir, "udn/udn_crd_singlestack_template.yaml")
-			pingPodNodeTemplate       = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
-			mtu                 int32 = 1300
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			egressIP2Template   = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			udnNS               []string
 		)
 
-		exutil.By("1 Get node list, apply EgressLabel Key to one node to make it egressNode")
+		exutil.By("1. Get node list, apply EgressLabel Key to one node to make it egressNode")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
@@ -333,7 +308,35 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel, "true")
 
-		exutil.By("2 Create an egressip object, verify egressIP is assigned to egress node")
+		exutil.By("2.1 Obtain first namespace, create five more namespaces")
+		// first three namespaces will be used for layer3 UDNs, last three namespaces will be used for layer2 UDN
+		oc.CreateNamespaceUDN()
+		ns := oc.Namespace()
+		udnNS = append(udnNS, ns)
+		for i := 0; i < 5; i++ {
+			oc.CreateNamespaceUDN()
+			ns := oc.Namespace()
+			udnNS = append(udnNS, ns)
+		}
+
+		exutil.By("2.2 Apply a label to all namespaces that matches namespaceSelector defined in egressIP object")
+		for _, ns := range udnNS {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("3. Create non overlapping & overlapping layer3 UDNs in three namesapces, create non-overlapping & overlapping layer2 UDN in last three namespaces")
+		cidr := []string{"10.150.0.0/16", "10.151.0.0/16", "10.151.0.0/16"}
+		ipv4cidr := []string{"10.150.0.0/16", "10.151.0.0/16", "10.151.0.0/16"}
+		ipv6cidr := []string{"2010:100:200::0/60", "2011:100:200::0/60", "2011:100:200::0/60"}
+
+		for i := 0; i < 3; i++ {
+			createGeneralUDNCRD(oc, udnNS[i], "udn-network-layer3-"+udnNS[i], ipv4cidr[i], ipv6cidr[i], cidr[i], "layer3")
+			createGeneralUDNCRD(oc, udnNS[i+3], "udn-network-layer2-"+udnNS[i+3], ipv4cidr[i], ipv6cidr[i], cidr[i], "layer2")
+		}
+
+		exutil.By("4. Create an egressip object, verify egressIP is assigned to egress node")
 		freeIPs := findFreeIPs(oc, egressNodes[0], 1)
 		o.Expect(len(freeIPs)).Should(o.Equal(1))
 		egressip1 := egressIPResource1{
@@ -351,46 +354,11 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
 		o.Expect(egressIPMaps1[0]["node"]).Should(o.ContainSubstring(egressNodes[0]))
 
-		exutil.By("3.1 Obtain first namespace, create two more namespaces")
-		oc.CreateNamespaceUDN()
-		ns1 := oc.Namespace()
-		oc.CreateNamespaceUDN()
-		ns2 := oc.Namespace()
-		oc.CreateNamespaceUDN()
-		ns3 := oc.Namespace()
-		udnNS := []string{ns1, ns2, ns3}
-
-		exutil.By("3.2 Apply a label to all namespaces that matches namespaceSelector definied in egressIP object")
-		for _, ns := range udnNS {
-			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
-			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-
-		exutil.By("4. Create non-overlapping UDNs between ns1 and ns2, overlapping UDN between ns2 and ns3")
-		udnResourcename := []string{"l3-network-" + ns1, "l3-network-" + ns2, "l3-network-" + ns3}
-		cidr := []string{"10.150.0.0/16", "10.151.0.0/16", "10.151.0.0/16"}
-		udncrd := make([]udnCRDResource, 3)
-		for i := 0; i < 2; i++ {
-			udncrd[i] = udnCRDResource{
-				crdname:   udnResourcename[i],
-				namespace: udnNS[i],
-				role:      "Primary",
-				mtu:       mtu,
-				cidr:      cidr[i],
-				prefix:    24,
-				template:  udnCRDSingleStack,
-			}
-			udncrd[i].createUdnCRDSingleStack(oc)
-			err := waitUDNCRDApplied(oc, udnNS[i], udncrd[i].crdname)
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-
 		exutil.By("5.1 In each namespace, create two test pods, the first one on egressNode, the second one on nonEgressNode ")
 		exutil.By("5.2 Apply label to all pods that matches podSelector definied in egressIP object")
-		testpods1 := make([]pingPodResourceNode, 3)
-		testpods2 := make([]pingPodResourceNode, 3)
-		for i := 0; i < 3; i++ {
+		testpods1 := make([]pingPodResourceNode, len(udnNS))
+		testpods2 := make([]pingPodResourceNode, len(udnNS))
+		for i := 0; i < len(udnNS); i++ {
 			// testpods1 are pods on egressNode
 			testpods1[i] = pingPodResourceNode{
 				name:      "hello-pod1-" + udnNS[i],
@@ -430,7 +398,7 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		_, cmdOnPod = getRequestURL(dstHost)
 
 		exutil.By("6.2 Use tcpdump captured on egressNode to verify egressIP from local pods and remote pods")
-		for i := 0; i < 3; i++ {
+		for i := 0; i < len(udnNS); i++ {
 			tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNodes[0], tcpdumpCmd, udnNS[i], testpods1[i].name, cmdOnPod)
 			o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
 			tcpdumOutput = getTcpdumpOnNodeCmdFromPod(oc, egressNodes[0], tcpdumpCmd, udnNS[i], testpods2[i].name, cmdOnPod)
@@ -451,12 +419,12 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 			}
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to update egress node:%s", egressipErr))
+		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to update egress node:%v", egressipErr))
 		o.Expect(egressIPMaps1[0]["node"]).Should(o.ContainSubstring(egressNodes[1]))
 
 		exutil.By("9. Validate egressIP again after egressIP failover \n")
 		exutil.By("9.1 Use tcpdump captured on egressNode to verify egressIP from local pods and remote pods after egressIP failover")
-		for i := 0; i < 3; i++ {
+		for i := 0; i < len(udnNS); i++ {
 			tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNodes[1], tcpdumpCmd, udnNS[i], testpods1[i].name, cmdOnPod)
 			o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
 			tcpdumOutput = getTcpdumpOnNodeCmdFromPod(oc, egressNodes[1], tcpdumpCmd, udnNS[i], testpods2[i].name, cmdOnPod)
@@ -465,11 +433,12 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-ConnectedOnly-NonPreRelease-Medium-78276-non-overlapping and overlapping UDN egressIP Pods will not be affected by the egressIP set on other netnamespace(layer3 and IPv4 only) [Serial]", func() {
+	g.It("Author:jechen-ConnectedOnly-NonPreRelease-Medium-78276-non-overlapping and overlapping UDN egressIP Pods will not be affected by the egressIP set on other netnamespace(layer3/2 and IPv4 only) [Serial]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			egressIP2Template   = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
 			pingPodTemplate     = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
+			allNS               []string
 		)
 
 		exutil.By("1. Get node list, apply EgressLabel Key to one node to make it egressNode")
@@ -483,22 +452,39 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
 
-		exutil.By("2. Create 3 namespaces for non-overlapping and overlapping UDNs")
+		exutil.By("2.1 Obtain first namespace, create five more namespaces")
 		oc.CreateNamespaceUDN()
-		ns1 := oc.Namespace()
-		oc.CreateNamespaceUDN()
-		ns2 := oc.Namespace()
-		oc.CreateNamespaceUDN()
-		ns3 := oc.Namespace()
-		allNS := []string{ns1, ns2, ns3}
+		ns := oc.Namespace()
+		allNS = append(allNS, ns)
+		for i := 0; i < 5; i++ {
+			oc.CreateNamespaceUDN()
+			ns := oc.Namespace()
+			allNS = append(allNS, ns)
+		}
 
-		exutil.By("3. Get 3 unused IPs from the same subnet of the egressNode,create 3 egressIP objects with same namespaceSelector but different podSelector")
+		exutil.By("2.2 Apply a label to all namespaces that matches namespaceSelector defined in egressIP object")
+		for _, ns := range allNS {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("3. Create non-overlapping & overlapping layer3 UDNs in first three namesapces, create non-overlapping & overlapping layer2 UDN in last three namespaces")
+		cidr := []string{"10.150.0.0/16", "10.151.0.0/16", "10.151.0.0/16"}
+		ipv4cidr := []string{"10.150.0.0/16", "10.151.0.0/16", "10.151.0.0/16"}
+		ipv6cidr := []string{"2010:100:200::0/60", "2011:100:200::0/60", "2011:100:200::0/60"}
+		for i := 0; i < 3; i++ {
+			createGeneralUDNCRD(oc, allNS[i], "udn-network-layer3-"+allNS[i], ipv4cidr[i], ipv6cidr[i], cidr[i], "layer3")
+			createGeneralUDNCRD(oc, allNS[i+3], "udn-network-layer2-"+allNS[i+3], ipv4cidr[i], ipv6cidr[i], cidr[i], "layer2")
+		}
+
+		exutil.By("4. Get 3 unused IPs from the same subnet of the egressNode,create 3 egressIP objects with same namespaceSelector but different podSelector")
 		freeIPs := findFreeIPs(oc, egressNode, 3)
 		o.Expect(len(freeIPs)).Should(o.Equal(3))
 
-		podLabelValues := []string{"pink", "blue", "red"}
+		podLabelValues := []string{"pink", "blue", "red", "pink", "blue", "red"}
 		egressips := make([]egressIPResource1, 3)
-		for i := 0; i < len(allNS); i++ {
+		for i := 0; i < 3; i++ {
 			egressips[i] = egressIPResource1{
 				name:          "egressip-78276-" + strconv.Itoa(i),
 				template:      egressIP2Template,
@@ -514,17 +500,8 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 			o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
 		}
 
-		exutil.By("4. Apply UDN CRD to each namespace,apply to each namespace with label that matches namespaceSelector definied in egressIP object")
-		for i, ns := range allNS {
-			err = applyL3UDNtoNamespace(oc, ns, i)
-			o.Expect(err).NotTo(o.HaveOccurred())
-			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
-			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-
 		exutil.By("5. In each namespace, create a test pod, apply to test pod with label that matches podSelector definied in egressIP object")
-		testpods := make([]pingPodResource, 3)
+		testpods := make([]pingPodResource, len(allNS))
 		for i := 0; i < len(allNS); i++ {
 			testpods[i] = pingPodResource{
 				name:      "hello-pod" + strconv.Itoa(i),
@@ -548,139 +525,21 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s host %s", primaryInf, dstHost)
 
 		exutil.By("Use tcpdump captured on egressNode to verify egressIP each pod")
-		for i := 0; i < len(allNS); i++ {
+		for i := 0; i < 3; i++ {
 			_, cmdOnPod := getRequestURL(dstHost)
+
+			// Verify from layer3 UDN pods
 			tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, allNS[i], testpods[i].name, cmdOnPod)
+			o.Expect(strings.Contains(tcpdumOutput, freeIPs[i])).To(o.BeTrue())
+
+			// Verify from layer2 UDN pods
+			tcpdumOutput = getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, allNS[i+3], testpods[i+3].name, cmdOnPod)
 			o.Expect(strings.Contains(tcpdumOutput, freeIPs[i])).To(o.BeTrue())
 		}
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-ConnectedOnly-NonPreRelease-High-78199-egressIP still works correctly after a UDN network gets deleted then recreated (layer3 and IPv4 only) [Serial]", func() {
-		var (
-			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
-			egressIP2Template         = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
-			udnCRDSingleStack         = filepath.Join(buildPruningBaseDir, "udn/udn_crd_singlestack_template.yaml")
-			pingPodNodeTemplate       = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
-			mtu                 int32 = 1300
-		)
-
-		exutil.By("1 Get node list, apply EgressLabel Key to one node to make it egressNode")
-		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		ok, nodesToBeUsed := getTwoNodesSameSubnet(oc, nodeList)
-		if !ok || nodesToBeUsed == nil || len(nodesToBeUsed) < 2 {
-			g.Skip("The prerequirement was not fullfilled, skip the case!!")
-		}
-		egressNode := nodesToBeUsed[0]
-
-		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
-		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
-
-		exutil.By("2 Create an egressip object, verify egressIP is assigned to egress node")
-		freeIPs := findFreeIPs(oc, egressNode, 1)
-		o.Expect(len(freeIPs)).Should(o.Equal(1))
-		egressip1 := egressIPResource1{
-			name:          "egressip-78199",
-			template:      egressIP2Template,
-			egressIP1:     freeIPs[0],
-			nsLabelKey:    "org",
-			nsLabelValue:  "qe",
-			podLabelKey:   "color",
-			podLabelValue: "pink",
-		}
-		defer egressip1.deleteEgressIPObject1(oc)
-		egressip1.createEgressIPObject2(oc)
-		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
-		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
-		o.Expect(egressIPMaps1[0]["node"]).Should(o.ContainSubstring(egressNode))
-
-		exutil.By("3 Obtain a namespace, apply a label to the namespace that matches namespaceSelector definied in egressIP object")
-		oc.CreateNamespaceUDN()
-		ns1 := oc.Namespace()
-
-		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org-").Execute()
-		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org=qe").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		exutil.By("4. Create an UDN in ns1")
-		cidr := []string{"10.150.0.0/16"}
-		udncrd := udnCRDResource{
-			crdname:   "l3-network-" + ns1,
-			namespace: ns1,
-			role:      "Primary",
-			mtu:       mtu,
-			cidr:      cidr[0],
-			prefix:    24,
-			template:  udnCRDSingleStack,
-		}
-		udncrd.createUdnCRDSingleStack(oc)
-		udnErr := waitUDNCRDApplied(oc, ns1, udncrd.crdname)
-		o.Expect(udnErr).NotTo(o.HaveOccurred())
-
-		exutil.By("5.1 In the namespace, create two test pods, the first one on egressNode, the second one on nonEgressNode ")
-		exutil.By("5.2 Apply to all pods with label that matches podSelector definied in egressIP object")
-		testpods := make([]pingPodResourceNode, 2)
-		for i := 0; i < 2; i++ {
-			testpods[i] = pingPodResourceNode{
-				name:      "hello-pod" + strconv.Itoa(i) + "-" + ns1,
-				namespace: ns1,
-				nodename:  nodesToBeUsed[i],
-				template:  pingPodNodeTemplate,
-			}
-			testpods[i].createPingPodNode(oc)
-			waitPodReady(oc, ns1, testpods[i].name)
-			defer exutil.LabelPod(oc, ns1, testpods[i].name, "color-")
-			err = exutil.LabelPod(oc, ns1, testpods[i].name, "color=pink")
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-
-		exutil.By("6. Verify egressIP from each namespace, egress traffic from these pods should use egressIP as their sourceIP regardless it is from overlapping or non-overlapping UDN")
-		var dstHost, primaryInf, tcpdumpCmd, cmdOnPod string
-		var infErr error
-		exutil.By("6.1 Use tcpdump to verify egressIP.")
-		e2e.Logf("Trying to get physical interface on the egressNode %s", egressNode)
-		primaryInf, infErr = getSnifPhyInf(oc, nodeList.Items[0].Name)
-		o.Expect(infErr).NotTo(o.HaveOccurred())
-		dstHost = nslookDomainName("ifconfig.me")
-		tcpdumpCmd = fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s host %s", primaryInf, dstHost)
-		_, cmdOnPod = getRequestURL(dstHost)
-
-		exutil.By("6.2 Use tcpdump captured on egressNode to verify egressIP from local pods and remote pods")
-		for i := 0; i < 2; i++ {
-			tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, ns1, testpods[i].name, cmdOnPod)
-			o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
-		}
-
-		exutil.By("7. Delete local and remote test pods that are associated with UDN in ns1 first, then delete the UDN in ns1.\n")
-		for i := 0; i < 2; i++ {
-			removeResource(oc, true, true, "pod", testpods[i].name, "-n", testpods[i].namespace)
-		}
-		removeResource(oc, true, true, "UserDefinedNetwork", udncrd.crdname, "-n", udncrd.namespace)
-
-		exutil.By("8. Recreate the UDN and local/remote test pods in ns1.\n")
-		udncrd.createUdnCRDSingleStack(oc)
-		for i := 0; i < 2; i++ {
-			testpods[i].createPingPodNode(oc)
-			waitPodReady(oc, ns1, testpods[i].name)
-			defer exutil.LabelPod(oc, ns1, testpods[i].name, "color-")
-			err = exutil.LabelPod(oc, ns1, testpods[i].name, "color=pink")
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
-
-		udnErr = waitUDNCRDApplied(oc, ns1, udncrd.crdname)
-		o.Expect(udnErr).NotTo(o.HaveOccurred())
-
-		exutil.By("9. Validate egressIP again after recreating UDN in ns1 \n")
-		exutil.By("9.1 Use tcpdump captured on egressNode to verify egressIP from local pods and remote pods again after UDN recreation")
-		for i := 0; i < 2; i++ {
-			tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, ns1, testpods[i].name, cmdOnPod)
-			o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
-		}
-	})
-
-	// author: jechen@redhat.com
-	g.It("Author:jechen-ConnectedOnly-NonPreRelease-High-78200-egressIP still works correctly after OVNK restarted on local and remote client host  (layer3 and IPv4 only) [Serial]", func() {
+	g.It("Author:jechen-ConnectedOnly-NonPreRelease-High-78199-egressIP still works correctly after a UDN network gets deleted then recreated (layer3/2 and IPv4 only) [Serial]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			egressIP2Template   = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
@@ -699,7 +558,158 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
 
-		exutil.By("2 Create an egressip object, verify egressIP is assigned to egress node")
+		exutil.By("2.1 Obtain first namespace, create another namespace")
+		// first namespace for layer3 UDNs, second namespace will be used for layer2 UDN
+		oc.CreateNamespaceUDN()
+		ns1 := oc.Namespace()
+		oc.CreateNamespaceUDN()
+		ns2 := oc.Namespace()
+		allNS := []string{ns1, ns2}
+
+		exutil.By("2.2 Apply a label to all namespaces that matches namespaceSelector definied in egressIP object")
+		for _, ns := range allNS {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("3.1 Create an UDN layer3 in ns1")
+		cidr := []string{"10.150.0.0/16"}
+		ipv4cidr := []string{"10.150.0.0/16"}
+		ipv6cidr := []string{"2010:100:200::0/48"}
+		createGeneralUDNCRD(oc, ns1, "udn-network-layer3-"+ns1, ipv4cidr[0], ipv6cidr[0], cidr[0], "layer3")
+		createGeneralUDNCRD(oc, ns2, "udn-network-layer2-"+ns2, ipv4cidr[0], ipv6cidr[0], cidr[0], "layer2")
+
+		exutil.By("4. Create an egressip object, verify egressIP is assigned to egress node")
+		freeIPs := findFreeIPs(oc, egressNode, 1)
+		o.Expect(len(freeIPs)).Should(o.Equal(1))
+		egressip1 := egressIPResource1{
+			name:          "egressip-78199",
+			template:      egressIP2Template,
+			egressIP1:     freeIPs[0],
+			nsLabelKey:    "org",
+			nsLabelValue:  "qe",
+			podLabelKey:   "color",
+			podLabelValue: "pink",
+		}
+		defer egressip1.deleteEgressIPObject1(oc)
+		egressip1.createEgressIPObject2(oc)
+		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip1.name)
+		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
+		o.Expect(egressIPMaps1[0]["node"]).Should(o.ContainSubstring(egressNode))
+
+		exutil.By("5.1 In the namespace, create two test pods, the first one on egressNode, the second one on nonEgressNode ")
+		exutil.By("5.2 Apply to all pods with label that matches podSelector definied in egressIP object")
+		var testpods [2][2]pingPodResourceNode
+		for j := 0; j < len(allNS); j++ {
+			for i := 0; i < 2; i++ {
+				testpods[j][i] = pingPodResourceNode{
+					name:      "hello-pod" + strconv.Itoa(i) + "-" + allNS[j],
+					namespace: ns1,
+					nodename:  nodesToBeUsed[i],
+					template:  pingPodNodeTemplate,
+				}
+				testpods[j][i].createPingPodNode(oc)
+				waitPodReady(oc, ns1, testpods[j][i].name)
+				defer exutil.LabelPod(oc, ns1, testpods[j][i].name, "color-")
+				err = exutil.LabelPod(oc, ns1, testpods[j][i].name, "color=pink")
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}
+
+		exutil.By("6. Verify egressIP from each namespace, egress traffic from these pods should use egressIP as their sourceIP regardless it is from overlapping or non-overlapping UDN")
+		var dstHost, primaryInf, tcpdumpCmd, cmdOnPod string
+		var infErr error
+		exutil.By("6.1 Use tcpdump to verify egressIP.")
+		e2e.Logf("Trying to get physical interface on the egressNode %s", egressNode)
+		primaryInf, infErr = getSnifPhyInf(oc, nodeList.Items[0].Name)
+		o.Expect(infErr).NotTo(o.HaveOccurred())
+		dstHost = nslookDomainName("ifconfig.me")
+		tcpdumpCmd = fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s host %s", primaryInf, dstHost)
+		_, cmdOnPod = getRequestURL(dstHost)
+
+		exutil.By("6.2 Use tcpdump captured on egressNode to verify egressIP from local pods and remote pods")
+		for j := 0; j < len(allNS); j++ {
+			for i := 0; i < 2; i++ {
+				tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, ns1, testpods[j][i].name, cmdOnPod)
+				o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+			}
+		}
+
+		exutil.By("7. Delete local and remote test pods that are associated with UDNs, then delete the UDNs.\n")
+		for j := 0; j < len(allNS); j++ {
+			for i := 0; i < 2; i++ {
+				removeResource(oc, true, true, "pod", testpods[j][i].name, "-n", testpods[j][i].namespace)
+			}
+		}
+		removeResource(oc, true, true, "UserDefinedNetwork", "udn-network-layer3-"+ns1, "-n", ns1)
+		removeResource(oc, true, true, "UserDefinedNetwork", "udn-network-layer2-"+ns2, "-n", ns2)
+
+		exutil.By("8. Recreate layer3 and layer2 UDNs, recreate local/remote test pods.\n")
+		createGeneralUDNCRD(oc, ns1, "udn-network-layer3-"+ns1, ipv4cidr[0], ipv6cidr[0], cidr[0], "layer3")
+		createGeneralUDNCRD(oc, ns2, "udn-network-layer2-"+ns2, ipv4cidr[0], ipv6cidr[0], cidr[0], "layer2")
+
+		for j := 0; j < len(allNS); j++ {
+			for i := 0; i < 2; i++ {
+				testpods[j][i].createPingPodNode(oc)
+				waitPodReady(oc, ns1, testpods[j][i].name)
+				defer exutil.LabelPod(oc, ns1, testpods[j][i].name, "color-")
+				err = exutil.LabelPod(oc, ns1, testpods[j][i].name, "color=pink")
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}
+
+		exutil.By("9. Validate egressIP again after recreating UDNs \n")
+		exutil.By("9.1 Use tcpdump captured on egressNode to verify egressIP from local pods and remote pods again after UDN recreation")
+		for j := 0; j < len(allNS); j++ {
+			for i := 0; i < 2; i++ {
+				tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, ns1, testpods[j][i].name, cmdOnPod)
+				o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+			}
+		}
+	})
+
+	// author: jechen@redhat.com
+	g.It("Author:jechen-ConnectedOnly-NonPreRelease-High-78200-egressIP still works correctly after OVNK restarted on local and remote client host  (layer3/2 and IPv4 only) [Serial]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			egressIP2Template   = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
+			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		)
+
+		exutil.By("1 Get node list, apply EgressLabel Key to one node to make it egressNode")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ok, nodesToBeUsed := getTwoNodesSameSubnet(oc, nodeList)
+		if !ok || nodesToBeUsed == nil || len(nodesToBeUsed) < 2 {
+			g.Skip("The prerequirement was not fullfilled, skip the case!!")
+		}
+		egressNode := nodesToBeUsed[0]
+
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
+
+		exutil.By("2 Obtain a namespace, create a second one, apply a label to both namespaces that matches namespaceSelector definied in egressIP object")
+		oc.CreateNamespaceUDN()
+		ns1 := oc.Namespace()
+		oc.CreateNamespaceUDN()
+		ns2 := oc.Namespace()
+		allNS := []string{ns1, ns2}
+
+		for _, ns := range allNS {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("3. Create a layer3 UDN in ns1, and another layer2 UDN in ns2")
+		cidr := []string{"10.150.0.0/16"}
+		ipv4cidr := []string{"10.150.0.0/16"}
+		ipv6cidr := []string{"2010:100:200::0/48"}
+		createGeneralUDNCRD(oc, ns1, "udn-network-layer3-"+ns1, ipv4cidr[0], ipv6cidr[0], cidr[0], "layer3")
+		createGeneralUDNCRD(oc, ns2, "udn-network-layer2-"+ns2, ipv4cidr[0], ipv6cidr[0], cidr[0], "layer2")
+
+		exutil.By("4. Create an egressip object, verify egressIP is assigned to egress node")
 		freeIPs := findFreeIPs(oc, egressNode, 1)
 		o.Expect(len(freeIPs)).Should(o.Equal(1))
 		egressip1 := egressIPResource1{
@@ -717,33 +727,23 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
 		o.Expect(egressIPMaps1[0]["node"]).Should(o.ContainSubstring(egressNode))
 
-		exutil.By("3 Obtain a namespace, apply a label to the namespace that matches namespaceSelector definied in egressIP object")
-		oc.CreateNamespaceUDN()
-		ns1 := oc.Namespace()
-
-		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org-").Execute()
-		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "org=qe").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		exutil.By("4. Create an UDN in ns1")
-		err = applyL3UDNtoNamespace(oc, ns1, 0)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
 		exutil.By("5.1 In the namespace, create two test pods, the first one on egressNode, the second one on nonEgressNode ")
-		exutil.By("5.2 Apply to all pods with label that matches podSelector definied in egressIP object")
-		testpods := make([]pingPodResourceNode, 2)
-		for i := 0; i < 2; i++ {
-			testpods[i] = pingPodResourceNode{
-				name:      "hello-pod" + strconv.Itoa(i) + "-" + ns1,
-				namespace: ns1,
-				nodename:  nodesToBeUsed[i],
-				template:  pingPodNodeTemplate,
+		exutil.By("5.2 Apply to all pods with label that matches podSelector defined in egressIP object")
+		var testpods [2][2]pingPodResourceNode
+		for j := 0; j < len(allNS); j++ {
+			for i := 0; i < 2; i++ {
+				testpods[j][i] = pingPodResourceNode{
+					name:      "hello-pod" + strconv.Itoa(i) + "-" + allNS[j],
+					namespace: allNS[j],
+					nodename:  nodesToBeUsed[i],
+					template:  pingPodNodeTemplate,
+				}
+				testpods[j][i].createPingPodNode(oc)
+				waitPodReady(oc, allNS[j], testpods[j][i].name)
+				defer exutil.LabelPod(oc, allNS[j], testpods[j][i].name, "color-")
+				err = exutil.LabelPod(oc, allNS[j], testpods[j][i].name, "color=pink")
+				o.Expect(err).NotTo(o.HaveOccurred())
 			}
-			testpods[i].createPingPodNode(oc)
-			waitPodReady(oc, ns1, testpods[i].name)
-			defer exutil.LabelPod(oc, ns1, testpods[i].name, "color-")
-			err = exutil.LabelPod(oc, ns1, testpods[i].name, "color=pink")
-			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
 		exutil.By("6. Verify egress traffic from these local or remote egressIP pods should use egressIP as their sourceIP")
@@ -758,42 +758,48 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		_, cmdOnPod = getRequestURL(dstHost)
 
 		exutil.By("6.2 Use tcpdump captured on egressNode to verify egressIP from local pods and remote pods")
-		for i := 0; i < 2; i++ {
-			tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, ns1, testpods[i].name, cmdOnPod)
-			o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+		for j := 0; j < len(allNS); j++ {
+			for i := 0; i < 2; i++ {
+				tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, allNS[j], testpods[j][i].name, cmdOnPod)
+				o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+			}
 		}
 
-		exutil.By("7. Restart ovnkube-node pod of client host that local egressIP pod is on.\n")
-		// Since local egressIP pod is on egress node, restart ovnkube-pod of egress node
+		exutil.By("7. Restart ovnkube-node pod of client host that local egressIP pod are on.\n")
+		// Since local egressIP pods are on egress node, restart ovnkube-pod of egress node
 		ovnkPod := ovnkubeNodePod(oc, egressNode)
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", ovnkPod, "-n", "openshift-ovn-kubernetes").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
 
-		exutil.By("8. Validate egressIP again after restarting ovnkude-node pod of client host that local egressIP pod is on \n")
-		exutil.By("Use tcpdump captured on egressNode to verify egressIP from local pods and remote pods again after UDN recreation")
-		for i := 0; i < 2; i++ {
-			tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, ns1, testpods[i].name, cmdOnPod)
-			o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+		exutil.By("8. Validate egressIP again after restarting ovnkude-node pod of client host that local egressIP pods are on \n")
+		exutil.By("Use tcpdump captured on egressNode to verify egressIP from local pods again after OVNK restart")
+		for j := 0; j < len(allNS); j++ {
+			for i := 0; i < 2; i++ {
+				tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, allNS[j], testpods[j][i].name, cmdOnPod)
+				o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+			}
 		}
 
-		exutil.By("9. Restart ovnkube-node pod of client host that remote egressIP pod is on.\n")
+		exutil.By("9. Restart ovnkube-node pod of client host that remote egressIP pods are on.\n")
 		// Since remote egressIP pod is on non-egress node, restart ovnkube-pod of the non-egress node nodesToBeUsed[1]
 		ovnkPod = ovnkubeNodePod(oc, nodesToBeUsed[1])
 		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pods", ovnkPod, "-n", "openshift-ovn-kubernetes").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
 
-		exutil.By("10. Validate egressIP again after restarting ovnkude-node pod of client host that remote egressIP pod is on \n")
-		exutil.By("Use tcpdump captured on egressNode to verify egressIP from local pods and remote pods again after UDN recreation")
-		for i := 0; i < 2; i++ {
-			tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, ns1, testpods[i].name, cmdOnPod)
-			o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+		exutil.By("10. Validate egressIP again after restarting ovnkude-node pod of client host that remote egressIP pods on \n")
+		exutil.By("Use tcpdump captured on egressNode to verify egressIP from remote pods again after OVNK restart")
+		for j := 0; j < len(allNS); j++ {
+			for i := 0; i < 2; i++ {
+				tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, allNS[j], testpods[j][i].name, cmdOnPod)
+				o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+			}
 		}
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-ConnectedOnly-Longduration-NonPreRelease-High-78293-After reboot egress node EgressIP on UDN still work (layer3 and IPv4). [Disruptive]", func() {
+	g.It("Author:jechen-ConnectedOnly-Longduration-NonPreRelease-High-78293-After reboot egress node EgressIP on UDN still work (layer3/2 and IPv4). [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			egressIP2Template   = filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
@@ -811,7 +817,27 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel)
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNode, egressNodeLabel, "true")
 
-		exutil.By("2. Get 1 unused IPs from the same subnet of the egressNode,create an egressIP object")
+		exutil.By("2 Obtain a namespace, create a second one, apply a label to both namespaces that matches namespaceSelector definied in egressIP object")
+		oc.CreateNamespaceUDN()
+		ns1 := oc.Namespace()
+		oc.CreateNamespaceUDN()
+		ns2 := oc.Namespace()
+		allNS := []string{ns1, ns2}
+
+		for _, ns := range allNS {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("3. Create a layer3 UDN in ns1, create a layer2 UDN in ns2")
+		cidr := []string{"10.150.0.0/16"}
+		ipv4cidr := []string{"10.150.0.0/16"}
+		ipv6cidr := []string{"2010:100:200::0/48"}
+		createGeneralUDNCRD(oc, ns1, "udn-network-layer3-"+ns1, ipv4cidr[0], ipv6cidr[0], cidr[0], "layer3")
+		createGeneralUDNCRD(oc, ns2, "udn-network-layer2-"+ns2, ipv4cidr[0], ipv6cidr[0], cidr[0], "layer2")
+
+		exutil.By("4. Get 1 unused IPs from the same subnet of the egressNode,create an egressIP object")
 		freeIPs := findFreeIPs(oc, egressNode, 1)
 		o.Expect(len(freeIPs)).Should(o.Equal(1))
 
@@ -829,29 +855,20 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		egressIPMaps1 := getAssignedEIPInEIPObject(oc, egressip.name)
 		o.Expect(len(egressIPMaps1)).Should(o.Equal(1))
 
-		exutil.By("3. Get a namespace and apply UDN CRD to it")
-		oc.CreateNamespaceUDN()
-		ns := oc.Namespace()
-		oc.CreateNamespaceUDN()
-
-		exutil.By("4. Apply UDN CRD to each namespace,apply to each namespace with label that matches namespaceSelector definied in egressIP object")
-		err = applyL3UDNtoNamespace(oc, ns, 0)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
-		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		exutil.By("5. In the namespace, create a test pod, apply to test pod with label that matches podSelector definied in egressIP object")
-		testpod := pingPodResource{
-			name:      "hello-pod",
-			namespace: ns,
-			template:  pingPodTemplate,
+		exutil.By("5. In each namespace, create a test pod, apply to test pod with label that matches podSelector definied in egressIP object")
+		testpods := make([]pingPodResource, len(allNS))
+		for i := 0; i < len(allNS); i++ {
+			testpods[i] = pingPodResource{
+				name:      "hello-pod" + strconv.Itoa(i),
+				namespace: allNS[i],
+				template:  pingPodTemplate,
+			}
+			testpods[i].createPingPod(oc)
+			waitPodReady(oc, testpods[i].namespace, testpods[i].name)
+			defer exutil.LabelPod(oc, allNS[i], testpods[i].name, "color-")
+			err = exutil.LabelPod(oc, allNS[i], testpods[i].name, "color=pink")
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}
-		testpod.createPingPod(oc)
-		waitPodReady(oc, testpod.namespace, testpod.name)
-		defer exutil.LabelPod(oc, ns, testpod.name, "color-")
-		err = exutil.LabelPod(oc, ns, testpod.name, "color=pink")
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("6. Verify that egress traffic from pod use egressIP as its sourceIP")
 		primaryInf, infErr := getSnifPhyInf(oc, egressNode)
@@ -859,29 +876,35 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		dstHost := nslookDomainName("ifconfig.me")
 		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s host %s", primaryInf, dstHost)
 		_, cmdOnPod := getRequestURL(dstHost)
-		tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, ns, testpod.name, cmdOnPod)
-		o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+		for i := 0; i < len(allNS); i++ {
+			tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, allNS[i], testpods[i].name, cmdOnPod)
+			o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+		}
 
 		exutil.By("7.Reboot egress node.\n")
 		defer checkNodeStatus(oc, egressNode, "Ready")
 		rebootNode(oc, egressNode)
 		checkNodeStatus(oc, egressNode, "NotReady")
 		checkNodeStatus(oc, egressNode, "Ready")
-		waitPodReady(oc, testpod.namespace, testpod.name)
-		err = exutil.LabelPod(oc, ns, testpod.name, "color=pink")
-		o.Expect(err).NotTo(o.HaveOccurred())
+		for i := 0; i < len(allNS); i++ {
+			waitPodReady(oc, testpods[i].namespace, testpods[i].name)
+			err = exutil.LabelPod(oc, allNS[i], testpods[i].name, "color=pink")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		exutil.By("8. Check EgressIP is assigned again after reboot.\n")
 		verifyExpectedEIPNumInEIPObject(oc, egressip.name, 1)
 
 		exutil.By("8. Validate egressIP after node reboot \n")
-		tcpdumOutput = getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, ns, testpod.name, cmdOnPod)
-		o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+		for i := 0; i < len(allNS); i++ {
+			tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, egressNode, tcpdumpCmd, allNS[i], testpods[i].name, cmdOnPod)
+			o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+		}
 
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-NonHyperShiftHOST-Longduration-NonPreRelease-High-78422-EgressIP on UDN still works on next available egress node after previous assigned egress node was deleted (layer3 and IPv4 only). [Disruptive]", func() {
+	g.It("Author:jechen-NonHyperShiftHOST-Longduration-NonPreRelease-High-78422-EgressIP on UDN still works on next available egress node after previous assigned egress node was deleted (layer3/2 and IPv4 only). [Disruptive]", func() {
 
 		platform := exutil.CheckPlatform(oc)
 		if strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") {
@@ -913,14 +936,25 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		nodeName0 := clusterinfra.GetNodeNameFromMachine(oc, machineNames[0])
 		nodeName1 := clusterinfra.GetNodeNameFromMachine(oc, machineNames[1])
 
-		exutil.By("3. Get a namespace and apply UDN CRD to it, apply to the namespace with a label that matches namespaceSelector in egressIP object in step 5")
+		exutil.By("3.1 Obtain a namespace, create a second one, apply a label to both namespaces that matches namespaceSelector definied in egressIP object")
 		oc.CreateNamespaceUDN()
-		ns := oc.Namespace()
-		err = applyL3UDNtoNamespace(oc, ns, 0)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
-		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		ns1 := oc.Namespace()
+		oc.CreateNamespaceUDN()
+		ns2 := oc.Namespace()
+		allNS := []string{ns1, ns2}
+
+		for _, ns := range allNS {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("3.2. Create a layer3 UDN in ns1, create a layer2 UDN in ns2")
+		cidr := []string{"10.150.0.0/16"}
+		ipv4cidr := []string{"10.150.0.0/16"}
+		ipv6cidr := []string{"2010:100:200::0/48"}
+		createGeneralUDNCRD(oc, ns1, "udn-network-layer3-"+ns1, ipv4cidr[0], ipv6cidr[0], cidr[0], "layer3")
+		createGeneralUDNCRD(oc, ns2, "udn-network-layer2-"+ns2, ipv4cidr[0], ipv6cidr[0], cidr[0], "layer2")
 
 		exutil.By("4. Apply EgressLabel to the first node created by the new machineset\n")
 		// No need to defer unlabeling the node, as the node will be defer deleted with machineset before end of the test case
@@ -946,17 +980,20 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		o.Expect(egressIPMaps[0]["node"]).Should(o.Equal(nodeName0))
 
 		exutil.By("6. Create a test pod on the non-egress node, apply to the pod with a label that matches podSelector in egressIP object \n")
-		testpod := pingPodResourceNode{
-			name:      "hello-pod",
-			namespace: ns,
-			nodename:  nonEgressNode,
-			template:  pingPodNodeTemplate,
+		testpods := make([]pingPodResourceNode, len(allNS))
+		for i := 0; i < len(allNS); i++ {
+			testpods[i] = pingPodResourceNode{
+				name:      "hello-pod" + strconv.Itoa(i),
+				namespace: allNS[i],
+				nodename:  nonEgressNode,
+				template:  pingPodNodeTemplate,
+			}
+			testpods[i].createPingPodNode(oc)
+			waitPodReady(oc, allNS[i], testpods[i].name)
+			defer exutil.LabelPod(oc, allNS[i], testpods[i].name, "color-")
+			err = exutil.LabelPod(oc, allNS[i], testpods[i].name, "color=pink")
+			o.Expect(err).NotTo(o.HaveOccurred())
 		}
-		testpod.createPingPodNode(oc)
-		waitPodReady(oc, ns, testpod.name)
-		defer exutil.LabelPod(oc, ns, testpod.name, "color-")
-		err = exutil.LabelPod(oc, ns, testpod.name, "color=pink")
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("7. Get tcpdump on first egress node, verify that egressIP works on first egress node")
 		primaryInf, infErr := getSnifPhyInf(oc, nodeName0)
@@ -964,8 +1001,10 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		dstHost := nslookDomainName("ifconfig.me")
 		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s host %s", primaryInf, dstHost)
 		_, cmdOnPod := getRequestURL(dstHost)
-		tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, machineNames[0], tcpdumpCmd, ns, testpod.name, cmdOnPod)
-		o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+		for i := 0; i < len(allNS); i++ {
+			tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, machineNames[0], tcpdumpCmd, allNS[i], testpods[i].name, cmdOnPod)
+			o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+		}
 
 		exutil.By("8. Apply EgressLabel to the second node created by the new machineset.\n")
 		// No need to defer unlabeling the node, as the node will be deleted with machineset before the end of the test case
@@ -984,8 +1023,10 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		o.Expect(infErr).NotTo(o.HaveOccurred())
 		tcpdumpCmd = fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s host %s", primaryInf, dstHost)
 		_, cmdOnPod = getRequestURL(dstHost)
-		tcpdumOutput = getTcpdumpOnNodeCmdFromPod(oc, nodeName1, tcpdumpCmd, ns, testpod.name, cmdOnPod)
-		o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+		for i := 0; i < len(allNS); i++ {
+			tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, nodeName1, tcpdumpCmd, allNS[i], testpods[i].name, cmdOnPod)
+			o.Expect(strings.Contains(tcpdumOutput, freeIPs[0])).To(o.BeTrue())
+		}
 
 	})
 
@@ -1017,11 +1058,133 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel, "true")
 		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel)
 
-		exutil.By("3 Obtain first namespace, apply CRD and label to it ")
+		exutil.By("3 Obtain first namespace, apply layer3 UDN CRD to it, add to the namespace with a label matching the namespaceSelector of egressIP object that will be created in step 4")
 		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
-		err = applyL3UDNtoNamespace(oc, ns1, 0)
+
+		cidr := []string{"10.150.0.0/16"}
+		ipv4cidr := []string{"10.150.0.0/16"}
+		ipv6cidr := []string{"2010:100:200::0/48"}
+		createGeneralUDNCRD(oc, ns1, "udn-network-layer3-"+ns1, ipv4cidr[0], ipv6cidr[0], cidr[0], "layer3")
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("4. Create an egressip object\n")
+		freeIPs := findFreeIPs(oc, egressNodes[0], 2)
+		o.Expect(len(freeIPs)).Should(o.Equal(2))
+		egressip1 := egressIPResource1{
+			name:      "egressip-78453",
+			template:  egressIPTemplate,
+			egressIP1: freeIPs[0],
+			egressIP2: freeIPs[1],
+		}
+		egressip1.createEgressIPObject1(oc)
+		defer egressip1.deleteEgressIPObject1(oc)
+		//Replace matchLabel with matchExpressions
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressip/egressip-78453", "-p", "{\"spec\":{\"namespaceSelector\":{\"matchExpressions\":[{\"key\": \"name\", \"operator\": \"In\", \"values\": [\"test\"]}]}}}", "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("egressip/egressip-78453", "-p", "{\"spec\":{\"namespaceSelector\":{\"matchLabels\":null}}}", "--type=merge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 2)
+
+		exutil.By("5. Create two pods, one pod is local to egress node, another pod is remote to egress node ")
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod1-" + ns1,
+			namespace: ns1,
+			nodename:  egressNodes[0],
+			template:  pingPodNodeTemplate,
+		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, ns1, pod1.name)
+
+		pod2 := pingPodResourceNode{
+			name:      "hello-pod2-" + ns1,
+			namespace: ns1,
+			nodename:  nonEgressNode,
+			template:  pingPodNodeTemplate,
+		}
+		pod2.createPingPodNode(oc)
+		waitPodReady(oc, ns1, pod2.name)
+
+		exutil.By("6. Check source IP is randomly one of egress ips.\n")
+		exutil.By("6.1 Use tcpdump to verify egressIP, create tcpdump sniffer Daemonset first.")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], "tcpdump")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], "tcpdump", "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], "tcpdump")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], "tcpdump", "true")
+		primaryInf, infErr := getSnifPhyInf(oc, egressNodes[0])
+		o.Expect(infErr).NotTo(o.HaveOccurred())
+		dstHost := nslookDomainName("ifconfig.me")
+		defer deleteTcpdumpDS(oc, "tcpdump-78453", ns1)
+		tcpdumpDS, snifErr := createSnifferDaemonset(oc, ns1, "tcpdump-78453", "tcpdump", "true", dstHost, primaryInf, 80)
+		o.Expect(snifErr).NotTo(o.HaveOccurred())
+
+		exutil.By("6.2 Verify egressIP load balancing from local pod.")
+		egressipErr := wait.PollUntilContextTimeout(context.Background(), 100*time.Second, 100*time.Second, false, func(cxt context.Context) (bool, error) {
+			randomStr, url := getRequestURL(dstHost)
+			_, err := execCommandInSpecificPod(oc, pod1.namespace, pod1.name, "for i in {1..10}; do curl -s "+url+" --connect-timeout 5 ; sleep 2;echo ;done")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, freeIPs[0], true) != nil || checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, freeIPs[1], true) != nil || err != nil {
+				e2e.Logf("No matched egressIPs in tcpdump log, try next round.")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to get both EgressIPs %s,%s in tcpdump for local pod %s", freeIPs[0], freeIPs[1], pod1.name))
+
+		exutil.By("6.3 Verify egressIP load balancing from remote pod.")
+		egressipErr = wait.PollUntilContextTimeout(context.Background(), 100*time.Second, 100*time.Second, false, func(cxt context.Context) (bool, error) {
+			randomStr, url := getRequestURL(dstHost)
+			_, err := execCommandInSpecificPod(oc, pod2.namespace, pod2.name, "for i in {1..10}; do curl -s "+url+" --connect-timeout 5 ; sleep 2;echo ;done")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, freeIPs[0], true) != nil || checkMatchedIPs(oc, ns1, tcpdumpDS.name, randomStr, freeIPs[1], true) != nil || err != nil {
+				e2e.Logf("No matched egressIPs in tcpdump log, try next round.")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to get both EgressIPs %s,%s in tcpdump for remote pod %s", freeIPs[0], freeIPs[1], pod2.name))
+	})
+
+	// author: jechen@redhat.com
+	g.It("Author:jechen-ConnectedOnly-NonPreRelease-High-79097-Traffic is load balanced between egress nodes for egressIP UDN (layer2 and IPv4 only) .[Serial]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		pingPodNodeTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
+
+		exutil.By("1. Get two worker nodes that are in same subnet, they will be used as egress-assignable nodes, get a third node as non-egress node\n")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ok, egressNodes := getTwoNodesSameSubnet(oc, nodeList)
+		if !ok || egressNodes == nil || len(egressNodes) < 2 || len(nodeList.Items) < 3 {
+			g.Skip("The prerequirement was not fullfilled, skip the case!!")
+		}
+
+		var nonEgressNode string
+		for _, node := range nodeList.Items {
+			if !contains(egressNodes, node.Name) {
+				nonEgressNode = node.Name
+				break
+			}
+		}
+
+		exutil.By("2. Apply EgressLabel Key to nodes.\n")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel, "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[0], egressNodeLabel)
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel, "true")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egressNodes[1], egressNodeLabel)
+
+		exutil.By("3 Obtain first namespace, apply layer2 UDN CRD to it, add to the namespace with a label matching the namespaceSelector of egressIP object that will be created in step 4")
+		oc.CreateNamespaceUDN()
+		ns1 := oc.Namespace()
+
+		cidr := []string{"10.150.0.0/16"}
+		ipv4cidr := []string{"10.150.0.0/16"}
+		ipv6cidr := []string{"2010:100:200::0/48"}
+		createGeneralUDNCRD(oc, ns1, "udn-network-layer2-"+ns1, ipv4cidr[0], ipv6cidr[0], cidr[0], "layer2")
+
 		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name-").Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "name=test").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1100,7 +1263,7 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP", func() {
 			}
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to get both EgressIPs %s,%s in tcpdump for local pod %s", freeIPs[0], freeIPs[1], pod2.name))
+		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to get both EgressIPs %s,%s in tcpdump for remote pod %s", freeIPs[0], freeIPs[1], pod2.name))
 	})
 
 })
@@ -1695,7 +1858,7 @@ var _ = g.Describe("[sig-networking] SDN udn EgressIP IPv6", func() {
 			}
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to update egress node:%s", egressipErr))
+		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to update egress node:%v", egressipErr))
 		o.Expect(egressIPMaps1[0]["node"]).Should(o.ContainSubstring(egressNodes[1]))
 
 		exutil.By("9. Validate egressIP again after egressIP failover \n")
