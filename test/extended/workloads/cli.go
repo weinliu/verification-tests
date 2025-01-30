@@ -1619,16 +1619,17 @@ var _ = g.Describe("[sig-cli] Workloads sos reports on Microshift", func() {
 		o.Expect(creationErr).NotTo(o.HaveOccurred())
 
 		g.By("Verify running sos report -p works fine")
-		sosreportStatus, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo sos report --batch --clean --all-logs --profile microshift --tmp-dir=/tmp/test60929")
+		sosreportStatus, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo /usr/bin/microshift-sos-report --tmp-dir /tmp/test60929")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(sosreportStatus, "Your sosreport has been generated and saved in")).To(o.BeTrue())
+		o.Expect(strings.Contains(sosreportStatus, "Your sos report has been generated and saved in")).To(o.BeTrue())
 		o.Expect(strings.Contains(sosreportStatus, "/tmp/test60929/sosreport")).To(o.BeTrue())
 
 		// Code to extract the sosreport & it's name
-		extractSosReportName := strings.Split(sosreportStatus, "Your sosreport has been generated and saved in")
+		extractSosReportName := strings.Split(sosreportStatus, "Your sos report has been generated and saved in")
 		sosreportNames := strings.Split(extractSosReportName[1], "\n")
+		e2e.Logf("sosreportNames are %s", sosreportNames)
 		sosreportName := strings.Split(sosreportNames[1], "/")
-		sosreportnameaExtraction := strings.Split(sosreportName[3], "-obfuscated")
+		sosreportnameaExtraction := strings.Split(sosreportName[3], ".")
 		e2e.Logf("sosreportnameaExtraction is %v", sosreportnameaExtraction)
 		if err != nil {
 			e2e.Failf("Error occured running with microshift profile: %v", err.Error())
@@ -1651,14 +1652,15 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		o.Expect(strings.Contains(outputFromExtractedSosText, "oc adm inspect")).To(o.BeTrue())
 		o.Expect(strings.Contains(outputFromExtractedSosText, "ovs-appctl -t /var/run/ovn/ovn-controller.*.ctl ct-zone-list")).To(o.BeTrue())
 
+		readMConfigCmd := fmt.Sprintf(`ls -l /tmp/test60929/%v/etc/microshift | awk '{print $NF}' | tail -n+2`, sosreportnameaExtraction[0])
+		extractedMConfigOut, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", readMConfigCmd)
+		e2e.Logf("ExtractedMicroshiftConfigOutput is \n %v", extractedMConfigOut)
+
 		g.By("Verify microshift config files are collected in sos report")
 		mConfigFileStatus, mConfigFileErr := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo ls -l  /etc/microshift | awk '{print $NF}' | tail -n+2")
 		o.Expect(mConfigFileErr).NotTo(o.HaveOccurred())
 		e2e.Logf("mConfigFileStatus is \n %s", mConfigFileStatus)
 
-		readMConfigCmd := fmt.Sprintf(`ls -l /tmp/test60929/%v/etc/microshift | awk '{print $NF}' | tail -n+2`, sosreportnameaExtraction[0])
-		extractedMConfigOut, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", readMConfigCmd)
-		e2e.Logf("ExtractedMicroshiftConfigOutput is \n %v", extractedMConfigOut)
 		if extractedMConfigOut != mConfigFileStatus {
 			e2e.Failf("Not all microshift config files are collected in sosreport")
 		}
@@ -1698,7 +1700,7 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		sosreportStatus, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo sos report --batch")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("sosreport status is: %v", string(sosreportStatus))
-		o.Expect(strings.Contains(sosreportStatus, "Your sosreport has been generated and saved in")).To(o.BeTrue())
+		o.Expect(strings.Contains(sosreportStatus, "Your sos report has been generated and saved in")).To(o.BeTrue())
 		o.Expect(strings.Contains(sosreportStatus, "/var/tmp/sosreport")).To(o.BeTrue())
 		if err != nil {
 			e2e.Failf("Error occured running with sos report: %v", err.Error())
@@ -1716,11 +1718,11 @@ sudo tar -xvf %v -C /tmp/test60929`, sosreportNames[1])
 		g.By("Verify running sos report -p system collects greenbot logs")
 		sosreportStatus, err := exutil.DebugNodeWithOptionsAndChroot(oc, masterNodes[0], []string{"-q"}, "bash", "-c", "sudo sos report --batch --clean --all-logs --profile system")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(sosreportStatus, "Your sosreport has been generated and saved in")).To(o.BeTrue())
+		o.Expect(strings.Contains(sosreportStatus, "Your sos report has been generated and saved in")).To(o.BeTrue())
 		o.Expect(strings.Contains(sosreportStatus, "/var/tmp/sosreport")).To(o.BeTrue())
 
 		// Code to extract the sosreport & it's name
-		extractSosReportName := strings.Split(sosreportStatus, "Your sosreport has been generated and saved in")
+		extractSosReportName := strings.Split(sosreportStatus, "Your sos report has been generated and saved in")
 		sosreportNames := strings.Split(extractSosReportName[1], "\n")
 		sosreportName := strings.Split(sosreportNames[1], "/")
 		sosreportnameaExtraction := strings.Split(sosreportName[3], "-obfuscated")
