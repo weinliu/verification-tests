@@ -31,7 +31,7 @@ var _ = g.Describe("[sig-networking] SDN CNO", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-Critical-72348-Configure networkDiagnostics for both network-check-source and network-check-target. [Disruptive]", func() {
+	g.It("Author:huirwang-NonHyperShiftHOST-Critical-72348-Configure networkDiagnostics for both network-check-source and network-check-target. [Disruptive]", func() {
 		workers, err := exutil.GetSchedulableLinuxWorkerNodes(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if len(workers) < 2 {
@@ -167,7 +167,7 @@ var _ = g.Describe("[sig-networking] SDN CNO", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-Medium-72349-No matching node for sourcePlacement or targePlacement. [Disruptive]", func() {
+	g.It("Author:huirwang-NonHyperShiftHOST-Medium-72349-No matching node for sourcePlacement or targePlacement. [Disruptive]", func() {
 		exutil.By("Get default networkDiagnostics pods.  ")
 		networkdDiagPods, err := exutil.GetAllPods(oc, diagNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -257,7 +257,7 @@ var _ = g.Describe("[sig-networking] SDN CNO", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-Medium-72351-Low-73365-mode of networkDiagnostics is Disabled,invalid mode will not be accepted. [Disruptive]", func() {
+	g.It("Author:huirwang-NonHyperShiftHOST-Medium-72351-Low-73365-mode of networkDiagnostics is Disabled,invalid mode will not be accepted. [Disruptive]", func() {
 		exutil.By("Get default networkDiagnostics pods.  ")
 		networkdDiagPods, err := exutil.GetAllPods(oc, diagNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -325,7 +325,7 @@ var _ = g.Describe("[sig-networking] SDN CNO", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-Medium-73367-Configure disableNetworkDiagnostics and networkDiagnostics. [Disruptive]", func() {
+	g.It("Author:huirwang-NonHyperShiftHOST-Medium-73367-Configure disableNetworkDiagnostics and networkDiagnostics. [Disruptive]", func() {
 		exutil.By("Get default networkDiagnostics pods.  ")
 		networkdDiagPods, err := exutil.GetAllPods(oc, diagNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())

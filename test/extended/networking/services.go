@@ -1172,7 +1172,7 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-High-43492-ExternalIP for node that has secondary IP. [Disruptive]", func() {
+	g.It("Author:jechen-NonHyperShiftHOST-High-43492-ExternalIP for node that has secondary IP. [Disruptive]", func() {
 
 		// This is for bug https://bugzilla.redhat.com/show_bug.cgi?id=1959798
 
