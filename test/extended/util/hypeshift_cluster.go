@@ -209,7 +209,7 @@ func ROSAValidHypershiftAndGetGuestKubeConf(oc *CLI) (string, string, string) {
 		e2e.Logf("can't get hostedcluster name %s SHARE_DIR: %s", err.Error(), os.Getenv("SHARED_DIR"))
 		return "", "", ""
 	}
-	clusterName := string(data)
+	clusterName := strings.ReplaceAll(string(data), "\n", "")
 	hostedclusterNS, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("-A", "hostedclusters", `-o=jsonpath={.items[?(@.metadata.name=="`+clusterName+`")].metadata.namespace}`).Output()
 	if len(hostedclusterNS) <= 0 {
 		e2e.Logf("there is no hosted cluster NS in mgmt cluster")
