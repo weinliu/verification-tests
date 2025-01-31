@@ -16,4 +16,4 @@ parameters:
 - name: CATALOG_NAME
   value: "netobserv-konflux-fbc"
 - name: IMAGE
-  value: "quay.io/redhat-user-workloads/ocp-network-observab-tenant/netobserv-operator/network-observability-operator-fbc:latest"
+  value: "quay.io/redhat-user-workloads/ocp-network-observab-tenant/netobserv-operator/network-observability-operator-fbc:1.8"

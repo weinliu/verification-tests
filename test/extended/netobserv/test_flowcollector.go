@@ -72,11 +72,13 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			NOcatSrc.Name = "redhat-operators"
 			NOSource.SourceName = NOcatSrc.Name
 		} else {
-			g.By("Deploy konflux FBC")
+			g.By("Deploy konflux FBC and ImageDigestMirrorSet")
+			imageDigest := filePath.Join(subscriptionDir, "image-digest-mirror-set.yaml")
 			catSrcTemplate := filePath.Join(subscriptionDir, "catalog-source.yaml")
 			catsrcErr := NOcatSrc.applyFromTemplate(oc, "-n", NOcatSrc.Namespace, "-f", catSrcTemplate)
 			o.Expect(catsrcErr).NotTo(o.HaveOccurred())
 			WaitUntilCatSrcReady(oc, NOcatSrc.Name)
+			applyResourceFromFile(oc, netobservNS, imageDigest)
 		}
 
 		ipStackType := checkIPStackType(oc)
@@ -1501,7 +1503,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).ToNot(o.HaveOccurred())
 
 		g.By("Deploy test client pod to induce SYN flooding")
-		template := filePath.Join(baseDir, "test-client_template.yaml")
+		template := filePath.Join(baseDir, "test-SYN-flood-client_template.yaml")
 		testTemplate := TestClientTemplate{
 			ClientNS: "test-client-75656",
 			Template: template,

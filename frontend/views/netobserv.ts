@@ -30,10 +30,12 @@ export const Operator = {
             catalogSources.createCustomCatalog(catalogImg, catalogSource, catalogDisplayName)
         }
         else {
-            let catalogImg = "quay.io/redhat-user-workloads/ocp-network-observab-tenant/netobserv-operator/network-observability-operator-fbc:latest"
+            let catalogImg = "quay.io/redhat-user-workloads/ocp-network-observab-tenant/netobserv-operator/network-observability-operator-fbc:1.8"
             let catalogSource = "netobserv-konflux-fbc"
             catalogDisplayName = "NetObserv Konflux"
             catalogSources.createCustomCatalog(catalogImg, catalogSource, catalogDisplayName)
+            // deploy ImageDigetMirrorSet
+            cy.adminCLI('oc apply -f ./fixtures/netobserv/image-digest-mirror-set.yaml')
         }
         return catalogDisplayName
     },
