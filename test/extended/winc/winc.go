@@ -52,10 +52,10 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 	// author: sgao@redhat.com
 	g.It("Smokerun-Author:sgao-Critical-33612-Windows node basic check", func() {
 		g.By("Check Windows worker nodes run the same kubelet version as other Linux worker nodes")
-		linuxKubeletVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l=kubernetes.io/os=linux", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
+		linuxKubeletVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=linux", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		windowsKubeletVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l=kubernetes.io/os=windows", "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
+		windowsKubeletVersion, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", nodeLabel, "-o=jsonpath={.items[0].status.nodeInfo.kubeletVersion}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		if !matchKubeletVersion(oc, linuxKubeletVersion, windowsKubeletVersion) {
@@ -63,7 +63,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 
 		g.By("Check worker label is applied to Windows nodes")
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers", "-l=kubernetes.io/os=windows").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "--no-headers", "-l", nodeLabel).Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, node := range strings.Split(msg, "\n") {
 			if !strings.Contains(node, "worker") {
@@ -721,7 +721,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 
 		g.By("Check a cluster-admin can retrieve hybrid-overlay logs")
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=hybrid-overlay/hybrid-overlay.log").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "-l", nodeLabel, "--path=hybrid-overlay/hybrid-overlay.log").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, winHostName := range windowsHostNames {
 			e2e.Logf("Retrieve hybrid-overlay log on: " + winHostName)
@@ -731,7 +731,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 
 		g.By("Check a cluster-admin can retrieve container runtime logs")
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=containerd/containerd.log").Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "-l", nodeLabel, "--path=containerd/containerd.log").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("Retrieve container runtime logs")
 		if !strings.Contains(string(msg), "starting containerd") {
@@ -739,7 +739,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 
 		g.By("Check a cluster-admin can retrieve wicd runtime logs")
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=wicd/windows-instance-config-daemon.exe.INFO").Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "-l", nodeLabel, "--path=wicd/windows-instance-config-daemon.exe.INFO").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, winHostName := range windowsHostNames {
 			e2e.Logf("Retrieve wicd runtime log on: " + winHostName)
@@ -749,7 +749,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 
 		g.By("Check a cluster-admin can retrieve csi-proxy logs")
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "-l=kubernetes.io/os=windows", "--path=csi-proxy/csi-proxy.log").Output()
+		msg, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", "-l", nodeLabel, "--path=csi-proxy/csi-proxy.log").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, winHostName := range windowsHostNames {
 			e2e.Logf("Retrieve csi-proxy runtime log on: " + winHostName)
@@ -982,7 +982,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		defer deleteProject(oc, namespace)
 		createProject(oc, namespace)
 		g.By("Check Windows node have a taint 'os=Windows:NoSchedule'")
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l=kubernetes.io/os=windows", "-o=jsonpath={.items[0].spec.taints[0].key}={.items[0].spec.taints[0].value}:{.items[0].spec.taints[0].effect}").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", nodeLabel, "-o=jsonpath={.items[0].spec.taints[0].key}={.items[0].spec.taints[0].value}:{.items[0].spec.taints[0].effect}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if msg != "os=Windows:NoSchedule" {
 			e2e.Failf("Failed to check Windows node have taint os=Windows:NoSchedule")
@@ -2668,6 +2668,48 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		// verify the deployment is scaled down
 		checkWorkloadCreated(oc, windowsWorkloads, namespace, 1)
 
-	})
+		g.It("Author:rrasouli-Smokerun-Medium-79251-Validate matching provider IDs between Windows nodes and machines", func() {
+			e2e.Logf("Fetching Windows Machines and Nodes provider IDs...")
 
+			// Get JSON output for Machines
+			windowsMachinesJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").
+				Args(exutil.MapiMachine, "-n", exutil.MachineAPINamespace, "-l", machineLabel, "-o=json").Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), "Failed to retrieve Windows Machines JSON")
+
+			// Get JSON output for Nodes
+			windowsNodesJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").
+				Args("nodes", "-l", nodeLabel, "-o=json").Output()
+			o.Expect(err).NotTo(o.HaveOccurred(), "Failed to retrieve Windows Nodes JSON")
+
+			// Extract provider IDs directly using extractInstanceID
+			machineProviderIDs, err := extractInstanceID(windowsMachinesJSON, "Windows Machine")
+			o.Expect(err).NotTo(o.HaveOccurred(), "Failed to process Windows Machines provider IDs")
+
+			nodeProviderIDs, err := extractInstanceID(windowsNodesJSON, "Windows Node")
+			o.Expect(err).NotTo(o.HaveOccurred(), "Failed to process Windows Nodes provider IDs")
+
+			e2e.Logf("Final Windows Machine provider IDs: %v", machineProviderIDs)
+			e2e.Logf("Final Windows Node provider IDs: %v", nodeProviderIDs)
+
+			// Retrieve Windows node hostnames
+			winHostNames := getWindowsHostNames(oc)
+
+			// Correlate Machines with Nodes and Validate Provider IDs
+			for _, nodeName := range winHostNames {
+				nodeProviderID, exists := nodeProviderIDs[nodeName]
+				o.Expect(exists).To(o.BeTrue(), fmt.Sprintf("Node %s does not have a provider ID", nodeName))
+
+				matchingMachineFound := false
+				for machineName, machineProviderID := range machineProviderIDs {
+					if machineProviderID == nodeProviderID {
+						matchingMachineFound = true
+						e2e.Logf("Machine %s is correctly associated with Node %s (Instance ID: %s)", machineName, nodeName, nodeProviderID)
+						break
+					}
+				}
+				o.Expect(matchingMachineFound).To(o.BeTrue(), fmt.Sprintf("No matching Machine found for Node %s with Provider ID %s", nodeName, nodeProviderID))
+			}
+		})
+
+	})
 })

@@ -1,6 +1,7 @@
 package winc
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
@@ -63,6 +64,8 @@ var (
 	linuxWebserverFile             = "linux_web_server.yaml"
 	linuxWebserverFileDisconnected = "linux_web_server_disconnected.yaml"
 	windowsWebserverFile           = "windows_web_server.yaml"
+	machineLabel                   = "machine.openshift.io/os-id=Windows"
+	nodeLabel                      = "kubernetes.io/os=windows"
 	//	defaultSource      = "wmco"
 	// Bastion user used for Nutanix and vSphere IBMC
 	sshProxyUser = "root"
@@ -120,7 +123,7 @@ func waitWindowsNodesReady(oc *exutil.CLI, expectedNodes int, timeout time.Durat
 	pollErr := wait.Poll(10*time.Second, timeout, func() (bool, error) {
 		// Run the oc command to get the status of Windows nodes
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").
-			Args("nodes", "-l", "kubernetes.io/os=windows", "-o=jsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}").Output()
+			Args("nodes", "-l", nodeLabel, "-o=jsonpath={.items[*].status.conditions[?(@.type==\"Ready\")].status}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get Windows nodes")
 
 		// Parse the output to check node statuses
@@ -256,7 +259,7 @@ func getWindowsMachineSetName(oc *exutil.CLI, name string, iaasPlatform string, 
 }
 
 func getWindowsHostNames(oc *exutil.CLI) []string {
-	winHostNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=windows", "-o=jsonpath={.items[*].status.addresses[?(@.type==\"Hostname\")].address}").Output()
+	winHostNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", nodeLabel, "-o=jsonpath={.items[*].status.addresses[?(@.type==\"Hostname\")].address}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if winHostNames == "" {
 		return []string{}
@@ -265,7 +268,7 @@ func getWindowsHostNames(oc *exutil.CLI) []string {
 }
 
 func getWindowsInternalIPs(oc *exutil.CLI) []string {
-	winInternalIPs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", "kubernetes.io/os=windows", "-o=jsonpath={.items[*].status.addresses[?(@.type==\"InternalIP\")].address}").Output()
+	winInternalIPs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-l", nodeLabel, "-o=jsonpath={.items[*].status.addresses[?(@.type==\"InternalIP\")].address}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if winInternalIPs == "" {
 		return []string{}
@@ -545,7 +548,7 @@ func configureMachineset(oc *exutil.CLI, iaasPlatform, machineSetName string, fi
 	if iaasPlatform == "aws" {
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
 		if err != nil {
-			region, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", "machine.openshift.io/os-id=Windows", "-o=jsonpath={.items[0].spec.providerSpec.value.placement.region}").Output()
+			region, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", machineLabel, "-o=jsonpath={.items[0].spec.providerSpec.value.placement.region}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred(), "Could not fetch region from the existing machineset")
 		}
 		zone := getAvailabilityZone(oc)
@@ -590,7 +593,7 @@ func configureMachineset(oc *exutil.CLI, iaasPlatform, machineSetName string, fi
 		o.Expect(err).NotTo(o.HaveOccurred())
 		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.gcp.region}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defaultMachineSet, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", "machine.openshift.io/os-id=Windows", "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset}").Output()
+		defaultMachineSet, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachine, "-n", mcoNamespace, "-l", machineLabel, "-o=jsonpath={.items[0].metadata.labels.machine\\.openshift\\.io\\/cluster-api-machineset}").Output()
 		// Obtain the projectId and email from the existing machineSet
 		project, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(exutil.MapiMachineset, "-n", mcoNamespace, defaultMachineSet, "-o=jsonpath={.spec.template.spec.providerSpec.value.projectID}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1696,4 +1699,61 @@ func verifyAWSRoutePersistence(bastionHost, windowsHost, privateKey, iaasPlatfor
 func haveMetricsServer(oc *exutil.CLI) bool {
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiservice", "v1beta1.metrics.k8s.io").Output()
 	return err == nil && strings.Contains(output, "True")
+}
+
+// extractInstanceID extracts the last segment (Instance ID or VM Name) from the providerID string.
+// It also fetches the full providerID from JSON and processes it.
+func extractInstanceID(jsonData, resourceType string) (map[string]string, error) {
+	e2e.Logf("Processing %s JSON data to extract provider IDs...", resourceType)
+
+	// Use jq to extract names and provider IDs with "|" as separator
+	cmd := exec.Command("jq", "-r", `.items[] | "\(.metadata.name)|\(.spec.providerID)"`)
+	cmd.Stdin = bytes.NewBufferString(jsonData)
+	jqOutput, err := cmd.Output()
+	if err != nil {
+		e2e.Logf("Error parsing jq output for %s: %v", resourceType, err)
+		return nil, fmt.Errorf("failed to parse jq output for %s: %v", resourceType, err)
+	}
+
+	output := strings.TrimSpace(string(jqOutput))
+	if output == "" {
+		e2e.Logf("Error: No %s found in jq processing", resourceType)
+		return nil, fmt.Errorf("no %s found", resourceType)
+	}
+
+	e2e.Logf("Raw %s output:\n%s", resourceType, output)
+
+	// Parse resource name and provider ID pairs
+	providerIDs := make(map[string]string)
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		parts := strings.SplitN(line, "|", 2) // Split only on the first "|"
+		if len(parts) != 2 {
+			e2e.Logf("Error: Invalid %s data format: %s", resourceType, line)
+			return nil, fmt.Errorf("invalid %s data format: %s", resourceType, line)
+		}
+		name := parts[0]
+		providerID := parts[1]
+
+		// Extract only the last segment after "/"
+		re := regexp.MustCompile(`.*/([^/]+)$`)
+		matches := re.FindStringSubmatch(providerID)
+
+		if len(matches) != 2 {
+			e2e.Logf("Error: Invalid providerID format, cannot extract instance ID for %s: %s", resourceType, providerID)
+			return nil, fmt.Errorf("invalid providerID format: %s", providerID)
+		}
+
+		instanceID := matches[1]
+		e2e.Logf("Mapped %s %s to instance ID %s", resourceType, name, instanceID)
+		providerIDs[name] = instanceID
+	}
+
+	if len(providerIDs) == 0 {
+		e2e.Logf("Error: No valid %s found after parsing", resourceType)
+		return nil, fmt.Errorf("no valid %s found", resourceType)
+	}
+
+	e2e.Logf("Successfully retrieved %s provider IDs", resourceType)
+	return providerIDs, nil
 }
