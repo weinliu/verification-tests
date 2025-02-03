@@ -319,6 +319,7 @@ func verifyPacketTranslationFlows(oc *exutil.CLI, serverNS, clientNS string, flo
 	}
 }
 
+// Verify Network Events feature flows
 func verifyNetworkEvents(flowRecords []FlowRecord, action, policytype, direction string) {
 	nNWEventsLogs := 0
 	for _, flow := range flowRecords {

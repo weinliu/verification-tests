@@ -278,7 +278,7 @@ func getSecrets(oc *exutil.CLI, namespace string) (string, error) {
 	return secrets, err
 }
 
-// check pods with label that are fully deleted
+// check if pods with label are fully deleted
 func checkPodDeleted(oc *exutil.CLI, ns, label, checkValue string) {
 	podCheck := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 240*time.Second, false, func(context.Context) (bool, error) {
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Output()
@@ -549,7 +549,7 @@ func getPodLogs(oc *exutil.CLI, namespace, podname string) (string, error) {
 	return filepath.Abs(podLogs)
 }
 
-// check if NetworkAttachDefinition is created
+// wait until NetworkAttachDefinition is Ready
 func checkNAD(oc *exutil.CLI, nad, ns string) {
 	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 600*time.Second, false, func(context.Context) (done bool, err error) {
 		nadOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("net-attach-def", nad, "-n", ns).Output()
@@ -615,7 +615,7 @@ func WaitUntilCatSrcReady(oc *exutil.CLI, catSrc string) {
 	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 600*time.Second, false, func(context.Context) (done bool, err error) {
 		state, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", catSrc, "-n", "openshift-marketplace", "-o", "jsonpath='{.status.connectionState.lastObservedState}'").Output()
 		if err != nil {
-			// loop until virtual machine is found or until timeout
+			// loop until catalogSource is found or until timeout
 			if strings.Contains(err.Error(), "not found") {
 				return false, nil
 			}

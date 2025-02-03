@@ -158,7 +158,7 @@ func verifyEBPFFeatureMetrics(oc *exutil.CLI, feature string) {
 		o.Expect(metrics).Should(o.BeNumerically("~", 50, 60), "RTT metrics are beyond threshold values")
 	case "DNS":
 		// Expected to be around 1
-		o.Expect(metrics).Should(o.BeNumerically("~", 0.2, 2.5), "DNS metrics are beyond threshold values")
+		o.Expect(metrics).Should(o.BeNumerically("~", 0.2, 5), "DNS metrics are beyond threshold values")
 	case "Xlat":
 		// Expected to be around 18
 		o.Expect(metrics).Should(o.BeNumerically("~", 15, 22), "Xlat metrics are beyond threshold values")

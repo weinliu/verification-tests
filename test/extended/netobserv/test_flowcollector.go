@@ -665,7 +665,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		flow.CreateFlowcollector(oc)
 
 		g.By("Get NetObserv and components versions")
-		NOCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=netobserv-operator", "-n", netobservNS, "-o=jsonpath={.items[*].spec.containers[1].env[0].value}").Output()
+		NOCSV, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=netobserv-operator", "-n", netobservNS, "-o=jsonpath={.items[*].spec.containers[0].env[?(@.name=='OPERATOR_CONDITION_NAME')].value}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		preUpgradeNOVersion := strings.Split(NOCSV, ".v")[1]
@@ -690,7 +690,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect((NOStatus)).To(o.BeTrue())
 
 		g.By("Get NetObserv operator and components versions")
-		NOCSV, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=netobserv-operator", "-n", netobservNS, "-o=jsonpath={.items[*].spec.containers[1].env[0].value}").Output()
+		NOCSV, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "app=netobserv-operator", "-n", netobservNS, "-o=jsonpath={.items[*].spec.containers[0].env[?(@.name=='OPERATOR_CONDITION_NAME')].value}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		postUpgradeNOVersion := strings.Split(NOCSV, ".v")[1]
