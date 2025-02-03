@@ -4114,7 +4114,7 @@ nulla pariatur.`
 		}
 	})
 
-	g.It("Author:rioliu-NonPreRelease-Longduration-High-70125-[P2] Test patch annotation way of updating a paused pool [Disruptive]", func() {
+	g.It("Author:rioliu-NonPreRelease-Longduration-High-70125-[P2][OnCLayer] Test patch annotation way of updating a paused pool [Disruptive]", func() {
 
 		var (
 			workerMcp  = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
@@ -4133,6 +4133,7 @@ nulla pariatur.`
 		mc.SetParams(fmt.Sprintf("FILES=[%s]", fileConfig))
 		mc.skipWaitForMcp = true
 
+		defer workerMcp.RecoverFromDegraded()
 		defer mc.delete()
 		// unpause the mcp first in defer logic, so nodes can be recovered automatically
 		defer workerMcp.pause(false)
@@ -4143,21 +4144,47 @@ nulla pariatur.`
 		currentConfig, ccerr := workerMcp.getConfigNameOfStatus()
 		o.Expect(ccerr).NotTo(o.HaveOccurred(), "Get current MC of worker pool failed")
 		o.Eventually(workerMcp.getConfigNameOfSpec, "2m", "5s").ShouldNot(o.Equal(currentConfig))
-		desireConfig, dcerr := workerMcp.getConfigNameOfSpec()
+		desiredConfig, dcerr := workerMcp.getConfigNameOfSpec()
 		o.Expect(dcerr).NotTo(o.HaveOccurred(), "Get desired MC of worker pool failed")
-		o.Expect(desireConfig).NotTo(o.BeEmpty(), "Cannot get desired MC")
-		logger.Infof("Desired MC is: %s\n", desireConfig)
+		o.Expect(desiredConfig).NotTo(o.BeEmpty(), "Cannot get desired MC")
+		logger.Infof("Desired MC is: %s\n", desiredConfig)
 
 		allWorkerNodes := NewNodeList(oc.AsAdmin()).GetAllLinuxWorkerNodesOrFail()
 		o.Expect(allWorkerNodes).NotTo(o.BeEmpty(), "Cannot get any worker node from worker pool")
 		workerNode := allWorkerNodes[0]
-		logger.Infof("Start to patch annotation [machineconfiguration.openshift.io/desiredConfig] for worker node %s", workerNode.GetName())
-		defer workerMcp.RecoverFromDegraded()
-		workerNode.PatchDesiredConfig(desireConfig)
+
+		if exutil.OrFail[bool](workerMcp.IsOCL()) {
+			logger.Infof("OCL cluster, we need to patch the desiredImage annotation too")
+			logger.Infof("Start to patch annotations [machineconfiguration.openshift.io/desiredConfig] and [machineconfiguration.openshift.io/desiredImage] for worker node %s", workerNode.GetName())
+			mosc := exutil.OrFail[*MachineOSConfig](workerMcp.GetMOSC())
+			var mosb *MachineOSBuild
+			o.Eventually(func() (string, error) {
+				var err error
+				mosb, err = mosc.GetCurrentMachineOSBuild()
+				if err != nil {
+					return "", err
+				}
+				return mosb.GetMachineConfigName()
+			}, "5m", "15s").Should(o.Equal(desiredConfig), "The MOSC resource was not updated with the right MOSB")
+			logger.Infof("Waiting for the image to be built")
+			o.Eventually(mosb, "20m", "20s").Should(HaveConditionField("Building", "status", FalseString), "Build was not finished")
+			o.Eventually(mosb, "10m", "20s").Should(HaveConditionField("Succeeded", "status", TrueString), "Build didn't succeed")
+			desiredImage := exutil.OrFail[string](mosb.GetStatusFinalImagePullSpec())
+			o.Eventually(mosc.GetStatusCurrentImagePullSpec, "2m", "10s").Should(o.Equal(desiredImage), "The MOSC resource was not updated")
+			logger.Infof("Desired Image is: %s\n", desiredImage)
+			o.Expect(desiredImage).NotTo(o.BeEmpty(), "Cannot get desired image")
+			workerNode.PatchDesiredConfigAndDesiredImage(desiredConfig, desiredImage)
+		} else {
+			logger.Infof("Not OCL cluster, we only patch the desiredConfig annotation")
+			logger.Infof("Start to patch annotation [machineconfiguration.openshift.io/desiredConfig] for worker node %s", workerNode.GetName())
+			workerNode.PatchDesiredConfig(desiredConfig)
+		}
+
 		// wait update to complete
 		o.Eventually(workerNode.IsUpdating, "5m", "5s").Should(o.BeTrue(), "Node is not updating")
 		o.Eventually(workerNode.IsUpdated, "10m", "10s").Should(o.BeTrue(), "Node is not updated")
-		logger.Infof("Node %s is updated to desired MC %s", workerNode.GetName(), desireConfig)
+		o.Eventually(workerMcp.getUpdatedMachineCount, "2m", "15s").Should(o.Equal(1), "The  MCP is not properly reporting the updated node")
+		logger.Infof("Node %s is updated to desired MC %s", workerNode.GetName(), desiredConfig)
 
 		exutil.By("Unpause worker pool")
 		workerMcp.pause(false)

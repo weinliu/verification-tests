@@ -434,12 +434,23 @@ func (n *Node) RestoreDesiredConfig() error {
 		return fmt.Errorf("currentConfig annotation has an empty value in node %s", n.GetName())
 	}
 	logger.Infof("Node: %s. Restoring desiredConfig value to match currentConfig value: %s", n.GetName(), currentConfig)
-	return n.PatchDesiredConfig(currentConfig)
+
+	currentImage := n.GetCurrentImage()
+	if currentImage == "" {
+		return n.PatchDesiredConfig(currentConfig)
+	}
+	logger.Infof("Node: %s. Restoring desiredImage value to match currentImage value: %s", n.GetName(), currentImage)
+	return n.PatchDesiredConfigAndDesiredImage(currentConfig, currentImage)
 }
 
 // GetCurrentMachineConfig returns the ID of the current machine config used in the node
 func (n Node) GetCurrentMachineConfig() string {
 	return n.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/currentConfig}`)
+}
+
+// GetCurrentImage returns the current image used in this node
+func (n Node) GetCurrentImage() string {
+	return n.GetOrFail(`{.metadata.annotations.machineconfiguration\.openshift\.io/currentImage}`)
 }
 
 // GetDesiredMachineConfig returns the ID of the machine config that we want the node to use
@@ -465,6 +476,11 @@ func (n Node) GetDesiredConfig() string {
 // PatchDesiredConfig patches the desiredConfig annotation with the provided value
 func (n *Node) PatchDesiredConfig(desiredConfig string) error {
 	return n.Patch("merge", `{"metadata":{"annotations":{"machineconfiguration.openshift.io/desiredConfig":"`+desiredConfig+`"}}}`)
+}
+
+// PatchDesiredConfigAndImage patches the desiredConfig annotation and the desiredImage annotation with the provided values
+func (n *Node) PatchDesiredConfigAndDesiredImage(desiredConfig, desiredImage string) error {
+	return n.Patch("merge", `{"metadata":{"annotations":{"machineconfiguration.openshift.io/desiredConfig":"`+desiredConfig+`", "machineconfiguration.openshift.io/desiredImage":"`+desiredImage+`"}}}`)
 }
 
 // GetDesiredDrain returns the last desired machine config that needed a drain operation in this node
