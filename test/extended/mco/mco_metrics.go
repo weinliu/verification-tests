@@ -126,6 +126,8 @@ var _ = g.Describe("[sig-mco] MCO metrics", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Restore original OS status in the node")
+		o.Eventually(node.IsRpmOsTreeIdle, "10m", "20s").
+			Should(o.BeTrue(), "rpm-ostree status didn't become idle")
 		o.Expect(node.OSReset()).To(o.Succeed(),
 			"Error restoring the original OS status in %s", node)
 		o.Expect(node.Reboot()).To(o.Succeed(),
