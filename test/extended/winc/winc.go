@@ -2569,4 +2569,105 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		})
 		o.Expect(waitErr).NotTo(o.HaveOccurred(), "Timeout waiting for service changes cleanup")
 	})
+
+	// author: rrasouli@redhat.com
+	g.It("Author:rrasouli-Smokerun-Medium-79100-Horizontal Pod Autoscaling with Windows containers", func() {
+		if !haveMetricsServer(oc) {
+			g.Skip("metrics-server is required for HPA testing")
+		}
+
+		namespace := "winc-79100"
+		defer deleteProject(oc, namespace)
+
+		// Create project
+		g.By("Creating test namespace")
+		createProject(oc, namespace)
+
+		// Create Windows deployment
+		g.By("Creating Windows deployment")
+		windowsImage := getConfigMapData(oc, wincTestCM, "primary_windows_container_image", defaultNamespace)
+		createWorkload(oc, namespace, "windows_web_server.yaml", map[string]string{
+			"<windows_container_image>": windowsImage,
+			"<namespace>":               namespace,
+		}, true, windowsWorkloads)
+
+		// Memory HPA test
+		g.By("Creating memory-based HPA")
+		// create new HPA
+		manifestFile, err := exutil.GenerateManifestFile(oc, "winc", "windows_hpa.yaml", map[string]string{
+			"<resourceName>": "hpa-resource-metrics-memory",
+			"<resource>":     "memory",
+			"<namespace>":    namespace,
+			"<averageValue>": "50Mi"})
+
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// create the HPA memory based on the manifest file
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to create HPA")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile, "--ignore-not-found").Execute()
+		defer os.Remove(manifestFile)
+
+		g.By("Verifying HPA scales up deployment")
+		err = wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").
+				Args("deployment", windowsWorkloads, "-o=jsonpath={.status.readyReplicas}", "-n", namespace).Output()
+			numberOfWorkloads, _ := strconv.Atoi(msg)
+			return numberOfWorkloads > 1, nil
+		})
+		o.Expect(err).NotTo(o.HaveOccurred(), "Deployment did not scale up")
+
+		g.By("Patching memory HPA to trigger scale down")
+		_, err = oc.WithoutNamespace().Run("patch").Args(
+			"hpa", "hpa-resource-metrics-memory",
+			"-n", namespace,
+			"--type=merge",
+			"--patch", `{"spec":{"metrics":[{"resource":{"target":{"type":"AverageValue","averageValue":"150Mi"},"name":"memory"},"type":"Resource"}]}}`,
+		).Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to patch memory HPA")
+
+		g.By("Removing memory HPA")
+		oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile, "--ignore-not-found").Execute()
+		checkWorkloadCreated(oc, windowsWorkloads, namespace, 1)
+
+		// CPU HPA test
+		g.By("Creating CPU-based HPA")
+		// create new HPA for CPU
+		manifestFile, err = exutil.GenerateManifestFile(oc, "winc", "windows_hpa.yaml", map[string]string{
+			"<resourceName>": "hpa-resource-metrics-cpu",
+			"<resource>":     "cpu",
+			"<namespace>":    namespace,
+			"<averageValue>": "10m"})
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// create the HPA CPU based on the manifest file
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", manifestFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to create HPA")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", manifestFile, "--ignore-not-found").Execute()
+		defer os.Remove(manifestFile)
+
+		g.By("Verifying HPA scales up deployment")
+		err = wait.Poll(10*time.Second, 5*time.Minute, func() (bool, error) {
+			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").
+				Args("deployment", windowsWorkloads, "-o=jsonpath={.status.readyReplicas}", "-n", namespace).Output()
+			numberOfWorkloads, _ := strconv.Atoi(msg)
+			return numberOfWorkloads > 1, nil
+		})
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Patching CPU HPA to trigger scale down")
+		_, err = oc.WithoutNamespace().Run("patch").Args(
+			"hpa", "hpa-resource-metrics-cpu",
+			"-n", namespace,
+			"--type=merge",
+			"--patch", `{"spec":{"metrics":[{"resource":{"target":{"type":"AverageValue","averageValue":"500m"},"name":"cpu"},"type":"Resource"}]}}`,
+		).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		g.By("Removing CPU HPA")
+		oc.WithoutNamespace().Run("delete").Args("hpa", "hpa-resource-metrics-cpu", "-n", namespace).Execute()
+
+		// verify the deployment is scaled down
+		checkWorkloadCreated(oc, windowsWorkloads, namespace, 1)
+
+	})
+
 })

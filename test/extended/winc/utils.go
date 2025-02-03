@@ -421,6 +421,7 @@ func createWorkload(oc *exutil.CLI, namespace string, workloadFile string, repla
 		o.Expect(poolErr).NotTo(o.HaveOccurred(), workloadType+" workload is not ready after waiting up to 15 minutes")
 	}
 }
+
 func checkWorkloadCreated(oc *exutil.CLI, deploymentName string, namespace string, replicas int) bool {
 	// Get the number of ready replicas
 	msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").
@@ -1689,4 +1690,10 @@ func verifyAWSRoutePersistence(bastionHost, windowsHost, privateKey, iaasPlatfor
 	}
 
 	return nil
+}
+
+// Helper function to check for metrics server
+func haveMetricsServer(oc *exutil.CLI) bool {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiservice", "v1beta1.metrics.k8s.io").Output()
+	return err == nil && strings.Contains(output, "True")
 }
