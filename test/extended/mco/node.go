@@ -380,9 +380,20 @@ func (n Node) GetCurrentBootOSImage() (string, error) {
 	}
 
 	// remove the "ostree-unverified-registry:" part of the image
-	// it can have other modifiers too, like: ostree-unverified-image:containers-storage:quay.io/openshift-.....
-	// so we only take the last 2 fields and ignore the rest
-	image := strings.Join(imageSplit[len(imageSplit)-2:], ":")
+	// remove the "containers-storage:" part of the image
+	// it can have these modifiers: ostree-unverified-image:containers-storage:quay.io/openshift-.....
+	// we need to take into account this kind of images too ->  ostree-unverified-registry:image-registry.openshift-image-registry.svc:5000/openshift-machine-config-operator/ocb-worker-image@sha256:da29d9033c...
+	image := imageSplit[lenImageSplit-2] + ":" + imageSplit[lenImageSplit-1]
+	// we need to check if the image includes the port too
+	if lenImageSplit > 2 {
+		_, err := strconv.Atoi(strings.Split(image, "/")[0])
+		// the image url includes the port. It is in the format my.doamin:port/my/path
+		if err == nil {
+			image = imageSplit[lenImageSplit-3] + ":" + image
+		}
+	}
+
+	image = strings.TrimSpace(image)
 	logger.Infof("Booted image: %s", image)
 
 	return image, nil
