@@ -505,6 +505,26 @@ func (c *CLI) CreateNamespaceUDN() {
 	e2e.Logf("Namespace %q has been created successfully.", newNamespace)
 }
 
+// CreateSpecificNamespaceUDN creates an UDN namespace with pre-defined name, and the namespace requires user defined network label during creation time only
+// required for testing networking UDN features on 4.17z+
+// Important Note:  the namespace created by this function will not be automatically deleted, user need to explicitly delete the namespace after test is done
+func (c *CLI) CreateSpecificNamespaceUDN(ns string) {
+	c.SetNamespace(ns)
+	labelKey := "k8s.ovn.org/primary-user-defined-network"
+	labelValue := "null"
+	e2e.Logf("Creating a pre-defined project %q with label for UDN", ns)
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   ns,
+			Labels: map[string]string{labelKey: labelValue},
+		},
+	}
+	// Create the namespace
+	_, err := c.AdminKubeClient().CoreV1().Namespaces().Create(context.TODO(), namespace, metav1.CreateOptions{})
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Namespace %q has been created successfully.", ns)
+}
+
 // CreateProject creates a new project and assign a random user to the project.
 // All resources will be then created within this project.
 // TODO this should be removed.  It's only used by image tests.

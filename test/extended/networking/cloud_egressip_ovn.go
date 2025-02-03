@@ -1566,10 +1566,15 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		egressNode1 := egressNodes[0]
 
 		exutil.By("1. Create namespaces, label them with label that matches namespaceSelector defined in egressip object.")
-		for _, ns := range allNS {
-			oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", ns).Execute()
-			exutil.SetNamespacePrivileged(oc, ns)
-			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
+		for i := 0; i < len(allNS); i++ {
+			// first namespace is for default network
+			if i == 0 {
+				oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", allNS[i]).Execute()
+			} else {
+				oc.CreateSpecificNamespaceUDN(allNS[i])
+			}
+			exutil.SetNamespacePrivileged(oc, allNS[i])
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", allNS[i], "org=qe").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
@@ -1654,7 +1659,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		e2e.Logf("got upgrade namespaces:  %v", allNS)
 
 		for _, ns := range allNS {
-			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--ignore-not-found=true").Execute()
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("namespace", ns, "--ignore-not-found=true").Execute()
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", "hello-", "-n", ns, "--ignore-not-found=true").Execute()
 		}
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("egressip", "--all").Execute()
