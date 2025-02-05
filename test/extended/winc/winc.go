@@ -2667,49 +2667,49 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 
 		// verify the deployment is scaled down
 		checkWorkloadCreated(oc, windowsWorkloads, namespace, 1)
+	})
 
-		g.It("Author:rrasouli-Smokerun-Medium-79251-Validate matching provider IDs between Windows nodes and machines", func() {
-			e2e.Logf("Fetching Windows Machines and Nodes provider IDs...")
+	// author: rrasouli@redhat.com
+	g.It("Author:rrasouli-Smokerun-Medium-79251-Validate matching provider IDs between Windows nodes and machines", func() {
+		e2e.Logf("Fetching Windows Machines and Nodes provider IDs...")
 
-			// Get JSON output for Machines
-			windowsMachinesJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").
-				Args(exutil.MapiMachine, "-n", exutil.MachineAPINamespace, "-l", machineLabel, "-o=json").Output()
-			o.Expect(err).NotTo(o.HaveOccurred(), "Failed to retrieve Windows Machines JSON")
+		// Get JSON output for Machines
+		windowsMachinesJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").
+			Args(exutil.MapiMachine, "-n", exutil.MachineAPINamespace, "-l", machineLabel, "-o=json").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to retrieve Windows Machines JSON")
 
-			// Get JSON output for Nodes
-			windowsNodesJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").
-				Args("nodes", "-l", nodeLabel, "-o=json").Output()
-			o.Expect(err).NotTo(o.HaveOccurred(), "Failed to retrieve Windows Nodes JSON")
+		// Get JSON output for Nodes
+		windowsNodesJSON, err := oc.AsAdmin().WithoutNamespace().Run("get").
+			Args("nodes", "-l", nodeLabel, "-o=json").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to retrieve Windows Nodes JSON")
 
-			// Extract provider IDs directly using extractInstanceID
-			machineProviderIDs, err := extractInstanceID(windowsMachinesJSON, "Windows Machine")
-			o.Expect(err).NotTo(o.HaveOccurred(), "Failed to process Windows Machines provider IDs")
+		// Extract provider IDs directly using extractInstanceID
+		machineProviderIDs, err := extractInstanceID(windowsMachinesJSON, "Windows Machine")
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to process Windows Machines provider IDs")
 
-			nodeProviderIDs, err := extractInstanceID(windowsNodesJSON, "Windows Node")
-			o.Expect(err).NotTo(o.HaveOccurred(), "Failed to process Windows Nodes provider IDs")
+		nodeProviderIDs, err := extractInstanceID(windowsNodesJSON, "Windows Node")
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to process Windows Nodes provider IDs")
 
-			e2e.Logf("Final Windows Machine provider IDs: %v", machineProviderIDs)
-			e2e.Logf("Final Windows Node provider IDs: %v", nodeProviderIDs)
+		e2e.Logf("Final Windows Machine provider IDs: %v", machineProviderIDs)
+		e2e.Logf("Final Windows Node provider IDs: %v", nodeProviderIDs)
 
-			// Retrieve Windows node hostnames
-			winHostNames := getWindowsHostNames(oc)
+		// Retrieve Windows node hostnames
+		winHostNames := getWindowsHostNames(oc)
 
-			// Correlate Machines with Nodes and Validate Provider IDs
-			for _, nodeName := range winHostNames {
-				nodeProviderID, exists := nodeProviderIDs[nodeName]
-				o.Expect(exists).To(o.BeTrue(), fmt.Sprintf("Node %s does not have a provider ID", nodeName))
+		// Correlate Machines with Nodes and Validate Provider IDs
+		for _, nodeName := range winHostNames {
+			nodeProviderID, exists := nodeProviderIDs[nodeName]
+			o.Expect(exists).To(o.BeTrue(), fmt.Sprintf("Node %s does not have a provider ID", nodeName))
 
-				matchingMachineFound := false
-				for machineName, machineProviderID := range machineProviderIDs {
-					if machineProviderID == nodeProviderID {
-						matchingMachineFound = true
-						e2e.Logf("Machine %s is correctly associated with Node %s (Instance ID: %s)", machineName, nodeName, nodeProviderID)
-						break
-					}
+			matchingMachineFound := false
+			for machineName, machineProviderID := range machineProviderIDs {
+				if machineProviderID == nodeProviderID {
+					matchingMachineFound = true
+					e2e.Logf("Machine %s is correctly associated with Node %s (Instance ID: %s)", machineName, nodeName, nodeProviderID)
+					break
 				}
-				o.Expect(matchingMachineFound).To(o.BeTrue(), fmt.Sprintf("No matching Machine found for Node %s with Provider ID %s", nodeName, nodeProviderID))
 			}
-		})
-
+			o.Expect(matchingMachineFound).To(o.BeTrue(), fmt.Sprintf("No matching Machine found for Node %s with Provider ID %s", nodeName, nodeProviderID))
+		}
 	})
 })
