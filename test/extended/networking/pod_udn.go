@@ -2569,7 +2569,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		prepareSCTPModule(oc, sctpModule)
 
 		exutil.By("1. Create the first namespace")
-		oc.CreateNamespaceUDN()
+		oc.SetupProject()
 		ns1 := oc.Namespace()
 
 		exutil.By("2. Create a hello pod in ns1")
@@ -2626,7 +2626,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		prepareSCTPModule(oc, sctpModule)
 
 		exutil.By("1. Create the first namespace")
-		oc.CreateNamespaceUDN()
+		oc.SetupProject()
 		ns1 := oc.Namespace()
 
 		exutil.By("2. Create a hello pod in ns1")
