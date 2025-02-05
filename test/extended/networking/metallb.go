@@ -359,7 +359,7 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 
 	})
 
-	g.It("Author:asood-High-46560-High-50944-MetalLB-CR All Workers Creation and Verify the logging level of MetalLB can be changed for debugging [Serial]", func() {
+	g.It("Author:asood-NonHyperShiftHOST-High-46560-High-50944-MetalLB-CR All Workers Creation and Verify the logging level of MetalLB can be changed for debugging [Serial]", func() {
 
 		exutil.By("Creating metalLB CR on all the worker nodes in cluster")
 		metallbCRTemplate := filepath.Join(testDataDir, "metallb-cr-template.yaml")
@@ -417,7 +417,7 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 
 	})
 
-	g.It("Author:asood-High-54857-Validate controller and pod can be scheduled based on node selectors.[Serial]", func() {
+	g.It("Author:asood-NonHyperShiftHOST-High-54857-Validate controller and pod can be scheduled based on node selectors.[Serial]", func() {
 		var nodeSelKey = "kubernetes.io/hostname"
 		exutil.By("Obtain the worker nodes in cluster")
 		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
@@ -452,7 +452,7 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 
 	})
 
-	g.It("Author:asood-High-54822-Validate controller and speaker pods can be scheduled based on affinity - node affinity, pod affinity and pod anti affinity.[Serial]", func() {
+	g.It("Author:asood-NonHyperShiftHOST-High-54822-Validate controller and speaker pods can be scheduled based on affinity - node affinity, pod affinity and pod anti affinity.[Serial]", func() {
 		var (
 			testDataBaseDir         = exutil.FixturePath("testdata", "networking")
 			nodeLabels              = []string{"east", "west"}
@@ -566,7 +566,7 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 
 	})
 
-	g.It("Author:asood-High-54823-Validate controller and speaker pods are scheduled on nodes based priority class. [Serial]", func() {
+	g.It("Author:asood-NonHyperShiftHOST-High-54823-Validate controller and speaker pods are scheduled on nodes based priority class. [Serial]", func() {
 		var (
 			metallbCRPriorityClassFile = filepath.Join(testDataDir, "metallb-cr-priority-class.yaml")
 			metallbPriorityClassFile   = filepath.Join(testDataDir, "metallb-priority-class.yaml")

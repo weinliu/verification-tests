@@ -1348,7 +1348,7 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 
 	})
 
-	g.It("Author:asood-High-73454-[FdpOvnOvs] Egress traffic works with ANP, BANP and NP with node egress peer. [Serial]", func() {
+	g.It("Author:asood-NonHyperShiftHOST-High-73454-[FdpOvnOvs] Egress traffic works with ANP, BANP and NP with node egress peer. [Serial]", func() {
 		var (
 			testID                          = "73454"
 			testDataDir                     = exutil.FixturePath("testdata", "networking")
