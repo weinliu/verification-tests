@@ -210,16 +210,12 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		var (
 			ccscOperatorNs        = "openshift-cluster-storage-operator"
-			csiSnapshotWebhook    = newDeployment(setDeploymentName("csi-snapshot-webhook"), setDeploymentNamespace(ccscOperatorNs), setDeploymentApplabel("app=csi-snapshot-webhook"))
 			csiSnapshotController = newDeployment(setDeploymentName("csi-snapshot-controller"), setDeploymentNamespace(ccscOperatorNs), setDeploymentApplabel("app=csi-snapshot-webhook"))
 		)
 
-		exutil.By("Check the snapshot controller and snapshot webhook deployment VolumeGroupSnapshot args added")
+		exutil.By("Check the snapshot controller deployment VolumeGroupSnapshot args added")
 		csiSnapshotControllerArgs := csiSnapshotController.getSpecifiedJSONPathValue(oc, "{.spec.template.spec.containers[?(@.name==\"snapshot-controller\")].args}")
-		o.Expect(csiSnapshotControllerArgs).Should(o.ContainSubstring("--enable-volume-group-snapshots"), "The snapshot controller VolumeGroupSnapshot args is not enabled")
-
-		csiSnapshotWebhookArgs := csiSnapshotWebhook.getSpecifiedJSONPathValue(oc, "{.spec.template.spec.containers[?(@.name==\"webhook\")].args}")
-		o.Expect(csiSnapshotWebhookArgs).Should(o.ContainSubstring("--enable-volume-group-snapshot-webhook"), "The snapshot webhook VolumeGroupSnapshot args is not enabled")
+		o.Expect(csiSnapshotControllerArgs).Should(o.ContainSubstring("--feature-gates=CSIVolumeGroupSnapshot=true"), "The snapshot controller VolumeGroupSnapshot args is not enabled")
 
 		exutil.By("Check the VolumeGroupSnapshot CRDs created")
 		o.Expect(isCRDSpecificFieldExist(oc, "volumegroupsnapshotclasses.kind")).Should(o.BeTrue())
