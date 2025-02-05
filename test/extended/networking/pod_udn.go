@@ -1433,9 +1433,8 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		)
 
 		ipStackType := checkIPStackType(oc)
-		exutil.By("1. Obtain first namespace and create three others")
-		udnNS = append(udnNS, oc.Namespace())
-		for i := 0; i < 3; i++ {
+		exutil.By("1. Create four UDN namespaces")
+		for i := 0; i < 4; i++ {
 			oc.CreateNamespaceUDN()
 			udnNS = append(udnNS, oc.Namespace())
 		}
