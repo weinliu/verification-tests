@@ -177,6 +177,13 @@ machineautoscalers.autoscaling.openshift.io`
 			if strings.Contains(featuregate, "TechPreviewNoUpgrade") {
 				g.Skip("This case is only suitable for non-techpreview cluster!")
 			} else if strings.Contains(featuregate, "CustomNoUpgrade") {
+				// Extract enabled features
+				enabledFeatures, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.spec.customNoUpgrade.enabled}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				if !strings.Contains(enabledFeatures, "MachineAPIMigration") {
+					g.Skip("Skipping test: MachineAPIMigration is not enabled in CustomNoUpgrade feature gate.")
+				}
 				g.By("Check if MachineAPIMigration enabled, project openshift-cluster-api exists")
 				project, err := oc.AsAdmin().WithoutNamespace().Run("project").Args(clusterAPINamespace).Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
