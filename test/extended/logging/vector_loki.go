@@ -4387,7 +4387,7 @@ log_attributes:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		if reflect.DeepEqual(lokiLimitsConfig.LimitsConfig.OtlpConfig, staticOtlpConfig) {
-			fmt.Println("Validated expected default OTLP configuration under lokistack config")
+			e2e.Logf("Validated expected default OTLP configuration under lokistack config")
 		} else {
 			e2e.Failf("Incorrect default OTLP configuration found. Failing case..")
 		}
@@ -4399,21 +4399,9 @@ log_attributes:
 		for _, logType := range []string{"application", "infrastructure", "audit"} {
 			lc.waitForLogsAppearByKey(logType, "openshift_log_type", logType)
 		}
-
-		logs, err := lc.searchByKey("application", "k8s_namespace_name", appProj)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		extractedLogs := extractLogEntities(logs)
-		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
-
-		logs, err = lc.searchByKey("application", "k8s_container_name", "logging-centos-logtest")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		extractedLogs = extractLogEntities(logs)
-		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
-
-		logs, err = lc.searchByKey("infrastructure", "k8s_namespace_name", "openshift-monitoring")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		extractedLogs = extractLogEntities(logs)
-		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+		lc.waitForLogsAppearByKey("application", "k8s_namespace_name", appProj)
+		lc.waitForLogsAppearByKey("infrastructure", "k8s_namespace_name", "openshift-monitoring")
+		lc.waitForLogsAppearByKey("application", "k8s_container_name", "logging-centos-logtest")
 
 		exutil.By("Validate log streams are pushed to external storage bucket/container")
 		ls.validateExternalObjectStorageForLogs(oc, []string{"application", "audit", "infrastructure"})
@@ -4581,7 +4569,7 @@ resource_attributes:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		if reflect.DeepEqual(lokiLimitsConfig.LimitsConfig.OtlpConfig, staticOtlpConfig) {
-			fmt.Println("Validated expected default OTLP configuration under lokistack config")
+			e2e.Logf("Validated expected default OTLP configuration under lokistack config")
 		} else {
 			e2e.Failf("Incorrect default OTLP configuration found. Failing case..")
 		}
@@ -4657,21 +4645,14 @@ log_attributes:
 			lc.waitForLogsAppearByKey(logType, "openshift_log_type", logType)
 		}
 
-		logs, err := lc.searchByKey("application", "k8s_namespace_name", appProj)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		extractedLogs := extractLogEntities(logs)
-		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+		lc.waitForLogsAppearByKey("application", "k8s_namespace_name", appProj)
+		lc.waitForLogsAppearByKey("infrastructure", "k8s_namespace_name", "openshift-monitoring")
 
 		// No logs found for app tenant with k8s_container_name streamLabel/labelKey since it is not included under custom overrides config
-		logs, err = lc.searchByKey("application", "k8s_container_name", "logging-centos-logtest")
+		logs, err := lc.searchByKey("application", "k8s_container_name", "logging-centos-logtest")
 		o.Expect(err).NotTo(o.HaveOccurred())
-		extractedLogs = extractLogEntities(logs)
+		extractedLogs := extractLogEntities(logs)
 		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
-
-		logs, err = lc.searchByKey("infrastructure", "k8s_namespace_name", "openshift-monitoring")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		extractedLogs = extractLogEntities(logs)
-		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
 
 		exutil.By("Validate log streams are pushed to external storage bucket/container")
 		ls.validateExternalObjectStorageForLogs(oc, []string{"application", "audit", "infrastructure"})

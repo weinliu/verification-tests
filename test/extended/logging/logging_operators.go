@@ -361,6 +361,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		})
 		exutil.AssertWaitPollNoErr(err, "application logs are not found")
 
+		// Creating cluster roles to allow read access from LokiStack
+		defer deleteLokiClusterRolesForReadAccess(oc)
+		createLokiClusterRolesForReadAccess(oc)
+
 		g.By("checking if regular user can view his logs after upgrading")
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", "cluster-logging-application-view", oc.Username(), "-n", appProj).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
