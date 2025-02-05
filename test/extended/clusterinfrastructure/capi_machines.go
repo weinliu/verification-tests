@@ -448,7 +448,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CAPI", func()
 		var newDhcpOptionsID, currentDhcpOptionsID string
 		clusterinfra.GetAwsCredentialFromCluster(oc)
 		awsClient := exutil.InitAwsSession()
-		newDhcpOptionsID, err := awsClient.CreateDhcpOptionsWithDomainName("capi76088-CAPI.com")
+		newDhcpOptionsID, err := awsClient.CreateDhcpOptionsWithDomainName("capi76088-CAPI.com.")
 		if err != nil {
 			g.Skip("The credential is insufficient to perform create dhcpOptions operation, skip the cases!!")
 		}
