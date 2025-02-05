@@ -351,7 +351,7 @@ func waitUDNCRDApplied(oc *exutil.CLI, ns, crdName string) error {
 
 func waitCUDNCRDApplied(oc *exutil.CLI, crdName string) error {
 	checkErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
-		output, efErr := oc.AsAdmin().WithoutNamespace().Run("wait").Args("ClusterUserDefinedNetwork/"+crdName, "--for", "condition=NetworkReady=True").Output()
+		output, efErr := oc.AsAdmin().WithoutNamespace().Run("wait").Args("ClusterUserDefinedNetwork/"+crdName, "--for", "condition=NetworkCreated=True").Output()
 		if efErr != nil {
 			e2e.Logf("Failed to get CUDN %v, error: %s. Trying again", crdName, efErr)
 			return false, nil
