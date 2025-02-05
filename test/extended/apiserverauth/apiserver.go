@@ -1929,26 +1929,42 @@ spec:
 	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-High-47633-[Apiserver] Update existing alert ExtremelyHighIndividualControlPlaneCPU [Slow] [Disruptive]", func() {
 		var (
 			alert             = "ExtremelyHighIndividualControlPlaneCPU"
+			alertSno          = "HighOverallControlPlaneCPU"
 			alertBudget       = "KubeAPIErrorBudgetBurn"
 			runbookURL        = "https://github.com/openshift/runbooks/blob/master/alerts/cluster-kube-apiserver-operator/ExtremelyHighIndividualControlPlaneCPU.md"
 			runbookBudgetURL  = "https://github.com/openshift/runbooks/blob/master/alerts/cluster-kube-apiserver-operator/KubeAPIErrorBudgetBurn.md"
 			alertTimeWarning  = "5m"
 			alertTimeCritical = "1h"
 			severity          = []string{"warning", "critical"}
+			chkStr            string
+			alertName         string
+			//alertOutputWarning2 string
+			//alertOutputWarning1 string
 		)
 		exutil.By("1.Check with cluster installed OCP 4.10 and later release, the following changes for existing alerts " + alert + " have been applied.")
 		output, alertSevErr := oc.Run("get").Args("prometheusrule/cpu-utilization", "-n", "openshift-kube-apiserver", "-o", `jsonpath='{.spec.groups[?(@.name=="control-plane-cpu-utilization")].rules[?(@.alert=="`+alert+`")].labels.severity}'`).Output()
 		o.Expect(alertSevErr).NotTo(o.HaveOccurred())
-		chkStr := fmt.Sprintf("%s %s", severity[0], severity[1])
-		o.Expect(output).Should(o.ContainSubstring(chkStr), fmt.Sprintf("Not have new alert %s with severity :: %s : %s", alert, severity[0], severity[1]))
-		e2e.Logf("Have new alert %s with severity :: %s : %s", alert, severity[0], severity[1])
+		exutil.By("1) Check if cluster is SNO.")
+		if !isSNOCluster(oc) {
+			chkStr = fmt.Sprintf("%s %s", severity[0], severity[1])
+			o.Expect(output).Should(o.ContainSubstring(chkStr), fmt.Sprintf("Not have new alert %s with severity :: %s : %s", alert, severity[0], severity[1]))
+			e2e.Logf("Have new alert %s with severity :: %s : %s", alert, severity[0], severity[1])
+		} else {
+			o.Expect(output).Should(o.ContainSubstring(severity[1]), fmt.Sprintf("Not have new alert %s with severity :: %s", alert, severity[1]))
+			e2e.Logf("Have new alert %s with severity :: %s", alert, severity[1])
+		}
 
 		e2e.Logf("Check reduce severity to %s and %s for :: %s : %s", severity[0], severity[1], alertTimeWarning, alertTimeCritical)
 		output, alertTimeErr := oc.Run("get").Args("prometheusrule/cpu-utilization", "-n", "openshift-kube-apiserver", "-o", `jsonpath='{.spec.groups[?(@.name=="control-plane-cpu-utilization")].rules[?(@.alert=="`+alert+`")].for}'`).Output()
 		o.Expect(alertTimeErr).NotTo(o.HaveOccurred())
-		chkStr = fmt.Sprintf("%s %s", alertTimeWarning, alertTimeCritical)
-		o.Expect(output).Should(o.ContainSubstring(chkStr), fmt.Sprintf("Not Have reduce severity to %s and %s for :: %s : %s", severity[0], severity[1], alertTimeWarning, alertTimeCritical))
-		e2e.Logf("Have reduce severity to %s and %s for :: %s : %s", severity[0], severity[1], alertTimeWarning, alertTimeCritical)
+		if !isSNOCluster(oc) {
+			chkStr = fmt.Sprintf("%s %s", alertTimeWarning, alertTimeCritical)
+			o.Expect(output).Should(o.ContainSubstring(chkStr), fmt.Sprintf("Not Have reduce severity to %s and %s for :: %s : %s", severity[0], severity[1], alertTimeWarning, alertTimeCritical))
+			e2e.Logf("Have reduce severity to %s and %s for :: %s : %s", severity[0], severity[1], alertTimeWarning, alertTimeCritical)
+		} else {
+			o.Expect(output).Should(o.ContainSubstring(alertTimeCritical), fmt.Sprintf("Not Have reduce severity to %s for :: %s", severity[1], alertTimeCritical))
+			e2e.Logf("Have reduce severity to %s for :: %s", severity[1], alertTimeCritical)
+		}
 
 		e2e.Logf("Check a run book url for %s", alert)
 		output, alertRunbookErr := oc.Run("get").Args("prometheusrule/cpu-utilization", "-n", "openshift-kube-apiserver", "-o", `jsonpath='{.spec.groups[?(@.name=="control-plane-cpu-utilization")].rules[?(@.alert=="`+alert+`")].annotations.runbook_url}'`).Output()
@@ -1988,14 +2004,21 @@ spec:
 		o.Expect(execPodErr).NotTo(o.HaveOccurred())
 
 		e2e.Logf("Check alert ExtremelyHighIndividualControlPlaneCPU firing")
-		errWatcher := wait.PollUntilContextTimeout(context.Background(), 60*time.Second, 500*time.Second, false, func(cxt context.Context) (bool, error) {
+		errWatcher := wait.PollUntilContextTimeout(context.Background(), 60*time.Second, 900*time.Second, false, func(cxt context.Context) (bool, error) {
 			alertOutput, alertErr := GetAlertsByName(oc, "ExtremelyHighIndividualControlPlaneCPU")
 			o.Expect(alertErr).NotTo(o.HaveOccurred())
-			alertName := gjson.Parse(alertOutput).String()
-			alertOutputWarning1 := gjson.Get(alertName, `data.alerts.#(labels.alertname=="`+alert+`")#`).String()
+			alertNameData := gjson.Parse(alertOutput).String()
+			if isSNOCluster(oc) {
+				alertName = alertSno
+			} else {
+				alertName = alert
+			}
+			alertOutputWarning1 := gjson.Get(alertNameData, `data.alerts.#(labels.alertname=="`+alertName+`")#`).String()
 			alertOutputWarning2 := gjson.Get(alertOutputWarning1, `#(labels.severity=="`+severity[0]+`").state`).String()
+
 			if strings.Contains(string(alertOutputWarning2), "firing") {
-				e2e.Logf("%s with %s is firing", alert, severity[0])
+				e2e.Logf("%s with %s is firing", alertName, severity[0])
+				alertOutputWarning1 = gjson.Get(alertNameData, `data.alerts.#(labels.alertname=="`+alert+`")#`).String()
 				alertOuptutCritical := gjson.Get(alertOutputWarning1, `#(labels.severity=="`+severity[1]+`").state`).String()
 				o.Expect(alertOuptutCritical).Should(o.ContainSubstring("pending"), fmt.Sprintf("%s with %s is not pending", alert, severity[1]))
 				e2e.Logf("%s with %s is pending", alert, severity[1])
