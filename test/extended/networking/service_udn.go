@@ -1898,8 +1898,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 
 		exutil.By("1. Create two namespaces")
 		for i := 0; i < 2; i++ {
-			err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", nadNS[i]).Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
+			oc.CreateSpecificNamespaceUDN(nadNS[i])
 		}
 
 		exutil.By("2. Create CRD for layer3 UDN in namespace ns1")
