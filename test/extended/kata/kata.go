@@ -583,6 +583,10 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 	g.It("Author:abhbaner-High-43617-High-43616-CLI checks pod logs & fetching pods in podNs", func() {
 
+		if testrun.workloadToTest == "coco" {
+			g.Skip("Test not supported with coco")
+		}
+
 		oc.SetupProject()
 		var (
 			msg            string
@@ -1935,5 +1939,42 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("ERROR: pod %v could not be installed: %v %v", secPodName, msg, err))
 
 		g.By("SUCCESS - operator deleted while workload keep running")
+	})
+
+	g.It("Author:vvoronko-High-C00999-deploy peerpod with tags", func() {
+
+		if !(testrun.workloadToTest == "peer-pods" && getCloudProvider(oc) == "azure") {
+			g.Skip("Test supported only with peer-pods on Azure since AWS tags disabled for metadata by default")
+		}
+
+		oc.SetupProject()
+
+		var (
+			basePodName = "-example-00999"
+			podNs       = oc.Namespace()
+			//works with default configmap value
+			tagValue = map[string]string{
+				"aws":   "value1",
+				"azure": "key1:value1;key2:value2", //format is different than in configmap
+			}
+		)
+
+		provider := getCloudProvider(oc)
+
+		g.By("Deploying pod with kata runtime and verify it")
+		newPodName := createKataPod(oc, podNs, defaultPod, basePodName, kataconfig.runtimeClassName, testrun.workloadImage)
+		defer deleteKataResource(oc, "pod", podNs, newPodName)
+		msg, err := checkResourceJsonpath(oc, "pod", newPodName, podNs, "-o=jsonpath={.status.phase}", podRunState, podSnooze*time.Second, 10*time.Second)
+		if err != nil {
+			e2e.Logf("ERROR: pod %v could not be installed: %v %v", newPodName, msg, err)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		actualValue, err := getPeerPodMetadataTags(oc, podNs, newPodName, provider)
+		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed rsh to pod %v to provide metadata: %v", newPodName, err))
+		e2e.Logf("%v pod tags: %v", newPodName, actualValue)
+		o.Expect(actualValue).To(o.ContainSubstring(tagValue[provider]), fmt.Sprintf("Instance size don't match provided annotations: %v", err))
+
+		g.By("SUCCESS - Podvm with required instance type was launched")
 	})
 })

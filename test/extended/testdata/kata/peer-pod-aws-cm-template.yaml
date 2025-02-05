@@ -19,6 +19,7 @@ objects:
       AWS_SUBNET_ID: "${AWS_SUBNET_ID}"
       AWS_VPC_ID: "${AWS_VPC_ID}"
       AWS_SG_IDS: "${AWS_SG_IDS}"
+      TAGS: "${CUSTOM_TAGS}"
 
 # oc process --ignore-unknown-parameters=true -f $L/peer-pod-aws-cm-template.yaml -p PODVM_AMI_ID=${PODVM_AMI_ID} AWS_SUBNET_ID=${AWS_SUBNET_ID} AWS_VPC_ID=${AWS_VPC_ID} AWS_SG_IDS=${AWS_SG_IDS}
 # This is for end user/Jenkins to create a configmap and apply it to your cluster
@@ -46,3 +47,5 @@ parameters:
     value: "5m"
   - name: VXLAN_PORT
     value: "9000"
+  - name: CUSTOM_TAGS
+    value: "key1=value1,key2=value2"

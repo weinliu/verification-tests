@@ -1898,6 +1898,25 @@ func getPeerPodMetadataInstanceType(oc *exutil.CLI, opNamespace, podName, provid
 	return msg, err
 }
 
+func getPeerPodMetadataTags(oc *exutil.CLI, opNamespace, podName, provider string) (string, error) {
+
+	//AWS have to enable tags by 1st finding instance-id from metadata
+	//curl -s http://169.254.169.254/latest/meta-data/instance-id
+	//aws ec2 modify-instance-metadata-options --instance-id i-0a893c6458c272d12 --instance-metadata-tags enabled
+	//curl -s http://169.254.169.254/latest/meta-data/tags/instance/key1
+	//value1
+	metadataCurl := map[string][]string{
+		"aws":   {"http://169.254.169.254/latest/meta-data/tags/instance/key1"},
+		"azure": {"-H", "Metadata:true", "\\*", "http://169.254.169.254/metadata/instance/compute/tags?api-version=2023-07-01&format=text"},
+	}
+	//azure pod tags format is different from the configmap="key1=value1,key2=value2":
+	//  sh-4.4$ curl -s -H "Metadata:true" "\\*" "http://169.254.169.254/metadata/instance/compute/tags?api-version=2023-07-01&format=text"
+	//  key1:value1;key2:value2sh-4.4$
+	podCmd := []string{"-n", opNamespace, podName, "--", "curl", "-s"}
+	msg, err := oc.WithoutNamespace().AsAdmin().Run("exec").Args(append(podCmd, metadataCurl[provider]...)...).Output()
+	return msg, err
+}
+
 func CheckPodVMImageID(oc *exutil.CLI, ppConfigMapName, provider, opNamespace string) (msg string, err error, imageID string) {
 
 	cloudProviderMap := map[string]string{
