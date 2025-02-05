@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -46,6 +47,11 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		sVersion := string(version)
 		kubeVer := strings.Split(sVersion, "+")[0]
 		kubeVer = strings.TrimSpace(kubeVer)
+		// Sometimes, there will be a version difference between kubeletVersion and k8s version due to RHCOS version.
+		// It will be matching once there is a new RHCOS version. Detail see https://issues.redhat.com/browse/OCPBUGS-48612
+		pattern := regexp.MustCompile(`\S+?.\d+`)
+		validVer := pattern.FindAllString(kubeVer, -1)
+		e2e.Logf("Version considered is %v", validVer[0])
 
 		e2e.Logf("retrieve all the master node")
 		masterNodeList := getNodeListByLabel(oc, "node-role.kubernetes.io/master=")
@@ -53,7 +59,7 @@ var _ = g.Describe("[sig-etcd] ETCD", func() {
 		e2e.Logf("verify the kubelet version in node details")
 		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("node", masterNodeList[0], "-o", "custom-columns=VERSION:.status.nodeInfo.kubeletVersion").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(msg).To(o.ContainSubstring(kubeVer))
+		o.Expect(msg).To(o.ContainSubstring(validVer[0]))
 
 	})
 	// author: geliu@redhat.com
