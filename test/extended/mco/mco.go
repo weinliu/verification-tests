@@ -4169,7 +4169,7 @@ nulla pariatur.`
 			logger.Infof("Waiting for the image to be built")
 			o.Eventually(mosb, "20m", "20s").Should(HaveConditionField("Building", "status", FalseString), "Build was not finished")
 			o.Eventually(mosb, "10m", "20s").Should(HaveConditionField("Succeeded", "status", TrueString), "Build didn't succeed")
-			desiredImage := exutil.OrFail[string](mosb.GetStatusFinalImagePullSpec())
+			desiredImage := exutil.OrFail[string](mosb.GetStatusDigestedImagePullSpec())
 			o.Eventually(mosc.GetStatusCurrentImagePullSpec, "2m", "10s").Should(o.Equal(desiredImage), "The MOSC resource was not updated")
 			logger.Infof("Desired Image is: %s\n", desiredImage)
 			o.Expect(desiredImage).NotTo(o.BeEmpty(), "Cannot get desired image")

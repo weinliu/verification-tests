@@ -31,14 +31,14 @@ func (mosb MachineOSBuild) GetMachineOSConfig() (*MachineOSConfig, error) {
 	return NewMachineOSConfig(mosb.GetOC(), moscName), err
 }
 
-// GetStatusFinalImagePullSpec resturns the image pull spec resulting from building this machineosbuild
-func (mosb MachineOSBuild) GetStatusFinalImagePullSpec() (string, error) {
-	return mosb.Get(`{.status.finalImagePullspec}`)
+// GetStatusDigestedImagePullSpec resturns the image pull spec resulting from building this machineosbuild
+func (mosb MachineOSBuild) GetStatusDigestedImagePullSpec() (string, error) {
+	return mosb.Get(`{.status.digestedImagePushSpec}`)
 }
 
-// GetStatusFinalImagePullSpec returns the name of the MC that this MOSB is using to build the image
+// GetMachineConfigName returns the name of the MC that this MOSB is using to build the image
 func (mosb MachineOSBuild) GetMachineConfigName() (string, error) {
-	return mosb.Get(`{.spec.desiredConfig.name}`)
+	return mosb.Get(`{.spec.machineConfig.name}`)
 }
 
 // GetJob returns the pod used to build this build
