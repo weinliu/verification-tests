@@ -3746,7 +3746,7 @@ func verifySctpConnPod2IP(oc *exutil.CLI, namespace, sctpServerPodIP, sctpServer
 	if strings.Contains(msg, "/usr/bin/ncat -l 30102 --sctp") {
 		e2e.Logf("sctpserver pod is already listening on port 30102.")
 	} else {
-		cmdNcat, _, _, _ := oc.Run("exec").Args("-n", namespace, sctpServerPodName, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
+		cmdNcat, _, _, _ := oc.AsAdmin().Run("exec").Args("-n", namespace, sctpServerPodName, "--", "/usr/bin/ncat", "-l", "30102", "--sctp").Background()
 		defer cmdNcat.Process.Kill()
 		e2e.Logf("check sctp process enabled in the sctp server pod")
 		o.Eventually(func() string {
