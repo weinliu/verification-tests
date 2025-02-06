@@ -3678,9 +3678,8 @@ var _ = g.Describe("[sig-networking] SDN udn metallb", func() {
 		}
 
 		exutil.By("2. Set up user defined network namespaces")
-		namespaces = append(namespaces, oc.Namespace())
-		for i := 0; i < 3; i++ {
-			oc.SetupProject()
+		for i := 0; i < 4; i++ {
+			oc.CreateNamespaceUDN()
 			namespaces = append(namespaces, oc.Namespace())
 		}
 		exutil.By("2.1. Create CRD for UDN in first two namespaces")
