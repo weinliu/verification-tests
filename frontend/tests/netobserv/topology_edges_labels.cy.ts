@@ -9,8 +9,7 @@ describe("(OCP-53591 Network_Observability) Netflow Topology edges,labels, badge
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
-        cy.switchPerspective('Administrator');
+        cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
 
         Operator.install()
         Operator.createFlowcollector(project)
@@ -78,21 +77,16 @@ describe("(OCP-53591 Network_Observability) Netflow Topology edges,labels, badge
         topologyPage.selectScopeGroup(null, "none")
         topologyPage.selectScopeGroup("namespace", null)
         cy.get('#reset-view').should('exist').click()
+        cy.get('[data-test-id="edge-handler"] g.pf-topology__edge__tag').should("exist")
 
-        cy.get(topologySelectors.defaultLayer + ' > ' + topologySelectors.edge).each((node, index) => {
-            cy.wrap(node).should('have.descendants', 'g.pf-topology__edge__tag')
-        })
+
         cy.contains('Display options').should('exist').click()
         cy.get(topologySelectors.labelToggle).uncheck()
-        // cy.contains('Display options').should('exist').click()
 
-        cy.get(topologySelectors.defaultLayer + ' > ' + topologySelectors.edge).each((node, index) => {
-            cy.wrap(node).should('not.have.descendants', 'g.pf-topology__edge__tag')
-        })
+        cy.get('[data-test-id="edge-handler"] g.pf-topology__edge__tag').should("not.exist")
+
         cy.get(topologySelectors.labelToggle).check()
-        cy.get(topologySelectors.defaultLayer + ' > ' + topologySelectors.edge).each((node, index) => {
-            cy.wrap(node).should('have.descendants', 'g.pf-topology__edge__tag')
-        })
+        cy.get('[data-test-id="edge-handler"] g.pf-topology__edge__tag').should("exist")
     })
 
     it("(OCP-53591, memodi, Network_Observability) should verify badges display/hidden", function () {

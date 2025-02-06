@@ -1,9 +1,9 @@
 import { Operator, project } from "../../views/netobserv"
 import { netflowPage } from "../../views/netflow-page"
 
-const [user1, user1Passwd] = Cypress.env('LOGIN_USERS').split(',')[0].split(':');
-const [user2, user2Passwd] = Cypress.env('LOGIN_USERS').split(',')[1].split(':');
-const [user3, user3Passwd] = Cypress.env('LOGIN_USERS').split(',')[2].split(':');
+const [user1, user1Passwd] = Cypress.env('LOGIN_USERS').split(',')[2].split(':');
+const [user2, user2Passwd] = Cypress.env('LOGIN_USERS').split(',')[3].split(':');
+const [user3, user3Passwd] = Cypress.env('LOGIN_USERS').split(',')[4].split(':');
 
 describe('(OCP-75874 Network_Observability) NetObserv developer view', { tags: ['Network_Observability'] }, function () {
 
@@ -46,7 +46,7 @@ describe('(OCP-75874 Network_Observability) NetObserv developer view', { tags: [
         cy.checkNetflowTraffic("Disabled")
 
         // Add view role for test-server project to user3
-        cy.exec(`oc adm policy add-role-to-user view ${user3} -n test-server`)
+        cy.adminCLI(`oc adm policy add-role-to-user view ${user3} -n test-server`)
 
         // Logout from console as user3 and login as user3
         cy.uiLogout().then(() => {

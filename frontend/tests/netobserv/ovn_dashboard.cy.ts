@@ -33,8 +33,7 @@ describe('Network_Observability networking dashboards tests', { tags: ['Network_
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
-        cy.switchPerspective('Administrator');
+        cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
     })
 
     it('(OCP-69944, aramesha, Network_Observability), should have OVN (Linux Subsystem Stats) dashboards', function () {

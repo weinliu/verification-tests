@@ -42,8 +42,7 @@ describe('Network_Observability health dashboards tests', { tags: ['Network_Obse
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
-        cy.switchPerspective('Administrator');
+        cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
 
         Operator.install()
         Operator.createFlowcollector(project, "AllMetrics")

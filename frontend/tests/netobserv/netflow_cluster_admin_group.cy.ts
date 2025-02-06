@@ -8,8 +8,7 @@ describe('(OCP-67617 Network_Observability) User in group with cluster-admin rol
         cy.adminCLI(`oc adm groups new netobservadmins`)
         cy.adminCLI(`oc adm groups add-users netobservadmins ${Cypress.env('LOGIN_USERNAME')}`)
         cy.adminCLI(`oc adm policy add-cluster-role-to-group cluster-admin netobservadmins`)
-        cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
-        cy.switchPerspective('Administrator');
+        cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
 
         Operator.install()
         Operator.createFlowcollector(project)

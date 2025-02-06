@@ -9,8 +9,7 @@ describe('(OCP-71525, OCP-71524 Network_Observability) Netflow Zone and multiClu
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
-        cy.switchPerspective('Administrator');
+        cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
 
         Operator.install()
         Operator.createFlowcollector(project, "ZonesAndMultiCluster")

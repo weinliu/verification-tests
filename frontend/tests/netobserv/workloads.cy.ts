@@ -10,8 +10,7 @@ describe('(OCP-70972 Network_Observability) Netflow traffic pages on workloads',
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
-        cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
-        cy.switchPerspective('Administrator');
+        cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
 
         Operator.install()
         Operator.createFlowcollector(project)
@@ -19,6 +18,7 @@ describe('(OCP-70972 Network_Observability) Netflow traffic pages on workloads',
 
     it('(OCP-70972, memodi, Network_Observability), netflow traffic pages should appear on workloads', { tags: ["@smoke"] }, function () {
         pagesToVisit.forEach((page) => {
+            cy.clearLocalStorage()
             cy.visitNetflowTrafficTab(page)
         })
     })
