@@ -690,8 +690,14 @@ func skipTestIfExtensionsAreUsed(oc *exutil.CLI) {
 func WorkersCanBeScaled(oc *exutil.CLI) (bool, error) {
 	logger.Infof("Checking if in this cluster workers can be scaled using machinesets")
 
+	if exutil.CheckPlatform(oc) == BaremetalPlatform {
+		logger.Infof("Baremetal platform. Can't scale up nodes in Baremetal test environmets. Nodes cannot be scaled")
+		return false, nil
+	}
+
 	if !IsCapabilityEnabled(oc.AsAdmin(), "MachineAPI") {
-		g.Skip("MachineAPI capability is disabled. Nodes cannot be scaled!")
+		logger.Infof("MachineAPI capability is disabled. Nodes cannot be scaled")
+		return false, nil
 	}
 
 	msl, err := NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAll()
@@ -702,6 +708,7 @@ func WorkersCanBeScaled(oc *exutil.CLI) (bool, error) {
 
 	// If there is no machineset then clearly we can't use them to scale the workers
 	if len(msl) == 0 {
+		logger.Infof("No machineset configured. Nodes cannot be scaled")
 		return false, nil
 	}
 
@@ -723,6 +730,7 @@ func WorkersCanBeScaled(oc *exutil.CLI) (bool, error) {
 	// In some UPI/SNO/Compact clusters machineset resources exist, but they are all configured with 0 replicas
 	// If all machinesets have 0 replicas, then it means that we need to skip the test case
 	if totalworkers == 0 {
+		logger.Infof("All machinesets have 0 worker nodes. Nodes cannot be scaled")
 		return false, nil
 	}
 
