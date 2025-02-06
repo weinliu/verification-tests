@@ -421,8 +421,14 @@ func createIssuer(oc *exutil.CLI, ns string) {
 	e2e.Logf("create a selfsigned issuer")
 	buildPruningBaseDir := exutil.FixturePath("testdata", "apiserverauth/certmanager")
 	issuerFile := filepath.Join(buildPruningBaseDir, "issuer-selfsigned.yaml")
-	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "-f", issuerFile).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
+	err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, true, func(context.Context) (bool, error) {
+		retryErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "-f", issuerFile).Execute()
+		if retryErr != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to be created successfully")
 	err = waitForResourceReadiness(oc, ns, "issuer", "default-selfsigned", 10*time.Second, 120*time.Second)
 	if err != nil {
 		dumpResource(oc, ns, "issuer", "default-selfsigned", "-o=yaml")
