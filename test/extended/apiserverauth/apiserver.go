@@ -6206,6 +6206,10 @@ metadata:
 
 	// author: rgangwar@redhat.com
 	g.It("Author:rgangwar-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-High-73853-[Apiserver] Update existing alert KubeAPIErrorBudgetBurn [Slow] [Disruptive]", func() {
+		if isSNOCluster(oc) {
+			g.Skip("This is a SNO cluster, skip.")
+		}
+
 		var (
 			alertBudget          = "KubeAPIErrorBudgetBurn"
 			runbookBudgetURL     = "https://github.com/openshift/runbooks/blob/master/alerts/cluster-kube-apiserver-operator/KubeAPIErrorBudgetBurn.md"
@@ -6378,6 +6382,10 @@ metadata:
 
 	// author: kewang@redhat.com
 	g.It("Author:kewang-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-High-73880-[Apiserver] Alert KubeAggregatedAPIErrors [Slow] [Disruptive]", func() {
+		if isSNOCluster(oc) {
+			g.Skip("This is a SNO cluster, skip.")
+		}
+
 		var (
 			kubeAlert1      = "KubeAggregatedAPIErrors"
 			kubeAlert2      = "KubeAggregatedAPIDown"
@@ -6457,6 +6465,10 @@ metadata:
 
 	// author: kewang@redhat.com
 	g.It("Author:kewang-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-High-73879-[Apiserver] Alert KubeAPIDown [Slow] [Disruptive]", func() {
+		if isSNOCluster(oc) {
+			g.Skip("This is a SNO cluster, skip.")
+		}
+
 		var (
 			kubeAlert     = "KubeAPIDown"
 			alertSeverity = "critical"
