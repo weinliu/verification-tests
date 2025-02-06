@@ -5,11 +5,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/gjson"
+	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
 var _ = g.Describe("[sig-storage] STORAGE", func() {
@@ -309,6 +311,95 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		for i := 0; i < len(gjson.Get(infraPlatformStatus, "resourceLabels").Array()); i++ {
 			o.Expect(fmt.Sprint(filestoreJSONMap["labels"])).Should(o.ContainSubstring(gjson.Get(infraPlatformStatus, `resourceLabels.`+strconv.Itoa(i)+`.key`).String() + ":" + gjson.Get(infraPlatformStatus, `resourceLabels.`+strconv.Itoa(i)+`.value`).String()))
 		}
+	})
+
+	g.It("Author:chaoyang-NonHyperShiftHOST-OSD_CCS-High-75891-[GCP-Filestore-CSI-Driver] new tags in storageclass should be added on the filestore instances", func() {
+
+		var (
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			storageClassParameters = map[string]string{
+				"tier":          "standard",
+				"resource-tags": "openshift-qe/test.chao/123456",
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+
+		infraPlatformStatus, getInfraErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o", "jsonpath={.status.platformStatus.gcp}").Output()
+		o.Expect(getInfraErr).ShouldNot(o.HaveOccurred())
+		if !gjson.Get(infraPlatformStatus, `resourceTags`).Exists() {
+			g.Skip("Skipped: No resourceTags set by installer, not satisfy the test scenario!!!")
+		}
+
+		// Set the resource definition for the scenario
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassVolumeBindingMode("Immediate"), setStorageClassProvisioner("filestore.csi.storage.gke.io"))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimCapacity("1Ti"))
+
+		exutil.By("# Create csi storageclass")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+		exutil.By("# Create a pvc with the preset csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+		pvc.waitStatusAsExpected(oc, "Bound")
+
+		exutil.By("# Check filestore volume info from backend")
+		pvName := getPersistentVolumeNameByPersistentVolumeClaim(oc, pvc.namespace, pvc.name)
+		getCredentialFromCluster(oc)
+		var filestoreJSONMap map[string]interface{}
+		filestoreJSONMap = getFilestoreInstanceFromGCP(oc, pvName, "--zone="+strings.Split(pvc.getVolumeID(oc), "/")[1])
+		e2e.Logf("The pd volume info is: %v.", filestoreJSONMap)
+
+		// TODO: Currently the gcloud CLI could not get the tags info for pd volumes, try sdk laster
+		// o.Expect(fmt.Sprint(filestoreJSONMap["tags"])).Should(o.ContainSubstring("test.chao: 123456"))
+	})
+
+	g.It("Author:chaoyang-NonHyperShiftHOST-OSD_CCS-High-75892-[GCP-Filestore-CSI-Driver] No volume is provisioned with not existed customer tag", func() {
+
+		var (
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			storageClassParameters = map[string]string{
+				"resource-tags": "openshift-qe/test.notExist/123456",
+			}
+
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+
+		infraPlatformStatus, getInfraErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o", "jsonpath={.status.platformStatus.gcp}").Output()
+		o.Expect(getInfraErr).ShouldNot(o.HaveOccurred())
+		if !gjson.Get(infraPlatformStatus, `resourceTags`).Exists() {
+			g.Skip("Skipped: No resourceTags set by installer, not satisfy the test scenario!!!")
+		}
+
+		// Set the resource definition for the scenario
+		storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassVolumeBindingMode("Immediate"), setStorageClassProvisioner("filestore.csi.storage.gke.io"))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimCapacity("1Ti"))
+
+		exutil.By("# Create csi storageclass")
+		storageClass.createWithExtraParameters(oc, extraParameters)
+		defer storageClass.deleteAsAdmin(oc) // ensure the storageclass is deleted whether the case exist normally or not.
+
+		exutil.By("# Create a pvc with the created csi storageclass")
+		pvc.create(oc)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("# Check pvc should stuck at Pending status and no volume is provisioned")
+		o.Eventually(func() bool {
+			pvcInfo, _ := describePersistentVolumeClaim(oc, pvc.namespace, pvc.name)
+			return strings.Contains(pvcInfo, "ProvisioningFailed") && strings.Contains(pvcInfo, "does not exist")
+		}, 180*time.Second, 10*time.Second).Should(o.BeTrue())
+		o.Consistently(func() string {
+			pvcState, _ := pvc.getStatus(oc)
+			return pvcState
+		}, 60*time.Second, 10*time.Second).Should(o.ContainSubstring("Pending"))
 	})
 
 })
