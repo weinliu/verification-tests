@@ -884,8 +884,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		masterNode, err := exutil.GetFirstMasterNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("1. Create two namespaces and label namespaces")
-		oc.CreateNamespaceUDN()
+		exutil.By("1. Create two namespaces, first one is for default network and second is for UDN and then label namespaces")
 		ns1 := oc.Namespace()
 		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()

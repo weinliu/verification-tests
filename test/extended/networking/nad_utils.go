@@ -40,6 +40,15 @@ type udnPodSecNADResource struct {
 	template   string
 }
 
+type udnPodSecNADResourceNode struct {
+	name      string
+	namespace string
+	label     string
+	nadname   string
+	nodename  string
+	template  string
+}
+
 type udnNetDefResource struct {
 	nadname             string
 	namespace           string
@@ -133,6 +142,18 @@ func (pod *udnPodWithProbeResource) createUdnPodWithProbe(oc *exutil.CLI) {
 func (pod *udnPodSecNADResource) createUdnPodWithSecNAD(oc *exutil.CLI) {
 	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "LABEL="+pod.label, "ANNOTATION="+pod.annotation)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create pod %v", pod.name))
+}
+
+func (pod *udnPodSecNADResourceNode) createUdnPodWithSecNADNode(oc *exutil.CLI) {
+	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "LABEL="+pod.label, "NADNAME="+pod.nadname, "NODENAME="+pod.nodename)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
