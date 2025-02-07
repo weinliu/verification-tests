@@ -235,10 +235,10 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
 		nodeIp := getNodeIPv4(oc, ns1, PodNodeName)
 
-		output, err := e2eoutput.RunHostCmd(ns1, mtuTestPod[1], "curl --connect-timeout 5 -s "+net.JoinHostPort(nodeIp, "31251")+"?mtu=8849 2>/dev/null | cut -b-10")
+		output, err := e2eoutput.RunHostCmd(ns1, mtuTestPod[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(nodeIp, "31251")+"?mtu=8849 2>/dev/null | cut -b-10")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(output, "Terminated")).To(o.BeFalse())
-		output, err = e2eoutput.RunHostCmd(ns1, mtuTestPod[1], "curl --connect-timeout 5 -s "+net.JoinHostPort(nodeIp, "31251")+"?mtu=8850 2>/dev/null | cut -b-10")
+		output, err = e2eoutput.RunHostCmd(ns1, mtuTestPod[0], "curl --connect-timeout 5 -s "+net.JoinHostPort(nodeIp, "31251")+"?mtu=8850 2>/dev/null | cut -b-10")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(output, "Terminated")).To(o.BeFalse())
 	})
