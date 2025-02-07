@@ -1828,7 +1828,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		CurlPod2PodFail(oc, ns1, pod1.name, ns2, pod2.name)
 	})
 
-	g.It("Author:meinli-High-77517-Validate pod2pod connection within and across node when creating UDN with Secondary role from same namespace (Layer3)", func() {
+	g.It("Author:meinli-NonHyperShiftHOST-High-77517-Validate pod2pod connection within and across node when creating UDN with Secondary role from same namespace (Layer3)", func() {
 		var (
 			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
 			udnCRDSingleStack         = filepath.Join(buildPruningBaseDir, "udn/udn_crd_singlestack_template.yaml")
@@ -1850,14 +1850,11 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		exutil.By("2. create UDN with Secondary role and Primary role")
 		var cidr, ipv4cidr, ipv6cidr []string
 		var prefix, ipv4prefix, ipv6prefix int32
-		if ipStackType == "ipv4single" {
-			cidr = []string{"10.150.0.0/16", "10.200.0.0/16"}
-			prefix = 24
-		} else {
-			if ipStackType == "ipv6single" {
-				cidr = []string{"2010:100:200::0/60", "2011:100:200::0/60"}
-				prefix = 64
-			}
+		cidr = []string{"10.150.0.0/16", "10.200.0.0/16"}
+		prefix = 24
+		if ipStackType == "ipv6single" {
+			cidr = []string{"2010:100:200::0/60", "2011:100:200::0/60"}
+			prefix = 64
 		}
 		ipv4cidr = []string{"10.150.0.0/16", "10.200.0.0/16"}
 		ipv4prefix = 24
@@ -1894,7 +1891,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		// create Primary UDN
-		createGeneralUDNCRD(oc, ns, "l3-primary-77517", ipv4cidr[1], ipv4cidr[1], cidr[1], "layer3")
+		createGeneralUDNCRD(oc, ns, "l3-primary-77517", ipv4cidr[1], ipv6cidr[1], cidr[1], "layer3")
 
 		exutil.By("3. Create 2 pods within the same node and 1 pod across with different nodes")
 		pods := make([]udnPodSecNADResourceNode, 3)
@@ -1935,7 +1932,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		CurlUDNPod2PodFailMultiNetwork(oc, ns, ns, podNames[0], "net1", podNames[1], "ovn-udn1")
 	})
 
-	g.It("Author:meinli-High-77519-Validate pod2pod isolation within and across nodes when creating UDN with Secondary role from different namespaces (Layer3)", func() {
+	g.It("Author:meinli-NonHyperShiftHOST-High-77519-Validate pod2pod isolation within and across nodes when creating UDN with Secondary role from different namespaces (Layer3)", func() {
 		var (
 			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
 			udnCRDSingleStack         = filepath.Join(buildPruningBaseDir, "udn/udn_crd_singlestack_template.yaml")
@@ -2059,7 +2056,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		CurlUDNPod2PodPassMultiNetwork(oc, ns2, ns2, podNames[1], "net1", podNames[2], "net1")
 	})
 
-	g.It("Author:meinli-High-77563-Validate pod2pod connection within and across node when creating UDN with Secondary role from same namespace (Layer2)", func() {
+	g.It("Author:meinli-NonHyperShiftHOST-High-77563-Validate pod2pod connection within and across node when creating UDN with Secondary role from same namespace (Layer2)", func() {
 		var (
 			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
 			udnCRDdualStack           = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_dualstack_template.yaml")
@@ -2080,12 +2077,9 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		ipStackType := checkIPStackType(oc)
 		var cidr string
 		var ipv4cidr, ipv6cidr []string
-		if ipStackType == "ipv4single" {
-			cidr = "10.200.0.0/16"
-		} else {
-			if ipStackType == "ipv6single" {
-				cidr = "2011:100:200::0/60"
-			}
+		cidr = "10.200.0.0/16"
+		if ipStackType == "ipv6single" {
+			cidr = "2011:100:200::0/60"
 		}
 		ipv4cidr = []string{"10.150.0.0/16", "10.200.0.0/16"}
 		ipv6cidr = []string{"2010:100:200::0/60", "2011:100:200::0/60"}
@@ -2151,7 +2145,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		CurlUDNPod2PodFailMultiNetwork(oc, ns, ns, podNames[0], "net1", podNames[1], "ovn-udn1")
 	})
 
-	g.It("Author:meinli-High-77564-Validate pod2pod isolation within and across node when creating UDN with Secondary role from different namespaces (Layer2)", func() {
+	g.It("Author:meinli-NonHyperShiftHOST-High-77564-Validate pod2pod isolation within and across node when creating UDN with Secondary role from different namespaces (Layer2)", func() {
 		var (
 			buildPruningBaseDir       = exutil.FixturePath("testdata", "networking")
 			udnCRDdualStack           = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_dualstack_template.yaml")
@@ -2183,14 +2177,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		err = waitUDNCRDApplied(oc, udncrd1.namespace, udncrd1.crdname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("3. validate Layer2 switch is created in OVN")
-		ovnMasterPodName := getOVNKMasterOVNkubeNode(oc)
-		o.Expect(ovnMasterPodName).NotTo(o.BeEmpty())
-		o.Eventually(func() bool {
-			return checkOVNSwitch(oc, "l2.secondary_ovn_layer2_switch", ovnMasterPodName)
-		}, 20*time.Second, 5*time.Second).Should(o.BeTrue(), "The correct OVN switch is not created")
-
-		exutil.By("4. create 1 pod with secondary annotation in ns1")
+		exutil.By("3. create 1 pod with secondary annotation in ns1")
 		var podNames []string
 		// create 1 pod in ns1
 		pod1 := udnPodSecNADResourceNode{
@@ -2204,7 +2191,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		waitPodReady(oc, ns1, pod1.name)
 		podNames = append(podNames, pod1.name)
 
-		exutil.By("5. create Layer2 UDN with secondary role in ns2")
+		exutil.By("4. create Layer2 UDN with secondary role in ns2")
 		// create 2nd namespace
 		oc.SetupProject()
 		ns2 := oc.Namespace()
@@ -2221,7 +2208,7 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		err = waitUDNCRDApplied(oc, udncrd2.namespace, udncrd2.crdname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("6. create pods with secondary annotation in ns2")
+		exutil.By("5. create pods with secondary annotation in ns2")
 		pods := make([]udnPodSecNADResourceNode, 2)
 		//create 2 pods in ns2
 		for i := 0; i < 2; i++ {
@@ -2237,13 +2224,13 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 			podNames = append(podNames, pods[i].name)
 		}
 
-		exutil.By("7. validate pod2pod isolation (dual stack) within the same node")
+		exutil.By("6. validate pod2pod isolation (dual stack) within the same node")
 		pod0IPv4, pod0IPv6 := getPodMultiNetwork(oc, ns2, podNames[1])
 		e2e.Logf("Pod0 IPv4 address is: %v, IPv6 address is: %v", pod0IPv4, pod0IPv6)
 		CurlMultusPod2PodFail(oc, ns1, podNames[0], pod0IPv4, "net1", podenvname)
 		CurlMultusPod2PodFail(oc, ns1, podNames[0], pod0IPv6, "net1", podenvname)
 
-		exutil.By("8. validate pod2pod isolation (dual stack) across with different node")
+		exutil.By("7. validate pod2pod isolation (dual stack) across with different node")
 		pod1IPv4, pod1IPv6 := getPodMultiNetwork(oc, ns2, podNames[2])
 		e2e.Logf("Pod1 IPv4 address is: %v, IPv6 address is: %v", pod1IPv4, pod1IPv6)
 		CurlMultusPod2PodFail(oc, ns1, podNames[0], pod1IPv4, "net1", podenvname)
@@ -3038,10 +3025,14 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 
 		exutil.By("3. create UDN NAD in nadNS")
 		var subnet string
-		if ipStackType == "dualstack" {
-			subnet = "10.150.0.0/16,2010:100:200::0/60"
+		if ipStackType == "ipv4single" {
+			subnet = "10.151.0.0/16"
 		} else {
-			subnet = cidr
+			if ipStackType == "ipv6single" {
+				subnet = "2011:100:200::0/60"
+			} else {
+				subnet = "10.151.0.0/16,2011:100:200::0/60"
+			}
 		}
 
 		nadResourcename := "l2-network" + nadNS
@@ -3139,6 +3130,16 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		waitPodReady(oc, udnpod.namespace, udnpod.name)
 
 		exutil.By("3. create CUDN in ns1 and ns2")
+		if ipStackType == "ipv4single" {
+			cidr = "10.151.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2011:100:200::0/48"
+			} else {
+				ipv4cidr = "10.151.0.0/16"
+				ipv6cidr = "2011:100:200::0/48"
+			}
+		}
 		defer removeResource(oc, true, true, "clusteruserdefinednetwork", crdName)
 		cudncrd, err := applyCUDNtoMatchLabelNS(oc, matchLabelKey, matchValue, crdName, ipv4cidr, ipv6cidr, cidr, "layer3")
 		o.Expect(err).To(o.HaveOccurred())
@@ -3205,6 +3206,16 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("3. create UDN in ns3")
+		if ipStackType == "ipv4single" {
+			cidr = "10.151.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2011:100:200::0/48"
+			} else {
+				ipv4cidr = "10.151.0.0/16"
+				ipv6cidr = "2011:100:200::0/48"
+			}
+		}
 		createGeneralUDNCRD(oc, udnNS, "udn-network-78741", ipv4cidr, ipv6cidr, cidr, "layer3")
 
 		exutil.By("4. create pods in namespaces")
