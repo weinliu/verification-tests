@@ -209,7 +209,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		o.Expect(err).To(o.HaveOccurred())
 	})
 
-	// OCPBUGS-32044
 	// author: jechen@redhat.com
 	g.It("Author:jechen-Medium-42878-Errorfile stanzas and dummy default html files have been added to the router", func() {
 		exutil.By("Get pod (router) in openshift-ingress namespace")
@@ -224,11 +223,6 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		searchOutput = readRouterPodData(oc, podname, "cat haproxy-config.template", "errorfile")
 		o.Expect(searchOutput).To(o.ContainSubstring(`ROUTER_ERRORFILE_404`))
 		o.Expect(searchOutput).To(o.ContainSubstring(`ROUTER_ERRORFILE_503`))
-
-		// https://issues.redhat.com/browse/OCPBUGS-32044
-		exutil.By("Check if 'idle-close-on-response' have been added into haproxy-config.template")
-		searchOutput = readRouterPodData(oc, podname, "cat haproxy-config.template", "idle-close-on-response")
-		o.Expect(searchOutput).To(o.ContainSubstring(`option idle-close-on-response`))
 	})
 
 	// author: jechen@redhat.com
@@ -4456,5 +4450,54 @@ DNS.2 = *.%s.%s.svc
 			initReloadedNum = checkRouterReloadedLogs(oc, routerpod, initReloadedNum, initSrvStates, currentSrvStates)
 			initSrvStates = currentSrvStates
 		}
+	})
+
+	// author: hongli@redhat.com
+	// https://issues.redhat.com/browse/OCPBUGS-43745 and https://issues.redhat.com/browse/OCPBUGS-43811
+	g.It("Author:hongli-ROSA-OSD_CCS-ARO-Critical-79514-haproxy option idle-close-on-response is configurable", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+		var (
+			ingctrl = ingressControllerDescription{
+				name:      "ocp79514",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+			ingctrlResource = "ingresscontrollers/" + ingctrl.name
+		)
+
+		exutil.By("Create a custom ingresscontroller")
+		baseDomain := getBaseDomain(oc)
+		ingctrl.domain = ingctrl.name + "." + baseDomain
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ensureCustomIngressControllerAvailable(oc, ingctrl.name)
+		routerPod := getOneRouterPodNameByIC(oc, ingctrl.name)
+
+		exutil.By("Verify default spec.idleConnectionTerminationPolicy is Immediate in 4.19+")
+		output := getByJsonPath(oc, ingctrl.namespace, ingctrlResource, `{.spec.idleConnectionTerminationPolicy}`)
+		o.Expect(output).To(o.ContainSubstring("Immediate"))
+
+		exutil.By("Verify no variable ROUTER_IDLE_CLOSE_ON_RESPONSE in deployed router pod")
+		checkEnv := readRouterPodEnv(oc, routerPod, "ROUTER_IDLE_CLOSE_ON_RESPONSE")
+		o.Expect(checkEnv).To(o.ContainSubstring("NotFound"))
+
+		exutil.By("Verify no option idle-close-on-response in haproxy.config")
+		_, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerPod, "--", "grep", "idle-close-on-response", "haproxy.config").Output()
+		o.Expect(err).To(o.HaveOccurred())
+
+		exutil.By("Patch custom ingresscontroller spec.idleConnectionTerminationPolicy with Deferred")
+		patchResourceAsAdmin(oc, ingctrl.namespace, ingctrlResource, `{"spec":{"idleConnectionTerminationPolicy":"Deferred"}}`)
+		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		routerPod = getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
+
+		exutil.By("Verify variable ROUTER_IDLE_CLOSE_ON_RESPONSE of the deployed router pod")
+		checkEnv = readRouterPodEnv(oc, routerPod, "ROUTER_IDLE_CLOSE_ON_RESPONSE")
+		o.Expect(checkEnv).To(o.ContainSubstring(`ROUTER_IDLE_CLOSE_ON_RESPONSE=true`))
+
+		exutil.By("Check the router haproxy.config for option idle-close-on-response")
+		output = readRouterPodData(oc, routerPod, "cat haproxy.config", "idle-close-on-response")
+		o.Expect(strings.Count(output, "option idle-close-on-response")).To(o.Equal(3))
 	})
 })
