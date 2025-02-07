@@ -46,11 +46,13 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	)
 
 	g.BeforeEach(func() {
-		g.By("Deploy konflux FBC")
+		g.By("Deploy konflux FBC and ImageDigestMirrorSet")
+		imageDigest := filePath.Join(subscriptionDir, "image-digest-mirror-set.yaml")
 		catSrcTemplate := filePath.Join(subscriptionDir, "catalog-source.yaml")
 		catsrcErr := NOcatSrc.applyFromTemplate(oc, "-n", NOcatSrc.Namespace, "-f", catSrcTemplate)
 		o.Expect(catsrcErr).NotTo(o.HaveOccurred())
 		WaitUntilCatSrcReady(oc, NOcatSrc.Name)
+		ApplyResourceFromFile(oc, netobservNS, imageDigest)
 
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", NOSource.Channel))
 		// check if Network Observability Operator is already present

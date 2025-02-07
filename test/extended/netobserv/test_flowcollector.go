@@ -78,7 +78,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			catsrcErr := NOcatSrc.applyFromTemplate(oc, "-n", NOcatSrc.Namespace, "-f", catSrcTemplate)
 			o.Expect(catsrcErr).NotTo(o.HaveOccurred())
 			WaitUntilCatSrcReady(oc, NOcatSrc.Name)
-			applyResourceFromFile(oc, netobservNS, imageDigest)
+			ApplyResourceFromFile(oc, netobservNS, imageDigest)
 		}
 
 		ipStackType := checkIPStackType(oc)
@@ -1714,7 +1714,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		DNSTemplate := filePath.Join(baseDir, "DNS-pods.yaml")
 		DNSNamespace := "dns-traffic"
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(DNSNamespace)
-		applyResourceFromFile(oc, DNSNamespace, DNSTemplate)
+		ApplyResourceFromFile(oc, DNSNamespace, DNSTemplate)
 		exutil.AssertAllPodsToBeReady(oc, DNSNamespace)
 
 		g.By("Deploy test server and client pods")

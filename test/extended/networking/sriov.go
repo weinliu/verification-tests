@@ -1232,10 +1232,12 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 				g.Skip("the cluster do not contain the sriov card. skip this testing!")
 			}
 
-			g.By("Deploy konflux FBC")
+			g.By("Deploy konflux FBC and ImageDigestMirrorSet")
+			imageDigest := filePath.Join(subscriptionDir, "image-digest-mirror-set.yaml")
 			catSrcTemplate := filePath.Join(subscriptionDir, "catalog-source.yaml")
-			exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), "--ignore-unknown-parameters=true", "-f", catSrcTemplate, "-p", "NAMESPACE="+catsrc.Namespace)
+			exutil.ApplyNsResourceFromTemplate(oc, catsrc.Namespace, "--ignore-unknown-parameters=true", "-f", catSrcTemplate, "-p", "NAMESPACE="+catsrc.Namespace)
 			netobserv.WaitUntilCatSrcReady(oc, catsrc.Name)
+			netobserv.ApplyResourceFromFile(oc, netobservNS, imageDigest)
 
 			g.By(fmt.Sprintf("Subscribe operators to %s channel", NOSource.Channel))
 			// check if Network Observability Operator is already present
@@ -1318,7 +1320,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 				parameters := []string{interfaceParam}
 				flowRecords, err := lokilabels.GetMonolithicLokiFlowLogs("http://localhost:3100", time.Now(), parameters...)
 				o.Expect(err).NotTo(o.HaveOccurred())
-				o.Expect(len(flowRecords)).To(o.BeNumerically(">", 0), "expected number of flowRecords to be equal to 0")
+				o.Expect(len(flowRecords)).To(o.BeNumerically(">", 0), "expected number of flowRecords to be greater than 0")
 			})
 		})
 		g.When("SRIOV interfaces are up prior to agents", func() {
@@ -1373,7 +1375,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 				parameters := []string{interfaceParam}
 				flowRecords, err := lokilabels.GetMonolithicLokiFlowLogs("http://localhost:3100", time.Now(), parameters...)
 				o.Expect(err).NotTo(o.HaveOccurred())
-				o.Expect(len(flowRecords)).To(o.BeNumerically(">", 0), "expected number of flowRecords to be equal to 0")
+				o.Expect(len(flowRecords)).To(o.BeNumerically(">", 0), "expected number of flowRecords to be greater than 0")
 			})
 		})
 	})
