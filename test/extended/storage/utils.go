@@ -559,6 +559,9 @@ func getIntreeSupportProvisionersByCloudProvider(oc *exutil.CLI) []string {
 
 // Get pre-defined storageclass by cloudplatform and provisioner
 func getPresetStorageClassNameByProvisioner(oc *exutil.CLI, cloudProvider string, provisioner string) string {
+	if provisioner == "file.csi.azure.com" && isAzureFullyPrivateCluster(oc) {
+		g.Skip("Skip: Azure fully private clusters file csi preset storageclass tests!!!")
+	}
 	scList := getPresetStorageClassListByProvisioner(oc, cloudProvider, provisioner)
 	if len(scList) < 1 {
 		return ""

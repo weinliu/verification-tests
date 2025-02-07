@@ -1038,6 +1038,23 @@ func isAzureStackCluster(oc *exutil.CLI) bool {
 	return strings.EqualFold(azureCloudType, "AzureStackCloud")
 }
 
+// isAzureFullyPrivateCluster judges whether the test cluster is azure fully private cluster
+func isAzureFullyPrivateCluster(oc *exutil.CLI) bool {
+	if cloudProvider != "azure" {
+		return false
+	}
+
+	installConfig, getInstallConfigError := oc.AsAdmin().WithoutNamespace().Run("extract").Args("-n", "kube-system", "cm/cluster-config-v1", "--to=-").Output()
+	o.Expect(getInstallConfigError).NotTo(o.HaveOccurred(), "Failed to extract the install config")
+
+	if strings.Contains(installConfig, "publish: Internal") && strings.Contains(installConfig, "outboundType: UserDefinedRouting") {
+		e2e.Logf("The cluster is azure fully private.")
+		return true
+	}
+
+	return false
+}
+
 // GetvSphereCredentials gets the vsphere credentials from cluster
 func GetvSphereCredentials(oc *exutil.CLI) (host string, username string, password string) {
 	credential, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", "kube-system", "secret/"+getRootSecretNameByCloudProvider(), "-o", `jsonpath={.data}`).Output()

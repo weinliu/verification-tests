@@ -100,7 +100,10 @@ func (sc *storageClass) create(oc *exutil.CLI) {
 	} else if provisioner == "filestore.csi.storage.gke.io" {
 		filestoreNetworkParameter := generateValidfilestoreNetworkParameter(oc)
 		sc.createWithExtraParameters(oc, map[string]interface{}{"parameters": filestoreNetworkParameter})
-
+	} else if provisioner == "file.csi.azure.com" && isAzureFullyPrivateCluster(oc) {
+		// Adding "networkEndpointType: privateEndpoint" if it is Azure fully private cluster
+		azureFileCSIPrivateEndpointParameter := map[string]string{"networkEndpointType": "privateEndpoint"}
+		sc.createWithExtraParameters(oc, map[string]interface{}{"parameters": azureFileCSIPrivateEndpointParameter})
 	} else {
 		err := applyResourceFromTemplateAsAdmin(oc, "--ignore-unknown-parameters=true", "-f", sc.template, "-p", "SCNAME="+sc.name, "RECLAIMPOLICY="+sc.reclaimPolicy,
 			"PROVISIONER="+sc.provisioner, "VOLUMEBINDINGMODE="+sc.volumeBindingMode)
@@ -138,8 +141,8 @@ func (sc *storageClass) createWithExtraParameters(oc *exutil.CLI, extraParameter
 		// See https://issues.redhat.com/browse/OCPBUGS-18581 for detail
 		// Adding "networkEndpointType: privateEndpoint" for "nfs" protocol when there is compact node
 		// See another Jira bug https://issues.redhat.com/browse/OCPBUGS-38922
-		// Adding "networkEndpointType: privateEndpoint" if it is Azure internal registry cluster
-		if provisioner == "file.csi.azure.com" && ((finalParameters["protocol"] == "nfs" && len(getCompactNodeList(oc)) > 0) || isAzureInternalRegistryConfigured(oc)) {
+		// Adding "networkEndpointType: privateEndpoint" if it is Azure internal registry cluster/Azure fully private cluster
+		if provisioner == "file.csi.azure.com" && ((finalParameters["protocol"] == "nfs" && len(getCompactNodeList(oc)) > 0) || isAzureInternalRegistryConfigured(oc) || isAzureFullyPrivateCluster(oc)) {
 			sc.parameters["networkEndpointType"] = "privateEndpoint"
 		}
 
