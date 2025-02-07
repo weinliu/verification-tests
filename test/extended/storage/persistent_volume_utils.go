@@ -313,6 +313,11 @@ func (pv *persistentVolume) createWithNodeAffinityExpressions(oc *exutil.CLI, no
 	pv.createWithMultiExtraParameters(oc, []map[string]string{{"items.0.spec.nodeAffinity.required.nodeSelectorTerms.0.": "set"}}, []map[string]interface{}{{"matchExpressions": nodeAffinityExpressions}})
 }
 
+// Create new PersistentVolume with VolumeAttributesClass
+func (pv *persistentVolume) createWithVolumeAttributesClass(oc *exutil.CLI, vacName string) {
+	pv.createWithMultiExtraParameters(oc, []map[string]string{{"items.0.spec.": "set"}}, []map[string]interface{}{{"volumeAttributesClassName": vacName}})
+}
+
 // Delete the PersistentVolume use kubeadmin
 func (pv *persistentVolume) deleteAsAdmin(oc *exutil.CLI) {
 	oc.WithoutNamespace().AsAdmin().Run("delete").Args("pv", pv.name, "--ignore-not-found").Execute()

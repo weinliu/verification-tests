@@ -5677,6 +5677,20 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod1 := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc1.name))
 			pod2 := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc2.name))
 
+			exutil.By("#. Create a new volumeAttributesClass (VAC) resource")
+			if provisioner == "ebs.csi.aws.com" {
+				vac.volumeType = "gp3"
+				vac.iops = strconv.FormatInt(getRandomNum(3001, 4000), 10)
+				vac.throughput = strconv.FormatInt(getRandomNum(126, 200), 10)
+				vacParameters = map[string]string{ // AWS-EBS-CSI-DRIVER specific VAC parameters
+					"type":       vac.volumeType,
+					"iops":       vac.iops,
+					"throughput": vac.throughput,
+				}
+			}
+			vac.createWithExtraParameters(oc, vacParameters)
+			defer vac.deleteAsAdmin(oc)
+
 			exutil.By("#. Create multiple PVCs with the preset csi storageclass")
 			pvc1.create(oc)
 			defer pvc1.deleteAsAdmin(oc)
@@ -5706,20 +5720,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			exutil.By("#. Check the pod volume can be read and write")
 			pod1.checkMountedVolumeCouldRW(oc)
 			pod2.checkMountedVolumeCouldRW(oc)
-
-			exutil.By("#. Create a new volumeAttributesClass (VAC) resource")
-			if provisioner == "ebs.csi.aws.com" {
-				vac.volumeType = "gp3"
-				vac.iops = strconv.FormatInt(getRandomNum(3001, 4000), 10)
-				vac.throughput = strconv.FormatInt(getRandomNum(126, 200), 10)
-				vacParameters = map[string]string{ // AWS-EBS-CSI-DRIVER specific VAC parameters
-					"type":       vac.volumeType,
-					"iops":       vac.iops,
-					"throughput": vac.throughput,
-				}
-			}
-			vac.createWithExtraParameters(oc, vacParameters)
-			defer vac.deleteAsAdmin(oc)
 
 			exutil.By("#. Patch all PVC resources with volumeAttributesClass (VAC) name")
 			pvc1.modifyWithVolumeAttributesClass(oc, vac.name)
@@ -5761,7 +5761,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
 			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
 			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
-			vacParameters       = map[string]string{}
+			vacParameters1      = map[string]string{}
+			vacParameters2      = map[string]string{}
 		)
 
 		if len(supportProvisioners) == 0 {
@@ -5788,15 +5789,25 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			pod1 := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc1.name))
 			pod2 := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc2.name))
 
-			exutil.By("#. Create a new volumeAttributesClass (VAC-1) resource")
+			exutil.By("#. Create new volumeAttributesClass resources VAC-1 & VAC-2")
 			if provisioner == "ebs.csi.aws.com" {
 				vac1.volumeType = "gp2"
-				vacParameters = map[string]string{ // AWS-EBS-CSI-DRIVER specific VAC parameters
+				vacParameters1 = map[string]string{ // AWS-EBS-CSI-DRIVER specific VAC parameters
 					"type": vac1.volumeType,
 				}
+				vac2.volumeType = "gp3"
+				vac2.iops = strconv.FormatInt(getRandomNum(3000, 4000), 10)
+				vac2.throughput = strconv.FormatInt(getRandomNum(125, 200), 10)
+				vacParameters2 = map[string]string{ // AWS-EBS-CSI-DRIVER specific VAC parameters
+					"type":       vac2.volumeType,
+					"iops":       vac2.iops,
+					"throughput": vac2.throughput,
+				}
 			}
-			vac1.createWithExtraParameters(oc, vacParameters)
+			vac1.createWithExtraParameters(oc, vacParameters1)
 			defer vac1.deleteAsAdmin(oc)
+			vac2.createWithExtraParameters(oc, vacParameters2)
+			defer vac2.deleteAsAdmin(oc)
 
 			exutil.By("#. Create multiple PVCs with the preset csi storageclass and volumeAttributesClass (VAC-1)")
 			pvc1.createWithSpecifiedVAC(oc, vac1.name)
@@ -5830,20 +5841,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				e2e.Logf("The initial PV volume attributes are, IOPS: %d AND Throughput: %d AND VolumeType: %q ", iops, throughput, volumeType)
 			}
 
-			exutil.By("#. Create a new volumeAttributesClass (VAC-2) resource")
-			if provisioner == "ebs.csi.aws.com" {
-				vac2.volumeType = "gp3"
-				vac2.iops = strconv.FormatInt(getRandomNum(3000, 4000), 10)
-				vac2.throughput = strconv.FormatInt(getRandomNum(125, 200), 10)
-				vacParameters = map[string]string{ // AWS-EBS-CSI-DRIVER specific VAC parameters
-					"type":       vac2.volumeType,
-					"iops":       vac2.iops,
-					"throughput": vac2.throughput,
-				}
-			}
-			vac2.createWithExtraParameters(oc, vacParameters)
-			defer vac2.deleteAsAdmin(oc)
-
 			exutil.By("#. Patch all PVC resources with volumeAttributesClass (VAC-2) name")
 			pvc1.modifyWithVolumeAttributesClass(oc, vac2.name)
 			pvc2.modifyWithVolumeAttributesClass(oc, vac2.name)
@@ -5862,6 +5859,143 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 					o.Expect(throughput_new).To(o.Equal(vac2.throughput))
 					o.Expect(volType).To(o.Equal(vac2.volumeType))
 				}
+			}
+
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
+	})
+
+	// author: rdeore@redhat.com
+	// OCP-78995-[CSI-Driver] [Dynamic PV] [VolumeAttributesClass] [Pre-provision] Check pre-provisioned PVs created using VAC, can be bound to new PVCs with same VAC
+	g.It("Author:rdeore-ROSA-OSD_CCS-High-78995-[CSI-Driver] [VolumeAttributesClass] [Pre-provision] Check pre-provisioned PVs created using VAC, can be bound to new PVCs with same VAC", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			vacTemplate          = filepath.Join(storageTeamBaseDir, "volumeattributesclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate          = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			pvTemplate           = filepath.Join(storageTeamBaseDir, "csi-pv-template.yaml")
+			supportProvisioners  = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+			vacParameters1       = map[string]string{}
+			vacParameters2       = map[string]string{}
+		)
+
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		// TODO: Remove this check after feature GA
+		if !isTechPreviewNoUpgrade(oc) {
+			g.Skip("Skip test scenario, cluster under test is not TechPreviewNoUpgrade enabled")
+		}
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject()
+		for _, provisioner = range supportProvisioners {
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+			// Set the resource definition for the scenario
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassReclaimPolicy("Retain"), setStorageClassProvisioner(provisioner))
+			pvcCapacity := strconv.FormatInt(getRandomNum(8, 20), 10) + "Gi" // Minimum size of "8Gi" required for 'IOPS = 4000'
+			vac1 := newVolumeAttributesClass(setVolumeAttributesClassTemplate(vacTemplate), setVolumeAttributesClassDriverName(provisioner))
+			vac2 := newVolumeAttributesClass(setVolumeAttributesClassTemplate(vacTemplate), setVolumeAttributesClassDriverName(provisioner))
+			pvc1 := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimAccessmode("ReadWriteOnce"), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimCapacity(pvcCapacity))
+			pvc2 := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimAccessmode("ReadWriteOnce"), setPersistentVolumeClaimStorageClassName(storageClass.name), setPersistentVolumeClaimCapacity(pvcCapacity))
+			pvNew := newPersistentVolume(setPersistentVolumeTemplate(pvTemplate), setPersistentVolumeCapacity(pvcCapacity), setPersistentVolumeDriver(provisioner), setPersistentVolumeStorageClassName(storageClass.name))
+			pod1 := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc1.name))
+			pod2 := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc2.name))
+
+			exutil.By("#. Create a new storageClass resource with 'Retain' reclaim policy")
+			storageClass.create(oc)
+			defer storageClass.deleteAsAdmin(oc)
+
+			exutil.By("#. Create new volumeAttributesClass resources VAC-1 & VAC-2")
+			if provisioner == "ebs.csi.aws.com" {
+				vac1.volumeType = "gp3"
+				vacParameters1 = map[string]string{ // AWS-EBS-CSI-DRIVER specific VAC parameters
+					"type": vac1.volumeType, // default IOPS: "3000" and Throughput: "125" for Type: 'gp3'
+				}
+				vac2.volumeType = "gp3"
+				vac2.iops = strconv.FormatInt(getRandomNum(3100, 4000), 10)
+				vac2.throughput = strconv.FormatInt(getRandomNum(130, 200), 10)
+				vacParameters2 = map[string]string{ // AWS-EBS-CSI-DRIVER specific VAC parameters
+					"type":       vac2.volumeType,
+					"iops":       vac2.iops,
+					"throughput": vac2.throughput,
+				}
+			}
+			vac1.createWithExtraParameters(oc, vacParameters1)
+			defer vac1.deleteAsAdmin(oc)
+			vac2.createWithExtraParameters(oc, vacParameters2)
+			defer vac2.deleteAsAdmin(oc)
+
+			exutil.By("#. Create PVC-1 resource with the new storageclass and volumeAttributesClass (VAC-1)")
+			pvc1.createWithSpecifiedVAC(oc, vac1.name)
+			defer pvc1.deleteAsAdmin(oc)
+
+			exutil.By("#. Create Pod-1 resource with the PVC-1 and wait for the Pod-1 to be ready")
+			pod1.create(oc)
+			defer pod1.deleteAsAdmin(oc)
+			pod1.waitReady(oc)
+			nodeName := getNodeNameByPod(oc, pod1.namespace, pod1.name)
+
+			exutil.By("#. Save PV_Name and Volume_ID of provisioned PV resource")
+			getCredentialFromCluster(oc)
+			pvName := pvc1.getVolumeName(oc)
+			volumeID := pvc1.getVolumeID(oc)
+			defer func() {
+				deleteBackendVolumeByVolumeID(oc, volumeID)
+				waitVolumeDeletedOnBackend(oc, volumeID)
+			}()
+			defer deleteSpecifiedResource(oc.AsAdmin(), "pv", pvName, "")
+
+			exutil.By("#. Check PVC-1 and PV resources are updated with volumeAttributesClass (VAC-1) name")
+			pvc1.checkVolumeAttributesClassAsExpected(oc, vac1.name)
+
+			exutil.By("#. Check on Pod-1 mounted volume, data can be written and read")
+			pod1.checkMountedVolumeCouldRW(oc)
+
+			exutil.By("#. Delete Pod-1 and PVC-1 resources")
+			deleteSpecifiedResource(oc, "pod", pod1.name, pod1.namespace)
+			deleteSpecifiedResource(oc, "pvc", pvc1.name, pvc1.namespace)
+
+			exutil.By("#. Check the PV status gets updated to 'Released' ")
+			waitForPersistentVolumeStatusAsExpected(oc, pvName, "Released")
+
+			exutil.By("#. Delete old PV resource")
+			deleteSpecifiedResource(oc.AsAdmin(), "pv", pvName, "")
+
+			exutil.By("# Create a new PV resource using Volume handle and volumeAttributesClass (VAC-1)")
+			pvNew.volumeHandle = volumeID
+			pvNew.createWithVolumeAttributesClass(oc, vac1.name)
+			defer pvNew.deleteAsAdmin(oc)
+
+			exutil.By("#. Create PVC-2 resource with the same storageclass and volumeAttributesClass (VAC-1)")
+			pvc2.createWithSpecifiedVAC(oc, vac1.name)
+			defer pvc2.deleteAsAdmin(oc)
+
+			exutil.By("#. Create Pod-2 resource with the PVC-2 and wait for the Pod-2 to be ready")
+			pod2.createWithNodeSelector(oc, "kubernetes\\.io/hostname", nodeName)
+			defer pod2.deleteAsAdmin(oc)
+			pod2.waitReady(oc)
+
+			exutil.By("#. Check new Pod-2 mounted volume still have previously written data")
+			pod2.checkMountedVolumeDataExist(oc, true)
+
+			exutil.By("#. Modify PVC-2 resource with volumeAttributesClass (VAC-2) name")
+			pvc2.modifyWithVolumeAttributesClass(oc, vac2.name)
+
+			exutil.By("#. Check PVC-2 & PV resources are updated with volumeAttributesClass (VAC-2) name")
+			pvc2.checkVolumeAttributesClassAsExpected(oc, vac2.name)
+
+			exutil.By("#. Check volumeAttributes values of backend volume are updated as per the VAC-2")
+			if provisioner == "ebs.csi.aws.com" {
+				iops_new := strconv.FormatInt(getAwsVolumeIopsByVolumeID(volumeID), 10)
+				throughput_new := strconv.FormatInt(getAwsVolumeThroughputByVolumeID(volumeID), 10)
+				o.Expect(iops_new).To(o.Equal(vac2.iops))
+				o.Expect(throughput_new).To(o.Equal(vac2.throughput))
 			}
 
 			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
