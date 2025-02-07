@@ -6258,7 +6258,7 @@ metadata:
 		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
 		o.Expect(masterErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Master node is %v : ", masterNode)
-		cmd := `for iface in $(ls /sys/class/net | grep -oP '^(env|ens|eth)\w+'); do ip link show $iface | grep -q 'master' && echo "$iface" || true; done`
+		cmd := `for iface in $(ls /sys/class/net | grep -oP '^(env|ens|eth|enp)\w+'); do ip link show $iface | grep -q 'master' && echo "$iface" || true; done`
 		ethName, ethErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(ethErr).NotTo(o.HaveOccurred())
 		ethName = strings.TrimSpace(ethName)
@@ -6382,10 +6382,6 @@ metadata:
 
 	// author: kewang@redhat.com
 	g.It("Author:kewang-NonHyperShiftHOST-ROSA-ARO-OSD_CCS-NonPreRelease-Longduration-High-73880-[Apiserver] Alert KubeAggregatedAPIErrors [Slow] [Disruptive]", func() {
-		if isSNOCluster(oc) {
-			g.Skip("This is a SNO cluster, skip.")
-		}
-
 		var (
 			kubeAlert1      = "KubeAggregatedAPIErrors"
 			kubeAlert2      = "KubeAggregatedAPIDown"
@@ -6402,7 +6398,7 @@ metadata:
 		masterNode, masterErr := exutil.GetFirstMasterNode(oc)
 		o.Expect(masterErr).NotTo(o.HaveOccurred())
 		e2e.Logf("Master node is %v : ", masterNode)
-		cmd := `for iface in $(ls /sys/class/net | grep -oP '^(env|ens|eth)\w+'); do ip link show $iface | grep -q 'master' && echo "$iface" || true; done`
+		cmd := `for iface in $(ls /sys/class/net | grep -oP '^(env|ens|eth|enp)\w+'); do ip link show $iface | grep -q 'master' && echo "$iface" || true; done`
 		ethName, ethErr := exutil.DebugNodeRetryWithOptionsAndChroot(oc, masterNode, []string{"--quiet=true", "--to-namespace=openshift-kube-apiserver"}, "bash", "-c", cmd)
 		o.Expect(ethErr).NotTo(o.HaveOccurred())
 		ethName = strings.TrimSpace(ethName)
