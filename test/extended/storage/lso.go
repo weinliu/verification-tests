@@ -155,7 +155,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-Author:pewang-LEVEL0-Critical-24524-[LSO] [Filesystem xfs] LocalVolume CR related pv could be used by Pod", func() {
+	g.It("Author:pewang-NonHyperShiftHOST-ROSA-OSD_CCS-LEVEL0-Critical-24524-Medium-79030-[LSO] [Filesystem xfs] LocalVolume CR related pv could be used by Pod", func() {
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
@@ -217,6 +217,21 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		podNew.waitReady(oc)
 		// Check the data is cleaned up in the volume
 		podNew.checkMountedVolumeDataExist(oc, false)
+
+		exutil.By("# Delete new created pod and pvc and check the related pv's status")
+		podNew.delete(oc)
+		pvcNew.delete(oc)
+		pvcNew.waitStatusAsExpected(oc, "deleted")
+
+		exutil.By("# Delete the localvolume CR")
+		deleteSpecifiedResource(oc.AsAdmin(), "localvolume", mylv.name, mylv.namespace)
+		exutil.By("# Check pv is removed")
+		checkResourcesNotExist(oc.AsAdmin(), "pv", pvName, "")
+		exutil.By("# Check the softlink is removed on related worker")
+		o.Eventually(func() string {
+			output, _ := execCommandInSpecificNode(oc, myWorker.name, "ls /mnt/local-storage/"+mylv.scname)
+			return output
+		}).WithTimeout(defaultMaxWaitingTime).WithPolling(defaultMaxWaitingTime / defaultIterationTimes).Should(o.ContainSubstring("No such file or directory"))
 	})
 
 	// author: pewang@redhat.com
@@ -765,7 +780,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	})
 
 	// author: pewang@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-NonPreRelease-Author:pewang-High-33907-[LSO] [part] LocalVolumeSet CR should provision matched device and could be used by Pod [Serial]", func() {
+	g.It("Author:pewang-NonHyperShiftHOST-ROSA-OSD_CCS-NonPreRelease-High-33907-Medium-79031-[LSO] [part] LocalVolumeSet CR should provision matched device and could be used by Pod [Serial]", func() {
 		// Set the resource definition for the scenario
 		var (
 			pvcTemplate = filepath.Join(lsoBaseDir, "pvc-template.yaml")
@@ -851,6 +866,20 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		o.Expect(pvcNew.getVolumeName(oc)).Should(o.Equal(pvName))
 		// Check the data is cleaned up in the volume
 		podNew.checkMountedVolumeDataExist(oc, false)
+
+		exutil.By("# Delete pod/pvc and localvolumeset CR")
+		podNew.delete(oc)
+		pvcNew.delete(oc)
+		deleteSpecifiedResource(oc.AsAdmin(), "localvolumeset", mylvs.name, mylvs.namespace)
+		exutil.By("# Check pv is removed")
+		checkResourcesNotExist(oc.AsAdmin(), "pv", pvName, "")
+
+		exutil.By("# Check the softlink is removed on related worker")
+		o.Eventually(func() string {
+			output, _ := execCommandInSpecificNode(oc, myWorker.name, "ls /mnt/local-storage/"+mylvs.scname)
+			return output
+		}).WithTimeout(defaultMaxWaitingTime).WithPolling(defaultMaxWaitingTime / defaultIterationTimes).Should(o.ContainSubstring("No such file or directory"))
+
 	})
 
 	// author: pewang@redhat.com
