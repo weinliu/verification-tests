@@ -1326,6 +1326,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		err = oc.Run("delete").Args("-n", project1, "secret", "mytls").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForOutput(oc, project1, "route/myedge", `{.status.ingress[?(@.routerName=="default")].conditions[*]}`, "ExternalCertificateValidationFailed")
+
+		// https://issues.redhat.com/browse/OCPBUGS-33958 (4.19+)
+		exutil.By("edge and reen route should be recovered after recreating the referenced secret")
+		err = oc.WithoutNamespace().Run("apply").Args("-f", newSecretYaml).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForOutput(oc, project1, "route/myedge", `{.status.ingress[?(@.routerName=="default")].conditions[?(@.type=="Admitted")].status}`, "True")
+		waitForOutsideCurlContains("https://"+edgeRouteHost, curlOptions, "Hello-OpenShift")
+		waitForOutsideCurlContains("https://"+reenRouteHost, curlOptions, "Hello-OpenShift")
 	})
 
 	// author: iamin@redhat.com
