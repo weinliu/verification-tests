@@ -1590,7 +1590,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		)
 
 		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
-		vaultPodName, _ := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
+		vaultPodName, vaultRootToken := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
+		configVaultPKI(oc, oc.Namespace(), vaultReleaseName, vaultPodName, vaultRootToken)
 
 		exutil.By("configure auth with Vault AppRole")
 		cmd := fmt.Sprintf(`vault auth enable approle && vault write auth/approle/role/%s token_policies="cert-manager" token_ttl=1h token_max_ttl=4h`, vaultRoleName)
@@ -1643,9 +1644,10 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 
 		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
 		vaultPodName, vaultToken := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
+		configVaultPKI(oc, oc.Namespace(), vaultReleaseName, vaultPodName, vaultToken)
 
 		exutil.By("configure auth with Vault token")
-		cmd := fmt.Sprintf(`vault token create -policy=cert-manager -ttl=720h`)
+		cmd := `vault token create -policy=cert-manager -ttl=720h`
 		_, err := exutil.RemoteShPod(oc, oc.Namespace(), vaultPodName, "sh", "-c", cmd)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1686,7 +1688,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 		)
 
 		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
-		vaultPodName, _ := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
+		vaultPodName, vaultToken := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
+		configVaultPKI(oc, oc.Namespace(), vaultReleaseName, vaultPodName, vaultToken)
 
 		exutil.By("create a long-lived API token for a service account")
 		err := oc.Run("create").Args("serviceaccount", serviceAccountName).Execute()
@@ -1735,7 +1738,8 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 		skipUnsupportedVersion(oc, minSupportedVersion)
 
 		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
-		vaultPodName, _ := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
+		vaultPodName, vaultToken := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
+		configVaultPKI(oc, oc.Namespace(), vaultReleaseName, vaultPodName, vaultToken)
 
 		exutil.By("create RBAC resources for the service account to get tokens")
 		err := oc.Run("create").Args("serviceaccount", serviceAccountName).Execute()
@@ -1784,7 +1788,8 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 		skipUnsupportedVersion(oc, minSupportedVersion)
 
 		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
-		vaultPodName, _ := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
+		vaultPodName, vaultToken := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
+		configVaultPKI(oc, oc.Namespace(), vaultReleaseName, vaultPodName, vaultToken)
 
 		exutil.By("create RBAC resources for the service account to get tokens")
 		err := oc.Run("create").Args("serviceaccount", serviceAccountName).Execute()

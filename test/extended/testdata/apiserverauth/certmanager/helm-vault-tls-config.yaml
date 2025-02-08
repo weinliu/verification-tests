@@ -6,7 +6,7 @@ global:
   tlsDisable: false
 server:
   image:
-    repository: "hashicorp/vault"
+    repository: "registry.connect.redhat.com/hashicorp/vault"
     tag: "latest"
   dataStorage:
     enabled: true
