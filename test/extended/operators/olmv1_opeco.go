@@ -30,8 +30,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		exutil.SkipNoOLMv1Core(oc)
 	})
 
-	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-VMonly-High-69758-Catalogd Polling remote registries for update to images content", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-VMonly-High-69758-Catalogd Polling remote registries for update to images content", func() {
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -130,8 +130,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
-	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-69123-Catalogd clustercatalog offer the operator content through http server", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-69123-Catalogd clustercatalog offer the operator content through http server", func() {
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -160,8 +160,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
-	// author: jitli@redhat.com
-	g.It("Author:jitli-DEPRECATED-ConnectedOnly-NonHyperShiftHOST-High-69124-check the clustercatalog source type before created", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-DEPRECATED-ConnectedOnly-NonHyperShiftHOST-High-69124-check the clustercatalog source type before created", func() {
 		var (
 			baseDir             = exutil.FixturePath("testdata", "olm", "v1")
 			catalogPollTemplate = filepath.Join(baseDir, "clustercatalog-secret.yaml")
@@ -188,8 +188,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
-	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-69242-Catalogd deprecated package/bundlemetadata/catalogmetadata from clustercatalog CR", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-69242-Catalogd deprecated package/bundlemetadata/catalogmetadata from clustercatalog CR", func() {
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -218,8 +218,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
-	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-69069-Replace pod-based image unpacker with an image registry client", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-69069-Replace pod-based image unpacker with an image registry client", func() {
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -286,8 +286,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
-	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-69869-Catalogd Add metrics to the Storage implementation", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-69869-Catalogd Add metrics to the Storage implementation", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
@@ -401,8 +401,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 	})
 
-	// author: jfan@redhat.com
-	g.It("Author:jfan-ConnectedOnly-NonHyperShiftHOST-High-69202-Catalogd clustercatalog offer the operator content through http server off cluster", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-69202-Catalogd clustercatalog offer the operator content through http server off cluster", func() {
 		exutil.SkipOnProxyCluster(oc)
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
@@ -433,8 +433,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		exutil.AssertWaitPollNoErr(errWait, "Cannot get the result")
 	})
 
-	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-73219-Fetch deprecation data from the catalogd http server", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-73219-Fetch deprecation data from the catalogd http server", func() {
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -460,8 +460,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
-	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-73289-Check the deprecation conditions and messages", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-73289-Check the deprecation conditions and messages", func() {
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -595,8 +595,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
-	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-74948-catalog offer the operator content through https server", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-74948-catalog offer the operator content through https server", func() {
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -669,8 +669,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
-	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-OSD_CCS-High-74978-CRD upgrade will be prevented if the Scope is switched between Namespaced and Cluster", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-OSD_CCS-High-74978-CRD upgrade will be prevented if the Scope is switched between Namespaced and Cluster", func() {
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -742,8 +742,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
-	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75218-Disabling the CRD Upgrade Safety preflight checks", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-75218-Disabling the CRD Upgrade Safety preflight checks", func() {
 		var (
 			baseDir                      = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate       = filepath.Join(baseDir, "clustercatalog.yaml")
@@ -841,8 +841,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
-	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75122-CRD upgrade check Removing an existing stored version and add a new CRD with no modifications to existing versions", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-75122-CRD upgrade check Removing an existing stored version and add a new CRD with no modifications to existing versions", func() {
 		exutil.SkipForSNOCluster(oc)
 		var (
 			caseID                       = "75122"
@@ -922,9 +922,9 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
-	// author: jitli@redhat.com
+	// author: xzha@redhat.com
 	// Cover test case: OCP-75123 and OCP-75217
-	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75123-High-75217-CRD upgrade checks for changes in required field and field type", func() {
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-75123-High-75217-CRD upgrade checks for changes in required field and field type", func() {
 		exutil.SkipForSNOCluster(oc)
 		var (
 			caseID                       = "75123"
@@ -1016,8 +1016,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
-	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75124-CRD upgrade checks for changes in default values", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-75124-CRD upgrade checks for changes in default values", func() {
 		exutil.SkipForSNOCluster(oc)
 		var (
 			caseID                       = "75124"
@@ -1075,7 +1075,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			`default value "\"default-string-jitli\"" added when there was no default previously for resolved bundle`, 10, 60, 0)
+			`default value "\"default-string-xzha\"" added when there was no default previously for resolved bundle`, 10, 60, 0)
 
 		exutil.By("upgrade will be prevented if The default value of a field is changed")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
@@ -1095,8 +1095,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
-	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75515-CRD upgrade checks for changes in enumeration values", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-75515-CRD upgrade checks for changes in enumeration values", func() {
 		exutil.SkipForSNOCluster(oc)
 		var (
 			caseID                       = "75515"
@@ -1173,8 +1173,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		clusterextension.WaitClusterExtensionVersion(oc, "v1.0.6")
 	})
 
-	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-NonHyperShiftHOST-High-75516-CRD upgrade checks for the field maximum minimum changes", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-75516-CRD upgrade checks for the field maximum minimum changes", func() {
 		exutil.SkipForSNOCluster(oc)
 		var (
 			caseID                       = "75516"
@@ -1290,8 +1290,8 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 
 	})
 
-	// author: jfan@redhat.com
-	g.It("Author:jfan-ConnectedOnly-NonHyperShiftHOST-Critical-75441-Catalogd supports compression and jsonlines format", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-Critical-75441-Catalogd supports compression and jsonlines format", func() {
 		var (
 			baseDir                = exutil.FixturePath("testdata", "olm", "v1")
 			clustercatalogTemplate = filepath.Join(baseDir, "clustercatalog.yaml")

@@ -9477,8 +9477,8 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(envFromPod).To(o.ContainSubstring(secret.name))
 	})
 
-	// author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-High-75328-CatalogSources that use binaryless images must set extractContent", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-High-75328-CatalogSources that use binaryless images must set extractContent", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "olm")
 		catsrcImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 		catsrcExtractImageTemplate := filepath.Join(buildPruningBaseDir, "catalogsource-image-extract.yaml")
@@ -13378,8 +13378,8 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 	})
 
-	// OCP-45359 author: jitli@redhat.com
-	g.It("Author:jitli-DEPRECATED-NonHyperShiftHOST-ConnectedOnly-Medium-45359-Default catalogs need to use the correct tags", func() {
+	// OCP-45359 author: xzha@redhat.com
+	g.It("Author:xzha-DEPRECATED-NonHyperShiftHOST-ConnectedOnly-Medium-45359-Default catalogs need to use the correct tags", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		exutil.SkipIfDisableDefaultCatalogsource(oc)
 		exutil.By("step: get version")
@@ -13407,8 +13407,8 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 		}
 	})
 
-	// OCP-45361 author: jitli@redhat.com
-	g.It("Author:jitli-ConnectedOnly-Medium-45361-Resolution failed error condition in Subscription should be removed after resolution error is resolved", func() {
+	// OCP-45361 author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-Medium-45361-Resolution failed error condition in Subscription should be removed after resolution error is resolved", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
@@ -13500,8 +13500,8 @@ var _ = g.Describe("[sig-operators] OLM on VM for an end user handle within a na
 
 	})
 
-	// author: jitli@redhat.com
-	g.It("ConnectedOnly-Author:jitli-Medium-43276-oc adm catalog mirror can mirror declaritive index images", func() {
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-Medium-43276-oc adm catalog mirror can mirror declaritive index images", func() {
 
 		indexImage := "quay.io/olmqe/etcd-index:dc-new"
 		operatorAllPath := "operators-all-manifests-" + getRandomString()

@@ -974,7 +974,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 	})
 
 	// author: chuo@redhat.com
-	g.It("Author:xzha-High-52126-Sync 1.29 to downstream", func() {
+	g.It("Author:jitli-High-52126-Sync 1.29 to downstream", func() {
 		operatorsdkCLI.showInfo = true
 		output, _ := operatorsdkCLI.Run("version").Args().Output()
 		o.Expect(output).To(o.ContainSubstring("v1.29"))
@@ -1683,8 +1683,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.AssertWaitPollNoErr(waitErr, "No nginx34426-sample is in Running status")
 	})
 
-	// author: xzha@redhat.com
-	g.It("VMonly-ConnectedOnly-Author:xzha-Critical-38101-implement IndexImageCatalogCreator [Serial]", func() {
+	// author: jitli@redhat.com
+	g.It("Author:jitli-VMonly-ConnectedOnly-Critical-38101-implement IndexImageCatalogCreator [Serial]", func() {
 		exutil.SkipOnProxyCluster(oc)
 		operatorsdkCLI.showInfo = true
 		exutil.By("0) check the cluster proxy configuration")
@@ -1799,8 +1799,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("SUCCESS")
 	})
 
-	// author: xzha@redhat.com
-	g.It("Author:xzha-VMonly-ConnectedOnly-High-42028-Check python kubernetes package", func() {
+	// author: jitli@redhat.com
+	g.It("Author:jitli-VMonly-ConnectedOnly-High-42028-Check python kubernetes package", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
@@ -1835,8 +1835,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		e2e.Logf("OCP 42028 SUCCESS")
 	})
 
-	// author: xzha@redhat.com
-	g.It("ConnectedOnly-VMonly-Author:xzha-High-44295-Ensure that Go type Operators creation is working [Slow]", func() {
+	// author: jitli@redhat.com
+	g.It("Author:jitli-ConnectedOnly-VMonly-High-44295-Ensure that Go type Operators creation is working [Slow]", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
 			g.Skip("HTTP_PROXY is not empty - skipping test ...")
 		}
@@ -1988,8 +1988,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("OCP 44295 SUCCESS")
 	})
 
-	// author: xzha@redhat.com
-	g.It("ConnectedOnly-VMonly-Author:xzha-High-52371-Enable Micrometer Metrics from java operator plugins", func() {
+	// author: jitli@redhat.com
+	g.It("Author:jitli-ConnectedOnly-VMonly-High-52371-Enable Micrometer Metrics from java operator plugins", func() {
 
 		g.Skip("OperatorSDK Java plugin unavailable and no plan to fix it, so skip it")
 
@@ -2151,8 +2151,8 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("OCP 52371 SUCCESS")
 	})
 
-	// author: xzha@redhat.com
-	g.It("ConnectedOnly-VMonly-Author:xzha-High-52377-operatorSDK support java plugin", func() {
+	// author: jitli@redhat.com
+	g.It("Author:jitli-ConnectedOnly-VMonly-High-52377-operatorSDK support java plugin", func() {
 
 		g.Skip("OperatorSDK Java plugin unavailable and no plan to fix it, so skip it")
 
