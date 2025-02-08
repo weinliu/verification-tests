@@ -437,11 +437,12 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 
 	g.It("Author:weliang-Medium-75623-Feature Integration UDN with multus. [Disruptive]", func() {
 		var (
-			udnNadtemplate               = filepath.Join(testDataDirUDN, "udn_nad_template.yaml")
-			mtu                    int32 = 1300
-			buildPruningBaseDir          = exutil.FixturePath("testdata", "networking")
-			dualstackNADTemplate         = filepath.Join(buildPruningBaseDir, "multus/dualstack-NAD-template.yaml")
-			multihomingPodTemplate       = filepath.Join(buildPruningBaseDir, "multihoming/multihoming-pod-template.yaml")
+			buildPruningBaseDir  = exutil.FixturePath("testdata", "networking")
+			udnCRDdualStack      = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_dualstack_template.yaml")
+			udnPodTemplate       = filepath.Join(buildPruningBaseDir, "udn/udn_test_pod_annotation_template_node.yaml")
+			podenvname           = "Hello OpenShift"
+			udnCRDSingleStack    = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_singlestack_template.yaml")
+			dualstackNADTemplate = filepath.Join(buildPruningBaseDir, "multus/dualstack-NAD-template.yaml")
 		)
 
 		exutil.By("Getting the ready-schedulable worker nodes")
@@ -452,105 +453,96 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		}
 
 		oc.CreateNamespaceUDN()
-		ns1 := oc.Namespace()
+		ns := oc.Namespace()
 
-		exutil.By("Creating NAD1 for ns1")
-		nad1 := udnNetDefResource{
-			nadname:             "udn-primary-net",
-			namespace:           ns1,
-			nad_network_name:    "udn-primary-net",
-			topology:            "layer3",
-			subnet:              "10.100.0.0/16/24",
-			mtu:                 mtu,
-			net_attach_def_name: ns1 + "/" + "udn-primary-net",
-			role:                "primary",
-			template:            udnNadtemplate,
-		}
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("net-attach-def", nad1.nadname, "-n", ns1).Execute()
-		nad1.createUdnNad(oc)
-
-		exutil.By("Verifying the configured NAD1")
-		if checkNAD(oc, ns1, nad1.nadname) {
-			e2e.Logf("The correct network-attach-definition: %v is created!", nad1.nadname)
+		ipStackType := checkIPStackType(oc)
+		var cidr, ipv4cidr, ipv6cidr string
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
 		} else {
-			e2e.Failf("The correct network-attach-definition: %v is not created!", nad1.nadname)
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/48"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/48"
+			}
 		}
 
-		exutil.By("Creating NAD2 for ns1")
-		nad2 := dualstackNAD{
+		exutil.By("Creating Layer2 UDN CRD with Primary role")
+		var udncrd udnCRDResource
+		if ipStackType == "dualstack" {
+			udncrd = udnCRDResource{
+				crdname:   "udn-network-75239",
+				namespace: ns,
+				role:      "Primary",
+				mtu:       1400,
+				IPv4cidr:  ipv4cidr,
+				IPv6cidr:  ipv6cidr,
+				template:  udnCRDdualStack,
+			}
+			udncrd.createLayer2DualStackUDNCRD(oc)
+
+		} else {
+			udncrd = udnCRDResource{
+				crdname:   "udn-network-75658",
+				namespace: ns,
+				role:      "Primary",
+				mtu:       1400,
+				cidr:      cidr,
+				template:  udnCRDSingleStack,
+			}
+			udncrd.createLayer2SingleStackUDNCRD(oc)
+		}
+		err := waitUDNCRDApplied(oc, ns, udncrd.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Creating NAD for ns")
+		nad := dualstackNAD{
 			nadname:        "dualstack",
-			namespace:      ns1,
+			namespace:      ns,
 			plugintype:     "macvlan",
 			mode:           "bridge",
 			ipamtype:       "whereabouts",
-			ipv4range:      "192.168.10.0/24",
-			ipv6range:      "fd00:dead:beef:10::/64",
+			ipv4range:      "20.200.200.0/24",
+			ipv6range:      "2000:200:200::0/64",
 			ipv4rangestart: "",
 			ipv4rangeend:   "",
 			ipv6rangestart: "",
 			ipv6rangeend:   "",
 			template:       dualstackNADTemplate,
 		}
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("net-attach-def", nad2.nadname, "-n", ns1).Execute()
-		nad2.createDualstackNAD(oc)
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("net-attach-def", nad.nadname, "-n", ns).Execute()
+		nad.createDualstackNAD(oc)
 
-		exutil.By("Verifying the configured NAD2")
-		if checkNAD(oc, ns1, nad2.nadname) {
-			e2e.Logf("The correct network-attach-definition: %v is created!", nad2.nadname)
-		} else {
-			e2e.Failf("The correct network-attach-definition: %v is not created!", nad2.nadname)
+		exutil.By("Creating three testing pods consuming above network-attach-definition in ns")
+		pods := make([]udnPodSecNADResourceNode, 3)
+		var podNames []string
+		for i := 0; i < 3; i++ {
+			pods[i] = udnPodSecNADResourceNode{
+				name:      "hello-pod" + strconv.Itoa(i),
+				namespace: ns,
+				nadname:   nad.nadname,
+				nodename:  nodeList.Items[0].Name,
+				template:  udnPodTemplate,
+			}
+			pods[i].createUdnPodWithSecNADNode(oc)
+			waitPodReady(oc, ns, pods[i].name)
+			podNames = append(podNames, pods[i].name)
 		}
 
-		exutil.By("Configuring pod1 for additional network using NAD2")
-		pod1 := testMultihomingPod{
-			name:       "dualstack-pod-1",
-			namespace:  ns1,
-			podlabel:   "dualstack-pod1",
-			nadname:    "dualstack",
-			nodename:   nodeList.Items[0].Name,
-			podenvname: "",
-			template:   multihomingPodTemplate,
-		}
-		pod1.createTestMultihomingPod(oc)
-		o.Expect(waitForPodWithLabelReady(oc, ns1, "name=dualstack-pod1")).NotTo(o.HaveOccurred())
+		exutil.By("Verifying the all pods get dual IPs")
+		pod1IPv4, pod1IPv6 := getPodMultiNetwork(oc, ns, podNames[0])
+		pod2IPv4, pod2IPv6 := getPodMultiNetwork(oc, ns, podNames[1])
 
-		exutil.By("Configuring pod2 for additional network using NAD2")
-		pod2 := testMultihomingPod{
-			name:       "dualstack-pod-2",
-			namespace:  ns1,
-			podlabel:   "dualstack-pod2",
-			nadname:    "dualstack",
-			nodename:   nodeList.Items[0].Name,
-			podenvname: "",
-			template:   multihomingPodTemplate,
-		}
-		pod2.createTestMultihomingPod(oc)
-		o.Expect(waitForPodWithLabelReady(oc, ns1, "name=dualstack-pod2")).NotTo(o.HaveOccurred())
-
-		exutil.By("Getting two pods' names")
-		podList, podListErr := exutil.GetAllPods(oc, ns1)
-		o.Expect(podListErr).NotTo(o.HaveOccurred())
-		o.Expect(len(podList)).Should(o.Equal(2))
-
-		exutil.By("Verifying the pod1 has the primary network")
-		pod1IPs, err := execCommandInSpecificPod(oc, ns1, podList[0], "ip a")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(pod1IPs, "ovn-udn1@")).To(o.BeTrue())
-
-		exutil.By("Verifying the pod2 has the primary network")
-		pod2IPs, err := execCommandInSpecificPod(oc, ns1, podList[1], "ip a")
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(pod2IPs, "ovn-udn1@")).To(o.BeTrue())
-
-		exutil.By("Getting IPs from pod1's secondary interface")
-		pod1v4, pod1v6 := getPodMultiNetwork(oc, ns1, podList[0])
-
-		exutil.By("Getting IPs from pod2's secondary interface")
-		pod2v4, pod2v6 := getPodMultiNetwork(oc, ns1, podList[1])
-
-		exutil.By("Verifying both ipv4 and ipv6 communication between two pods through their secondary interface")
-		curlPod2PodMultiNetworkPass(oc, ns1, podList[0], pod2v4, pod2v6)
-		curlPod2PodMultiNetworkPass(oc, ns1, podList[1], pod1v4, pod1v6)
+		exutil.By("Verifying that there is no traffic blocked between pods")
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod1IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod1IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod2IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod2IPv6, "net1", podenvname)
 	})
 
 	g.It("Author:huirwang-Medium-75239-Check sctp traffic work well via udn pods user defined networks for layer2.	[Disruptive]", func() {
@@ -2243,10 +2235,12 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		var (
 			buildPruningBaseDir                          = exutil.FixturePath("testdata", "networking")
 			udnCRDdualStack                              = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_dualstack_template.yaml")
-			udnPodTemplate                               = filepath.Join(buildPruningBaseDir, "multihoming/multihoming-pod-template.yaml")
+			udnPodTemplate                               = filepath.Join(buildPruningBaseDir, "udn/udn_test_pod_annotation_template_node.yaml")
 			multinetworkipBlockIngressTemplateDual       = filepath.Join(buildPruningBaseDir, "multihoming/multiNetworkPolicy_ingress_ipblock_template.yaml")
 			patchSResource                               = "networks.operator.openshift.io/cluster"
 			mtu                                    int32 = 9000
+			podenvname                                   = "Hello OpenShift"
+			udnCRDSingleStack                            = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_singlestack_template.yaml")
 		)
 		exutil.By("Getting the ready-schedulable worker nodes")
 		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
@@ -2258,8 +2252,6 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		exutil.By("Getting the namespace name")
 		oc.CreateNamespaceUDN()
 		ns := oc.Namespace()
-		nadName := "ipblockingress77656"
-		nsWithnad := ns + "/" + nadName
 
 		exutil.By("Enabling useMultiNetworkPolicy in the cluster")
 		patchInfoTrue := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":true}}")
@@ -2276,42 +2268,78 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		waitForNetworkOperatorState(oc, 10, 5, "True.*True.*False")
 		waitForNetworkOperatorState(oc, 60, 15, "True.*False.*False")
 
+		ipStackType := checkIPStackType(oc)
+		var cidr, ipv4cidr, ipv6cidr string
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/48"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/48"
+			}
+		}
+		exutil.By("Creating Layer2 UDN CRD with Primary role")
+		var udncrd udnCRDResource
+		if ipStackType == "dualstack" {
+			udncrd = udnCRDResource{
+				crdname:   "udn-network-75239",
+				namespace: ns,
+				role:      "Primary",
+				mtu:       1400,
+				IPv4cidr:  ipv4cidr,
+				IPv6cidr:  ipv6cidr,
+				template:  udnCRDdualStack,
+			}
+			udncrd.createLayer2DualStackUDNCRD(oc)
+
+		} else {
+			udncrd = udnCRDResource{
+				crdname:   "udn-network-75658",
+				namespace: ns,
+				role:      "Primary",
+				mtu:       1400,
+				cidr:      cidr,
+				template:  udnCRDSingleStack,
+			}
+			udncrd.createLayer2SingleStackUDNCRD(oc)
+		}
+		err := waitUDNCRDApplied(oc, ns, udncrd.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("Creating Layer2 UDN CRD with Secondary role")
-		ipv4cidr := "20.200.200.0/24"
-		ipv6cidr := "2000:200:200::0/64"
-		udncrd := udnCRDResource{
-			crdname:   nadName,
+		ipv4cidr1 := "20.200.200.0/24"
+		ipv6cidr1 := "2000:200:200::0/64"
+		nadName1 := "ipblockingress77656"
+		nsWithnad := ns + "/" + nadName1
+		udncrd1 := udnCRDResource{
+			crdname:   nadName1,
 			namespace: ns,
 			role:      "Secondary",
 			mtu:       mtu,
-			IPv4cidr:  ipv4cidr,
-			IPv6cidr:  ipv6cidr,
+			IPv4cidr:  ipv4cidr1,
+			IPv6cidr:  ipv6cidr1,
 			template:  udnCRDdualStack,
 		}
-		udncrd.createLayer2DualStackUDNCRD(oc)
-		err := waitUDNCRDApplied(oc, udncrd.namespace, udncrd.crdname)
+		udncrd1.createLayer2DualStackUDNCRD(oc)
+		err = waitUDNCRDApplied(oc, udncrd1.namespace, udncrd1.crdname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Creating three testing pods consuming above network-attach-definition in ns")
-		var podName, podLabel, podenvName string
-		pods := make([]testMultihomingPod, 3)
+		pods := make([]udnPodSecNADResourceNode, 3)
 		var podNames []string
 		for i := 0; i < 3; i++ {
-			podName = "multihoming-pod-" + strconv.Itoa(i+1)
-			podLabel = "multihoming-pod" + strconv.Itoa(i+1)
-			podenvName = "Hello multihoming-pod-" + strconv.Itoa(i+1)
-			pods[i] = testMultihomingPod{
-				name:       podName,
-				namespace:  ns,
-				podlabel:   podLabel,
-				nadname:    udncrd.crdname,
-				nodename:   "",
-				podenvname: podenvName,
-				template:   udnPodTemplate,
+			pods[i] = udnPodSecNADResourceNode{
+				name:      "hello-pod" + strconv.Itoa(i),
+				namespace: ns,
+				nadname:   udncrd1.crdname,
+				nodename:  nodeList.Items[0].Name,
+				template:  udnPodTemplate,
 			}
-			pods[i].createTestMultihomingPod(oc)
-			o.Expect(waitForPodWithLabelReady(oc, ns, fmt.Sprintf("name=%s", pods[i].podlabel))).NotTo(o.HaveOccurred())
-			podNames = append(podNames, getPodName(oc, pods[i].namespace, fmt.Sprintf("name=%s", pods[i].podlabel))[0])
+			pods[i].createUdnPodWithSecNADNode(oc)
+			waitPodReady(oc, ns, pods[i].name)
+			podNames = append(podNames, pods[i].name)
 		}
 
 		exutil.By("Verifying the all pods get dual IPs")
@@ -2322,14 +2350,14 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		pod3IPv6WithCidr := pod3IPv6 + "/128"
 
 		exutil.By("Verifying that there is no traffic blocked between pods")
-		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv4, "net1", pods[1].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv6, "net1", pods[1].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv4, "net1", pods[0].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv6, "net1", pods[0].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[2], pod1IPv4, "net1", pods[0].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[2], pod1IPv6, "net1", pods[0].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[2], pod2IPv4, "net1", pods[1].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[2], pod2IPv6, "net1", pods[1].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod1IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod1IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod2IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod2IPv6, "net1", podenvname)
 
 		exutil.By("Creating ipBlock Ingress Dual CIDRs Policy to allow traffic only from pod3")
 		defer removeResource(oc, true, true, "multi-networkpolicy", "multinetworkipblock-dual-cidrs-ingress", "-n", ns)
@@ -2347,14 +2375,14 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		o.Expect(policyoutput).To(o.ContainSubstring("multinetworkipblock-dual-cidrs-ingress"))
 
 		exutil.By("Verifying the ipBlock Ingress Dual CIDRs policy ensures that only traffic from pod3 is allowed")
-		CurlMultusPod2PodFail(oc, ns, podNames[0], pod2IPv4, "net1", pods[1].podenvname)
-		CurlMultusPod2PodFail(oc, ns, podNames[0], pod2IPv6, "net1", pods[1].podenvname)
-		CurlMultusPod2PodFail(oc, ns, podNames[1], pod1IPv4, "net1", pods[0].podenvname)
-		CurlMultusPod2PodFail(oc, ns, podNames[1], pod1IPv6, "net1", pods[0].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[2], pod1IPv4, "net1", pods[0].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[2], pod1IPv6, "net1", pods[0].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[2], pod2IPv4, "net1", pods[1].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[2], pod2IPv6, "net1", pods[1].podenvname)
+		CurlMultusPod2PodFail(oc, ns, podNames[0], pod2IPv4, "net1", podenvname)
+		CurlMultusPod2PodFail(oc, ns, podNames[0], pod2IPv6, "net1", podenvname)
+		CurlMultusPod2PodFail(oc, ns, podNames[1], pod1IPv4, "net1", podenvname)
+		CurlMultusPod2PodFail(oc, ns, podNames[1], pod1IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod1IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod1IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod2IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod2IPv6, "net1", podenvname)
 
 		exutil.By("Deleting ipBlock Ingress Dual CIDRs Policy")
 		removeResource(oc, true, true, "multi-networkpolicy", "multinetworkipblock-dual-cidrs-ingress", "-n", ns)
@@ -2363,24 +2391,26 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		o.Expect(policyoutput1).NotTo(o.ContainSubstring("multinetworkipblock-dual-cidrs-ingress"))
 
 		exutil.By("Verifying that there is no traffic blocked between pods after deleting policy")
-		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv4, "net1", pods[1].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv6, "net1", pods[1].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv4, "net1", pods[0].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv6, "net1", pods[0].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[2], pod1IPv4, "net1", pods[0].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[2], pod1IPv6, "net1", pods[0].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[2], pod2IPv4, "net1", pods[1].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[2], pod2IPv6, "net1", pods[1].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod1IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod1IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod2IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[2], pod2IPv6, "net1", podenvname)
 	})
 
 	g.It("Author:weliang-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-78125-Verify egress-ipblock policy for UDN pod's secondary interface (Layer2). [Disruptive]", func() {
 		var (
 			buildPruningBaseDir                         = exutil.FixturePath("testdata", "networking")
 			udnCRDdualStack                             = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_dualstack_template.yaml")
-			udnPodTemplate                              = filepath.Join(buildPruningBaseDir, "multihoming/multihoming-pod-template.yaml")
+			udnPodTemplate                              = filepath.Join(buildPruningBaseDir, "udn/udn_test_pod_annotation_template_node.yaml")
 			multinetworkipBlockegressTemplateDual       = filepath.Join(buildPruningBaseDir, "multihoming/multiNetworkPolicy_egress_ipblock_template.yaml")
 			patchSResource                              = "networks.operator.openshift.io/cluster"
 			mtu                                   int32 = 9000
+			podenvname                                  = "Hello OpenShift"
+			udnCRDSingleStack                           = filepath.Join(buildPruningBaseDir, "udn/udn_crd_layer2_singlestack_template.yaml")
 		)
 		exutil.By("Getting the ready-schedulable worker nodes")
 		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
@@ -2392,8 +2422,6 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		exutil.By("Getting the namespace name")
 		oc.CreateNamespaceUDN()
 		ns := oc.Namespace()
-		nadName := "ipblockegress78125"
-		nsWithnad := ns + "/" + nadName
 
 		exutil.By("Enabling useMultiNetworkPolicy in the cluster")
 		patchInfoTrue := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":true}}")
@@ -2406,46 +2434,82 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		}()
 		patchResourceAsAdmin(oc, patchSResource, patchInfoTrue)
 
-		exutil.By("Wait for the NetworkOperator to become functional after enabling useMultiNetworkPolicy")
+		exutil.By("Waitting for the NetworkOperator to become functional after enabling useMultiNetworkPolicy")
 		waitForNetworkOperatorState(oc, 10, 5, "True.*True.*False")
 		waitForNetworkOperatorState(oc, 60, 15, "True.*False.*False")
 
+		ipStackType := checkIPStackType(oc)
+		var cidr, ipv4cidr, ipv6cidr string
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/48"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/48"
+			}
+		}
+		exutil.By("Creating Layer2 UDN CRD with Primary role")
+		var udncrd udnCRDResource
+		if ipStackType == "dualstack" {
+			udncrd = udnCRDResource{
+				crdname:   "udn-network-75239",
+				namespace: ns,
+				role:      "Primary",
+				mtu:       1400,
+				IPv4cidr:  ipv4cidr,
+				IPv6cidr:  ipv6cidr,
+				template:  udnCRDdualStack,
+			}
+			udncrd.createLayer2DualStackUDNCRD(oc)
+
+		} else {
+			udncrd = udnCRDResource{
+				crdname:   "udn-network-75658",
+				namespace: ns,
+				role:      "Primary",
+				mtu:       1400,
+				cidr:      cidr,
+				template:  udnCRDSingleStack,
+			}
+			udncrd.createLayer2SingleStackUDNCRD(oc)
+		}
+		err := waitUDNCRDApplied(oc, ns, udncrd.crdname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("Creating Layer2 UDN CRD with Secondary role")
-		ipv4cidr := "20.200.200.0/24"
-		ipv6cidr := "2000:200:200::0/64"
-		udncrd := udnCRDResource{
-			crdname:   nadName,
+		ipv4cidr1 := "20.200.200.0/24"
+		ipv6cidr1 := "2000:200:200::0/64"
+		nadName1 := "ipblockegress78125"
+		nsWithnad := ns + "/" + nadName1
+		udncrd1 := udnCRDResource{
+			crdname:   nadName1,
 			namespace: ns,
 			role:      "Secondary",
 			mtu:       mtu,
-			IPv4cidr:  ipv4cidr,
-			IPv6cidr:  ipv6cidr,
+			IPv4cidr:  ipv4cidr1,
+			IPv6cidr:  ipv6cidr1,
 			template:  udnCRDdualStack,
 		}
-		udncrd.createLayer2DualStackUDNCRD(oc)
-		err := waitUDNCRDApplied(oc, udncrd.namespace, udncrd.crdname)
+		udncrd1.createLayer2DualStackUDNCRD(oc)
+		err = waitUDNCRDApplied(oc, udncrd1.namespace, udncrd1.crdname)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Creating three testing pods consuming above network-attach-definition in ns")
-		var podName, podLabel, podenvName string
-		pods := make([]testMultihomingPod, 3)
+		pods := make([]udnPodSecNADResourceNode, 3)
 		var podNames []string
 		for i := 0; i < 3; i++ {
-			podName = "multihoming-pod-" + strconv.Itoa(i+1)
-			podLabel = "multihoming-pod" + strconv.Itoa(i+1)
-			podenvName = "Hello multihoming-pod-" + strconv.Itoa(i+1)
-			pods[i] = testMultihomingPod{
-				name:       podName,
-				namespace:  ns,
-				podlabel:   podLabel,
-				nadname:    udncrd.crdname,
-				nodename:   "",
-				podenvname: podenvName,
-				template:   udnPodTemplate,
+			pods[i] = udnPodSecNADResourceNode{
+				name:      "hello-pod" + strconv.Itoa(i),
+				namespace: ns,
+				nadname:   udncrd1.crdname,
+				nodename:  nodeList.Items[0].Name,
+				template:  udnPodTemplate,
 			}
-			pods[i].createTestMultihomingPod(oc)
-			o.Expect(waitForPodWithLabelReady(oc, ns, fmt.Sprintf("name=%s", pods[i].podlabel))).NotTo(o.HaveOccurred())
-			podNames = append(podNames, getPodName(oc, pods[i].namespace, fmt.Sprintf("name=%s", pods[i].podlabel))[0])
+			pods[i].createUdnPodWithSecNADNode(oc)
+			waitPodReady(oc, ns, pods[i].name)
+			podNames = append(podNames, pods[i].name)
 		}
 
 		exutil.By("Verifying the all pods get dual IPs")
@@ -2456,14 +2520,14 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		pod3IPv6WithCidr := pod3IPv6 + "/128"
 
 		exutil.By("Verifying that there is no traffic blocked between pods")
-		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv4, "net1", pods[1].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv6, "net1", pods[1].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv4, "net1", pods[0].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv6, "net1", pods[0].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv4, "net1", pods[2].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv6, "net1", pods[2].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv4, "net1", pods[2].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv6, "net1", pods[2].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv6, "net1", podenvname)
 
 		exutil.By("Creating ipBlock egress Dual CIDRs Policy to allow traffic only to pod3")
 		defer removeResource(oc, true, true, "multi-networkpolicy", "multinetworkipblock-dual-cidrs-egress", "-n", ns)
@@ -2481,14 +2545,14 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		o.Expect(policyoutput).To(o.ContainSubstring("multinetworkipblock-dual-cidrs-egress"))
 
 		exutil.By("Verifying the ipBlock egress Dual CIDRs policy ensures that only traffic to pod3 is allowed")
-		CurlMultusPod2PodFail(oc, ns, podNames[0], pod2IPv4, "net1", pods[1].podenvname)
-		CurlMultusPod2PodFail(oc, ns, podNames[0], pod2IPv6, "net1", pods[1].podenvname)
-		CurlMultusPod2PodFail(oc, ns, podNames[1], pod1IPv4, "net1", pods[0].podenvname)
-		CurlMultusPod2PodFail(oc, ns, podNames[1], pod1IPv6, "net1", pods[0].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv4, "net1", pods[2].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv6, "net1", pods[2].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv4, "net1", pods[2].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv6, "net1", pods[2].podenvname)
+		CurlMultusPod2PodFail(oc, ns, podNames[0], pod2IPv4, "net1", podenvname)
+		CurlMultusPod2PodFail(oc, ns, podNames[0], pod2IPv6, "net1", podenvname)
+		CurlMultusPod2PodFail(oc, ns, podNames[1], pod1IPv4, "net1", podenvname)
+		CurlMultusPod2PodFail(oc, ns, podNames[1], pod1IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv6, "net1", podenvname)
 
 		exutil.By("Deleting ipBlock egress Dual CIDRs Policy")
 		removeResource(oc, true, true, "multi-networkpolicy", "multinetworkipblock-dual-cidrs-egress", "-n", ns)
@@ -2497,14 +2561,14 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		o.Expect(policyoutput1).NotTo(o.ContainSubstring("multinetworkipblock-dual-cidrs-egress"))
 
 		exutil.By("Verifying that there is no traffic blocked between pods after deleting policy")
-		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv4, "net1", pods[1].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv6, "net1", pods[1].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv4, "net1", pods[0].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv6, "net1", pods[0].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv4, "net1", pods[2].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv6, "net1", pods[2].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv4, "net1", pods[2].podenvname)
-		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv6, "net1", pods[2].podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod2IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod1IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv6, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv4, "net1", podenvname)
+		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv6, "net1", podenvname)
 	})
 
 	g.It("Author:meinli-Medium-78329-Validate pod2pod on diff workers and host2pod on same/diff workers (UDN Layer3 with Primary role)", func() {
