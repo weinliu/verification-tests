@@ -411,7 +411,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:wewang-High-41414-There are 2 replicas for image registry on HighAvailable workers S3/Azure/GCS/Swift storage", func() {
+	g.It("Author:wewang-ROSA-OSD_CCS-ARO-High-41414-There are 2 replicas for image registry on HighAvailable workers s3/azure/gcs/swift storage", func() {
 		if !checkOptionalOperatorInstalled(oc, "Build") {
 			g.Skip("Skip for the test due to Build not installed")
 		}
@@ -1251,7 +1251,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("NonHyperShiftHOST-ARO-Author:wewang-Medium-43731-Image registry pods should have anti-affinity rules", func() {
+	g.It("Author:wewang-ARO-Medium-43731-Image registry pods should have anti-affinity rules", func() {
 		// When replicas=2 the image registry pods follow requiredDuringSchedulingIgnoredDuringExecution
 		// anti-affinity rule on 4.11 and above version, other replicas will follow topologySpreadContraints
 		g.By("Check replicas")
@@ -3584,7 +3584,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		exutil.AssertWaitPollNoErr(err, "The imagestreamchange trigger doesn't work, not update to use new image")
 	})
 
-	g.It("NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Author:xiuwang-Critical-55008-ImageStreamChange triggers using annotations should work on daemonset", func() {
+	g.It("Author:xiuwang-ROSA-OSD_CCS-ARO-Critical-55008-ImageStreamChange triggers using annotations should work on daemonset", func() {
 		var (
 			dsFile = filepath.Join(imageRegistryBaseDir, "daemonset-trigger-annoation.yaml")
 			dssrc  = dsSource{
