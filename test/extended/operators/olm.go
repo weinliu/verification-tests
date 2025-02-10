@@ -14651,7 +14651,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
 
-		exutil.By("2, create a CatalogSource that in a random project")
+		exutil.By("2, create an OperatorGroup")
 		ns := "guest-cluster-45543"
 		err := oc.AsGuestKubeconf().Run("create").Args("ns", ns).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -14665,34 +14665,36 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 		defer og.delete(itName, dr)
 		og.createwithCheck(oc.AsGuestKubeconf(), itName, dr)
 
-		csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-image-template.yaml")
-		cmdString := `oc version -o json | jq -r '.openshiftVersion' | cut -d '.' -f1,2`
-		if isAKS {
-			cmdString = fmt.Sprintf(`oc --kubeconfig=%s version -o json | jq -r '.openshiftVersion' | cut -d '.' -f1,2`, guestClusterKube)
-		}
-		ocpVersionByte, err := exec.Command("bash", "-c", cmdString).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		ocpVersion := strings.Replace(string(ocpVersionByte), "\n", "", -1)
-		indexImage := fmt.Sprintf("quay.io/openshift-qe-optional-operators/aosqe-index:v%s", ocpVersion)
+		// exutil.By("2, create a CatalogSource that in a random project")
+		// csImageTemplate := filepath.Join(buildPruningBaseDir, "cs-image-template.yaml")
+		// cmdString := `oc version -o json | jq -r '.openshiftVersion' | cut -d '.' -f1,2`
+		// if isAKS {
+		// 	cmdString = fmt.Sprintf(`oc --kubeconfig=%s version -o json | jq -r '.openshiftVersion' | cut -d '.' -f1,2`, guestClusterKube)
+		// }
+		// ocpVersionByte, err := exec.Command("bash", "-c", cmdString).Output()
+		// o.Expect(err).NotTo(o.HaveOccurred())
+		// ocpVersion := strings.Replace(string(ocpVersionByte), "\n", "", -1)
+		// indexImage := fmt.Sprintf("quay.io/openshift-qe-optional-operators/aosqe-index:v%s", ocpVersion)
 
-		cs := catalogSourceDescription{
-			name:        "cs-45348",
-			namespace:   ns,
-			displayName: "QE Operators",
-			publisher:   "QE",
-			sourceType:  "grpc",
-			address:     indexImage,
-			template:    csImageTemplate,
-		}
-		defer cs.delete(itName, dr)
-		cs.createWithCheck(oc.AsGuestKubeconf(), itName, dr)
+		// cs := catalogSourceDescription{
+		// 	name:        "cs-45348",
+		// 	namespace:   ns,
+		// 	displayName: "QE Operators",
+		// 	publisher:   "QE",
+		// 	sourceType:  "grpc",
+		// 	address:     indexImage,
+		// 	template:    csImageTemplate,
+		// }
+		// defer cs.delete(itName, dr)
+		// cs.createWithCheck(oc.AsGuestKubeconf(), itName, dr)
 
 		exutil.By("3, subscribe to learn-operator.v0.0.3")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
-			subName:                "sub-45348",
-			namespace:              ns,
-			catalogSourceName:      "cs-45348",
+			subName:   "sub-45348",
+			namespace: ns,
+			// catalogSourceName:      "cs-45348",
+			catalogSourceName:      "qe-app-registry",
 			catalogSourceNamespace: ns,
 			channel:                "beta",
 			ipApproval:             "Automatic",
