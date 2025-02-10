@@ -1641,3 +1641,9 @@ func getEnabledFeatureGates(oc *exutil.CLI) ([]string, error) {
 
 	return strings.Split(enabledFeatureGates, " "), nil
 }
+
+func IsMultiArch(oc *exutil.CLI) bool {
+	architecture, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion/version", "-o=jsonpath={..status.desired.architecture}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return strings.ToLower(architecture) == "multi"
+}
