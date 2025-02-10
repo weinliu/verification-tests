@@ -2519,6 +2519,7 @@ var _ = g.Describe("[sig-node] NODE Install and verify Cluster Resource Override
 	// author: asahay@redhat.com
 
 	g.It("Author:asahay-StagerunBoth-High-27070-Cluster Resource Override Operator. [Serial]", func() {
+		defer deleteAPIService(oc)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterResourceOverride", "cluster", "-n", "clusterresourceoverride-operator").Execute()
 		createCRClusterresourceoverride(oc)
 		var err error
@@ -2541,6 +2542,7 @@ var _ = g.Describe("[sig-node] NODE Install and verify Cluster Resource Override
 
 	g.It("Author:asahay-Medium-27075-Testing the config changes. [Serial]", func() {
 
+		defer deleteAPIService(oc)
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ClusterResourceOverride", "cluster").Execute()
 		createCRClusterresourceoverride(oc)
 		var err error

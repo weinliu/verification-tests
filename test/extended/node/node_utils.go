@@ -1803,6 +1803,15 @@ func createCRClusterresourceoverride(oc *exutil.CLI) {
 	e2e.Logf("/n Cluster Resource Overrride status is %v", cro)
 
 }
+func deleteAPIService(oc *exutil.CLI) {
+	e2e.Logf("Deleting apiservice v1.admission.autoscaling.openshift.io to unblock other test cases")
+	_, err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("apiservice", "v1.admission.autoscaling.openshift.io").Output()
+	if err != nil {
+		e2e.Logf("Failed to delete apiservice: %v", err)
+	} else {
+		e2e.Logf("Successfully deleted apiservice v1.admission.autoscaling.openshift.io")
+	}
+}
 
 //this function is to test config changes to Cluster Resource Override Webhook
 
