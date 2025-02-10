@@ -2502,6 +2502,8 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	//author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Critical-29696-Use node credentials in imagestream import", func() {
 		g.By("Create image stream whose auth has added to node credentials")
+		err := waitForAnImageStreamTag(oc, "openshift", "cli", "latest")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		dockerImage, err := exutil.GetDockerImageReference(oc.ImageClient().ImageV1().ImageStreams("openshift"), "cli", "latest")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().Run("import-image").Args("cli-29696", "--from="+dockerImage, "--confirm", "-n", oc.Namespace()).Execute()
