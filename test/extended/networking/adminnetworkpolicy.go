@@ -1743,14 +1743,23 @@ var _ = g.Describe("[sig-networking] SDN adminnetworkpolicy", func() {
 			nsPodMap                    = make(map[string][]string)
 			urlToLookup                 = "www.facebook.com"
 		)
+		if checkProxy(oc) {
+			g.Skip("This cluster has proxy configured, egress access cannot be tested on the cluster, skip the test.")
+		}
+		ipStackType := checkIPStackType(oc)
+		o.Expect(ipStackType).NotTo(o.BeEmpty())
+		if ipStackType == "dualstack" || ipStackType == "ipv6single" {
+			if !checkIPv6PublicAccess(oc) {
+				g.Skip("This cluster is dualstack/IPv6 with no access to public websites, egress access cannot be tested on the cluster, skip the test.")
+			}
+		}
+
 		var allCIDRs, googleIP1, googleIP2, googleDNSServerIP1, googleDNSServerIP2, patchANPCIDR, patchNP string
 		var allNS, checkIPAccessList []string
 
 		exutil.By("0. Get the workers list ")
 		workerList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		ipStackType := checkIPStackType(oc)
-		o.Expect(ipStackType).NotTo(o.BeEmpty())
 
 		exutil.By("1.1 Create another namespace")
 		allNS = append(allNS, oc.Namespace())

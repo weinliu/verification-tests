@@ -1424,7 +1424,17 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 			pingCmds                  = []string{}
 		)
 
+		if checkProxy(oc) {
+			g.Skip("This cluster has proxy configured, egress access cannot be tested on the cluster, skip the test.")
+		}
+
 		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" || ipStackType == "ipv6single" {
+			if !checkIPv6PublicAccess(oc) {
+				g.Skip("This cluster is dualstack/IPv6 with no access to public websites, egress access cannot be tested on the cluster, skip the test.")
+			}
+		}
+		e2e.Logf("The gateway mode of the cluster is %s", getOVNGatewayMode(oc))
 		exutil.By("1. Create four UDN namespaces")
 		for i := 0; i < 4; i++ {
 			oc.CreateNamespaceUDN()
