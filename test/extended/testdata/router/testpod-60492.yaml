@@ -5,10 +5,19 @@ metadata:
   labels:
     app: testpod-60492
 spec:
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
   containers:
   - name: myapp-container
     image: quay.io/openshifttest/busybox@sha256:c5439d7db88ab5423999530349d327b04279ad3161d7596d2126dfb5b02bfd1f
     name: testpod-60492
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
     command: ['sh', '-c', 'echo The app is running! && sleep 3600']
   dnsPolicy: ClusterFirst
   dnsConfig:
