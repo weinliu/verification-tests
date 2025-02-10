@@ -824,46 +824,58 @@ func checkFoldersDoNotExist(bastionHost, winInternalIP, folder, privateKey, iaas
 	return strings.Contains(output, "ItemNotFoundException")
 }
 
-// waitUntilWMCOStatusChanged waits until a specific status message appears in the logs of the
-// Windows Machine Config Operator (WMCO). This is useful to ensure that WMCO has reached a
-// particular state before proceeding with further test steps.
+/*
+waitUntilWMCOStatusChanged waits until a specific INFO-level status message appears in the WMCO logs.
+Windows Machine Config Operator (WMCO). This is useful to ensure that WMCO has reached
+a particular state before proceeding with further test steps.
+*/
 func waitUntilWMCOStatusChanged(oc *exutil.CLI, message string) {
-	// Define the polling interval and timeout duration
-	pollInterval := 10 * time.Second
+	pollInterval := 15 * time.Second
 	timeout := 25 * time.Minute
 
-	// Define the polling function
 	waitLogErr := wait.Poll(pollInterval, timeout, func() (bool, error) {
-		// Run the oc command to get logs from the WMCO deployment
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("logs").
-			Args("deployment.apps/windows-machine-config-operator", "-n", wmcoNamespace, "--since=10s").Output()
+		// Fetch logs from the last 1 minute to capture recent activity
+		logs, err := oc.AsAdmin().WithoutNamespace().Run("logs").
+			Args("deployment.apps/windows-machine-config-operator", "-n", wmcoNamespace, "--since=1m").Output()
 
-		// Check for errors in running the command
 		if err != nil {
-			return false, err
+			e2e.Logf("Error retrieving WMCO logs: %v", err)
+			return false, nil // Continue polling on transient errors
 		}
 
-		// Check if the specified message is in the logs
-		if strings.Contains(msg, message) {
-			e2e.Logf("Message: %v, found in WMCO logs", message)
-			return true, nil
+		// Split logs into lines for efficient parsing
+		logLines := strings.Split(logs, "\n")
+		for _, line := range logLines {
+			// Only process INFO level logs to reduce unnecessary matches
+			if strings.Contains(line, "INFO") && strings.Contains(line, message) {
+				e2e.Logf("Message found in WMCO logs: %v", line)
+				return true, nil
+			}
 		}
 
-		// If message is not found, return false to continue polling
+		// If message isn't found, continue polling
+		e2e.Logf("Message '%v' not found in WMCO logs. Continuing to poll...", message)
 		return false, nil
 	})
 
-	// Assert that no error occurred during the wait
-	exutil.AssertWaitPollNoErr(waitLogErr, fmt.Sprintf("Failed to find %v in WMCO log after %v minutes", message, timeout))
+	exutil.AssertWaitPollNoErr(waitLogErr, fmt.Sprintf("Failed to find '%v' in WMCO logs after %v", message, timeout))
 }
 
 func getWMCOVersionFromLogs(oc *exutil.CLI) string {
 	wmcoLog, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("deployment.apps/windows-machine-config-operator", "-n", wmcoNamespace).Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	// match everything after "version":"(7.0.0-802f3e0)"
-	// only in the lines that include the word "operator"
-	re, _ := regexp.Compile(`operator.*version":"(.*)"}`)
-	wmcoVersion := re.FindStringSubmatch(wmcoLog)[1]
+
+	// Updated regex to match the log structure
+	re, _ := regexp.Compile(`operator.*?\"version\":\s*\"([^\"]+)\"`)
+
+	matches := re.FindStringSubmatch(wmcoLog)
+
+	if len(matches) < 2 {
+		e2e.Failf("Failed to find WMCO version in logs. Log output: %s", wmcoLog)
+		return ""
+	}
+
+	wmcoVersion := strings.TrimSpace(matches[1])
 	return wmcoVersion
 }
 

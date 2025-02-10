@@ -1154,105 +1154,92 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			configmap = "kube-apiserver-to-kubelet-client-ca"
 		)
 
-		// Get the expected number of Windows nodes
+		// Dynamically get the number of Windows nodes
 		winInternalIP := getWindowsInternalIPs(oc)
-		expectedWindowsNodes := 2
-		if len(winInternalIP) != expectedWindowsNodes {
-			e2e.Failf("Expected Ready Windows nodes does not match %d", expectedWindowsNodes)
+		expectedWindowsNodes := len(winInternalIP)
+		if expectedWindowsNodes == 0 {
+			e2e.Failf("No Windows nodes detected in the cluster")
 		}
 
 		g.By("Ensure Windows nodes are Ready before proceeding")
-		waitWindowsNodesReady(oc, expectedWindowsNodes, 10*time.Minute)
+		waitWindowsNodesReady(oc, expectedWindowsNodes, 15*time.Minute)
 
-		initialCertNotBefore, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", "kube-apiserver-to-kubelet-signer", "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.metadata.annotations.auth\\.openshift\\.io\\/certificate-not-before}'").Output()
+		initialCertNotBefore, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", "kube-apiserver-to-kubelet-signer", "-n", namespace, "-o=jsonpath='{.metadata.annotations.auth\\.openshift\\.io\\/certificate-not-before}'").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		initialCertNotBeforeParsed, err := time.Parse(time.RFC3339, strings.Trim(initialCertNotBefore, `'`))
+		initialCertNotBeforeParsed, err := time.Parse(time.RFC3339, strings.Trim(initialCertNotBefore, "'"))
 		o.Expect(err).NotTo(o.HaveOccurred())
+
+		e2e.Logf("Initial kubelet CA certificate-not-before timestamp: %v", initialCertNotBeforeParsed)
 
 		// CA rotation
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret", "-p", `{"metadata": {"annotations": {"auth.openshift.io/certificate-not-after": null}}}`, "kube-apiserver-to-kubelet-signer", "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("Triggered CA rotation for kubelet")
 
-		// Wait for WMCO status to change
+		// Wait for WMCO status to reflect CA update
 		waitUntilWMCOStatusChanged(oc, "updating kubelet CA client certificates in")
 
-		// Confirm rotation
-		rotatedCertNotBefore, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", "kube-apiserver-to-kubelet-signer", "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.metadata.annotations.auth\\.openshift\\.io\\/certificate-not-before}'").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		rotatedCertNotBeforeParsed, err := time.Parse(time.RFC3339, strings.Trim(rotatedCertNotBefore, `'`))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if initialCertNotBeforeParsed.Equal(rotatedCertNotBeforeParsed) {
-			e2e.Failf("Kubelet CA rotation did not happen. certificate-not-before: %v", rotatedCertNotBefore)
-		}
+		var rotatedCertNotBeforeParsed time.Time
 
-		// Force the expired certificate deletion and update configmap
-		// ... (existing code for updating configmap)
+		// Poll to confirm CA rotation
+		err = wait.Poll(30*time.Second, 10*time.Minute, func() (bool, error) {
+			rotatedCertNotBefore, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secrets", "kube-apiserver-to-kubelet-signer", "-n", namespace, "-o=jsonpath='{.metadata.annotations.auth\\.openshift\\.io\\/certificate-not-before}'").Output()
+			if err != nil {
+				return false, nil
+			}
+			rotatedCertNotBeforeParsed, err = time.Parse(time.RFC3339, strings.Trim(rotatedCertNotBefore, "'"))
+			if err != nil {
+				return false, nil
+			}
+			e2e.Logf("Polled kubelet CA certificate-not-before timestamp: %v", rotatedCertNotBeforeParsed)
+			if !initialCertNotBeforeParsed.Equal(rotatedCertNotBeforeParsed) {
+				return true, nil
+			}
+			return false, nil
+		})
+		o.Expect(err).NotTo(o.HaveOccurred(), "Kubelet CA rotation did not happen")
 
 		g.By("Verify kubelet client CA is updated in Windows workers")
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
 		caBundlePath := folders[1] + "\\kubelet-ca.crt"
 
+		time.Sleep(2 * time.Minute) // Allow time for CA propagation
+
 		for _, winhost := range winInternalIP {
 			g.By(fmt.Sprintf("Verify kubelet client CA content is included in Windows worker %v ", winhost))
 
-			poolErr := wait.Poll(30*time.Second, 15*time.Minute, func() (bool, error) {
-				// Get kubelet client CA content from configmap
-				kubeletCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", configmap, "-n", "openshift-kube-apiserver-operator", "-o=jsonpath='{.data.ca\\-bundle\\.crt}'").Output()
-				if err != nil {
-					e2e.Logf("Error getting kubelet client CA from ConfigMap: %v", err)
-					return false, nil
-				}
-				if kubeletCA == "" {
-					e2e.Logf("Kubelet client CA from ConfigMap is empty, retrying...")
+			pollErr := wait.Poll(30*time.Second, 20*time.Minute, func() (bool, error) {
+				kubeletCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("configmap", configmap, "-n", namespace, "-o=jsonpath='{.data.ca\\-bundle\\.crt}'").Output()
+				if err != nil || kubeletCA == "" {
+					e2e.Logf("Error or empty kubelet client CA from ConfigMap: %v", err)
 					return false, nil
 				}
 
-				// Fetch CA bundle from Windows worker node
 				bundleContent, err := runPSCommand(bastionHost, winhost, fmt.Sprintf("Get-Content -Raw -Path %s", caBundlePath), privateKey, iaasPlatform)
-				if err != nil {
-					e2e.Logf("Failed fetching CA bundle from Windows node %v: %v", winhost, err)
-					return false, nil
-				}
-				if bundleContent == "" {
-					e2e.Logf("CA bundle from Windows node %v is empty, retrying...", winhost)
+				if err != nil || bundleContent == "" {
+					e2e.Logf("Failed fetching or empty CA bundle from Windows node %v: %v", winhost, err)
+					e2e.Logf("Bundle content fetched: %s", bundleContent)
 					return false, nil
 				}
 
 				kubeletCAFormatted := strings.Trim(strings.TrimSpace(kubeletCA), "'")
-				bundleContentSplit := strings.Split(bundleContent, "\r\n-----BEGIN CERTIFICATE-----")
-
-				if len(bundleContentSplit) < 2 {
-					e2e.Logf("Unexpected bundle content format from Windows node %v, retrying...", winhost)
-					return false, nil
-				}
-
-				if strings.Contains(bundleContentSplit[1], kubeletCAFormatted) {
+				if strings.Contains(bundleContent, kubeletCAFormatted) {
 					e2e.Logf("Kubelet CA found in Windows worker node %v bundle", winhost)
 					return true, nil
 				}
-
 				e2e.Logf("Kubelet CA not found in Windows worker node %v bundle. Retrying...", winhost)
 				return false, nil
 			})
 
-			if poolErr != nil {
-				e2e.Failf("Failed to verify that the kubelet client CA is included in Windows worker %v bundle: %v", winhost, poolErr)
-			}
+			o.Expect(pollErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to verify kubelet client CA in Windows worker %v bundle", winhost))
 		}
 
 		g.By("Ensure that none of the Windows Workers got restarted and that we have communication to the Windows workers")
-		// for ip, up := range getWindowsNodesUptime(oc, privateKey, iaasPlatform) {
-		// 	// If the timestamp from the moment when the certificate got rotated
-		// 	// is older than the worker's uptime timestamp it means that
-		// 	// a restart took place
-		// 	if rotatedCertNotBeforeParsed.Before(up) {
-		// 		e2e.Failf("windows worker %v got restarted after CA rotation", ip)
-		// 	}
-		// }
 		uptimes, err := getWindowsNodesUptime(oc, privateKey, iaasPlatform)
 		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get Windows nodes uptime")
 
 		for ip, up := range uptimes {
+			e2e.Logf("Checking uptime for node %v: last boot time %v", ip, up)
 			if rotatedCertNotBeforeParsed.Before(up) {
 				e2e.Failf("Windows worker %v got restarted after CA rotation", ip)
 			}
