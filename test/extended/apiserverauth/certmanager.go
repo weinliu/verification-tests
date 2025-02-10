@@ -50,17 +50,11 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			certName   = "cert-from-" + issuerName
 		)
 
-		exutil.By("Check proxy env.")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(output, "httpsProxy") {
-			g.Skip("The cluster has httpsProxy, ocp-62494 skipped.")
-		}
-
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		exutil.SkipOnProxyCluster(oc)
 
 		exutil.By("Check if the cluster is STS or not")
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Output()
 		if err != nil && strings.Contains(output, "not found") {
 			g.Skip("Skipping for the aws cluster without credential in cluster")
 		}
@@ -237,17 +231,11 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			certName   = "cert-from-" + issuerName
 		)
 
-		exutil.By("Check proxy env.")
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(output, "httpsProxy") {
-			g.Skip("The cluster has httpsProxy, ocp-62582 skipped.")
-		}
-
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		exutil.SkipOnProxyCluster(oc)
 
 		exutil.By("Skip test when the cluster is with STS credential")
-		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret/aws-creds", "-n", "kube-system").Output()
 		if err != nil && strings.Contains(output, "not found") {
 			g.Skip("Skipping for the aws cluster without credential in cluster")
 		}
@@ -527,6 +515,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			issuerName = "acme-multiple-solvers"
 		)
 
+		exutil.SkipOnProxyCluster(oc)
+
 		exutil.By("Create a clusterissuer which has multiple solvers mixed with http01 and dns01.")
 		clusterIssuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-multiple-solvers.yaml")
 		defer func() {
@@ -618,15 +608,11 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			certName            = "cert-from-" + issuerName + "-webhook"
 		)
 
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(output, "httpsProxy") || strings.Contains(output, "httpProxy") {
-			g.Skip("This case can run in STS proxy env. Handling proxy env needs to use cert-manager flag '--dns01-recursive-nameservers-only', which is already covered in OCP-63555. For simplicity, skipping proxy configured cluster for this case.")
-		}
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		if !exutil.IsSTSCluster(oc) {
 			g.Skip("Skip for non-STS cluster")
 		}
+		exutil.SkipOnProxyCluster(oc)
 
 		exutil.By("prepare the AWS config, STS and IAM client")
 		// AWS config
@@ -801,15 +787,11 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			stsSecretName       = "aws-sts-creds"
 		)
 
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(output, "httpsProxy") || strings.Contains(output, "httpProxy") {
-			g.Skip("This case can run in STS proxy env. Handling proxy env needs to use cert-manager flag '--dns01-recursive-nameservers-only', which is already covered in OCP-63555. For simplicity, skipping proxy configured cluster for this case.")
-		}
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		if !exutil.IsSTSCluster(oc) {
 			g.Skip("Skip for non-STS cluster")
 		}
+		exutil.SkipOnProxyCluster(oc)
 
 		exutil.By("prepare the AWS config, STS and IAM client")
 		// AWS config
@@ -990,16 +972,11 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			stsSecretName        = "gcp-sts-creds"
 		)
 
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(output, "httpsProxy") || strings.Contains(output, "httpProxy") {
-			g.Skip("This case can run in STS proxy env. Handling proxy env needs to use cert-manager flag '--dns01-recursive-nameservers-only', which is already covered in OCP-63555. For simplicity, skipping proxy configured cluster for this case.")
-		}
-
 		exutil.SkipIfPlatformTypeNot(oc, "GCP")
 		if !exutil.IsSTSCluster(oc) {
 			g.Skip("Skip for non-STS cluster")
 		}
+		exutil.SkipOnProxyCluster(oc)
 
 		exutil.By("create the GCP IAM and CloudResourceManager client")
 		// Note that in Prow CI, the credentials source is automatically pre-configured to by the step 'openshift-extended-test'
@@ -1496,6 +1473,8 @@ var _ = g.Describe("[sig-auth] CFE cert-manager", func() {
 			sharedNamespace = "ocp-65134-shared-ns"
 		)
 
+		exutil.SkipOnProxyCluster(oc)
+
 		exutil.By("create a shared testing namespace")
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", sharedNamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1865,6 +1844,7 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 			e2e.Logf("current GCP project ID: %s", id)
 			g.Skip("Skip as the CAS testing environment is only pre-setup under 'openshift-qe' project")
 		}
+		exutil.SkipOnProxyCluster(oc)
 
 		exutil.By("create the GCP IAM and CloudResourceManager client")
 		// Note that in Prow CI, the credentials source is automatically pre-configured to by the step 'openshift-extended-test'

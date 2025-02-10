@@ -134,8 +134,6 @@ func updateIamPolicyBinding(crmService *gcpcrm.Service, resource, role, member s
 			return false, nil
 		}
 
-		policy, err = crmService.Projects.GetIamPolicy(resource, &gcpcrm.GetIamPolicyRequest{}).Do()
-
 		if add {
 			policy.Bindings = append(policy.Bindings, &gcpcrm.Binding{
 				Role:    role,
@@ -1016,6 +1014,11 @@ func installGoogleCASIssuer(oc *exutil.CLI, ns string) {
 	)
 
 	// set proxy envs for the Issuer installer pod to access the Helm chart repository when running on a proxy-enabled cluster
+	e2e.Logf("=> inject trusted-ca bundle for HTTPS proxy traffic")
+	err := oc.AsAdmin().Run("create").Args("configmap", "trusted-ca").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = oc.AsAdmin().Run("label").Args("configmap", "trusted-ca", "config.openshift.io/inject-trusted-cabundle=true").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if strings.Contains(output, "httpProxy") {
