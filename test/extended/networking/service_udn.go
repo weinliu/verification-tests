@@ -875,14 +875,12 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 			ipFamilyPolicy         = "SingleStack"
 		)
 
-		exutil.By("0. Get master and worker node")
+		exutil.By("0. Get three worker nodes")
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(nodeList.Items) < 2 {
-			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		if len(nodeList.Items) < 3 {
+			g.Skip("This case requires 3 nodes, but the cluster has less than three nodes")
 		}
-		masterNode, err := exutil.GetFirstMasterNode(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("1. Create two namespaces, first one is for default network and second is for UDN and then label namespaces")
 		ns1 := oc.Namespace()
@@ -981,8 +979,8 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 			CurlPod2NodePortFail(oc, ns[i], pods[i].name, nodeList.Items[1].Name, nodeportsLocal[i])
 		}
 		exutil.By("4.2 Validate host to nodeport service with externalTrafficPolicy=Local traffic on default network")
-		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodeportsLocal[0])
-		CurlNodePortFail(oc, masterNode, nodeList.Items[1].Name, nodeportsLocal[0])
+		CurlNodePortPass(oc, nodeList.Items[2].Name, nodeList.Items[0].Name, nodeportsLocal[0])
+		CurlNodePortFail(oc, nodeList.Items[2].Name, nodeList.Items[1].Name, nodeportsLocal[0])
 		exutil.By("4.3 Validate UDN pod to default network nodeport service with externalTrafficPolicy=Local traffic")
 		CurlPod2NodePortFail(oc, ns[1], pods[1].name, nodeList.Items[0].Name, nodeportsLocal[0])
 		CurlPod2NodePortFail(oc, ns[1], pods[1].name, nodeList.Items[1].Name, nodeportsLocal[0])
@@ -1006,8 +1004,8 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 			CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[1].Name, nodeportsCluster[i])
 		}
 		exutil.By("6.2 Validate host to nodeport service with externalTrafficPolicy=Cluster traffic on default network")
-		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodeportsCluster[0])
-		CurlNodePortPass(oc, masterNode, nodeList.Items[1].Name, nodeportsCluster[0])
+		CurlNodePortPass(oc, nodeList.Items[2].Name, nodeList.Items[0].Name, nodeportsCluster[0])
+		CurlNodePortPass(oc, nodeList.Items[2].Name, nodeList.Items[1].Name, nodeportsCluster[0])
 		exutil.By("6.3 Validate UDN pod to default network nodeport service with externalTrafficPolicy=Cluster traffic")
 		CurlPod2NodePortFail(oc, ns[1], pods[1].name, nodeList.Items[0].Name, nodeportsLocal[0])
 		CurlPod2NodePortFail(oc, ns[1], pods[1].name, nodeList.Items[1].Name, nodeportsLocal[0])
