@@ -1247,10 +1247,13 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 		case "openstack":
 			e2e.Logf("\n OpenStack is detected, stop the instance %v on OSP now \n", nodeToBeShutdown)
 			ospObj = exutil.Osp{}
-			OspCredentials(oc)
+			cred, err1 := exutil.GetOpenStackCredentials(oc)
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			client := exutil.NewOpenStackClient(cred, "compute")
 			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
-			defer ospObj.GetStartOspInstance(nodeToBeShutdown)
-			err = ospObj.GetStopOspInstance(nodeToBeShutdown)
+			defer ospObj.GetStartOspInstance(client, nodeToBeShutdown)
+			err = ospObj.GetStopOspInstance(client, nodeToBeShutdown)
+
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, nodeToBeShutdown, "NotReady")
 		case "vsphere":
@@ -1357,8 +1360,11 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 			startVMOnAzure(az, nodeToBeShutdown, rg)
 			checkNodeStatus(oc, nodeToBeShutdown, "Ready")
 		case "openstack":
+			cred, err1 := exutil.GetOpenStackCredentials(oc)
+			o.Expect(err1).NotTo(o.HaveOccurred())
+			client := exutil.NewOpenStackClient(cred, "compute")
 			defer checkNodeStatus(oc, nodeToBeShutdown, "Ready")
-			err = ospObj.GetStartOspInstance(nodeToBeShutdown)
+			err = ospObj.GetStartOspInstance(client, nodeToBeShutdown)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			checkNodeStatus(oc, nodeToBeShutdown, "Ready")
 		case "vsphere":

@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/gophercloud/gophercloud"
 	o "github.com/onsi/gomega"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -16,16 +17,20 @@ import (
 type ospInstance struct {
 	instance
 	ospObj exutil.Osp
+	client *gophercloud.ServiceClient
 }
 
 // Get nodes and load clouds cred with the specified label.
 func GetOspNodes(oc *exutil.CLI, label string) ([]ComputeNode, func()) {
 	nodeNames, err := exutil.GetClusterNodesBy(oc, label)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	OspCredentials(oc)
+	cred, err1 := exutil.GetOpenStackCredentials(oc)
+	o.Expect(err1).NotTo(o.HaveOccurred())
+	client := exutil.NewOpenStackClient(cred, "compute")
+
 	var results []ComputeNode
 	for _, nodeName := range nodeNames {
-		results = append(results, newOspInstance(oc, nodeName))
+		results = append(results, newOspInstance(oc, client, nodeName))
 	}
 	return results, nil
 }
@@ -81,19 +86,19 @@ func OspCredentials(oc *exutil.CLI) {
 	}
 }
 
-func newOspInstance(oc *exutil.CLI, nodeName string) *ospInstance {
-	OspCredentials(oc)
+func newOspInstance(oc *exutil.CLI, client *gophercloud.ServiceClient, nodeName string) *ospInstance {
 	return &ospInstance{
 		instance: instance{
 			nodeName: nodeName,
 			oc:       oc,
 		},
 		ospObj: exutil.Osp{},
+		client: client,
 	}
 }
 
 func (osp *ospInstance) GetInstanceID() (string, error) {
-	instanceID, err := osp.ospObj.GetOspInstance(osp.nodeName)
+	instanceID, err := osp.ospObj.GetOspInstance(osp.client, osp.nodeName)
 	if err != nil {
 		e2e.Logf("Get instance id failed with error :: %v.", err)
 		return "", err
@@ -105,7 +110,7 @@ func (osp *ospInstance) Start() error {
 	instanceState, err := osp.State()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if _, ok := stopStates[instanceState]; ok {
-		err = osp.ospObj.GetStartOspInstance(osp.nodeName)
+		err = osp.ospObj.GetStartOspInstance(osp.client, osp.nodeName)
 		if err != nil {
 			return fmt.Errorf("start instance failed with error :: %v", err)
 		}
@@ -119,7 +124,7 @@ func (osp *ospInstance) Stop() error {
 	instanceState, err := osp.State()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if _, ok := startStates[instanceState]; ok {
-		err = osp.ospObj.GetStopOspInstance(osp.nodeName)
+		err = osp.ospObj.GetStopOspInstance(osp.client, osp.nodeName)
 		if err != nil {
 			return fmt.Errorf("stop instance failed with error :: %v", err)
 		}
@@ -130,7 +135,7 @@ func (osp *ospInstance) Stop() error {
 }
 
 func (osp *ospInstance) State() (string, error) {
-	instanceState, err := osp.ospObj.GetOspInstanceState(osp.nodeName)
+	instanceState, err := osp.ospObj.GetOspInstanceState(osp.client, osp.nodeName)
 	if err == nil {
 		e2e.Logf("VM %s is : %s", osp.nodeName, strings.ToLower(instanceState))
 		return strings.ToLower(instanceState), nil

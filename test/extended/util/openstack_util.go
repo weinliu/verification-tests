@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
-	"strings"
 
 	"github.com/gophercloud/gophercloud"
 	"github.com/gophercloud/gophercloud/openstack"
+	"github.com/gophercloud/gophercloud/openstack/compute/v2/extensions/startstop"
+	"github.com/gophercloud/gophercloud/openstack/compute/v2/servers"
 	tokens3 "github.com/gophercloud/gophercloud/openstack/identity/v3/tokens"
 	"github.com/gophercloud/gophercloud/openstack/identity/v3/users"
 	"github.com/gophercloud/gophercloud/openstack/objectstorage/v1/containers"
@@ -21,70 +21,7 @@ import (
 
 // A Osp represents object ...
 type Osp struct {
-}
-
-// GetOspInstance represents to list osp instance ...
-func (osp *Osp) GetOspInstance(instanceName string) (string, error) {
-	var cmd string
-	if os.Getenv("OSP_DR_USERNAME") == "" {
-		cmd = fmt.Sprintf("openstack --os-auth-type %s --os-auth-url %s --os-application-credential-id %s --os-application-credential-secret %s server list --name %s -c Name -f value", os.Getenv("OSP_DR_AUTH_TYPE"), os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_APPLICATION_CREDENTIAL_ID"), os.Getenv("OSP_DR_APPLICATION_CREDENTIAL_SECRET"), instanceName)
-	} else {
-		cmd = fmt.Sprintf("openstack --os-auth-url %s --os-password %s --os-project-id %s --os-username %s --os-domain-name %s server list --name %s -c Name -f value", os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_PASSWORD"), os.Getenv("OSP_DR_PROJECT_ID"), os.Getenv("OSP_DR_USERNAME"), os.Getenv("OSP_DR_USER_DOMAIN_NAME"), instanceName)
-	}
-	instance, err := exec.Command("bash", "-c", cmd).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if string(instance) == "" {
-		return "", fmt.Errorf("VM is not found")
-	}
-	e2e.Logf("Virtual machines instance found:", strings.Trim(string(instance), "\n"))
-	return strings.Trim(string(instance), "\n"), err
-}
-
-// GetOspInstanceState represents to list osp instance state ...
-func (osp *Osp) GetOspInstanceState(instanceName string) (string, error) {
-	var cmd string
-	if os.Getenv("OSP_DR_USERNAME") == "" {
-		cmd = fmt.Sprintf("openstack --os-auth-type %s --os-auth-url %s --os-application-credential-id %s --os-application-credential-secret %s server list --name %s -c Status -f value", os.Getenv("OSP_DR_AUTH_TYPE"), os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_APPLICATION_CREDENTIAL_ID"), os.Getenv("OSP_DR_APPLICATION_CREDENTIAL_SECRET"), instanceName)
-	} else {
-		cmd = fmt.Sprintf("openstack --os-auth-url %s --os-password %s --os-project-id %s --os-username %s --os-domain-name %s server list --name %s -c Status -f value", os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_PASSWORD"), os.Getenv("OSP_DR_PROJECT_ID"), os.Getenv("OSP_DR_USERNAME"), os.Getenv("OSP_DR_USER_DOMAIN_NAME"), instanceName)
-	}
-	instanceState, err := exec.Command("bash", "-c", cmd).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if string(instanceState) == "" {
-		return "", fmt.Errorf("Not able to get vm instance state")
-	}
-	return strings.Trim(string(instanceState), "\n"), err
-}
-
-// GetStopOspInstance represents to stop osp instance ...
-func (osp *Osp) GetStopOspInstance(instanceName string) error {
-	var cmd string
-	if os.Getenv("OSP_DR_USERNAME") == "" {
-		cmd = fmt.Sprintf("openstack --os-auth-type %s --os-auth-url %s --os-application-credential-id %s --os-application-credential-secret %s server stop %s", os.Getenv("OSP_DR_AUTH_TYPE"), os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_APPLICATION_CREDENTIAL_ID"), os.Getenv("OSP_DR_APPLICATION_CREDENTIAL_SECRET"), instanceName)
-	} else {
-		cmd = fmt.Sprintf("openstack --os-auth-url %s --os-password %s --os-project-id %s --os-username %s --os-domain-name %s server stop %s", os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_PASSWORD"), os.Getenv("OSP_DR_PROJECT_ID"), os.Getenv("OSP_DR_USERNAME"), os.Getenv("OSP_DR_USER_DOMAIN_NAME"), instanceName)
-	}
-	_, err := exec.Command("bash", "-c", cmd).Output()
-	e2e.Logf("When trying to stop openstack instance, got error: %s", err)
-	if err != nil {
-		return fmt.Errorf("Not able to stop VM")
-	}
-	return err
-}
-
-// GetStartOspInstance represents to start osp instance ...
-func (osp *Osp) GetStartOspInstance(instanceName string) error {
-	var cmd string
-	if os.Getenv("OSP_DR_USERNAME") == "" {
-		cmd = fmt.Sprintf("openstack --os-auth-type %s --os-auth-url %s --os-application-credential-id %s --os-application-credential-secret %s server start %s", os.Getenv("OSP_DR_AUTH_TYPE"), os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_APPLICATION_CREDENTIAL_ID"), os.Getenv("OSP_DR_APPLICATION_CREDENTIAL_SECRET"), instanceName)
-	} else {
-		cmd = fmt.Sprintf("openstack --os-auth-url %s --os-password %s --os-project-id %s --os-username %s --os-domain-name %s server start %s", os.Getenv("OSP_DR_AUTH_URL"), os.Getenv("OSP_DR_PASSWORD"), os.Getenv("OSP_DR_PROJECT_ID"), os.Getenv("OSP_DR_USERNAME"), os.Getenv("OSP_DR_USER_DOMAIN_NAME"), instanceName)
-	}
-	_, err := exec.Command("bash", "-c", cmd).Output()
-	if err != nil {
-		return fmt.Errorf("Not able to start VM")
-	}
-	return err
+	client *gophercloud.ServiceClient
 }
 
 // OpenstackCredentials the openstack credentials extracted from cluster
@@ -92,12 +29,14 @@ type OpenstackCredentials struct {
 	Clouds struct {
 		Openstack struct {
 			Auth struct {
-				AuthURL        string `yaml:"auth_url"`
-				Password       string `yaml:"password"`
-				ProjectID      string `yaml:"project_id"`
-				ProjectName    string `yaml:"project_name"`
-				UserDomainName string `yaml:"user_domain_name"`
-				Username       string `yaml:"username"`
+				AuthURL                     string `yaml:"auth_url"`
+				Password                    string `yaml:"password"`
+				ProjectID                   string `yaml:"project_id"`
+				ProjectName                 string `yaml:"project_name"`
+				UserDomainName              string `yaml:"user_domain_name"`
+				Username                    string `yaml:"username"`
+				ApplicationCredentialID     string `yaml:"application_credential_id"`
+				ApplicationCredentialSecret string `yaml:"application_credential_secret"`
 			} `yaml:"auth"`
 			EndpointType       string `yaml:"endpoint_type"`
 			IdentityAPIVersion string `yaml:"identity_api_version"`
@@ -127,28 +66,36 @@ func GetOpenStackCredentials(oc *CLI) (*OpenstackCredentials, error) {
 	return cred, err
 }
 
-// NewOpenStackClient initializes an openstack client
-// serviceType the type of the client, currently only supports indentity and object-store
 func NewOpenStackClient(cred *OpenstackCredentials, serviceType string) *gophercloud.ServiceClient {
 	var client *gophercloud.ServiceClient
-	opts := gophercloud.AuthOptions{
-		IdentityEndpoint: cred.Clouds.Openstack.Auth.AuthURL,
-		Username:         cred.Clouds.Openstack.Auth.Username,
-		Password:         cred.Clouds.Openstack.Auth.Password,
-		TenantID:         cred.Clouds.Openstack.Auth.ProjectID,
-		DomainName:       cred.Clouds.Openstack.Auth.UserDomainName,
+	var opts gophercloud.AuthOptions
+
+	if cred.Clouds.Openstack.Auth.ApplicationCredentialID != "" && cred.Clouds.Openstack.Auth.ApplicationCredentialSecret != "" {
+		opts = gophercloud.AuthOptions{
+			IdentityEndpoint:            cred.Clouds.Openstack.Auth.AuthURL,
+			ApplicationCredentialID:     cred.Clouds.Openstack.Auth.ApplicationCredentialID,
+			ApplicationCredentialSecret: cred.Clouds.Openstack.Auth.ApplicationCredentialSecret,
+		}
+	} else {
+		opts = gophercloud.AuthOptions{
+			IdentityEndpoint: cred.Clouds.Openstack.Auth.AuthURL,
+			Username:         cred.Clouds.Openstack.Auth.Username,
+			Password:         cred.Clouds.Openstack.Auth.Password,
+			TenantID:         cred.Clouds.Openstack.Auth.ProjectID,
+			DomainName:       cred.Clouds.Openstack.Auth.UserDomainName,
+		}
 	}
+
 	provider, err := openstack.AuthenticatedClient(opts)
 	o.Expect(err).NotTo(o.HaveOccurred())
+
 	switch serviceType {
 	case "identity":
-		{
-			client, err = openstack.NewIdentityV3(provider, gophercloud.EndpointOpts{Region: cred.Clouds.Openstack.RegionName})
-		}
+		client, err = openstack.NewIdentityV3(provider, gophercloud.EndpointOpts{Region: cred.Clouds.Openstack.RegionName})
 	case "object-store":
-		{
-			client, err = openstack.NewObjectStorageV1(provider, gophercloud.EndpointOpts{Region: cred.Clouds.Openstack.RegionName})
-		}
+		client, err = openstack.NewObjectStorageV1(provider, gophercloud.EndpointOpts{Region: cred.Clouds.Openstack.RegionName})
+	case "compute":
+		client, err = openstack.NewComputeV2(provider, gophercloud.EndpointOpts{Region: cred.Clouds.Openstack.RegionName})
 	}
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return client
@@ -252,4 +199,96 @@ func EmptyOpenStackContainer(client *gophercloud.ServiceClient, name string) err
 	}
 	e2e.Logf("deleted all object items in the container %s", name)
 	return nil
+}
+
+// GetOspInstance represents to list osp instance using SDK
+func (osp *Osp) GetOspInstance(client *gophercloud.ServiceClient, instanceName string) (string, error) {
+	// List servers with the given name
+	allServers, err := ListServersByName(client, instanceName)
+
+	if err != nil || len(allServers) == 0 {
+		return "", fmt.Errorf("VM with name %s not found", instanceName)
+	}
+
+	// Return the name of the first matching server
+	serverName := allServers[0].Name
+	e2e.Logf("Virtual machine instance found: %s", serverName)
+	return serverName, nil
+}
+
+// GetOspInstanceState represents to list osp instance state using SDK
+func (osp *Osp) GetOspInstanceState(client *gophercloud.ServiceClient, instanceName string) (string, error) {
+	// List servers with the given name
+	allServers, err := ListServersByName(client, instanceName)
+
+	if err != nil || len(allServers) == 0 {
+		return "", fmt.Errorf("VM with name %s not found", instanceName)
+	}
+
+	// Return the status of the first matching server
+	serverStatus := allServers[0].Status
+	e2e.Logf("Virtual machine instance state: %s", serverStatus)
+	return serverStatus, nil
+}
+
+// GetStopOspInstance represents to stop osp instance using SDK
+func (osp *Osp) GetStopOspInstance(client *gophercloud.ServiceClient, instanceName string) error {
+	// List servers with the given name
+	allServers, err := ListServersByName(client, instanceName)
+
+	if err != nil || len(allServers) == 0 {
+		return fmt.Errorf("VM with name %s not found", instanceName)
+	}
+
+	// Stop the server
+	serverID := allServers[0].ID
+	err = startstop.Stop(client, serverID).ExtractErr()
+	if err != nil {
+		return fmt.Errorf("failed to stop VM: %v", err)
+	}
+
+	e2e.Logf("VM %s stopped successfully", instanceName)
+	return nil
+}
+
+// GetStartOspInstance represents to start osp instance using SDK
+func (osp *Osp) GetStartOspInstance(client *gophercloud.ServiceClient, instanceName string) error {
+	// List servers with the given name
+	allServers, err := ListServersByName(client, instanceName)
+
+	if err != nil || len(allServers) == 0 {
+		return fmt.Errorf("VM with name %s not found", instanceName)
+	}
+
+	// Start the server
+	serverID := allServers[0].ID
+	err = startstop.Start(client, serverID).ExtractErr()
+	if err != nil {
+		return fmt.Errorf("failed to start VM: %v", err)
+	}
+
+	e2e.Logf("VM %s started successfully", instanceName)
+	return nil
+}
+
+// ListServersByName retrieves a list of servers matching the given instance name.
+func ListServersByName(client *gophercloud.ServiceClient, instanceName string) ([]servers.Server, error) {
+	// Define the options for listing servers
+	opts := servers.ListOpts{
+		Name: instanceName,
+	}
+
+	// Retrieve all pages of servers matching the options
+	allPages, err := servers.List(client, opts).AllPages()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list servers: %v", err)
+	}
+
+	// Extract the servers from the retrieved pages
+	allServers, err := servers.ExtractServers(allPages)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract servers: %v", err)
+	}
+
+	return allServers, nil
 }
