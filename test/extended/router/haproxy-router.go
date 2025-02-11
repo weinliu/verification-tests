@@ -3233,7 +3233,7 @@ DNS.2 = *.%s.%s.svc
 		exutil.By("try to patch the header to an ingress controller with its name exceeded the max length")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", negPatchHeaders, "--type=merge", "-n", ingctrl.namespace).Output()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Too long: may not be longer than 255"))
+		o.Expect(output).To(o.ContainSubstring("Too long: may not be more than 255 bytes"))
 
 		exutil.By("patch a http header with max header value to an ingress controller")
 		maxCfg.Reset()
@@ -3258,7 +3258,7 @@ DNS.2 = *.%s.%s.svc
 		o.Expect(strings.Contains(routeBackendCfg, "http-response set-header 'header123abc' '"+maxHeaderValue+"'")).To(o.BeTrue())
 		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", negPatchHeaders, "--type=merge", "-n", ingctrl.namespace).Output()
 		o.Expect(err).To(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Too long: may not be longer than 16384"))
+		o.Expect(output).To(o.ContainSubstring("Too long: may not be more than 16384 bytes"))
 	})
 
 	// author: shudili@redhat.com
