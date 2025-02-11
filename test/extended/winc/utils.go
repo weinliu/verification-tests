@@ -825,35 +825,35 @@ func checkFoldersDoNotExist(bastionHost, winInternalIP, folder, privateKey, iaas
 }
 
 /*
-waitUntilWMCOStatusChanged waits until a specific INFO-level status message appears in the WMCO logs.
+waitUntilWMCOStatusChanged waits until a specific status message appears in the WMCO logs.
 Windows Machine Config Operator (WMCO). This is useful to ensure that WMCO has reached
 a particular state before proceeding with further test steps.
 */
 func waitUntilWMCOStatusChanged(oc *exutil.CLI, message string) {
 	pollInterval := 15 * time.Second
 	timeout := 25 * time.Minute
+	// Normalize message and logs by removing whitespace and making them lowercase
+	normalizedMessage := strings.ToLower(strings.ReplaceAll(message, " ", ""))
 
 	waitLogErr := wait.Poll(pollInterval, timeout, func() (bool, error) {
-		// Fetch logs from the last 1 minute to capture recent activity
 		logs, err := oc.AsAdmin().WithoutNamespace().Run("logs").
 			Args("deployment.apps/windows-machine-config-operator", "-n", wmcoNamespace, "--since=1m").Output()
 
 		if err != nil {
 			e2e.Logf("Error retrieving WMCO logs: %v", err)
-			return false, nil // Continue polling on transient errors
+			return false, nil
 		}
 
-		// Split logs into lines for efficient parsing
 		logLines := strings.Split(logs, "\n")
 		for _, line := range logLines {
-			// Only process INFO level logs to reduce unnecessary matches
-			if strings.Contains(line, "INFO") && strings.Contains(line, message) {
+			// Normalize log line
+			normalizedLine := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(line), " ", ""))
+			if strings.Contains(normalizedLine, normalizedMessage) {
 				e2e.Logf("Message found in WMCO logs: %v", line)
 				return true, nil
 			}
 		}
 
-		// If message isn't found, continue polling
 		e2e.Logf("Message '%v' not found in WMCO logs. Continuing to poll...", message)
 		return false, nil
 	})

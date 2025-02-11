@@ -1510,6 +1510,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// A delay waiting for machine upgrade to be completed
 		waitUntilWMCOStatusChanged(oc, "\"unhealthy\":0")
+		waitWindowsNodesReady(oc, 2, 3000*time.Second)
 	})
 
 	// author rrasouli@redhat.com
