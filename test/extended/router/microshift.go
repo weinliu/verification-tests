@@ -63,7 +63,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge", func() {
 		var (
 			e2eTestNamespace    = "e2e-ne-ocp60266-" + getRandomString()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			edgeRouteHost       = "route-edge-" + e2eTestNamespace + ".apps.example.com"
 			passRouteHost       = "route-pass-" + e2eTestNamespace + ".apps.example.com"
 		)
@@ -72,11 +72,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge", func() {
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
-		exutil.By("create a web-server-rc pod and its services")
+		exutil.By("create a web-server-deploy pod and its services")
 		defer operateResourceFromFile(oc, "delete", e2eTestNamespace, testPodSvc)
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
-		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
-		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-deploy")
+		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-deploy")
 		ingressPod := getOneRouterPodNameByIC(oc, "default")
 
 		exutil.By("create a passthrough route")
@@ -180,7 +180,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge", func() {
 		var (
 			e2eTestNamespace    = "e2e-ne-ocp60149-" + getRandomString()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			ingressFile         = filepath.Join(buildPruningBaseDir, "microshift-ingress-http.yaml")
 			httpRoute           = "service-unsecure-test.example.com"
 		)
@@ -189,11 +189,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge", func() {
 		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 
-		exutil.By("create a web-server-rc pod and its services")
+		exutil.By("create a web-server-deploy pod and its services")
 		defer operateResourceFromFile(oc, "delete", e2eTestNamespace, testPodSvc)
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
-		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-rc")
-		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-deploy")
+		podName := getPodListByLabel(oc, e2eTestNamespace, "name=web-server-deploy")
 		ingressPod := getOneRouterPodNameByIC(oc, "default")
 
 		exutil.By("create ingress using the file and get the route details")
@@ -221,8 +221,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge", func() {
 	g.It("Author:shudili-MicroShiftOnly-High-72802-make router namespace ownership check configurable for the default microshift configuration", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
-			srvrcInfo           = "web-server-rc"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
 			unSecSvcName        = "service-unsecure"
 			secSvcName          = "service-secure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
@@ -324,7 +324,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge", func() {
 		o.Expect(adtInfo).To(o.Equal("True"))
 
 		exutil.By("9. curl the first HTTP route and check the result")
-		srvPodName := getPodListByLabel(oc, e2eTestNamespace1, "name=web-server-rc")
+		srvPodName := getPodListByLabel(oc, e2eTestNamespace1, "name=web-server-deploy")
 		routerPodIP := getPodv4Address(oc, routerPodName, "openshift-ingress")
 		toDst := httpRoutehost + ":80:" + routerPodIP
 		cmdOnPod := []string{"-n", e2eTestNamespace1, cltPodName, "--", "curl", "http://" + httpRoutehost + "/path/index.html", "--resolve", toDst, "--connect-timeout", "10"}
@@ -335,7 +335,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge", func() {
 		o.Expect(output).To(o.ContainSubstring("ocp-test " + srvPodName[0] + " http-8080"))
 
 		exutil.By("10. curl the second HTTP route and check the result")
-		srvPodName = getPodListByLabel(oc, e2eTestNamespace2, "name=web-server-rc")
+		srvPodName = getPodListByLabel(oc, e2eTestNamespace2, "name=web-server-deploy")
 		cmdOnPod = []string{"-n", e2eTestNamespace1, cltPodName, "--", "curl", "http://" + httpRoutehost + "/test/index.html", "--resolve", toDst, "--connect-timeout", "10"}
 		result, _ = repeatCmdOnClient(oc, cmdOnPod, "http-8080", 60, 1)
 		o.Expect(result).To(o.ContainSubstring("Hello-OpenShift-Path-Test " + srvPodName[0] + " http-8080"))
@@ -344,8 +344,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge", func() {
 	g.It("Author:shudili-MicroShiftOnly-NonPreRelease-Longduration-Medium-73621-Disable/Enable namespace ownership support for router [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
-			srvrcInfo           = "web-server-rc"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
 			unSecSvcName        = "service-unsecure"
 			e2eTestNamespace1   = "e2e-ne-73621-" + getRandomString()
 			e2eTestNamespace2   = "e2e-ne-73621-" + getRandomString()

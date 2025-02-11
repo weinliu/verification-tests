@@ -76,7 +76,7 @@ type ingressDescription struct {
 	template    string
 }
 
-type webServerRcDescription struct {
+type webServerDeployDescription struct {
 	podLabelName      string
 	secSvcLabelName   string
 	unsecSvcLabelName string
@@ -177,13 +177,13 @@ func (ing *ingressDescription) create(oc *exutil.CLI) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func (websrvrc *webServerRcDescription) create(oc *exutil.CLI) {
-	err := createResourceToNsFromTemplate(oc, websrvrc.namespace, "--ignore-unknown-parameters=true", "-f", websrvrc.template, "-p", "PodLabelName="+websrvrc.podLabelName, "SecSvcLabelName="+websrvrc.secSvcLabelName, "UnsecSvcLabelName="+websrvrc.unsecSvcLabelName)
+func (websrvdp *webServerDeployDescription) create(oc *exutil.CLI) {
+	err := createResourceToNsFromTemplate(oc, websrvdp.namespace, "--ignore-unknown-parameters=true", "-f", websrvdp.template, "-p", "PodLabelName="+websrvdp.podLabelName, "SecSvcLabelName="+websrvdp.secSvcLabelName, "UnsecSvcLabelName="+websrvdp.unsecSvcLabelName)
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 
-func (websrvrc *webServerRcDescription) delete(oc *exutil.CLI) error {
-	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", websrvrc.namespace, "--ignore-not-found", "ReplicationController", websrvrc.podLabelName).Execute()
+func (websrvdp *webServerDeployDescription) delete(oc *exutil.CLI) error {
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", websrvdp.namespace, "deployment", websrvdp.podLabelName).Execute()
 }
 
 // parse the yaml file to json.

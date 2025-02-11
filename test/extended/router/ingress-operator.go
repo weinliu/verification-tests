@@ -525,8 +525,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
-			srvrcInfo           = "web-server-rc"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
 			srvName             = "service-unsecure"
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp60012",
@@ -635,8 +635,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
-			srvrcInfo           = "web-server-rc"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
 			srvName             = "service-unsecure"
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp60013",
@@ -1219,11 +1219,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			baseTemp            = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 			syslogPod           = filepath.Join(buildPruningBaseDir, "rsyslogd-pod.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			syslogPodName       = "rsyslogd-pod"
 			syslogPodLabel      = "name=rsyslogd"
-			srvrcInfo           = "web-server-rc"
+			srvrcInfo           = "web-server-deploy"
 			srvName             = "service-unsecure"
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
@@ -1292,8 +1292,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-sidecar.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
-			srvrcInfo           = "web-server-rc"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
 			srvName             = "service-unsecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			cltPodName          = "hello-pod"
@@ -1597,7 +1597,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			srvName             = "service-unsecure"
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp22636",
@@ -1619,7 +1619,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 
 		exutil.By("2. Create a server pod and expose an unsecure service")
 		createResourceFromFile(oc, project1, testPodSvc)
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
 		err := oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForOutput(oc, project1, "route/"+srvName, "{.spec.host}", routehost)
@@ -1649,7 +1649,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			srvName             = "service-unsecure"
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp22637",
@@ -1671,7 +1671,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 
 		exutil.By("2. Create a server pod and expose an unsecure service")
 		createResourceFromFile(oc, project1, testPodSvc)
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
 		err := oc.Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		waitForOutput(oc, project1, "route/"+srvName, "{.spec.host}", routehost)

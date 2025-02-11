@@ -119,14 +119,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Low-10943-NetworkEdge Set invalid timeout server for route", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			unSecSvcName        = "service-unsecure"
 		)
 
 		exutil.By("1.0: Deploy a project with single pod and the service")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
 		output, err := oc.Run("get").Args("service").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(unSecSvcName))
@@ -321,8 +321,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
-			srvrcInfo           = "web-server-rc"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
 			unSecSvcName        = "service-unsecure"
 			fileDir             = "/tmp/OCP-11130-cookie"
 			ingctrl             = ingressControllerDescription{
@@ -333,7 +333,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 			}
 		)
 
-		exutil.By("1.0: Updated replicas in the web-server-rc file for testing")
+		exutil.By("1.0: Updated replicas in the web-server-deploy file for testing")
 		updateFilebySedCmd(testPodSvc, "replicas: 1", "replicas: 2")
 
 		exutil.By("2.0: Deploy a project with a client pod, two server pods and the service")
@@ -401,7 +401,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:mjoseph-ROSA-OSD_CCS-ARO-Critical-11619-Limit the number of TCP connection per IP in specified time period", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
@@ -411,7 +411,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		baseDomain := getBaseDomain(oc)
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
 		createResourceFromFile(oc, project1, clientPod)
 		ensurePodWithLabelReady(oc, project1, cltPodLabel)
 
@@ -645,7 +645,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Low-14680-NetworkEdge Add invalid value in annotation whitelist to route", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			unSecSvcName        = "service-unsecure"
 		)
 
@@ -653,7 +653,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		project1 := oc.Namespace()
 		routerpod := getOneRouterPodNameByIC(oc, "default")
 		createResourceFromFile(oc, project1, testPodSvc)
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
 
 		exutil.By("2.0: Create an unsecure, route")
 		unsecureRoute := "route-unsecure"
@@ -668,7 +668,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"'192.abc.123.0'"`))
 
 		exutil.By("4.0: access the route using any host since whitelist is not in effect")
-		waitForOutsideCurlContains("http://"+unsecureHost, "", `Hello-OpenShift web-server-rc`)
+		waitForOutsideCurlContains("http://"+unsecureHost, "", `Hello-OpenShift web-server-deploy`)
 
 		exutil.By("5.0: re-annotate route with IP that all Hosts can access")
 		setAnnotation(oc, project1, "route/"+unsecureRoute, `haproxy.router.openshift.io/ip_whitelist=0.0.0.0/0`)
@@ -676,7 +676,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/ip_whitelist":"0.0.0.0/0`))
 
 		exutil.By("6.0: all hosts can access the route")
-		waitForOutsideCurlContains("http://"+unsecureHost, "", `Hello-OpenShift web-server-rc`)
+		waitForOutsideCurlContains("http://"+unsecureHost, "", `Hello-OpenShift web-server-deploy`)
 
 		exutil.By("7.0: Check HaProxy if the IP in the whitelist annotation exists")
 		searchOutput := readHaproxyConfig(oc, routerpod, project1, "-A8", project1+":"+unsecureRoute)
@@ -783,8 +783,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Medium-16732-NetworkEdge Check haproxy.config when overwriting 'timeout server' which was already specified", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
-			srvrcInfo           = "web-server-rc"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
 			unSecSvcName        = "service-unsecure"
 		)
 
@@ -828,8 +828,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-38671-NetworkEdge 'haproxy.router.openshift.io/timeout-tunnel' annotation gets applied alongside 'haproxy.router.openshift.io/timeout' for clear/edge/reencrypt routes", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
-			srvrcInfo           = "web-server-rc"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
 			unSecSvcName        = "service-unsecure"
 		)
 
@@ -905,12 +905,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			output              string
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 		)
 		exutil.By("create project, pod, svc resources")
 		oc.SetupProject()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-deploy")
 
 		exutil.By("expose a service in the project")
 		createRoute(oc, oc.Namespace(), "http", "service-unsecure", "service-unsecure", []string{})
@@ -951,12 +951,12 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			output              string
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 		)
 		exutil.By("create project, pod, svc resources")
 		oc.SetupProject()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-deploy")
 
 		exutil.By("expose a service in the project")
 		createRoute(oc, oc.Namespace(), "http", "service-secure", "service-secure", []string{})
@@ -1002,7 +1002,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		}
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			customTemp          = filepath.Join(buildPruningBaseDir, "49802-route.yaml")
 			rut                 = routeDescription{
 				namespace: "",
@@ -1014,8 +1014,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		baseDomain := getBaseDomain(oc)
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
-		podName := getPodListByLabel(oc, project1, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
+		podName := getPodListByLabel(oc, project1, "name=web-server-deploy")
 		defaultContPod := getOneRouterPodNameByIC(oc, "default")
 
 		exutil.By("create routes and get the details")
@@ -1204,13 +1204,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			output              string
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 		)
 
 		exutil.By("Create a server pod")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
 
 		exutil.By("expose a service in the project")
 		createRoute(oc, project1, "http", "service-unsecure", "service-unsecure", []string{})
@@ -1432,15 +1432,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-77082-NetworkEdge Route gives allowlist precedence when whitelist and allowlist annotations are both present", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPod             = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPod             = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			unSecSvcName        = "service-unsecure"
 		)
 
 		exutil.By("1.0: Deploy a project with Pod and Services")
 		project1 := oc.Namespace()
 		routerpod := getOneRouterPodNameByIC(oc, "default")
-		srvPodList := createResourceFromWebServer(oc, project1, testPod, "web-server-rc")
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		srvPodList := createResourceFromWebServer(oc, project1, testPod, "web-server-deploy")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
 
 		exutil.By("2.0: Create an unsecure route")
 		unsecureRoute := "route-unsecure"
@@ -1493,15 +1493,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:iamin-ROSA-OSD_CCS-ARO-High-77091-NetworkEdge Route does not enable allowlist with than 61 CIDRs and if invalid IP annotation is given", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPod             = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPod             = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			unSecSvcName        = "service-unsecure"
 		)
 
 		exutil.By("1.0: Deploy a project with Pod and Services")
 		project1 := oc.Namespace()
 		routerpod := getOneRouterPodNameByIC(oc, "default")
-		srvPodList := createResourceFromWebServer(oc, project1, testPod, "web-server-rc")
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		srvPodList := createResourceFromWebServer(oc, project1, testPod, "web-server-deploy")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
 
 		exutil.By("2.0: Create an edge route")
 		edgeRoute := "route-edge"

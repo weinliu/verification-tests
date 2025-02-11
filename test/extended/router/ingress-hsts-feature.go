@@ -21,7 +21,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:aiyengar-NonHyperShiftHOST-Critical-43476-The PreloadPolicy option can be set to be enforced strictly to be present or absent in HSTS preload header checks [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 		var (
 			ingctrl = ingressControllerDescription{
 				name:      "ocp43476",
@@ -40,7 +40,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("Deploy project with pods and service resources")
 		oc.SetupProject()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-deploy")
 
 		exutil.By("Expose an edge route via the unsecure service inside project")
 		var output string
@@ -86,7 +86,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:aiyengar-NonHyperShiftHOST-High-43478-The PreloadPolicy option can be configured to be permissive with NoOpinion flag [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 		var (
 			ingctrl = ingressControllerDescription{
 				name:      "ocp43478",
@@ -105,7 +105,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("Deploy project with pods and service resources")
 		oc.SetupProject()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-deploy")
 
 		exutil.By("Expose an edge route via the unsecure service inside project")
 		var output string
@@ -143,7 +143,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:aiyengar-NonHyperShiftHOST-Critical-43474-The includeSubDomainsPolicy parameter can configure subdomain policy to inherit the HSTS policy of parent domain [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 		var (
 			ingctrl = ingressControllerDescription{
 				name:      "ocp43474",
@@ -162,7 +162,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("Deploy project with pods and service resources")
 		oc.SetupProject()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-deploy")
 
 		exutil.By("Expose an edge route via the unsecure service inside project")
 		var output string
@@ -208,7 +208,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:aiyengar-NonHyperShiftHOST-High-43475-The includeSubDomainsPolicy option can be configured to be permissive with NoOpinion flag [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 		var (
 			ingctrl = ingressControllerDescription{
 				name:      "ocp43475",
@@ -227,7 +227,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("Deploy project with pods and service resources")
 		oc.SetupProject()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-deploy")
 
 		exutil.By("Expose an edge route via the unsecure service inside project")
 		var output string
@@ -265,7 +265,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:aiyengar-NonHyperShiftHOST-High-43479-The Maxage HSTS policy strictly adheres to validation of route based based on largestMaxAge and smallestMaxAge parameter [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 		var (
 			ingctrl = ingressControllerDescription{
 				name:      "ocp43479",
@@ -284,7 +284,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("Deploy project with pods and service resources")
 		oc.SetupProject()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-deploy")
 
 		exutil.By("Expose an edge route via the unsecure service inside project")
 		var output string
@@ -325,7 +325,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:aiyengar-NonHyperShiftHOST-High-43480-The HSTS domain policy can be configure with multiple domainPatterns options [Disruptive]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 		var (
 			ingctrl1 = ingressControllerDescription{
 				name:      "ocp43480-1",
@@ -357,7 +357,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("Deploy project with pods and service resources")
 		oc.SetupProject()
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-deploy")
 
 		exutil.By("Expose an edge route via the unsecure service through ingresscontroller 1 inside project")
 		var output1 string
@@ -413,7 +413,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:aiyengar-NonHyperShiftHOST-High-43884-lobal HSTS policy can be enforced strictly on a specific namespace using namespaceSelector for given domain pattern filtering [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 		var (
 			ingctrl = ingressControllerDescription{
 				name:      "ocp43884",
@@ -433,13 +433,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		oc.SetupProject()
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-deploy")
 
 		exutil.By("Deploy project 2 with pods and service resources")
 		oc.SetupProject()
 		project2 := oc.Namespace()
 		createResourceFromFile(oc, project2, testPodSvc)
-		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
+		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-deploy")
 
 		exutil.By("set up HSTS policy for the custom domain with namespace selector set to label of project1 namespace")
 		ingctldomain := getIngressctlDomain(oc, ingctrl.name)

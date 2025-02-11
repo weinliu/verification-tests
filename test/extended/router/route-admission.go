@@ -19,9 +19,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:mjoseph-ROSA-OSD_CCS-ARO-Critical-27594-Set namespaceOwnership of routeAdmission to InterNamespaceAllowed", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			srvrcInfo           = "web-server-rc"
+			srvrcInfo           = "web-server-deploy"
 			srvName             = "service-unsecure"
 			e2eTestNamespace2   = "e2e-ne-ocp27594-" + getRandomString()
 			ingctrl             = ingressControllerDescription{
@@ -88,8 +88,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:mjoseph-ROSA-OSD_CCS-ARO-Critical-27595-Set namespaceOwnership of routeAdmission to Strict", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
-			srvrcInfo           = "web-server-rc"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
 			e2eTestNamespace2   = "e2e-ne-ocp27595-" + getRandomString()
 		)
 
@@ -194,7 +194,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:mjoseph-NonHyperShiftHOST-Critical-30190-Set wildcardPolicy of routeAdmission to WildcardsAllowed", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 			srvName             = "service-unsecure"
 			ingctrl             = ingressControllerDescription{
@@ -225,7 +225,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 
 		exutil.By("3. Create a server pod and an unsecure service")
 		createResourceFromFile(oc, project1, testPodSvc)
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
 
 		exutil.By("4. Expose a http wildcard route")
 		err = oc.WithoutNamespace().Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1, "--wildcard-policy=Subdomain").Execute()
@@ -252,7 +252,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:mjoseph-NonHyperShiftHOST-Medium-30191-Set wildcardPolicy of routeAdmission to WildcardsDisallowed", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 			srvName             = "service-unsecure"
 			ingctrl             = ingressControllerDescription{
@@ -277,7 +277,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 
 		exutil.By("3. Create a server pod and an unsecure service")
 		createResourceFromFile(oc, project1, testPodSvc)
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
 
 		exutil.By("4. Expose a http wildcard route")
 		err := oc.WithoutNamespace().Run("expose").Args("service", srvName, "--hostname="+routehost, "-n", project1, "--wildcard-policy=Subdomain").Execute()

@@ -732,8 +732,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
-			srvrcInfo           = "web-server-rc"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
 			srvName             = "service-unsecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			cltPodName          = "hello-pod"
@@ -811,7 +811,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("delete the backend pod and try to curl the route, expect to get custom http 503 Service Unavailable")
 		podname, err := oc.Run("get").Args("pods", "-l", "name="+srvrcInfo, "-o=jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.Run("delete").Args("replicationcontroller", srvrcInfo).Execute()
+		err = oc.Run("delete").Args("deployment", srvrcInfo).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForResourceToDisappear(oc, project1, "pod/"+podname)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
@@ -826,8 +826,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
-			srvrcInfo           = "web-server-rc"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
 			srvName             = "service-unsecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			cltPodName          = "hello-pod"
@@ -1617,7 +1617,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
@@ -1641,7 +1641,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("Deploy a backend pod and its service resources")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
 
 		exutil.By("Create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
@@ -1669,7 +1669,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("Verify the Idle annotation")
 		findAnnotation := getAnnotation(oc, project1, "svc", "service-unsecure")
 		o.Expect(findAnnotation).To(o.ContainSubstring("idling.alpha.openshift.io/idled-at"))
-		o.Expect(findAnnotation).To(o.ContainSubstring(`idling.alpha.openshift.io/unidle-targets":"[{\"kind\":\"ReplicationController\",\"name\":\"web-server-rc\",\"replicas\":1}]`))
+		o.Expect(findAnnotation).To(o.ContainSubstring(`idling.alpha.openshift.io/unidle-targets":"[{\"kind\":\"Deployment\",\"name\":\"web-server-deploy\",\"group\":\"apps\",\"replicas\":1}]`))
 
 		exutil.By("Wake the Idle resource by accessing its route")
 		waitForCurl(oc, cltPodName, baseDomain, "service-unsecure-"+project1+"."+"ocp56898.", "HTTP/1.1 200 OK", custContIP)
@@ -1683,8 +1683,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	g.It("Author:shudili-High-57001-edge terminated h2 (gRPC) connections need a haproxy template change to work correctly", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			srvPodSvc           = filepath.Join(buildPruningBaseDir, "bug1826225-proh2-rc.yaml")
-			srvrcInfo           = "web-server-rc"
+			srvPodSvc           = filepath.Join(buildPruningBaseDir, "bug1826225-proh2-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
 			svcName             = "service-h2c-57001"
 			routeName           = "myedge1"
 		)
@@ -1726,9 +1726,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "ocp54998-web-server-rc.yaml")
-			srvrcInfo           = "web-server-rc-54998"
-			srvName             = "service-unsecure-54998"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
+			srvName             = "service-unsecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			cltPodName          = "hello-pod"
 			cltPodLabel         = "app=hello-pod"
@@ -1753,6 +1753,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 
 		exutil.By("create an unsecure service and its backend pod")
 		project1 := oc.Namespace()
+		sedCmd := fmt.Sprintf(`sed -i'' -e 's/8080/10081/g' %s`, testPodSvc)
+		_, err := exec.Command("bash", "-c", sedCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name="+srvrcInfo)
 
@@ -1923,7 +1926,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp41929",
 				namespace: "openshift-ingress-operator",
@@ -1943,7 +1946,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("Deploy a backend pod and its service resources")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
 
 		exutil.By("Expose a route with the unsecure service inside the project")
 		routehost := "service-unsecure-" + project1 + "." + ingctrl.domain
@@ -1955,7 +1958,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("Cross check the selector value of the 'service-unsecure' service")
 		jpath := "{.spec.selector}"
 		output := getByJsonPath(oc, project1, "svc/service-unsecure", jpath)
-		o.Expect(output).To(o.ContainSubstring(`"name":"web-server-rc"`))
+		o.Expect(output).To(o.ContainSubstring(`"name":"web-server-deploy"`))
 
 		exutil.By("Delete the service selector for the 'service-unsecure' service")
 		patchPath := `{"spec":{"selector":null}}`
@@ -3580,49 +3583,49 @@ DNS.2 = *.%s.%s.svc
 	g.It("ROSA-OSD_CCS-ARO-Author:shudili-Critical-67093-Alternate Backends and Weights for a route work well", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvcTP        = filepath.Join(buildPruningBaseDir, "template-web-server-rc.yaml")
+			testPodSvcTP        = filepath.Join(buildPruningBaseDir, "template-web-server-deploy.yaml")
 
-			webServerRc1 = webServerRcDescription{
-				podLabelName:      "web-server-rc01",
+			webServerDeploy1 = webServerDeployDescription{
+				podLabelName:      "web-server-deploy01",
 				secSvcLabelName:   "service-secure01",
 				unsecSvcLabelName: "service-unsecure01",
 				template:          testPodSvcTP,
 				namespace:         "",
 			}
 
-			webServerRc2 = webServerRcDescription{
-				podLabelName:      "web-server-rc02",
+			webServerDeploy2 = webServerDeployDescription{
+				podLabelName:      "web-server-deploy02",
 				secSvcLabelName:   "service-secure02",
 				unsecSvcLabelName: "service-unsecure02",
 				template:          testPodSvcTP,
 				namespace:         "",
 			}
 
-			webServerRc3 = webServerRcDescription{
-				podLabelName:      "web-server-rc03",
+			webServerDeploy3 = webServerDeployDescription{
+				podLabelName:      "web-server-deploy03",
 				secSvcLabelName:   "service-secure03",
 				unsecSvcLabelName: "service-unsecure03",
 				template:          testPodSvcTP,
 				namespace:         "",
 			}
-			srv1Label    = "name=" + webServerRc1.podLabelName
-			srv2Label    = "name=" + webServerRc2.podLabelName
-			srv3Label    = "name=" + webServerRc3.podLabelName
-			service1Name = webServerRc1.unsecSvcLabelName
-			service2Name = webServerRc2.unsecSvcLabelName
-			service3Name = webServerRc3.unsecSvcLabelName
+			srv1Label    = "name=" + webServerDeploy1.podLabelName
+			srv2Label    = "name=" + webServerDeploy2.podLabelName
+			srv3Label    = "name=" + webServerDeploy3.podLabelName
+			service1Name = webServerDeploy1.unsecSvcLabelName
+			service2Name = webServerDeploy2.unsecSvcLabelName
+			service3Name = webServerDeploy3.unsecSvcLabelName
 		)
 
 		exutil.By("deploy a project, and create 3 server pods and 3 unsecure services")
 		project1 := oc.Namespace()
-		webServerRc1.namespace = project1
-		webServerRc1.create(oc)
+		webServerDeploy1.namespace = project1
+		webServerDeploy1.create(oc)
 		ensurePodWithLabelReady(oc, project1, srv1Label)
-		webServerRc2.namespace = project1
-		webServerRc2.create(oc)
+		webServerDeploy2.namespace = project1
+		webServerDeploy2.create(oc)
 		ensurePodWithLabelReady(oc, project1, srv2Label)
-		webServerRc3.namespace = project1
-		webServerRc3.create(oc)
+		webServerDeploy3.namespace = project1
+		webServerDeploy3.create(oc)
 		ensurePodWithLabelReady(oc, project1, srv3Label)
 
 		exutil.By("expose a route with the unsecure service inside the project")
@@ -3678,8 +3681,8 @@ DNS.2 = *.%s.%s.svc
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
-		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
-		srvrcInfo := "web-server-rc"
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+		srvrcInfo := "web-server-deploy"
 		srvName := "service-unsecure"
 		var (
 			ingctrl = ingressControllerDescription{

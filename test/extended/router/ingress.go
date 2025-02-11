@@ -60,7 +60,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			output              string
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			testIngress         = filepath.Join(buildPruningBaseDir, "ingress-with-class.yaml")
 		)
 
@@ -68,7 +68,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		oc.SetupProject()
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
 		createResourceFromFile(oc, project1, testIngress)
 
 		exutil.By("ensure no route is created from the ingress")
@@ -93,7 +93,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "subdomain-routes/ocp51148-route.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			rut                 = routeDescription{
 				namespace: "",
 				domain:    "",
@@ -105,8 +105,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("create project and a pod")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, testPodSvc)
-		ensurePodWithLabelReady(oc, project1, "name=web-server-rc")
-		podName := getPodListByLabel(oc, project1, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
+		podName := getPodListByLabel(oc, project1, "name=web-server-deploy")
 		baseDomain := getBaseDomain(oc)
 		rut.domain = "apps" + "." + baseDomain
 		rut.namespace = project1
@@ -155,7 +155,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp2         = filepath.Join(buildPruningBaseDir, "subdomain-routes/route.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp51429",
@@ -175,8 +175,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		baseDomain := getBaseDomain(oc)
 		project2 := oc.Namespace()
 		createResourceFromFile(oc, project2, testPodSvc)
-		ensurePodWithLabelReady(oc, project2, "name=web-server-rc")
-		podName := getPodListByLabel(oc, project2, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, project2, "name=web-server-deploy")
+		podName := getPodListByLabel(oc, project2, "name=web-server-deploy")
 		rut.domain = "apps" + "." + baseDomain
 		rut.namespace = project2
 
@@ -223,7 +223,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp2         = filepath.Join(buildPruningBaseDir, "subdomain-routes/alpha-shard-route.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-shard.yaml")
 			ingctrl1            = ingressControllerDescription{
 				name:      "alpha-ocp51437",
@@ -251,8 +251,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		baseDomain := getBaseDomain(oc)
 		project3 := oc.Namespace()
 		createResourceFromFile(oc, project3, testPodSvc)
-		ensurePodWithLabelReady(oc, project3, "name=web-server-rc")
-		podName := getPodListByLabel(oc, project3, "name=web-server-rc")
+		ensurePodWithLabelReady(oc, project3, "name=web-server-deploy")
+		podName := getPodListByLabel(oc, project3, "name=web-server-deploy")
 		rut.domain = "apps" + "." + baseDomain
 		rut.namespace = project3
 
@@ -357,8 +357,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			lbServices          = filepath.Join(buildPruningBaseDir, "bug2013004-lb-services.yaml")
-			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
-			srvrcInfo           = "web-server-rc"
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
 			externalSvc         = "external-lb-57089"
 			internalSvc         = "internal-lb-57089"
 		)

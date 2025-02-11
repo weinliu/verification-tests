@@ -190,7 +190,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	// author: mjoseph@redhat.com
 	g.It("Author:mjoseph-DEPRECATED-Critical-50842-destination-ca-certificate-secret annotation for destination CA Opaque certifcate", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
-		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-rc.yaml")
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 		ingressTemp := filepath.Join(buildPruningBaseDir, "ingress-destCA.yaml")
 		customTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 		caCert := filepath.Join(buildPruningBaseDir, "ca-bundle.pem")
@@ -213,8 +213,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("create project and a pod")
 		baseDomain := getBaseDomain(oc)
 		createResourceFromFile(oc, oc.Namespace(), testPodSvc)
-		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-rc")
-		podName := getPodListByLabel(oc, oc.Namespace(), "name=web-server-rc")
+		ensurePodWithLabelReady(oc, oc.Namespace(), "name=web-server-deploy")
+		podName := getPodListByLabel(oc, oc.Namespace(), "name=web-server-deploy")
 
 		exutil.By("create custom ingresscontroller")
 		ingctrl.domain = ingctrl.name + "." + baseDomain

@@ -1,0 +1,57 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+objects:
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: ${PodLabelName}
+      labels:
+        name: ${PodLabelName}
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          name: ${PodLabelName}
+      template:
+        metadata:
+          labels:
+            name: ${PodLabelName}
+        spec:
+          containers:
+          - image: quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0 
+            name: nginx        
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      labels:
+        name: ${SecSvcLabelName}
+      name: ${SecSvcLabelName}
+    spec:
+      ports:
+      - name: https
+        port: 27443
+        protocol: TCP
+        targetPort: 8443
+      selector:
+        name: ${PodLabelName}
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      labels:
+        name: ${UnsecSvcLabelName}
+      name: ${UnsecSvcLabelName}
+    spec:
+      ports:
+      - name: http
+        port: 27017
+        protocol: TCP
+        targetPort: 8080
+      selector:
+        name: ${PodLabelName}
+parameters:
+- name: PodLabelName
+  value: web-server-deploy
+- name: SecSvcLabelName
+  value: service-secure
+- name: UnsecSvcLabelName
+  value: service-unsecure
