@@ -20,6 +20,7 @@ import (
 	_ "github.com/openshift/openshift-tests-private/test/extended/netobserv"
 	_ "github.com/openshift/openshift-tests-private/test/extended/networking"
 	_ "github.com/openshift/openshift-tests-private/test/extended/node"
+	_ "github.com/openshift/openshift-tests-private/test/extended/oap"
 	_ "github.com/openshift/openshift-tests-private/test/extended/operators"
 	_ "github.com/openshift/openshift-tests-private/test/extended/operatorsdk"
 	_ "github.com/openshift/openshift-tests-private/test/extended/opm"

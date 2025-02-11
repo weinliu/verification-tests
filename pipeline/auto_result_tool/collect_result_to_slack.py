@@ -58,7 +58,7 @@ class SummaryClient:
                 "Hypershift":"",
                 "Network_Observability":"@no-qe-team ",
                 "DR_Testing":"@geliu",
-                "CFE":"@cfe-qe-team",
+                "OAP":"@oap-qe-team",
                 "User_Interface_Cypress": "@ui-ocp-qe-team",
                 "Insights": "@jfula",
                 "Sample":"@Jitendar Singh"

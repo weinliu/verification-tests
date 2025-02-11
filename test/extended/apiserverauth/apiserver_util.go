@@ -1354,13 +1354,6 @@ func clientCurl(tokenValue string, url string) string {
 	return bodyString
 }
 
-// parse base domain from dns config. format is like $clustername.$basedomain
-func getBaseDomain(oc *exutil.CLI) string {
-	str, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns/cluster", `-ojsonpath={.spec.baseDomain}`).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return str
-}
-
 // Return  the API server FQDN and port. format is like api.$clustername.$basedomain
 func getApiServerFQDNandPort(oc *exutil.CLI, hypershiftCluster bool) (string, string) {
 	var (
@@ -1986,4 +1979,30 @@ func fetchOpenShiftAPIServerCert(apiServerEndpoint string) ([]byte, error) {
 	}
 
 	return pemCert, nil
+}
+
+// Generate a random string with given number of digits
+func getRandomString(digit int) string {
+	chars := "abcdefghijklmnopqrstuvwxyz0123456789"
+	seed := rand.New(rand.NewSource(time.Now().UnixNano()))
+	buffer := make([]byte, digit)
+	for index := range buffer {
+		buffer[index] = chars[seed.Intn(len(chars))]
+	}
+	return string(buffer)
+}
+
+func getSAToken(oc *exutil.CLI, sa, ns string) (string, error) {
+	e2e.Logf("Getting a token assgined to specific serviceaccount from %s namespace...", ns)
+	token, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", sa, "-n", ns).Output()
+	if err != nil {
+		if strings.Contains(token, "unknown command") { // oc client is old version, create token is not supported
+			e2e.Logf("oc create token is not supported by current client, use oc sa get-token instead")
+			token, err = oc.AsAdmin().WithoutNamespace().Run("sa").Args("get-token", sa, "-n", ns).Output()
+		} else {
+			return "", err
+		}
+	}
+
+	return token, err
 }

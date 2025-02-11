@@ -1,0 +1,73 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: exec-helm-helper-template
+objects:
+  - apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+      name: "${SA_NAME}"
+      namespace: "${NAMESPACE}"
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: "${ROLEBINDING_NAME}"
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: cluster-admin
+    subjects:
+      - kind: ServiceAccount
+        name: "${SA_NAME}"
+        namespace: "${NAMESPACE}"
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      labels:
+        name: "${POD_NAME}"
+      name: "${POD_NAME}"
+      namespace: "${NAMESPACE}"
+    spec:
+      serviceAccount: "${SA_NAME}"
+      containers:
+        - name: helm
+          image: alpine/helm:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - "sh"
+            - "-c"
+            - ${HELM_CMD}
+          env:
+            - name: HTTPS_PROXY
+              value: "${HTTPS_PROXY}"
+            - name: HTTP_PROXY
+              value: "${HTTP_PROXY}"
+            - name: NO_PROXY
+              value: "${NO_PROXY}"
+          volumeMounts:
+            - name: values-volume
+              mountPath: /helm
+            - name: trusted-ca
+              mountPath: /etc/ssl/cert.pem
+              subPath: ca-bundle.crt
+              readOnly: true
+          securityContext:
+            privileged: true
+      volumes:
+        - name: values-volume
+          configMap:
+            name: "${CONFIGMAP_NAME}"
+        - name: trusted-ca
+          configMap:
+            name: trusted-ca
+      restartPolicy: Never
+parameters:
+  - name: SA_NAME
+  - name: ROLEBINDING_NAME
+  - name: POD_NAME
+  - name: NAMESPACE
+  - name: HELM_CMD
+  - name: CONFIGMAP_NAME
+  - name: HTTPS_PROXY
+  - name: HTTP_PROXY
+  - name: NO_PROXY

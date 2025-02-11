@@ -60,7 +60,7 @@ class SummaryClient:
                 "Network_Observability":"@no-qe-team",
                 "DR_Testing":"@geliu",
                 "Cluster_Operator":"@Jianping",
-                "CFE":"@cfe-qe-team",
+                "OAP":"@oap-qe-team",
                 "User_Interface_Cypress": "@ui-qe-team",
                 "Insights": "@jfula",
                 "Sample":"@Jitendar Singh"

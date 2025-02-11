@@ -13,7 +13,7 @@ class TestResult:
                 "Service_Development_A","OLM","Operator_SDK","App_Migration","Windows_Containers","Security_and_Compliance",
                 "KNI","Openshift_Jenkins","RHV","ISV_Operators","PSAP","Multi-Cluster-Networking","OTA","Kata","Build_API",
                 "Image_Registry","Container_Engine_Tools","MCO","API_Server","Authentication","Hypershift","Network_Observability",
-                "DR_Testing","CFE","User_Interface_Cypress","Insights","Sample", "Cluster_Management_Service"
+                "DR_Testing","OAP","User_Interface_Cypress","Insights","Sample", "Cluster_Management_Service"
             ]
 
     frameworkLabels = [
