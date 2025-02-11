@@ -32,6 +32,8 @@ const (
 	getMachineFieldValueJSONCon       = "getMachineFieldValueJSON"
 	changeSpecificFieldCon            = "changeSpecificField"
 	backupSpecificFieldCon            = "backupSpecificField"
+	customMasterMachineNamePrefix     = "custom.master.name-78772"
+	customMasterMachineNamePrefixGCP  = "custom-master-name-78772"
 )
 
 var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", func() {
@@ -173,7 +175,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 	})
 
 	// author: huliu@redhat.com
-	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-53323-Implement update logic for RollingUpdate CPMS strategy update instance type [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-53323-78772-Implement update logic for RollingUpdate CPMS strategy update instance type [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP)
 		skipForCPMSNotStable(oc)
@@ -222,6 +224,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 		defer waitForClusterStable(oc)
 		defer waitForCPMSUpdateCompleted(oc, 1)
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrRecover, "--type=merge", "-n", machineAPINamespace).Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"machineNamePrefix":null}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		customMachineName := customMasterMachineNamePrefix
+		if iaasPlatform == clusterinfra.GCP {
+			customMachineName = customMasterMachineNamePrefixGCP
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"machineNamePrefix":"`+customMachineName+`"}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrChange, "--type=merge", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		/*
@@ -231,13 +240,16 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 		*/
 		updatedMachineName := clusterinfra.WaitForMachinesRunningByLabel(oc, 1, labelsAfter)[0]
 		e2e.Logf("updatedMachineName:%s", updatedMachineName)
+		if exutil.IsTechPreviewNoUpgrade(oc) {
+			o.Expect(updatedMachineName).To(o.HavePrefix(customMachineName))
+		}
 		suffix := getMachineSuffix(oc, updatedMachineName)
 		e2e.Logf("suffix:%s", suffix)
 		clusterinfra.WaitForMachineDisappearBySuffix(oc, suffix, labelsBefore)
 	})
 
 	// author: huliu@redhat.com
-	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-53323-Implement update logic for RollingUpdate CPMS strategy update some field [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-53323-78772-Implement update logic for RollingUpdate CPMS strategy update some field [Disruptive]", func() {
 		//For the providers which don't have instance type, we will update some other field to trigger update
 		//For nutanix, we choose vcpusPerSocket
 		//For vsphere, we choose diskGiB
@@ -271,11 +283,17 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 		defer waitForClusterStable(oc)
 		defer waitForCPMSUpdateCompleted(oc, 1)
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrRecover, "--type=merge", "-n", machineAPINamespace).Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"machineNamePrefix":null}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"machineNamePrefix":"`+customMasterMachineNamePrefix+`"}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrChange, "--type=merge", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		labelMaster := "machine.openshift.io/cluster-api-machine-type=master"
 		updatedMachineName := clusterinfra.WaitForMachineRunningByField(oc, getMachineFieldValueJSON, changeFieldValue, labelMaster)
 		e2e.Logf("updatedMachineName:%s", updatedMachineName)
+		if exutil.IsTechPreviewNoUpgrade(oc) {
+			o.Expect(updatedMachineName).To(o.HavePrefix(customMasterMachineNamePrefix))
+		}
 		suffix := getMachineSuffix(oc, updatedMachineName)
 		e2e.Logf("suffix:%s", suffix)
 		clusterinfra.WaitForMachineDisappearBySuffixAndField(oc, suffix, getMachineFieldValueJSON, currentFieldValue, labelMaster)
@@ -311,7 +329,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 	})
 
 	// author: zhsun@redhat.com
-	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-54005-Control plane machine set OnDelete update strategies - update instance type [Disruptive]", func() {
+	g.It("Author:zhsun-NonHyperShiftHOST-Longduration-NonPreRelease-Medium-54005-78772-Control plane machine set OnDelete update strategies - update instance type [Disruptive]", func() {
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP)
 		skipForCPMSNotStable(oc)
@@ -346,10 +364,17 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 		defer waitForClusterStable(oc)
 		defer waitForCPMSUpdateCompleted(oc, 1)
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"RollingUpdate"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"machineNamePrefix":null}}`, "--type=merge", "-n", machineAPINamespace).Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrRecover, "--type=merge", "-n", machineAPINamespace).Execute()
 		defer waitForClusterStable(oc)
 
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"OnDelete"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		customMachineName := customMasterMachineNamePrefix
+		if iaasPlatform == clusterinfra.GCP {
+			customMachineName = customMasterMachineNamePrefixGCP
+		}
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"machineNamePrefix":"`+customMachineName+`"}}`, "--type=merge", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrChange, "--type=merge", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -361,13 +386,16 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 		g.By("Check new master will be created and old master will be deleted")
 		newCreatedMachineName := clusterinfra.WaitForMachinesRunningByLabel(oc, 1, labelsAfter)[0]
 		e2e.Logf("newCreatedMachineName:%s", newCreatedMachineName)
+		if exutil.IsTechPreviewNoUpgrade(oc) {
+			o.Expect(newCreatedMachineName).To(o.HavePrefix(customMachineName))
+		}
 		clusterinfra.WaitForMachineDisappearByName(oc, toDeletedMachineName)
 		waitForClusterStable(oc)
 		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
 	})
 
 	// author: huliu@redhat.com
-	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-54005-Control plane machine set OnDelete update strategies - update some field [Disruptive]", func() {
+	g.It("Author:huliu-NonHyperShiftHOST-Longduration-NonPreRelease-Author:huliu-Medium-54005-78772-Control plane machine set OnDelete update strategies - update some field [Disruptive]", func() {
 		//For the providers which don't have instance type, we will update some other field to trigger update
 		//For nutanix, we choose vcpusPerSocket
 		//For vsphere, we choose diskGiB
@@ -400,10 +428,13 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 		defer waitForClusterStable(oc)
 		defer waitForCPMSUpdateCompleted(oc, 1)
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"RollingUpdate"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"machineNamePrefix":null}}`, "--type=merge", "-n", machineAPINamespace).Execute()
 		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrRecover, "--type=merge", "-n", machineAPINamespace).Execute()
 		defer waitForClusterStable(oc)
 
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"strategy":{"type":"OnDelete"}}}`, "--type=merge", "-n", machineAPINamespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"machineNamePrefix":"`+customMasterMachineNamePrefix+`"}}`, "--type=merge", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", patchstrChange, "--type=merge", "-n", machineAPINamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -416,6 +447,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 		labelMaster := "machine.openshift.io/cluster-api-machine-type=master"
 		newCreatedMachineName := clusterinfra.WaitForMachineRunningByField(oc, getMachineFieldValueJSON, changeFieldValue, labelMaster)
 		e2e.Logf("newCreatedMachineName:%s", newCreatedMachineName)
+		if exutil.IsTechPreviewNoUpgrade(oc) {
+			o.Expect(newCreatedMachineName).To(o.HavePrefix(customMasterMachineNamePrefix))
+		}
 		clusterinfra.WaitForMachineDisappearByName(oc, toDeletedMachineName)
 		waitForClusterStable(oc)
 		o.Expect(checkIfCPMSIsStable(oc)).To(o.BeTrue())
@@ -733,5 +767,20 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CPMS MAPI", f
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(patchWithTargetPool).To(o.ContainSubstring("Warning: spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.targetPools: TargetPools field is not set on ControlPlaneMachineSet"))
 		o.Expect(patchWithoutTargetPool).To(o.ContainSubstring("Warning: spec.template.machines_v1beta1_machine_openshift_io.spec.providerSpec.value.targetPools: TargetPools field is not set on ControlPlaneMachineSet"))
+	})
+
+	// author: huliu@redhat.com
+	g.It("Author:huliu-NonHyperShiftHOST-Medium-78773-[CPMS] Webhook validation for custom name formats to Control Plane Machines via CPMS [Disruptive]", func() {
+		clusterinfra.SkipConditionally(oc)
+		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS, clusterinfra.Azure, clusterinfra.GCP, clusterinfra.Nutanix, clusterinfra.VSphere)
+		if !exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("featureSet: TechPreviewNoUpgrade is required for this test")
+		}
+		defer printNodeInfo(oc)
+		defer waitMasterNodeReady(oc)
+		defer waitForClusterStable(oc)
+		g.By("Patch invalid machine name prefix")
+		out, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("controlplanemachineset/cluster", "-p", `{"spec":{"machineNamePrefix":"abcd_0"}}`, "--type=merge", "-n", machineAPINamespace).Output()
+		o.Expect(out).To(o.ContainSubstring(`Invalid value: "string": a lowercase RFC 1123 subdomain must consist of lowercase alphanumeric characters, hyphens ('-'), and periods ('.'). Each block, separated by periods, must start and end with an alphanumeric character. Hyphens are not allowed at the start or end of a block, and consecutive periods are not permitted.`))
 	})
 })
