@@ -1880,6 +1880,73 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 
 	})
 
+	// author: xzha@redhat.com
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-78393-support metrics", func() {
+		var metricsMsg string
+		exutil.By("Get token")
+
+		catalogPodname, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", "openshift-operator-lifecycle-manager", "--selector=app=catalog-operator", "-o=jsonpath={.items..metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(catalogPodname).NotTo(o.BeEmpty())
+
+		metricsToken, err := exutil.GetSAToken(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(metricsToken).NotTo(o.BeEmpty())
+
+		wrongToken, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("token", "openshift-state-metrics", "-n", "openshift-monitoring").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(wrongToken).NotTo(o.BeEmpty())
+
+		exutil.By("get catalogd metrics")
+		promeEp, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("service", "-n", "openshift-catalogd", "catalogd-service", "-o=jsonpath={.spec.clusterIP}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(promeEp).NotTo(o.BeEmpty())
+		queryContent := "https://" + promeEp + ":7443/metrics"
+
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			metricsMsg, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-operator-lifecycle-manager", catalogPodname, "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", metricsToken), queryContent).Output()
+			e2e.Logf("err:%v", err)
+			if strings.Contains(metricsMsg, "catalogd_http_request_duration_seconds_bucket{code=\"200\"") {
+				e2e.Logf("found catalogd_http_request_duration_seconds_bucket{code=\"200\"")
+				return true, nil
+			}
+			return false, nil
+		})
+		if errWait != nil {
+			e2e.Logf("metricsMsg:%v", metricsMsg)
+			exutil.AssertWaitPollNoErr(errWait, "catalogd_http_request_duration_seconds_bucket{code=\"200\" not found.")
+		}
+
+		exutil.By("ClusterRole/openshift-state-metrics has no rule to get the catalogd metrics")
+		metricsMsg, _ = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-operator-lifecycle-manager", catalogPodname, "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", wrongToken), queryContent).Output()
+		o.Expect(metricsMsg).To(o.ContainSubstring("Authorization denied"))
+
+		exutil.By("get operator-controller metrics")
+		promeEp, err = oc.WithoutNamespace().AsAdmin().Run("get").Args("service", "-n", "openshift-operator-controller", "operator-controller-service", "-o=jsonpath={.spec.clusterIP}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(promeEp).NotTo(o.BeEmpty())
+		queryContent = "https://" + promeEp + ":8443/metrics"
+
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			metricsMsg, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-operator-lifecycle-manager", catalogPodname, "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", metricsToken), queryContent).Output()
+			e2e.Logf("err:%v", err)
+			if strings.Contains(metricsMsg, "controller_runtime_active_workers") {
+				e2e.Logf("found controller_runtime_active_workers")
+				return true, nil
+			}
+			return false, nil
+		})
+		if errWait != nil {
+			e2e.Logf("metricsMsg:%v", metricsMsg)
+			exutil.AssertWaitPollNoErr(errWait, "controller_runtime_active_workers not found.")
+		}
+
+		exutil.By("ClusterRole/openshift-state-metrics has no rule to get the operator-controller metrics")
+		metricsMsg, _ = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-operator-lifecycle-manager", catalogPodname, "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", wrongToken), queryContent).Output()
+		o.Expect(metricsMsg).To(o.ContainSubstring("Authorization denied"))
+
+	})
+
 	// author: bandrade@redhat.com
 	g.It("Author:bandrade-DEPRECATED-ConnectedOnly-NonHyperShiftHOST-High-69193-olmv1 major version zero", func() {
 		var (
