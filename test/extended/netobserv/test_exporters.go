@@ -3,6 +3,7 @@ package netobserv
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 
@@ -63,6 +64,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	)
 
 	g.BeforeEach(func() {
+		if strings.Contains(os.Getenv("E2E_RUN_TAGS"), "disconnected") {
+			g.Skip("Skipping tests for disconnected profiles")
+		}
 		g.By("Deploy konflux FBC and ImageDigestMirrorSet")
 		imageDigest := filePath.Join(subscriptionDir, "image-digest-mirror-set.yaml")
 		catSrcTemplate := filePath.Join(subscriptionDir, "catalog-source.yaml")
