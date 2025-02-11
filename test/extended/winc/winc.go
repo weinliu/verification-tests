@@ -1,13 +1,10 @@
 package winc
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
@@ -16,8 +13,13 @@ import (
 	"strings"
 	"time"
 
+	"context"
+	"fmt"
+	"os"
+
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/gjson"
 
@@ -47,6 +49,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		publicKey, err = exutil.GetPublicKey()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		//e2e.SkipOnOpenShiftNess(true)
+
 	})
 
 	// author: sgao@redhat.com
@@ -2699,5 +2703,49 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			}
 			o.Expect(matchingMachineFound).To(o.BeTrue(), fmt.Sprintf("No matching Machine found for Node %s with Provider ID %s", nodeName, nodeProviderID))
 		}
+	})
+
+	g.It("Author:weinliu-High-77777-Verify metrics configuration and HTTPS endpoint [Disruptive] [Serial]", func() {
+		//  Test 1 Check ServiceMonitor existence and configuration
+		g.By("Verifying ServiceMonitor existence")
+		serviceMonitorName := "windows-exporter"
+
+		output, err := oc.AsAdmin().Run("get").Args("servicemonitor", serviceMonitorName, "-n", wmcoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(serviceMonitorName), fmt.Sprintf("ServiceMonitor %v not found", serviceMonitorName))
+
+		//  Test 2 Check namespace selector
+		g.By("Verifying namespace selector configuration")
+		output, err = oc.AsAdmin().Run("get").Args("servicemonitor", serviceMonitorName, "-n", wmcoNamespace, "-o", "yaml").Output()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to get ServiceMonitor YAML configuration")
+		o.Expect(output).To(o.ContainSubstring("namespaceSelector:"), "Namespace selector not found in ServiceMonitor configuration")
+		o.Expect(output).To(o.ContainSubstring("matchNames:"), "matchNames field not found in namespace selector configuration")
+		o.Expect(output).To(o.ContainSubstring("- kube-system"), "kube-system namespace not found in matchNames list")
+
+		//  Test 3 check service port configuration
+		g.By("Verifying windows-exporter service port configuration")
+		svcOutput, err := oc.AsAdmin().Run("get").Args("svc", "windows-exporter", "-n", wmcoNamespace).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(svcOutput).To(o.ContainSubstring("9182/TCP"), "Service port 9182 not found")
+
+		// Original Windows nodes connectivity tests
+		winInternalIP := getWindowsInternalIPs(oc)
+
+		bastionHost := getSSHBastionHost(oc, iaasPlatform)
+
+		// Test 4: Check windows_container_available metric through HTTPS
+		g.By(fmt.Sprintf("Checking windows_container_available metric on %v", winInternalIP[0]))
+		metricsCmd := "& { C:\\Windows\\System32\\curl.exe -k -s https://127.0.0.1:9182/metrics | Select-String 'windows_container_available' }"
+		msg, err := runPSCommand(bastionHost, winInternalIP[0], metricsCmd, privateKey, iaasPlatform)
+
+		o.Expect(err).NotTo(o.HaveOccurred(), "Failed to execute metrics check command")
+		o.Expect(msg).To(o.ContainSubstring("windows_container_available"), "windows_container_available metric not found")
+
+		// Test 5: Verify HTTP is not required
+		g.By(fmt.Sprintf("Verifying HTTP is not allowed on %v", winInternalIP[0]))
+		httpCmd := "C:\\Windows\\System32\\curl.exe -k http://" + winInternalIP[1] + ":9182/metrics"
+		msg, _ = runPSCommand(bastionHost, winInternalIP[0], httpCmd, privateKey, iaasPlatform)
+		o.Expect(msg).To(o.ContainSubstring("Client sent an HTTP request to an HTTPS server"),
+			"Expected HTTP request to be rejected with HTTPS requirement message")
 	})
 })
