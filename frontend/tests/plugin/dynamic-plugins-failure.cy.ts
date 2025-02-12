@@ -12,17 +12,18 @@ describe('Dynamic Plugins notification features', () => {
   };
 
   let checkStatusMessage = (status: string, message: string) => {
+    cy.get('span').contains('Status').should('exist');
     cy.get('[data-test="status-text"]', {timeout: 30000}).contains(`${status}`).click();
     cy.contains(`${message}`).should('be.visible');
   };
 
   before(() => {
+    cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.adminCLI(`oc create -f ./fixtures/plugin/${testParams.failPluginFileName}`);
     cy.adminCLI(`oc create -f ./fixtures/plugin/${testParams.pendingPluginFileName}`);
     cy.adminCLI(`oc patch console.operator cluster --type='json' -p='[{"op": "add", "path": "/spec/plugins/-", "value":"${testParams.failPluginName}"}]'`);
     cy.adminCLI(`oc patch console.operator cluster --type='json' -p='[{"op": "add", "path": "/spec/plugins/-", "value":"${testParams.pendingPluginName}"}]'`);
-    cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
   })
 
   after(() => {
@@ -41,7 +42,7 @@ describe('Dynamic Plugins notification features', () => {
     cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
       expect(result.stdout).not.include(`"${testParams.pendingPluginName}"`)
     });
-    cy.adminCLI(`oc delete consoleplugin ${testParams.failPluginName} ${testParams.pendingPluginName}`,{failOnNonZeroExit: false});
+    cy.adminCLI(`oc delete consoleplugin ${testParams.failPluginName} ${testParams.pendingPluginName}`);
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`,{failOnNonZeroExit: false});
   })
 
@@ -54,7 +55,6 @@ describe('Dynamic Plugins notification features', () => {
     cy.wait(60000);
     cy.visit('/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins');
     cy.get('tr').should('exist');
-    cy.get('[data-label="Status"]').should('exist');
     checkStatusMessage('Failed', 'ailed to get a valid plugin manifest');
 
     cy.log('Check failed status on Cluster Overview and notification drawer')

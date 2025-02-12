@@ -1,10 +1,10 @@
 const feature_name_map = {
   'OpenShift AI': 'Red Hat OpenShift AI',
   'OpenShift Lightspeed': 'OpenShift Lightspeed Operator'
-  },
+  }
 export const Overview = {
   goToDashboard: () => {
-    cy.visit('/dashboards'),
+    cy.visit('/dashboards');
     cy.get('[data-test-id="status-card"]').should('be.visible');
   },
   closeGuidedTour: () => cy.get('#tour-step-footer-secondary').click(),
