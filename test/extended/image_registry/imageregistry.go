@@ -652,7 +652,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	})
 
 	// author: wewang@redhat.com
-	g.It("ARO-Author:wewang-Medium-23583-Registry should not try to pullthrough himself by any name ", func() {
+	g.It("Author:wewang-NonHyperShiftHOST-ARO-Medium-23583-Registry should not try to pullthrough himself by any name ", func() {
 		if !checkOptionalOperatorInstalled(oc, "Build") {
 			g.Skip("Skip for the test due to Build not installed")
 		}
