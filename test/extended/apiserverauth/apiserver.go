@@ -3320,8 +3320,8 @@ EOF`, serverconf)
 		dcpolicycmd := fmt.Sprintf(`cat > %v << EOF
 package kubernetes.admission
 deny[msg] {
-  input.request.kind.kind == "DeploymentConfig"
-  msg:= "No entry for you"
+    input.request.kind.kind == "DeploymentConfig"
+    msg:= "No entry for you"
 }
 EOF`, dcpolicyrepo)
 		_, dcpolicycmdErr := exec.Command("bash", "-c", dcpolicycmd).Output()

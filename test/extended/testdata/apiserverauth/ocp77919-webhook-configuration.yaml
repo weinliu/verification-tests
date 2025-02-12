@@ -2,13 +2,23 @@ apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
   name: opa-validating-webhook-template
+parameters:
+  - name: SERVERCERT
+    description: "The certificate for the webhook server"
+    value: ""
 objects:
   - apiVersion: admissionregistration.k8s.io/v1
     kind: ValidatingWebhookConfiguration
     metadata:
       name: opa-validating-webhook
     webhooks:
-      - name: opa-validating-webhook.openpolicyagent.org
+      - name: validating-webhook.openpolicyagent.org
+        namespaceSelector:
+          matchExpressions:
+            - key: openpolicyagent.org/webhook
+              operator: NotIn
+              values:
+                - ignore
         rules:
           - operations: ["UPDATE"]
             apiGroups: ["apps.openshift.io"]
@@ -17,12 +27,9 @@ objects:
             scope: "Namespaced"
         clientConfig:
           service:
-            namespace: opa
-            name: opa
+            namespace: "opa"
+            name: "opa"
           caBundle: "${SERVERCERT}"
-        admissionReviewVersions:
-        - v1
+        admissionReviewVersions: ["v1"]
         sideEffects: None
         timeoutSeconds: 5
-parameters:
-  - name: SERVERCERT
