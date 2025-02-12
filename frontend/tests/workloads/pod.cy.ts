@@ -8,7 +8,7 @@ describe('pod page', () => {
     cy.cliLogin();
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
-    cy.createProject(testName);
+    cy.createProjectWithCLI(testName);
     cy.adminCLI(`oc create -f ./fixtures/networkAttachmentDefinition.yaml -n ${testName}`)
     cy.adminCLI(`oc create -f ./fixtures/pods/pod-with-limit-multiInterface.yaml -n ${testName}`);
     cy.exec(`oc get pod -n openshift-sdn --no-headers --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | awk '{print $1;exit}'`).then((result) => {
