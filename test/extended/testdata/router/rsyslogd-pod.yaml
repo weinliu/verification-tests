@@ -5,18 +5,11 @@ metadata:
   labels:
     name: rsyslogd
 spec:
-  securityContext:
-    runAsNonRoot: true
-    seccompProfile:
-      type: RuntimeDefault
   containers:
   - image: quay.io/openshifttest/rsyslogd-container@sha256:e806eb41f05d7cc6eec96bf09c7bcb692f97562d4a983cb019289bd048d9aee2
     name: rsyslogd-container
     securityContext:
-      allowPrivilegeEscalation: false
-      capabilities:
-        drop:
-        - ALL
+      privileged: true
     ports:
     - containerPort: 514
       protocol: TCP
