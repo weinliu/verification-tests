@@ -1,5 +1,5 @@
 import { Operator, project } from "../../views/netobserv"
-import { netflowPage, colSelectors, querySumSelectors } from "../../views/netflow-page"
+import { netflowPage, colSelectors, querySumSelectors, filterSelectors } from "../../views/netflow-page"
 
 function getTableLimitURL(limit: string): string {
     return `**/netflow-traffic**limit=${limit}`
@@ -110,18 +110,19 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
         })
 
         // filter on DSCP values
-        cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
+        cy.byTestID("column-filter-toggle").click().get('.pf-v5-c-menu__content').should('be.visible')
         // verify drop TCP state filter
         cy.byTestID('group-2-toggle').click().should('be.visible')
         cy.byTestID('dscp').click()
         cy.byTestID('autocomplete-search').type('0' + '{enter}')
-        cy.get('#filters div.custom-chip > p').should('contain.text', 'Standard')
+        cy.get(filterSelectors.filterValue).should('contain.text', 'Standard')
 
         // Verify DSCP value is Standard for all rows
         cy.get('[data-test-td-column-id=Dscp]').each((td) => {
             expect(td).attr("data-test-td-value").to.contain(0)
             cy.get('[data-test-td-column-id=Dscp] > div > div').should('contain.text', 'Standard')
         })
+        netflowPage.clearAllFilters()
     })
 
     afterEach("test", function () {

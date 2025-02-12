@@ -1,5 +1,5 @@
 import { Operator, project } from "../../views/netobserv"
-import { netflowPage } from "../../views/netflow-page"
+import { netflowPage, filterSelectors } from "../../views/netflow-page"
 
 const CLIENT_NS = "test-client-56222"
 const SERVER_NS = "test-server-56222"
@@ -46,7 +46,8 @@ describe('(OCP-56222 Network_Observability) Quick Filters test', { tags: ['Netwo
             cy.reload()
         })
         cy.contains("Quick filters").should('exist').click()
-        cy.get('#quick-filters-dropdown').should('exist').contains("Test NS").children('[type="checkbox"]').check()
+        cy.get('#quick-filters-dropdown').contains("Test NS")
+        cy.get('#quick-filters-dropdown').find('.pf-v5-c-check__input').should('exist').click()
 
         // verify source and destination NS are test-server and test-client respectively
         cy.get('[data-test-td-column-id=SrcK8S_Namespace]').each((td) => {
@@ -56,8 +57,8 @@ describe('(OCP-56222 Network_Observability) Quick Filters test', { tags: ['Netwo
             expect(td).to.contain(CLIENT_NS)
         })
 
-        cy.get('[role="listbox"]').contains("Test NS").children('[type="checkbox"]').uncheck()
-        cy.get('#filters > div').should('not.have.class', 'custom-chip-group')
+        cy.get('#quick-filters-dropdown').find('.pf-v5-c-check__input').should('exist').click()
+        cy.get(filterSelectors.filterField).should('not.exist')
     })
 
     it("(OCP-56222, memodi, Network_Observability) should verify quick filters remove", function () {

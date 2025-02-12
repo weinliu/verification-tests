@@ -1,5 +1,5 @@
 import { Operator, project } from "../../views/netobserv"
-import { netflowPage, genSelectors, colSelectors, histogramSelectors } from "../../views/netflow-page"
+import { netflowPage, genSelectors, colSelectors, histogramSelectors, filterSelectors } from "../../views/netflow-page"
 
 describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Netflow Table view tests', { tags: ['Network_Observability'] }, function () {
 
@@ -34,7 +34,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
 
         cy.byTestID(genSelectors.refreshBtn).should('exist').click()
 
-        // change row sizes.
+        // change row sizes
         cy.byTestID("show-view-options-button").should('exist').click().then(views => {
             cy.contains('Display options').should('exist').click()
             cy.byTestID('size-s').click()
@@ -42,27 +42,27 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
             cy.byTestID('size-m').click()
         })
 
-        // expand 
+        // expand view
         cy.byTestID('filters-more-options-button').click().then(moreOpts => {
             cy.contains('Expand').click()
             cy.get('#page-sidebar').then(sidenav => {
-                cy.byLegacyTestID('perspective-switcher-menu').should('not.be.visible')
-
+                cy.byLegacyTestID('perspective-switcher-toggle').should('not.be.visible')
             })
         })
+
         // collapse view
         cy.byTestID('filters-more-options-button').click().then(moreOpts => {
             cy.contains('Collapse').click()
-            cy.byLegacyTestID('perspective-switcher-menu').should('exist')
+        })
+        cy.get('#page-sidebar').then(sidenav => {
+            cy.byLegacyTestID('perspective-switcher-toggle').should('be.visible')
         })
         cy.byTestID("show-view-options-button").should('exist').click()
     })
 
     it("(OCP-50532, memodi, Network_Observability) should validate columns", { tags: ['e2e', 'admin'] }, function () {
-        cy.byTestID("show-view-options-button").should('exist').click()
         netflowPage.stopAutoRefresh()
-        cy.byTestID('view-options-button').click()
-        cy.get(colSelectors.mColumns).click().then(col => {
+        cy.openColumnsModal().then(col => {
             cy.get(colSelectors.columnsModal).should('be.visible')
             cy.get('#K8S_OwnerObject').check()
             cy.get('#AddrPort').check()
@@ -100,8 +100,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
         })
 
         // restore defaults
-        cy.byTestID('view-options-button').click()
-        cy.get(colSelectors.mColumns).click().byTestID(colSelectors.resetDefault).click().byTestID(colSelectors.save).click()
+        cy.openColumnsModal().byTestID(colSelectors.resetDefault).click().byTestID(colSelectors.save).click()
 
         cy.byTestID('table-composable').within(() => {
             cy.get(colSelectors.srcNS).should('exist')
@@ -112,12 +111,12 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
     it("(OCP-50532, memodi, Network_Observability) should validate filters", { tags: ['@smoke'] }, function () {
         netflowPage.stopAutoRefresh()
 
-        cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
+        cy.byTestID("column-filter-toggle").click().get('.pf-v5-c-menu__content').should('be.visible')
 
         // verify Source namespace filter
         cy.byTestID('group-0-toggle').should('exist').byTestID('src_namespace').click()
         cy.byTestID('autocomplete-search').type(project + '{enter}')
-        cy.get('#filters div.custom-chip > p').should('contain.text', `${project}`)
+        cy.get(filterSelectors.filterValue).should('contain.text', `${project}`)
 
         // Verify SrcNS column for all rows
         cy.get('[data-test-td-column-id=SrcK8S_Namespace]').each((td) => {
@@ -125,10 +124,10 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
         })
 
         // verify swap button
-        cy.get('#chips-more-options-dropdown').should('exist').click().then(moreOpts => {
+        cy.get('#chips-more-options-button').should('exist').click().then(moreOpts => {
             cy.contains("Swap").should('exist').click()
         })
-        cy.get('#filters div.custom-chip-group > p').should('contain.text', 'Destination Namespace')
+        cy.get(filterSelectors.filterName).should('contain.text', 'Destination Namespace')
 
         // Verify DstNS column for all rows
         cy.get('[data-test-td-column-id=DstK8S_Namespace]').each((td) => {
@@ -140,10 +139,10 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
 
         // verify NOT filter switch button
         cy.get('#filter-compare-switch-button').should('exist').click()
-        cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
+        cy.byTestID("column-filter-toggle").click().get('.pf-v5-c-menu__content').should('be.visible')
         cy.byTestID('group-0-toggle').should('exist').byTestID('src_namespace').click()
         cy.byTestID('autocomplete-search').type(project + '{enter}')
-        cy.get('#filters div.custom-chip-group > p').should('contain.text', 'Not Source Namespace')
+        cy.get(filterSelectors.filterName).should('contain.text', 'Not Source Namespace')
 
         netflowPage.clearAllFilters()
 
@@ -151,19 +150,11 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
         cy.get('#filter-compare-toggle-button').should('exist').click().then(moreOpts => {
             cy.contains("Not equals").should('exist').click()
         })
-        cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
+        cy.byTestID("column-filter-toggle").click().get('.pf-v5-c-menu__content').should('be.visible')
         cy.byTestID('group-0-toggle').should('exist').byTestID('src_namespace').click()
         cy.byTestID('autocomplete-search').type(project + '{enter}')
-        cy.get('#filters div.custom-chip-group > p').should('contain.text', 'Not Source Namespace')
+        cy.get(filterSelectors.filterName).should('contain.text', 'Not Source Namespace')
 
-        // verify One-way and back-forth button
-        cy.get('#chips-more-options-dropdown').should('exist').click().then(moreOpts => {
-            cy.contains("One way").should('exist').click()
-        })
-
-        cy.get('#chips-more-options-dropdown').should('exist').click().then(moreOpts => {
-            cy.contains("Back and forth").should('exist').click()
-        })
         cy.get('#filter-compare-toggle-button').should('exist').click().then(moreOpts => {
             cy.contains("Equals").should('exist').click()
         })
@@ -174,28 +165,28 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
         cy.byTestID("column-filter-toggle").click()
         cy.byTestID('src_port').click()
         cy.byTestID('autocomplete-search').type('3100{enter}')
-        cy.get('#filters div.custom-chip > p').should('have.text', 'loki')
+        cy.get(filterSelectors.filterValue).should('have.text', 'loki')
 
         // check enabled or disabling filter
-        cy.get(':nth-child(1) > .pf-c-chip-group__label').click()
-        cy.get('#filters  > .pf-c-toolbar__item > :nth-child(1)').should('have.class', 'disabled-group')
+        cy.get(':nth-child(1) > .pf-v5-c-chip-group__label').click()
+        cy.get('#filters > .pf-v5-c-toolbar__item > :nth-child(1)').should('have.class', 'disabled-group')
 
         // sort by port
-        cy.get('[data-test=th-SrcPort] > .pf-c-table__button').click()
+        cy.get('[data-test=th-SrcPort] > .pf-v5-c-table__button').click()
         // cy.reload()
         // cy.get('#tabs-container li:nth-child(2)').click()
 
         // Verify SrcPort doesnt not have text loki for all rows
         cy.get('[data-test-td-column-id=SrcPort]').each((td) => {
-            cy.get('[data-test-td-column-id=SrcPort] > div > div').should('not.contain.text', 'loki (3100)')
+            cy.get('[data-test-td-column-id=SrcPort] > div > div > p').should('not.contain.text', 'loki (3100)')
         })
 
-        cy.get(':nth-child(1) > .pf-c-chip-group__label').click()
-        cy.get('#filters  > .pf-c-toolbar__item > :nth-child(1)').should('not.have.class', '.disabled-value')
+        cy.get(':nth-child(1) > .pf-v5-c-chip-group__label').click()
+        cy.get('#filters > .pf-v5-c-toolbar__item > :nth-child(1)').should('not.have.class', '.disabled-value')
 
         // Verify SrcPort has text loki for all rows
         cy.get('[data-test-td-column-id=SrcPort]').each((td) => {
-            cy.get('[data-test-td-column-id=SrcPort] > div > div').should('contain.text', 'loki (3100)')
+            cy.get('[data-test-td-column-id=SrcPort] > div > div > p').should('contain.text', 'loki (3100)')
         })
 
         netflowPage.clearAllFilters()
@@ -203,22 +194,12 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
     })
 
     it("(OCP-50531, memodi, Network_Observability) should validate localstorage for plugin", { tags: ['e2e', 'admin'] }, function () {
-        netflowPage.stopAutoRefresh()
-
-        cy.byTestID(genSelectors.refreshDrop).then(btn => {
-            expect(btn).to.exist
-            cy.wrap(btn).click().then(drop => {
-                cy.get('[data-test="15s"]').should('exist').click()
-            })
-        })
-
         // select compact column size
         cy.byTestID("show-view-options-button").should('exist').click().then(views => {
             cy.contains('Display options').should('exist').click()
             cy.byTestID('size-s').click()
             cy.contains('Display options').should('exist').click()
-            cy.byTestID('view-options-button').click()
-            cy.get(colSelectors.mColumns).click().then(col => {
+            cy.openColumnsModal().then(col => {
                 cy.get(colSelectors.columnsModal).should('be.visible')
                 cy.get('#StartTime').check()
                 cy.byTestID(colSelectors.save).click()
@@ -241,10 +222,10 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
     it("(OCP-59408, memodi, Network_Observability) should verify histogram", function () {
         cy.get('#time-range-dropdown-dropdown').should('exist').click().byTestID("5m").should('exist').click()
         cy.byTestID("show-histogram-button").should('exist').click()
-        cy.get("#refresh-dropdown button").should('be.disabled')
         cy.get('#popover-netobserv-tour-popover-body').should('exist')
         // close tour
-        cy.get("#popover-netobserv-tour-popover-header > div > div:nth-child(2) > button").should("exist").click()
+        cy.get("#popover-netobserv-tour-popover-header > h6 > div > div:nth-child(2) > button").should("exist").click()
+        cy.byTestID(genSelectors.refreshDrop).should('be.disabled')
         // get current refreshed time
         let lastRefresh = Cypress.$("#lastRefresh").text()
 

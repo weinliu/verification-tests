@@ -40,7 +40,7 @@ describe("(OCP-53591 Network_Observability) Netflow Topology view features", { t
             cy.byTestID('layout-dropdown').click()
             cy.byTestID('Grid').click()
         })
-        cy.byTestID(topologySelectors.metricsDrop).should('exist').click().get('#sum').click()
+        cy.byTestID(topologySelectors.metricsFunctionDrop).should('exist').click().get('#sum').click()
         cy.contains('Display options').should('exist').click()
 
         // advance options menu remains visible throughout the test
@@ -50,12 +50,12 @@ describe("(OCP-53591 Network_Observability) Netflow Topology view features", { t
         cy.byTestID('search-topology-element-input').should('exist')
         cy.contains('Display options').should('exist').click()
 
-        cy.byTestID(topologySelectors.metricsDrop).should('exist').click()
-        cy.get(topologySelectors.metricsList).should('have.length', 5).each((item, index) => {
+        cy.byTestID(topologySelectors.metricsFunctionDrop).should('exist').click()
+        cy.get(topologySelectors.metricsFunction).find('li').should('have.length', 5).each((item, index) => {
             cy.wrap(item).should('contain.text', metricFunction[index])
         })
-        cy.byTestID('metricType').should('exist').click()
-        cy.get('#metricType > ul > li').should('have.length', 2).each((item, index) => {
+        cy.byTestID(topologySelectors.metricTypeDrop).should('exist').click()
+        cy.get(topologySelectors.metricType).find('li').should('have.length', 2).each((item, index) => {
             cy.wrap(item).should('contain.text', metricType[index])
         })
         cy.contains('Display options').should('exist').click()
@@ -71,7 +71,7 @@ describe("(OCP-53591 Network_Observability) Netflow Topology view features", { t
     it("(OCP-53591, memodi, Network_Observability) should verify local storage", function () {
         // modify some options
         cy.contains('Display options').should('exist').click()
-        cy.byTestID('truncate-dropdown').click().byTestID("25")
+        cy.byTestID('truncate-dropdown').click().byTestID("25").click()
         cy.get(topologySelectors.badgeToggle).uncheck()
         cy.byTestID('scope-dropdown').should('exist').click().byTestID('namespace').should('exist').click()
         cy.contains('Display options').should('exist').click()
@@ -105,7 +105,7 @@ describe("(OCP-53591 Network_Observability) Netflow Topology view features", { t
         cy.get('#drawer-tabs > ul > li:nth-child(1)').should('exist')
         // metrics tab
         cy.get('#drawer-tabs > ul > li:nth-child(2)').should('exist').click()
-        cy.get('div.pf-c-chart').should('exist')
+        cy.get('div.pf-v5-c-chart').should('exist')
     })
 
     afterEach("test", function () {

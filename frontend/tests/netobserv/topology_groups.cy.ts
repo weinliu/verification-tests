@@ -36,7 +36,7 @@ describe("(OCP-53591 Network_Observability) Netflow Topology groups features", {
             cy.byTestID('layout-dropdown').click()
             cy.byTestID('Grid').click()
         })
-        cy.byTestID(topologySelectors.metricsDrop).should('exist').click().get('#sum').click()
+        cy.byTestID(topologySelectors.metricsFunctionDrop).should('exist').click().get('#sum').click()
         cy.contains('Display options').should('exist').click()
 
         // advance options menu remains visible throughout the test
@@ -70,12 +70,12 @@ describe("(OCP-53591 Network_Observability) Netflow Topology groups features", {
         // using slider
         let lastRefresh = Cypress.$("#lastRefresh").text()
         cy.log(`last refresh is ${lastRefresh}`)
-        cy.get('div.pf-c-slider__thumb').then(slider => {
-            cy.wrap(slider).type('{leftarrow}', { waitForAnimations: true })
+        cy.get('.pf-v5-c-progress-stepper').get('#scope-step-2 >  div:nth-child(2) > button').click().then(slider => {
             netflowPage.waitForLokiQuery()
             cy.wait(3000)
             cy.get('#lastRefresh').invoke('text').should('not.eq', lastRefresh)
         })
+
         cy.wait('@matchedUrl').then(({ response }) => {
             expect(response.statusCode).to.eq(200)
         })

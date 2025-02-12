@@ -44,9 +44,8 @@ export const netflowPage = {
         })
     },
     resetClearFilters: () => {
-        cy.byTestID('chips-more-options-button').should('exist').then(moreOpts => {
-            cy.wrap(moreOpts).click({ force: true })
-            cy.byTestID("reset-filters-button").should('exist').click({ force: true })
+        cy.byTestID('filters-more-options-button').should('exist').click().then(moreOpts => {
+            cy.contains("Default filters").should('exist').click()
         })
     },
     clearAllFilters: () => {
@@ -58,11 +57,11 @@ export const netflowPage = {
         cy.get("#refresh-button > span > svg").invoke('attr', 'style').should('contain', '0s linear 0s')
     },
     selectSourceNS: (project) => {
-        cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
+        cy.byTestID("column-filter-toggle").click().get('.pf-v5-c-menu__content').should('be.visible')
         // verify Source namespace filter
         cy.byTestID('group-0-toggle').should('exist').byTestID('src_namespace').click()
         cy.byTestID('autocomplete-search').type(project + '{enter}{enter}')
-        cy.get('#filters div.custom-chip > p').should('contain.text', `${project}`)
+        cy.get(filterSelectors.filterValue).should('contain.text', `${project}`)
     }
 }
 
@@ -93,46 +92,38 @@ export namespace genSelectors {
 }
 
 export namespace colSelectors {
-    export const mColumns = '#view-options-dropdown > ul > section:nth-child(1) > ul > li > a'
     export const columnsModal = '.modal-content'
     export const save = 'columns-save-button'
     export const resetDefault = 'columns-reset-button'
-    export const Mac = '[data-test=th-Mac] > .pf-c-table__button'
-    export const gK8sOwner = '[data-test=th-K8S_OwnerObject] > .pf-c-table__button'
-    export const gIPPort = '[data-test=th-AddrPort] > .pf-c-table__button'
-    export const Protocol = '[data-test=th-Proto] > .pf-c-table__button'
-    export const ICMPType = '[data-test=th-IcmpType] > .pf-c-table__button'
-    export const ICMPCode = '[data-test=th-IcmpCode] > .pf-c-table__button'
-    export const srcNodeIP = '[data-test=th-SrcK8S_HostIP] > .pf-c-table__button'
-    export const srcNS = '[data-test=th-SrcK8S_Namespace] > .pf-c-table__button'
-    export const dstNodeIP = '[data-test=th-DstK8S_HostIP] > .pf-c-table__button'
-    export const direction = '[data-test=th-FlowDirection] > .pf-c-table__button'
-    export const bytes = '[data-test=th-Bytes] > .pf-c-table__button'
-    export const packets = '[data-test=th-Packets] > .pf-c-table__button'
-    export const RecordType = '[data-test=th-RecordType] > .pf-c-table__button'
-    export const conversationID = '[data-test=th-_HashId] > .pf-c-table__button'
-    export const flowRTT = '[data-test=th-TimeFlowRttMs] > .pf-c-table__button'
-    export const DSCP = '[data-test=th-Dscp] > .pf-c-table__button'
-    export const DNSLatency = '[data-test=th-DNSLatency] > .pf-c-table__column-help > .pf-c-table__button'
-    export const DNSResponseCode = '[data-test=th-DNSResponseCode] > .pf-c-table__column-help > .pf-c-table__button'
-    export const DNSId = '[data-test=th-DNSId] > .pf-c-table__button'
-    export const DNSError = '[data-test=th-DNSErrNo] > .pf-c-table__button'
-    export const SrcZone = '[data-test=th-SrcZone] > .pf-c-table__button'
-    export const DstZone = '[data-test=th-DstZone] > .pf-c-table__button'
-    export const ClusterName = '[data-test=th-ClusterName] > .pf-c-table__button'
-}
-
-export namespace exportSelectors {
-    export const overviewExport = '#view-options-dropdown > ul > section:nth-child(2) > ul > li > a'
-    export const avgBytesRatesDropdown = '#top_avg_byte_rates div:nth-child(3) button'
-    export const tableExport = '#view-options-dropdown > ul > section:nth-child(2) > ul > li > a'
-    export const exportButton = '[data-test=export-button]'
-    export const closeButton = '[data-test=export-close-button]'
-    export const topologyExport = '#view-options-dropdown > ul > section:nth-child(1) > ul > li > a'
+    export const Mac = '[data-test=th-Mac] > .pf-v5-c-table__button'
+    export const gK8sOwner = '[data-test=th-K8S_OwnerObject] > .pf-v5-c-table__button'
+    export const gIPPort = '[data-test=th-AddrPort] > .pf-v5-c-table__button'
+    export const Protocol = '[data-test=th-Proto] > .pf-v5-c-table__button'
+    export const ICMPType = '[data-test=th-IcmpType] > .pf-v5-c-table__button'
+    export const ICMPCode = '[data-test=th-IcmpCode] > .pf-v5-c-table__button'
+    export const srcNodeIP = '[data-test=th-SrcK8S_HostIP] > .pf-v5-c-table__button'
+    export const srcNS = '[data-test=th-SrcK8S_Namespace] > .pf-v5-c-table__button'
+    export const dstNodeIP = '[data-test=th-DstK8S_HostIP] > .pf-v5-c-table__button'
+    export const direction = '[data-test=th-FlowDirection] > .pf-v5-c-table__button'
+    export const bytes = '[data-test=th-Bytes] > .pf-v5-c-table__button'
+    export const packets = '[data-test=th-Packets] > .pf-v5-c-table__button'
+    export const RecordType = '[data-test=th-RecordType] > .pf-v5-c-table__button'
+    export const conversationID = '[data-test=th-_HashId] > .pf-v5-c-table__button'
+    export const flowRTT = '[data-test=th-TimeFlowRttMs] > .pf-v5-c-table__button'
+    export const DSCP = '[data-test=th-Dscp] > .pf-v5-c-table__button'
+    export const DNSLatency = '[data-test=th-DNSLatency] > .pf-v5-c-table__column-help > .pf-v5-c-table__button'
+    export const DNSResponseCode = '[data-test=th-DNSResponseCode] > .pf-v5-c-table__column-help > .pf-v5-c-table__button'
+    export const DNSId = '[data-test=th-DNSId] > .pf-v5-c-table__button'
+    export const DNSError = '[data-test=th-DNSErrNo] > .pf-v5-c-table__button'
+    export const SrcZone = '[data-test=th-SrcZone] > .pf-v5-c-table__button'
+    export const DstZone = '[data-test=th-DstZone] > .pf-v5-c-table__button'
+    export const ClusterName = '[data-test=th-ClusterName] > .pf-v5-c-table__button'
 }
 
 export namespace filterSelectors {
-    export const filterGroupText = '.custom-chip > p'
+    export const filterField = '#filters > div .custom-chip-group'
+    export const filterName = filterField + " div > p"
+    export const filterValue = '#filters > div .custom-chip-group .custom-chip div > p'
 }
 
 export namespace querySumSelectors {
@@ -150,23 +141,24 @@ export namespace querySumSelectors {
 }
 
 export namespace topologySelectors {
-    export const metricsDrop = 'metricFunction-dropdown'
-    export const metricsList = '#metricFunction > ul > li'
-    export const optsClose = '.pf-c-drawer__close > .pf-c-button'
+    export const metricsFunctionDrop = 'metricFunction-dropdown'
+    export const metricsFunction = '#metricFunction'
+    export const metricTypeDrop = 'metricType-dropdown'
+    export const metricType = '#metricType'
+    export const optsClose = '.pf-v5-c-drawer__close > .pf-v5-c-button'
     export const nGroups = '[data-layer-id="groups"] > g'
     export const group = 'g[data-type="group"]'
     export const node = 'g[data-kind="node"]:empty'
     export const edge = 'g[data-kind="edge"]'
     export const groupLayer = '[data-layer-id="groups"]'
     export const defaultLayer = '[data-layer-id="default"]'
-    export const groupToggle = '[for="group-collapsed-switch"] > .pf-c-switch__toggle'
+    export const groupToggle = '[for="group-collapsed-switch"] > .pf-v5-c-switch__toggle'
     export const edgeToggle = "#edges-switch"
     export const labelToggle = '#edges-tag-switch'
     export const badgeToggle = '#badge-switch'
 }
 
 export namespace overviewSelectors {
-    export const mPanels = '#view-options-dropdown > ul > section:nth-child(1) > ul > li > a'
     export const panelsModal = '.modal-content'
     export const resetDefault = 'panels-reset-button'
     export const save = 'panels-save-button'
@@ -201,9 +193,9 @@ export const memoryUsage = {
 }
 
 export namespace histogramSelectors {
-    export const timeRangeContainer = "#chart-histogram > div.pf-l-flex.pf-m-row.histogram-range-container"
-    export const zoomin = timeRangeContainer + " > div:nth-child(5) > div > div:nth-child(2) > button"
-    export const zoomout = timeRangeContainer + "> div:nth-child(5) > div > div:nth-child(1) > button"
+    export const timeRangeContainer = "#chart-histogram > div.pf-v5-l-flex.pf-m-row.histogram-range-container"
+    export const zoomin = timeRangeContainer + " > div:nth-child(5) > div > div:nth-child(2) > pf-v5-c-button"
+    export const zoomout = timeRangeContainer + "> div:nth-child(5) > div > div:nth-child(1) > pf-v5-c-button"
     const forwardShift = timeRangeContainer + "> div:nth-child(4)"
     export const singleRightShift = forwardShift + "> button:nth-child(1)"
     export const doubleRightShift = forwardShift + "> button:nth-child(2)"
@@ -237,22 +229,28 @@ Cypress.Commands.add('checkPanel', (panelName) => {
 Cypress.Commands.add('openPanelsModal', () => {
     cy.showAdvancedOptions();
     cy.get('#view-options-button').click();
-    cy.get(overviewSelectors.mPanels).click().then(panel => {
-        cy.get(overviewSelectors.panelsModal).should('exist')
-    })
+    cy.get('#manage-overview-panels-button').click();
+    cy.get('#overview-panels-modal').should('exist');
+});
+
+Cypress.Commands.add('openColumnsModal', () => {
+    cy.showAdvancedOptions();
+    cy.get('#view-options-button').click();
+    cy.get('#manage-columns-button').click();
+    cy.get('#columns-modal').should('exist');
 });
 
 Cypress.Commands.add('checkPopupItems', (id, names) => {
     for (let i = 0; i < names.length; i++) {
         cy.get(id).contains(names[i])
-            .closest('.pf-c-data-list__item-row').find('.pf-c-data-list__check');
+            .closest('.pf-v5-c-data-list__item-row').find('.pf-v5-c-data-list__check');
     }
 });
 
 Cypress.Commands.add('selectPopupItems', (id, names) => {
     for (let i = 0; i < names.length; i++) {
         cy.get(id).contains(names[i])
-            .closest('.pf-c-data-list__item-row').find('.pf-c-data-list__check').click();
+            .closest('.pf-v5-c-data-list__item-row').find('.pf-v5-c-data-list__check').click();
     }
 });
 
@@ -307,7 +305,7 @@ Cypress.Commands.add('checkNetflowTraffic', (loki = "Enabled") => {
     // table view
     if (loki == "Disabled") {
         // verify netflow traffic page is disabled
-        cy.get('li.tableTabButton > button').should('exist').should('have.class', 'pf-m-aria-disabled')
+        cy.get('li.tableTabButton').should('exist').should('have.class', 'pf-m-disabled')
     }
     else {
         cy.get('li.tableTabButton').should('exist').click()
@@ -328,6 +326,7 @@ declare global {
             checkPanelsNum(panels?: number): Chainable<Element>
             checkPanel(panelName: string[]): Chainable<Element>
             openPanelsModal(): Chainable<Element>
+            openColumnsModal(): Chainable<Element>
             selectPopupItems(id: string, names: string[]): Chainable<Element>
             checkPopupItems(id: string, names: string[]): Chainable<Element>
             checkQuerySummary(metric: JQuery<HTMLElement>): Chainable<Element>

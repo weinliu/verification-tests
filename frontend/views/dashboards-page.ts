@@ -26,10 +26,10 @@ export const dashboard = {
 }
 
 export namespace dashboardSelectors {
-    export const flowStatsToggle = '[data-test-id=panel-flowlogs-pipeline-statistics] > .pf-c-button'
-    export const ebpfStatsToggle = '[data-test-id=panel-e-bpf-agent-statistics] > .pf-c-button'
-    export const operatorStatsToggle = '[data-test-id=panel-operator-statistics] > .pf-c-button'
-    export const resourceStatsToggle = '[data-test-id=panel-resource-usage] > .pf-c-button'
+    export const flowStatsToggle = '[data-test-id=panel-flowlogs-pipeline-statistics] > .pf-v5-c-button'
+    export const ebpfStatsToggle = '[data-test-id=panel-e-bpf-agent-statistics] > .pf-v5-c-button'
+    export const operatorStatsToggle = '[data-test-id=panel-operator-statistics] > .pf-v5-c-button'
+    export const resourceStatsToggle = '[data-test-id=panel-resource-usage] > .pf-v5-c-button'
 }
 
 export const graphSelector = {

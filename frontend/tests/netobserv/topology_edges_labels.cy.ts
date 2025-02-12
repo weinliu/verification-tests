@@ -33,7 +33,7 @@ describe("(OCP-53591 Network_Observability) Netflow Topology edges,labels, badge
             cy.byTestID('layout-dropdown').click()
             cy.byTestID('Grid').click()
         })
-        cy.byTestID(topologySelectors.metricsDrop).should('exist').click().get('#sum').click()
+        cy.byTestID(topologySelectors.metricsFunctionDrop).should('exist').click().get('#sum').click()
         cy.contains('Display options').should('exist').click()
 
         // advance options menu remains visible throughout the test
@@ -87,6 +87,7 @@ describe("(OCP-53591 Network_Observability) Netflow Topology edges,labels, badge
 
         cy.get(topologySelectors.labelToggle).check()
         cy.get('[data-test-id="edge-handler"] g.pf-topology__edge__tag').should("exist")
+        netflowPage.clearAllFilters()
     })
 
     it("(OCP-53591, memodi, Network_Observability) should verify badges display/hidden", function () {
@@ -103,6 +104,7 @@ describe("(OCP-53591 Network_Observability) Netflow Topology edges,labels, badge
         })
         // not checking the existence of the badge since there may be an 
         // "Unknown" node present with empty badge.
+        netflowPage.clearAllFilters()
     })
 
     afterEach("after each tests", function () {
@@ -113,5 +115,4 @@ describe("(OCP-53591 Network_Observability) Netflow Topology edges,labels, badge
     after("after all tests are done", function () {
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
     })
-
 })

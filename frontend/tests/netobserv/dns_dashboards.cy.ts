@@ -1,5 +1,5 @@
 import { Operator, project } from "../../views/netobserv"
-import { netflowPage, querySumSelectors } from "../../views/netflow-page"
+import { netflowPage, querySumSelectors, topologySelectors } from "../../views/netflow-page"
 import { dashboard } from "views/dashboards-page"
 
 const metricType = [
@@ -45,17 +45,14 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
             cy.byTestID('Grid').click()
         })
 
-        cy.byTestID('metricType').should('exist').click()
-        cy.get('#metricType > ul > li').should('have.length', 3).each((item, index) => {
+        cy.byTestID(topologySelectors.metricTypeDrop).should('exist').click()
+        cy.get(topologySelectors.metricType).find('li').should('have.length', 3).each((item, index) => {
             cy.wrap(item).should('contain.text', metricType[index])
         })
-
         cy.get('#DnsLatencyMs').click()
-        cy.byTestID("scope-dropdown").click().byTestID("host").click()
-        cy.contains('Display options').should('exist').click()
 
-        // validate edge labels shows DNS latency info
-        cy.get('#zoom-in').click({ force: true }).click({ force: true }).click({ force: true });
+        cy.byTestID("scope-dropdown").click().get("#host").click()
+        cy.contains('Display options').should('exist').click()
 
         cy.get('[data-test-id=edge-handler]').should('exist').each((g) => {
             expect(g.text()).to.match(/\d* ms/gm);
@@ -77,6 +74,7 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
     })
 
     after("Delete flowcollector and DNS pods", function () {
+        Operator.deleteFlowCollector()
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
     })
 })

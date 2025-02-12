@@ -21,7 +21,7 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         cy.checkPanelsNum(5);
 
         // open panels modal and verify all relevant panels are listed
-        cy.openPanelsModal();
+        cy.openPanelsModal()
         cy.checkPopupItems(overviewSelectors.panelsModal, overviewSelectors.manageDNSTrackingPanelsList);
 
         // select all panels and verify they are rendered
@@ -29,12 +29,13 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         cy.get(overviewSelectors.panelsModal).contains('Save').click();
         netflowPage.waitForLokiQuery()
         cy.checkPanelsNum(10);
+
         netflowPage.waitForLokiQuery()
         cy.checkPanel(overviewSelectors.allDNSTrackingPanels)
 
         // restore default panels and verify they are visible
-        cy.byTestID('view-options-button').click()
-        cy.get(overviewSelectors.mPanels).click().byTestID(overviewSelectors.resetDefault).click().byTestID(overviewSelectors.save).click()
+        cy.openPanelsModal();
+        cy.byTestID(overviewSelectors.resetDefault).click().byTestID(overviewSelectors.save).click()
         netflowPage.waitForLokiQuery()
         cy.checkPanel(overviewSelectors.defaultDNSTrackingPanels)
         cy.checkPanelsNum(5);
@@ -57,9 +58,7 @@ describe('(OCP-67087 Network_Observability) DNSTracking test', { tags: ['Network
         })
 
         // select DNS Id and DNS Error columns
-        cy.byTestID("show-view-options-button").should('exist').click()
-        cy.byTestID('view-options-button').click()
-        cy.get(colSelectors.mColumns).click().then(col => {
+        cy.openColumnsModal().then(col => {
             cy.get(colSelectors.columnsModal).should('be.visible')
             cy.get('#DNSId').check()
             cy.get('#DNSErrNo').check()

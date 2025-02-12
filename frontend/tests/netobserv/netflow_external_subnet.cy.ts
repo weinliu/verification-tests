@@ -20,9 +20,7 @@ describe('(OCP-67615, OCP-72874 Network_Observability) Return external traffic a
         cy.byTestID("table-composable").should('exist')
 
         // enable SrcSubnetLabel and DstSubnetLabel columns
-        cy.byTestID("show-view-options-button").should('exist').click()
-        cy.byTestID('view-options-button').click()
-        cy.get(colSelectors.mColumns).click().then(col => {
+        cy.openColumnsModal().then(col => {
             cy.get(colSelectors.columnsModal).should('be.visible')
             cy.get('#SrcSubnetLabel').check()
             cy.get('#DstSubnetLabel').check()
@@ -30,20 +28,20 @@ describe('(OCP-67615, OCP-72874 Network_Observability) Return external traffic a
         })
 
         // filter on SrcSubnetLabel Pods and DstIP 52.200.142.250
-        cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
+        cy.byTestID("column-filter-toggle").click().get('.pf-v5-c-menu__content').should('be.visible')
         cy.byTestID('src_subnet_label').click()
         cy.get('#autocomplete-search').type('Pods' + '{enter}')
 
-        cy.byTestID("column-filter-toggle").click().get('.pf-c-dropdown__menu').should('be.visible')
+        cy.byTestID("column-filter-toggle").click().get('.pf-v5-c-menu__content').should('be.visible')
         cy.byTestID('group-1-toggle').click().should('be.visible')
         cy.byTestID('dst_address').click()
         cy.get('#search').type('52.200.142.250' + '{enter}')
 
         netflowPage.waitForLokiQuery()
 
-        // validate rows count=1, DstNamespace and DstName is n/a for external traffic
-        cy.byTestID('table-composable').each((td) => {
-            expect(td).attr("data-test-rows-count").to.contain(1)
+        // validate rows count=1
+        cy.byTestID('table-composable').invoke('attr', 'data-test-rows-count').then(count => {
+            expect(count).to.contain(1)
         })
 
         // validate SrcSubnetLabel=Pods and DstSustomLabel=testcustomlabel for custom subnet labels
@@ -55,14 +53,16 @@ describe('(OCP-67615, OCP-72874 Network_Observability) Return external traffic a
         })
 
         // click on Back-on-Forth button
-        cy.get('#chips-more-options-dropdown').should('exist').click().then(moreOpts => {
+        cy.get('#chips-more-options-button').should('exist').click().then(moreOpts => {
             cy.contains("One way").should('exist').click()
         })
 
         // validate rows count=2
-        cy.byTestID('table-composable').each((td) => {
-            expect(td).attr("data-test-rows-count").to.contain(2)
+        cy.byTestID('table-composable').invoke('attr', 'data-test-rows-count').then(count => {
+            expect(count).to.contain(2)
         })
+
+        netflowPage.clearAllFilters()
     })
 
     afterEach("test", function () {
@@ -71,6 +71,7 @@ describe('(OCP-67615, OCP-72874 Network_Observability) Return external traffic a
 
     after("all tests", function () {
         cy.adminCLI('oc delete -f ./fixtures/netobserv/test-pod.yaml')
+        Operator.deleteFlowCollector()
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
     })
 })

@@ -1,5 +1,5 @@
 import { Operator, project } from "../../views/netobserv"
-import { netflowPage, overviewSelectors, querySumSelectors } from "../../views/netflow-page"
+import { netflowPage, overviewSelectors, querySumSelectors, colSelectors } from "../../views/netflow-page"
 
 describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Observability'] }, function () {
 
@@ -16,9 +16,6 @@ describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Obs
     })
 
     it("(OCP-68246, aramesha, Network_Observability) Verify flowRTT panels", function () {
-        cy.get('#filter-toolbar-search-filters').contains('Query options').click();
-        cy.get('#query-options-dropdown').click();
-        cy.get('#limit-5').click();
         // to reduce flakes restore default panels first time it comes to overview page
         cy.openPanelsModal();
         cy.get(overviewSelectors.panelsModal).contains('Restore default panels').click();
@@ -30,20 +27,32 @@ describe('(OCP-68246 Network_Observability) FlowRTT test', { tags: ['Network_Obs
         cy.checkPanelsNum(5);
 
         // verify all relevant panels are listed
-        cy.openPanelsModal();
+        cy.openPanelsModal()
         cy.checkPopupItems(overviewSelectors.panelsModal, overviewSelectors.manageFlowRTTPanelsList);
 
         // select all panels and verify they are rendered
         cy.get(overviewSelectors.panelsModal).contains('Select all').click();
         cy.get(overviewSelectors.panelsModal).contains('Save').click();
         netflowPage.waitForLokiQuery()
-
         cy.checkPanelsNum(9);
+
+        netflowPage.waitForLokiQuery()
         cy.checkPanel(overviewSelectors.allFlowRTTPanels)
 
         // verify Query Summary stats for flowRTT
         cy.get(querySumSelectors.avgRTT).should('exist').then(avgRTT => {
             cy.checkQuerySummary(avgRTT)
+        })
+    })
+
+    it("(OCP-68246, aramesha, Network_Observability) Verify default flowRTT column", function () {
+        cy.get('#tabs-container li:nth-child(2)').click()
+        cy.byTestID("table-composable").should('exist')
+        netflowPage.stopAutoRefresh()
+
+        // verify default FowRTT column
+        cy.byTestID('table-composable').should('exist').within(() => {
+            cy.get(colSelectors.flowRTT).should('exist')
         })
     })
 

@@ -23,9 +23,7 @@ describe('(OCP-71525, OCP-71524 Network_Observability) Netflow Zone and multiClu
         cy.get('#tabs-container li:nth-child(2)').click()
         cy.byTestID("table-composable").should('exist')
 
-        cy.byTestID("show-view-options-button").should('exist').click()
-        cy.byTestID('view-options-button').click()
-        cy.get(colSelectors.mColumns).click().then(col => {
+        cy.openColumnsModal().then(col => {
             cy.get(colSelectors.columnsModal).should('be.visible')
             // Check zone columns
             cy.get('#SrcZone').check()

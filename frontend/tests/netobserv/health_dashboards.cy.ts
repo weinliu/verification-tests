@@ -12,7 +12,8 @@ const flowPanels = [
     "flows-per-second-chart",
     "flows-overhead-(%-generated-by-netobserv-own-traffic)-chart",
     "by-namespace-chart",
-    "by-node-chart"
+    "by-node-chart",
+    "metrics-cardinality-chart"
 ]
 
 const eBPFPanels = [

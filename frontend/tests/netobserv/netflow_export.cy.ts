@@ -1,5 +1,5 @@
 import { Operator, project } from "../../views/netobserv"
-import { netflowPage, exportSelectors } from "../../views/netflow-page"
+import { netflowPage } from "../../views/netflow-page"
 
 describe('(OCP-72610 Network_Observability) Export automation', { tags: ['Network_Observability'] }, function () {
 
@@ -20,12 +20,11 @@ describe('(OCP-72610 Network_Observability) Export automation', { tags: ['Networ
         cy.get('li.overviewTabButton').should('exist').click()
         cy.byTestID("show-view-options-button").should('exist').click()
         netflowPage.stopAutoRefresh()
-        cy.byTestID('view-options-button').should('exist').click()
-        cy.get(exportSelectors.overviewExport).should('exist').click()
+        cy.byTestID('view-options-button').should('exist').click().get('#export-button').click()
         cy.readFile('cypress/downloads/overview_page.png')
 
         // Export only Top 5 average bytes rates panel
-        cy.get(exportSelectors.avgBytesRatesDropdown).should('exist').click()
+        cy.get('#panel-kebab-top_avg_byte_rates-container > .pf-v5-c-menu-toggle').should('exist').click()
         cy.contains("Export panel").should('exist').click()
         cy.readFile('cypress/downloads/overview_panel_top_avg_byte_rates.png')
         cy.exec('rm cypress/downloads/overview_page.png')
@@ -38,9 +37,8 @@ describe('(OCP-72610 Network_Observability) Export automation', { tags: ['Networ
         netflowPage.selectSourceNS(project)
         cy.byTestID("table-composable").should('exist')
         cy.byTestID("show-view-options-button").should('exist').click()
-        cy.byTestID('view-options-button').should('exist').click()
-        cy.get(exportSelectors.tableExport).should('exist').click()
-        cy.get(exportSelectors.exportButton).should('exist').then((exportbtn) => {
+        cy.byTestID('view-options-button').should('exist').click().get('#export-button').click()
+        cy.byTestID('export-button').should('exist').then((exportbtn) => {
             cy.wrap(exportbtn).click()
             // wait for download to complete
             cy.wait(3000)
@@ -53,6 +51,7 @@ describe('(OCP-72610 Network_Observability) Export automation', { tags: ['Networ
             })
             cy.exec('rm cypress/downloads/export_table.csv')
         })
+        netflowPage.clearAllFilters()
     })
 
     it("(OCP-72610, aramesha, Network_Observability) should validate exporting topology view", function () {
@@ -61,12 +60,11 @@ describe('(OCP-72610 Network_Observability) Export automation', { tags: ['Networ
         netflowPage.stopAutoRefresh()
         cy.get('#drawer').should('not.be.empty')
         cy.byTestID("show-view-options-button").should('exist').click()
-        cy.byTestID('view-options-button').should('exist').click()
-        cy.get(exportSelectors.topologyExport).should('exist').click()
+        cy.byTestID('view-options-button').should('exist').click().get('#export-button').click()
         cy.readFile('cypress/downloads/topology.png').then(() => {
             cy.exec('rm cypress/downloads/topology.png')
         })
-
+        netflowPage.clearAllFilters()
     })
 
     afterEach("test", function () {

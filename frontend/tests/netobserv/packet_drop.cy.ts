@@ -35,12 +35,12 @@ describe('(OCP-66141 Network_Observability) PacketDrop test', { tags: ['Network_
         cy.get(overviewSelectors.panelsModal).contains('Save').click();
         netflowPage.waitForLokiQuery()
         cy.checkPanelsNum(10);
+
         netflowPage.waitForLokiQuery()
         cy.checkPanel(overviewSelectors.allPacketDropPanels)
 
         // restore default panels and verify they are visible
-        cy.byTestID('view-options-button').click()
-        cy.get(overviewSelectors.mPanels).click().byTestID(overviewSelectors.resetDefault).click().byTestID(overviewSelectors.save).click()
+        cy.openPanelsModal().byTestID(overviewSelectors.resetDefault).click().byTestID(overviewSelectors.save).click()
         netflowPage.waitForLokiQuery()
         cy.checkPanel(overviewSelectors.defaultPacketDropPanels)
         cy.checkPanelsNum(6);
