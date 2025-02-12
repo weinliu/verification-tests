@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
@@ -36,4 +37,16 @@ func ROSALogin() {
 // Get cluster ID for ROSA created cluster
 func GetROSAClusterID() string {
 	return os.Getenv("CLUSTER_ID")
+}
+
+// IsROSACluster checks if the cluster is running on ROSA
+func IsROSACluster(oc *CLI) bool {
+	// get the cluster resource
+	out, err := oc.AsAdmin().Run("get").Args("infrastructures.config.openshift.io/cluster", "-o", `jsonpath='{.status.platformStatus.aws.resourceTags[?(@.key=="red-hat-clustertype")].value}'`).Output()
+	if err != nil {
+		e2e.Failf("get infrastructure resource failed: %v", err)
+	}
+	e2e.Logf("red-hat-clustertype is: %s", out)
+	// check if the cluster is running on ROSA
+	return strings.Contains(out, "rosa")
 }
