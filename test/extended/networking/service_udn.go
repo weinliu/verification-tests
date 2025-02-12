@@ -618,9 +618,9 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		exutil.By("16.4 From a third node, be able to access node1:nodePort")
 		CurlNodePortPass(oc, thirdNode, nodeList.Items[1].Name, nodePort)
 		//Ignore below steps because of bug https://issues.redhat.com/browse/OCPBUGS-43085
-		//exutil.By("16.5 From pod node, be able to access nodePort service")
-		//CurlNodePortPass(oc, nodeList.Items[0].Name, nodeList.Items[0].Name, nodePort)
-		//CurlNodePortPass(oc, nodeList.Items[0].Name, nodeList.Items[1].Name, nodePort)
+		exutil.By("16.5 From pod node, be able to access nodePort service")
+		CurlNodePortPass(oc, nodeList.Items[0].Name, nodeList.Items[0].Name, nodePort)
+		CurlNodePortPass(oc, nodeList.Items[0].Name, nodeList.Items[1].Name, nodePort)
 
 		exutil.By("17.Update externalTrafficPolicy as Local for udn service in ns1.")
 		patch = `[{"op": "replace", "path": "/spec/externalTrafficPolicy", "value": "Local"}]`
