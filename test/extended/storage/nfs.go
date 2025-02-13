@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"fmt"
 	"path/filepath"
 	"strconv"
 
@@ -197,11 +198,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		exutil.By("# Run patch cmd to update the nodeAffinity value on deployment's pod to get rescheduled to other node")
 		volName := pvc.getVolumeName(oc)
-		originNodeName := getNodeNameByPod(oc, dep.namespace, dep.getPodList(oc)[0])
+		originPodName := dep.getPodList(oc)[0]
+		originNodeName := getNodeNameByPod(oc, dep.namespace, originPodName)
 		patchPath := "{\"spec\":{\"template\":{\"spec\":{\"affinity\":{\"nodeAffinity\":{\"requiredDuringSchedulingIgnoredDuringExecution\":{\"nodeSelectorTerms\":[{\"matchExpressions\":[{\"key\":\"kubernetes.io/hostname\",\"operator\":\"NotIn\",\"values\":[\"" + originNodeName + "\"]}]}]}}}}}}}"
 		patchResourceAsAdmin(oc, dep.namespace, "deployment/"+dep.name, patchPath, "merge")
 
 		exutil.By("# Wait for the deployment become ready again")
+		o.Eventually(func() bool {
+			return !strSliceContains(dep.getPodList(oc), originPodName)
+		}).WithTimeout(defaultMaxWaitingTime).WithPolling(defaultMaxWaitingTime/defaultIterationTimes).Should(
+			o.BeTrue(), fmt.Sprintf("Pod %s is still not rescheduled to another node", originPodName))
 		dep.waitReady(oc)
 
 		exutil.By("# Check test data still exists in the volume")
