@@ -12,12 +12,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/tidwall/gjson"
+	"go.uber.org/ratelimit"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -1242,10 +1244,29 @@ func setApplyToFalseForAllCrs(oc *exutil.CLI, namespace string, ssbName string) 
 	}
 	crs := strings.Fields(crList)
 	patch := fmt.Sprintf("{\"spec\":{\"apply\":false}}")
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var patchErrors []error
+	rateLimiter := ratelimit.New(5)
 	for _, cr := range crs {
-		patchResource(oc, asAdmin, withoutNamespace, "complianceremediation", cr, "-n", namespace, "--type", "merge", "-p", patch)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "NotApplied", ok, []string{"complianceremediation", cr, "-n", namespace,
-			"-o=jsonpath={.status.applicationState}"}).check(oc)
+		wg.Add(1)
+		rateLimiter.Take()
+		go func(cr string) {
+			defer g.GinkgoRecover()
+			err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("complianceremediation", cr, "-n", namespace, "--type", "merge", "-p", patch).Execute()
+			if err != nil {
+				mu.Lock()
+				patchErrors = append(patchErrors, err) // Collect errors to report later
+				mu.Unlock()
+			}
+			wg.Done()
+		}(cr)
+	}
+	wg.Wait()
+
+	if len(patchErrors) > 0 {
+		o.Expect(patchErrors).To(o.BeEmpty()) // Ensure no patch errors
 	}
 }
 

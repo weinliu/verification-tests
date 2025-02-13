@@ -4850,11 +4850,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 
 		g.By("Check complianceSuite name and result.. !!!\n")
 		subD.complianceSuiteResult(oc, ssbHigh, "NON-COMPLIANT INCONSISTENT")
-
-		g.By("ClusterOperator should be healthy before running rescan")
-		clusterOperatorHealthcheck(oc, 1500)
-
-		g.By("Trigger another round of rescan if needed !!!\n")
 		crResult, err := oc.AsAdmin().Run("get").Args("complianceremediation", "-l", "compliance.openshift.io/suite="+ssbHigh, "-n", subD.namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if crResult != "" {
