@@ -4310,3 +4310,18 @@ func verifyPodConnCrossNodes(oc *exutil.CLI) bool {
 	e2e.Logf("The pods connection pass check is %v ", pass)
 	return pass
 }
+
+func waitForPodsCount(oc *exutil.CLI, namespace, labelSelector string, expectedCount int, interval, timeout time.Duration) error {
+	return wait.Poll(interval, timeout, func() (bool, error) {
+		allPods, getPodErr := exutil.GetAllPodsWithLabel(oc, namespace, labelSelector)
+		if getPodErr != nil {
+			e2e.Logf("Error fetching pods: %v, retrying...", getPodErr)
+			return false, nil
+		}
+		if len(allPods) == expectedCount {
+			return true, nil // Condition met, exit polling
+		}
+		e2e.Logf("Expected %d pods, but found %d. Retrying...", expectedCount, len(allPods))
+		return false, nil
+	})
+}

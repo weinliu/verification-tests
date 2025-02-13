@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -876,5 +877,54 @@ var _ = g.Describe("[sig-networking] SDN multus", func() {
 			_, err := e2eoutput.RunHostCmd(ns, clientPod[0], "curl 10.10.10.2:8080 --connect-timeout 5")
 			return err
 		}, "60s", "10s").ShouldNot(o.HaveOccurred(), "The service of dummy interface is NOT accessible")
+	})
+
+	// author: weliang@redhat.com
+	g.It("Author:weliang-Medium-79604-Failed to create the sandbox-plugin on multus daemonset rollout [Disruptive]", func() {
+		// https://issues.redhat.com/browse/OCPBUGS-48160
+		exutil.By("Getting the count of multus-pods")
+		allPods, getPodErr := exutil.GetAllPodsWithLabel(oc, "openshift-multus", "app=multus")
+		o.Expect(getPodErr).NotTo(o.HaveOccurred())
+		o.Expect(len(allPods)).ShouldNot(o.Equal(0))
+
+		defer func() {
+			errCVO := oc.AsAdmin().Run("scale").Args("-n", "openshift-cluster-version", "deployments/cluster-version-operator", "--replicas=1").Execute()
+			o.Expect(errCVO).NotTo(o.HaveOccurred())
+			errCNO := oc.AsAdmin().Run("scale").Args("-n", "openshift-network-operator", "deploy/network-operator", "--replicas=1").Execute()
+			o.Expect(errCNO).NotTo(o.HaveOccurred())
+		}()
+		exutil.By("Disabling CVO and CNO")
+		errCVO := oc.AsAdmin().Run("scale").Args("-n", "openshift-cluster-version", "deployments/cluster-version-operator", "--replicas=0").Execute()
+		o.Expect(errCVO).NotTo(o.HaveOccurred())
+		errCNO := oc.AsAdmin().Run("scale").Args("-n", "openshift-network-operator", "deploy/network-operator", "--replicas=0").Execute()
+		o.Expect(errCNO).NotTo(o.HaveOccurred())
+
+		exutil.By("Disabling daemonset by adding an invalid NodeSelector")
+		_, errMultus := oc.AsAdmin().WithoutNamespace().Run("patch").
+			Args("daemonset.apps/multus", "-n", "openshift-multus",
+				"-p", `{"spec":{"template":{"spec":{"nodeSelector":{"kubernetes.io/os":"linuxandwindow"}}}}}`,
+				"--type=merge").Output()
+		o.Expect(errMultus).NotTo(o.HaveOccurred())
+
+		exutil.By("Verifying all multus pods are deleted")
+		err := waitForPodsCount(oc, "openshift-multus", "app=multus", 0, 5*time.Second, 20*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Enabling daemonset by restoring the default NodeSelector")
+		_, errMultus = oc.AsAdmin().WithoutNamespace().Run("patch").
+			Args("daemonset.apps/multus", "-n", "openshift-multus",
+				"-p", `{"spec":{"template":{"spec":{"nodeSelector":{"kubernetes.io/os":"linux"}}}}}`,
+				"--type=merge").Output()
+		o.Expect(errMultus).NotTo(o.HaveOccurred())
+
+		exutil.By("Verifying all multus pods are recreated")
+		err = waitForPodsCount(oc, "openshift-multus", "app=multus", len(allPods), 5*time.Second, 20*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Enabling CVO and CNO")
+		errCVO = oc.AsAdmin().Run("scale").Args("-n", "openshift-cluster-version", "deployments/cluster-version-operator", "--replicas=1").Execute()
+		o.Expect(errCVO).NotTo(o.HaveOccurred())
+		errCNO = oc.AsAdmin().Run("scale").Args("-n", "openshift-network-operator", "deploy/network-operator", "--replicas=1").Execute()
+		o.Expect(errCNO).NotTo(o.HaveOccurred())
 	})
 })
