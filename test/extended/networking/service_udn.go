@@ -1124,7 +1124,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		}
 	})
 
-	g.It("Author:huirwang-High-76019-Validate ExternalIP service for UDN pods (Layer3), [Disruptive]", func() {
+	g.It("Author:huirwang-NonHyperShiftHOST-High-76019-Validate ExternalIP service for UDN pods (Layer3), [Disruptive]", func() {
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
 			pingPodTemplate        = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -1195,24 +1195,17 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		}
 		svc.createServiceFromParams(oc)
 
-		exutil.By("6. Find subnet")
-		var hostSubnetIPv4, hostSubnetIPv6, hostSubnet string
-		if ipStackType == "dualstack" {
-			hostSubnetIPv4, hostSubnetIPv6 = getNodeSubnetDualStack(oc, nodeList.Items[0].Name, "default")
-		} else {
-			hostSubnet = getNodeSubnet(oc, nodeList.Items[0].Name, "default")
-		}
-
+		exutil.By("6. Find externalIP")
 		nodeIP1, nodeIP2 := getNodeIP(oc, nodeList.Items[0].Name)
 		externalIP := nodeIP2
 
-		exutil.By("7.Patch update network.config with the host CIDR to enable externalIP \n")
+		exutil.By("7.Patch update network.config to enable externalIP \n")
 		defer patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{}}}}")
 		defer patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[]}}}}")
 		if ipStackType == "dualstack" {
-			patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[\""+hostSubnetIPv4+"\",\""+hostSubnetIPv6+"\"]}}}}")
+			patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[\""+nodeIP2+"\",\""+nodeIP1+"\"]}}}}")
 		} else {
-			patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[\""+hostSubnet+"\"]}}}}")
+			patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[\""+nodeIP2+"\"]}}}}")
 		}
 
 		exutil.By("8.Patch ExternalIP to service\n")
@@ -1365,7 +1358,7 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 
 	})
 
-	g.It("Author:huirwang-High-76731-Validate ExternalIP service for UDN pods (Layer2), [Disruptive]", func() {
+	g.It("Author:huirwang-NonHyperShiftHOST-High-76731-Validate ExternalIP service for UDN pods (Layer2), [Disruptive]", func() {
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
 			pingPodTemplate        = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
@@ -1436,24 +1429,17 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		}
 		svc.createServiceFromParams(oc)
 
-		exutil.By("6. Find subnet")
-		var hostSubnetIPv4, hostSubnetIPv6, hostSubnet string
-		if ipStackType == "dualstack" {
-			hostSubnetIPv4, hostSubnetIPv6 = getNodeSubnetDualStack(oc, nodeList.Items[0].Name, "default")
-		} else {
-			hostSubnet = getNodeSubnet(oc, nodeList.Items[0].Name, "default")
-		}
-
+		exutil.By("6. Find externalIP")
 		nodeIP1, nodeIP2 := getNodeIP(oc, nodeList.Items[0].Name)
 		externalIP := nodeIP2
 
-		exutil.By("7.Patch update network.config with the host CIDR to enable externalIP \n")
+		exutil.By("7.Patch update network.config to enable externalIP \n")
 		defer patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{}}}}")
 		defer patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[]}}}}")
 		if ipStackType == "dualstack" {
-			patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[\""+hostSubnetIPv4+"\",\""+hostSubnetIPv6+"\"]}}}}")
+			patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[\""+nodeIP2+"\",\""+nodeIP1+"\"]}}}}")
 		} else {
-			patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[\""+hostSubnet+"\"]}}}}")
+			patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[\""+nodeIP2+"\"]}}}}")
 		}
 
 		exutil.By("8.Patch ExternalIP to service\n")
@@ -2199,6 +2185,294 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		CurlNodePortPass(oc, clientNode, nodeList.Items[0].Name, nodePortNS4)
 		CurlNodePortPass(oc, clientNode, nodeList.Items[1].Name, nodePortNS4)
+	})
+
+	g.It("Author:qiowang-NonHyperShiftHOST-PreChkUpgrade-Medium-44790-High-79163-Validate ExternalIP service for default and UDN pods post upgrade [Disruptive]", func() {
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 3 {
+			g.Skip("This test requires at least 3 worker nodes which is not fulfilled. ")
+		}
+
+		ipStackType := checkIPStackType(oc)
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			rcPingPodTemplate      = filepath.Join(buildPruningBaseDir, "rc-ping-for-pod-template.yaml")
+			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+			allNS                  = []string{"79163-upgrade-ns1", "79163-upgrade-ns2", "79163-upgrade-ns3"}
+			ipFamilyPolicy         = "SingleStack"
+			serviceName            = "test-service"
+		)
+
+		exutil.By("1. Create three namespaces, ns1 and ns2 for udn network testing, ns3 for default network testing")
+		for i := 0; i < 2; i++ {
+			oc.CreateSpecificNamespaceUDN(allNS[i])
+		}
+		oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", allNS[2]).Execute()
+
+		exutil.By("2. Find externalIP for testing")
+		var externalIP, externalIPv6 []string
+		for i := 0; i < 3; i++ {
+			nodeIP1, nodeIP2 := getNodeIP(oc, nodeList.Items[i].Name)
+			externalIP = append(externalIP, nodeIP2)
+			if ipStackType == "dualstack" {
+				externalIPv6 = append(externalIPv6, nodeIP1)
+			}
+		}
+
+		exutil.By("3. Patch network.config to enable externalIP")
+		allowedCIDRs := `"` + externalIP[0] + `","` + externalIP[1] + `","` + externalIP[2] + `"`
+		if ipStackType == "dualstack" {
+			allowedCIDRs = allowedCIDRs + `,"` + externalIPv6[0] + `","` + externalIPv6[1] + `","` + externalIPv6[2] + `"`
+		}
+		patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":["+allowedCIDRs+"]}}}}")
+
+		exutil.By("4. Create CRD for layer3 UDN in namespace ns1")
+		var cidr, ipv4cidr, ipv6cidr string
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/48"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/48"
+				ipFamilyPolicy = "PreferDualStack"
+			}
+		}
+		createGeneralUDNCRD(oc, allNS[0], "udn-network-"+allNS[0], ipv4cidr, ipv6cidr, cidr, "layer3")
+
+		exutil.By("5. Create CRD for layer2 UDN in namespace ns2")
+		if ipStackType == "ipv4single" {
+			cidr = "10.151.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2011:100:200::0/48"
+			} else {
+				ipv4cidr = "10.151.0.0/16"
+				ipv6cidr = "2011:100:200::0/48"
+				ipFamilyPolicy = "PreferDualStack"
+			}
+		}
+		createGeneralUDNCRD(oc, allNS[1], "udn-network-"+allNS[1], ipv4cidr, ipv6cidr, cidr, "layer2")
+
+		exutil.By("6. Create pod as backend pod for service in each ns")
+		var podsBackendName []string
+		for i := 0; i < 3; i++ {
+			podsBackend := replicationControllerPingPodResource{
+				name:      "hello-pod-1",
+				replicas:  0,
+				namespace: allNS[i],
+				template:  rcPingPodTemplate,
+			}
+			podsBackend.createReplicaController(oc)
+			e2e.Logf("schedual backend pod to " + nodeList.Items[i].Name)
+			patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("rc/"+podsBackend.name, "-n", allNS[i], "-p", "{\"spec\":{\"replicas\":1,\"template\":{\"spec\":{\"nodeSelector\":{\"kubernetes.io/hostname\":\""+nodeList.Items[i].Name+"\"}}}}}", "--type=merge").Execute()
+			o.Expect(patchErr).NotTo(o.HaveOccurred())
+			err := waitForPodWithLabelReady(oc, podsBackend.namespace, "name="+podsBackend.name)
+			exutil.AssertWaitPollNoErr(err, "The backend pod is not ready")
+			podsBackendName = append(podsBackendName, getPodName(oc, allNS[i], "name="+podsBackend.name)[0])
+		}
+
+		exutil.By("7. Create udn client pod on different node in ns1 and ns2")
+		var udnClientName []string
+		for i := 0; i < 2; i++ {
+			udnClient := replicationControllerPingPodResource{
+				name:      "hello-pod-2",
+				replicas:  0,
+				namespace: allNS[i],
+				template:  rcPingPodTemplate,
+			}
+			udnClient.createReplicaController(oc)
+			e2e.Logf("schedual udn client pod to " + nodeList.Items[2].Name)
+			patchErr := oc.AsAdmin().WithoutNamespace().Run("patch").Args("rc/"+udnClient.name, "-n", allNS[i], "-p", "{\"spec\":{\"replicas\":1,\"template\":{\"spec\":{\"nodeSelector\":{\"kubernetes.io/hostname\":\""+nodeList.Items[2].Name+"\"}}}}}", "--type=merge").Execute()
+			o.Expect(patchErr).NotTo(o.HaveOccurred())
+			err := waitForPodWithLabelReady(oc, udnClient.namespace, "name="+udnClient.name)
+			exutil.AssertWaitPollNoErr(err, "The udn client pod is not ready")
+			udnClientName = append(udnClientName, getPodName(oc, allNS[i], "name="+udnClient.name)[0])
+		}
+
+		exutil.By("8. Create a ClusterIP service in each ns")
+		for i := 0; i < 3; i++ {
+			svc := genericServiceResource{
+				servicename:           serviceName,
+				namespace:             allNS[i],
+				protocol:              "TCP",
+				selector:              "hello-pod-1",
+				serviceType:           "ClusterIP",
+				ipFamilyPolicy:        ipFamilyPolicy,
+				internalTrafficPolicy: "Cluster",
+				externalTrafficPolicy: "",
+				template:              genericServiceTemplate,
+			}
+			svc.createServiceFromParams(oc)
+			e2e.Logf("Patch ExternalIP to service")
+			patchResourceAsAdmin(oc, "svc/"+svc.servicename, fmt.Sprintf("{\"spec\":{\"externalIPs\": [\"%s\"]}}", externalIP[i]), allNS[i])
+			svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", allNS[i], svc.servicename).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(svcOutput).Should(o.ContainSubstring(externalIP[i]))
+		}
+
+		exutil.By("9. Validate the externalIP service for default network")
+		_, err := e2eoutput.RunHostCmdWithRetries(allNS[2], podsBackendName[2], "curl --connect-timeout 5 -s "+net.JoinHostPort(externalIP[2], "27017"), 5*time.Second, 15*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		for i := 0; i < 2; i++ {
+			if i == 0 {
+				exutil.By("10. Validate the externalIP service for layer3 UDN")
+			} else {
+				exutil.By("11. Validate the externalIP service for layer2 UDN")
+			}
+			exutil.By("Validate the externalIP service can be accessed from another udn pod")
+			_, err := e2eoutput.RunHostCmdWithRetries(allNS[i], udnClientName[i], "curl --connect-timeout 5 -s "+net.JoinHostPort(externalIP[i], "27017"), 5*time.Second, 15*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("Validate the externalIP service can be accessed from same node as service backend pod")
+			_, err = exutil.DebugNode(oc, nodeList.Items[i].Name, "curl", net.JoinHostPort(externalIP[i], "27017"), "-s", "--connect-timeout", "5")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("Validate the externalIP service can be accessed from different node than service backend pod")
+			_, err = exutil.DebugNode(oc, nodeList.Items[2].Name, "curl", net.JoinHostPort(externalIP[i], "27017"), "-s", "--connect-timeout", "5")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		if ipStackType == "dualstack" {
+			exutil.By("Retest it with IPv6 address in dualstack cluster")
+			exutil.By("12. Patch IPv6 ExternalIP to service")
+			for i := 0; i < 3; i++ {
+				patchResourceAsAdmin(oc, "svc/"+serviceName, fmt.Sprintf("{\"spec\":{\"externalIPs\": [\"%s\",\"%s\"]}}", externalIP[i], externalIPv6[i]), allNS[i])
+				svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", allNS[i], serviceName).Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(svcOutput).Should(o.ContainSubstring(serviceName))
+			}
+
+			exutil.By("13. Validate the externalIP service for default network")
+			_, err := e2eoutput.RunHostCmdWithRetries(allNS[2], podsBackendName[2], "curl --connect-timeout 5 -s "+net.JoinHostPort(externalIPv6[2], "27017"), 5*time.Second, 15*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			for i := 0; i < 2; i++ {
+				if i == 0 {
+					exutil.By("14. Validate the externalIP service for layer3 UDN - ipv6")
+				} else {
+					exutil.By("15. Validate the externalIP service for layer2 UDN - ipv6")
+				}
+				exutil.By("Validate the externalIP service can be accessed from another udn pod - ipv6")
+				_, err := e2eoutput.RunHostCmdWithRetries(allNS[i], udnClientName[i], "curl --connect-timeout 5 -s "+net.JoinHostPort(externalIPv6[i], "27017"), 5*time.Second, 15*time.Second)
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				exutil.By("Validate the externalIP service can be accessed from same node as service backend pod - ipv6")
+				_, err = exutil.DebugNode(oc, nodeList.Items[i].Name, "curl", net.JoinHostPort(externalIPv6[i], "27017"), "-s", "--connect-timeout", "5")
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				exutil.By("Validate the externalIP service can be accessed from different node than service backend pod - ipv6")
+				_, err = exutil.DebugNode(oc, nodeList.Items[2].Name, "curl", net.JoinHostPort(externalIPv6[i], "27017"), "-s", "--connect-timeout", "5")
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}
+	})
+
+	g.It("Author:qiowang-NonHyperShiftHOST-PstChkUpgrade-Medium-44790-High-79163-Validate ExternalIP service for default and UDN pods post upgrade [Disruptive]", func() {
+		defer patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{}}}}")
+		defer patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[]}}}}")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 3 {
+			g.Skip("This test requires at least 3 worker nodes which is not fulfilled. ")
+		}
+
+		ipStackType := checkIPStackType(oc)
+		var (
+			allNS           = []string{"79163-upgrade-ns1", "79163-upgrade-ns2", "79163-upgrade-ns3"}
+			podBackendLabel = "hello-pod-1"
+			udnClientLabel  = "hello-pod-2"
+		)
+
+		exutil.By("1. Check the three namespaces are carried over")
+		for i := 0; i < 3; i++ {
+			nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", allNS[i]).Execute()
+			if nsErr != nil {
+				g.Skip("Skip the PstChkUpgrade test as namespace " + allNS[i] + " does not exist, PreChkUpgrade test did not run")
+			}
+		}
+		for i := 0; i < 3; i++ {
+			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", allNS[i], "--ignore-not-found=true").Execute()
+		}
+
+		exutil.By("2. Get externalIP for testing")
+		var externalIP, externalIPv6 []string
+		for i := 0; i < 3; i++ {
+			nodeIP1, nodeIP2 := getNodeIP(oc, nodeList.Items[i].Name)
+			externalIP = append(externalIP, nodeIP2)
+			if ipStackType == "dualstack" {
+				externalIPv6 = append(externalIPv6, nodeIP1)
+			}
+		}
+
+		exutil.By("3. Get backend pod from preserved namespaces")
+		var podsBackendName []string
+		for i := 0; i < 3; i++ {
+			err := waitForPodWithLabelReady(oc, allNS[i], "name="+podBackendLabel)
+			exutil.AssertWaitPollNoErr(err, "The backend pod is not ready")
+			podsBackendName = append(podsBackendName, getPodName(oc, allNS[i], "name="+podBackendLabel)[0])
+		}
+
+		exutil.By("4. Get udn clients from preserved namespaces")
+		var udnClientName []string
+		for i := 0; i < 2; i++ {
+			err := waitForPodWithLabelReady(oc, allNS[i], "name="+udnClientLabel)
+			exutil.AssertWaitPollNoErr(err, "The udn client pod is not ready")
+			udnClientName = append(udnClientName, getPodName(oc, allNS[i], "name="+udnClientLabel)[0])
+		}
+
+		exutil.By("5. Validate the externalIP service for default network")
+		_, err := e2eoutput.RunHostCmdWithRetries(allNS[2], podsBackendName[2], "curl --connect-timeout 5 -s "+net.JoinHostPort(externalIP[2], "27017"), 5*time.Second, 15*time.Second)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		for i := 0; i < 2; i++ {
+			if i == 0 {
+				exutil.By("6. Validate the externalIP service for layer3 UDN")
+			} else {
+				exutil.By("7. Validate the externalIP service for layer2 UDN")
+			}
+			exutil.By("Validate the externalIP service can be accessed from another udn pod")
+			_, err := e2eoutput.RunHostCmdWithRetries(allNS[i], udnClientName[i], "curl --connect-timeout 5 -s "+net.JoinHostPort(externalIP[i], "27017"), 5*time.Second, 15*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("Validate the externalIP service can be accessed from same node as service backend pod")
+			_, err = exutil.DebugNode(oc, nodeList.Items[i].Name, "curl", net.JoinHostPort(externalIP[i], "27017"), "-s", "--connect-timeout", "5")
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			exutil.By("Validate the externalIP service can be accessed from different node than service backend pod")
+			_, err = exutil.DebugNode(oc, nodeList.Items[2].Name, "curl", net.JoinHostPort(externalIP[i], "27017"), "-s", "--connect-timeout", "5")
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		if ipStackType == "dualstack" {
+			exutil.By("Retest it with IPv6 address in dualstack cluster")
+
+			exutil.By("8. Validate the externalIP service for default network")
+			_, err := e2eoutput.RunHostCmdWithRetries(allNS[2], podsBackendName[2], "curl --connect-timeout 5 -s "+net.JoinHostPort(externalIPv6[2], "27017"), 5*time.Second, 15*time.Second)
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			for i := 0; i < 2; i++ {
+				if i == 0 {
+					exutil.By("9. Validate the externalIP service for layer3 UDN - ipv6")
+				} else {
+					exutil.By("10. Validate the externalIP service for layer2 UDN - ipv6")
+				}
+				exutil.By("Validate the externalIP service can be accessed from another udn pod - ipv6")
+				_, err := e2eoutput.RunHostCmdWithRetries(allNS[i], udnClientName[i], "curl --connect-timeout 5 -s "+net.JoinHostPort(externalIPv6[i], "27017"), 5*time.Second, 15*time.Second)
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				exutil.By("Validate the externalIP service can be accessed from same node as service backend pod - ipv6")
+				_, err = exutil.DebugNode(oc, nodeList.Items[i].Name, "curl", net.JoinHostPort(externalIPv6[i], "27017"), "-s", "--connect-timeout", "5")
+				o.Expect(err).NotTo(o.HaveOccurred())
+
+				exutil.By("Validate the externalIP service can be accessed from different node than service backend pod - ipv6")
+				_, err = exutil.DebugNode(oc, nodeList.Items[2].Name, "curl", net.JoinHostPort(externalIPv6[i], "27017"), "-s", "--connect-timeout", "5")
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}
 	})
 
 })

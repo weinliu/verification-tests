@@ -1973,7 +1973,7 @@ func getNodeSubnetDualStack(oc *exutil.CLI, nodeName string, network string) (st
 	o.Expect(err).NotTo(o.HaveOccurred())
 	var data map[string]interface{}
 	json.Unmarshal([]byte(output), &data)
-	hostSubnets := data["network"].([]interface{})
+	hostSubnets := data[network].([]interface{})
 	hostSubnetIPv4 := hostSubnets[0].(string)
 	hostSubnetIPv6 := hostSubnets[1].(string)
 
