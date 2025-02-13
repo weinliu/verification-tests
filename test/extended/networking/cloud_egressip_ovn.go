@@ -3315,14 +3315,16 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		lspCmd := "ovn-nbctl lr-policy-list ovn_cluster_router | grep -v inport"
 		o.Eventually(func() bool {
 			output, cmdErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, lspCmd)
+			e2e.Logf(output)
 			return cmdErr == nil && strings.Count(output, "100 ") == lspExpNum
-		}, "120s", "10s").Should(o.BeTrue(), "The command check result in ovndb is not expected!")
+		}, "120s", "10s").Should(o.BeTrue(), "The command check result for lr-policy-list in ovndb is not expected!")
 		ovnPod = ovnkubeNodePod(oc, egressNodes[0])
-		snatCmd := "ovn-nbctl --format=csv --no-heading find nat external_ids:name=" + egressip1.name
+		snatCmd := "ovn-nbctl --format=csv --no-heading find nat | grep " + egressip1.name
 		o.Eventually(func() bool {
-			output, cmdErr := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnPod, snatCmd)
-			return cmdErr == nil && strings.Count(output, egressip1.name) == 5
-		}, "120s", "10s").Should(o.BeTrue(), "The command check result in ovndb is not expected!")
+			output, cmdErr := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnPod, "ovnkube-controller", snatCmd)
+			e2e.Logf(output)
+			return cmdErr == nil && strings.Count(output, "EgressIP:"+egressip1.name) == 5
+		}, "120s", "10s").Should(o.BeTrue(), "The command check result for snat in ovndb is not expected!")
 	})
 
 	// author: huirwang@redhat.com
