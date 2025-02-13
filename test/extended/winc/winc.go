@@ -2705,7 +2705,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		}
 	})
 
-	g.It("Author:weinliu-High-77777-Verify metrics configuration and HTTPS endpoint [Disruptive] [Serial]", func() {
+	g.It("Author:weinliu-Smokerun-High-77777-Verify metrics configuration and HTTPS endpoint [Disruptive] [Serial]", func() {
 		//  Test 1 Check ServiceMonitor existence and configuration
 		g.By("Verifying ServiceMonitor existence")
 		serviceMonitorName := "windows-exporter"
