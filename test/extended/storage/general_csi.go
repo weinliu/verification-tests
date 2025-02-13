@@ -2834,13 +2834,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// Known issue(BZ2073617) for ibm CSI Driver
 	g.It("ROSA-OSD_CCS-ARO-Author:wduan-Critical-37570-[CSI-Driver][Dynamic PV][FileSystem] topology should provision a volume and schedule a pod with AllowedTopologies", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "filestore.csi.storage.gke.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "filestore.csi.storage.gke.io", "csi.vsphere.vmware.com"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
 		if isAwsOutpostCluster(oc) {
 			g.Skip("Skip for scenario non-supported AWS Outpost clusters!!!")
+		}
+		if !isVsphereTopologyConfigured(oc) {
+			g.Skip("Skip for non-supported vSphere topology disabled cluster!!!")
 		}
 
 		// Set the resource template for the scenario
@@ -2923,13 +2926,16 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// Known issue(BZ2073617) for ibm CSI Driver
 	g.It("ROSA-OSD_CCS-ARO-Author:wduan-LEVEL0-Critical-50202-[CSI-Driver][Dynamic PV][Block] topology should provision a volume and schedule a pod with AllowedTopologies", func() {
 		// Define the test scenario support provisioners
-		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "vpc.block.csi.ibm.io"}
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "pd.csi.storage.gke.io", "diskplugin.csi.alibabacloud.com", "vpc.block.csi.ibm.io", "csi.vsphere.vmware.com"}
 		supportProvisioners := sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
 		if isAwsOutpostCluster(oc) {
 			g.Skip("Skip for scenario non-supported AWS Outpost clusters!!!")
+		}
+		if !isVsphereTopologyConfigured(oc) {
+			g.Skip("Skip for non-supported vSphere topology disabled cluster!!!")
 		}
 
 		// Set the resource template for the scenario
