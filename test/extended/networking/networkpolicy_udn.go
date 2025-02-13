@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -17,6 +18,7 @@ var _ = g.Describe("[sig-networking] SDN udn networkpolicy", func() {
 	var (
 		oc             = exutil.NewCLI("networking-udn", exutil.KubeConfigPath())
 		testDataDirUDN = exutil.FixturePath("testdata", "networking/udn")
+		ipStackType    = checkIPStackType(oc)
 	)
 
 	g.BeforeEach(func() {
@@ -39,7 +41,6 @@ var _ = g.Describe("[sig-networking] SDN udn networkpolicy", func() {
 			topology                     = "layer3"
 		)
 
-		ipStackType := checkIPStackType(oc)
 		var nadName string
 		var nadNS []string = make([]string, 0, 4)
 		nsDefaultNetwork := oc.Namespace()
@@ -196,7 +197,6 @@ var _ = g.Describe("[sig-networking] SDN udn networkpolicy", func() {
 			topology                    = "layer2"
 		)
 
-		ipStackType := checkIPStackType(oc)
 		var nadName string
 		var nadNS []string = make([]string, 0, 4)
 		nadNetworkName := []string{"l2-network-test-1", "l2-network-test-2"}
@@ -336,6 +336,196 @@ var _ = g.Describe("[sig-networking] SDN udn networkpolicy", func() {
 		exutil.By("14. Validate traffic to pods in second namespace works but fails to pod in third namespace")
 		CurlPod2PodPassUDN(oc, nadNS[0], nsPodMap[nadNS[0]][0], nadNS[1], nsPodMap[nadNS[1]][0])
 		CurlPod2PodFailUDN(oc, nadNS[0], nsPodMap[nadNS[0]][0], nadNS[2], nsPodMap[nadNS[2]][0])
+
+	})
+
+	g.It("Author:asood-High-79093-Validate ingress CIDR block with and without except clause network policies in Layer 3 CUDN.", func() {
+		var (
+			testID                       = "79093"
+			testDataDir                  = exutil.FixturePath("testdata", "networking")
+			udnPodTemplate               = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
+			udnPodNodeTemplate           = filepath.Join(testDataDirUDN, "udn_test_pod_template_node.yaml")
+			ingressDenyFile              = filepath.Join(testDataDir, "networkpolicy/default-deny-ingress.yaml")
+			ipBlockIngressTemplateDual   = filepath.Join(testDataDir, "networkpolicy/ipblock/ipBlock-ingress-dual-CIDRs-template.yaml")
+			ipBlockIngressTemplateSingle = filepath.Join(testDataDir, "networkpolicy/ipblock/ipBlock-ingress-single-CIDR-template.yaml")
+			nsPodMap                     = make(map[string][]string)
+			topology                     = "layer3"
+			matchLabelKey                = "test.io"
+			matchLabelVal                = "ns-" + testID
+			cudnCRDName                  = "cudn-l3-network-" + testID
+			udnCRDName                   = "udn-l3-network-" + testID + "-0"
+		)
+
+		var allNS []string = make([]string, 0, 3)
+		var ipBlockPolicyName string
+		var podCount int
+		nsDefaultNetwork := oc.Namespace()
+
+		exutil.By("1.0 Create 3 UDN namespaces")
+		for i := 0; i < 3; i++ {
+			oc.CreateNamespaceUDN()
+			ns := oc.Namespace()
+			allNS = append(allNS, ns)
+			// Label first two for CUDN
+			if i < 2 {
+				defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, fmt.Sprintf("%s-", matchLabelKey)).Execute()
+				err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, fmt.Sprintf("%s=%s", matchLabelKey, matchLabelVal)).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}
+		// Annotate first namespace for ACL logging
+		aclSettings := aclSettings{DenySetting: "alert", AllowSetting: "alert"}
+		err1 := oc.AsAdmin().WithoutNamespace().Run("annotate").Args("ns", allNS[0], aclSettings.getJSONString()).Execute()
+		o.Expect(err1).NotTo(o.HaveOccurred())
+
+		allNS = append(allNS, nsDefaultNetwork)
+		var cidr0, ipv4cidr0, ipv6cidr0, cidr1, ipv4cidr1, ipv6cidr1 string
+		if ipStackType == "ipv4single" {
+			cidr0 = "10.150.0.0/16"
+			cidr1 = "10.152.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr0 = "2010:100:200::0/48"
+				cidr1 = "2012:100:200::0/48"
+			} else {
+				ipv4cidr0 = "10.150.0.0/16"
+				ipv4cidr1 = "10.152.0.0/16"
+				ipv6cidr0 = "2010:100:200::0/48"
+				ipv6cidr1 = "2012:100:200::0/48"
+
+			}
+		}
+
+		exutil.By("2. Create default deny ingress type networkpolicy in first namespace before UDN is created")
+		createResourceFromFile(oc, allNS[0], ingressDenyFile)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("networkpolicy", "-n", allNS[0]).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("default-deny-ingress"))
+
+		exutil.By("3. Create Layer 3 UDN in first two namespaces with CUDN resource and UDN in third")
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", cudnCRDName)
+		_, cudnErr := applyCUDNtoMatchLabelNS(oc, matchLabelKey, matchLabelVal, cudnCRDName, ipv4cidr0, ipv6cidr0, cidr0, topology)
+		o.Expect(cudnErr).NotTo(o.HaveOccurred())
+		defer removeResource(oc, true, true, "userdefinednetwork", udnCRDName)
+		createGeneralUDNCRD(oc, allNS[2], udnCRDName, ipv4cidr1, ipv6cidr1, cidr1, topology)
+
+		exutil.By("4. Create two pods in each namespace")
+		podCount = 2
+		pod := make([]udnPodResource, 4)
+		for i := 0; i < len(allNS); i++ {
+			if i == 2 {
+				podCount = 1
+			}
+			for j := 0; j < podCount; j++ {
+				pod[j] = udnPodResource{
+					name:      "hello-pod-" + testID + "-" + strconv.Itoa(i) + "-" + strconv.Itoa(j),
+					namespace: allNS[i],
+					label:     "hello-pod",
+					template:  udnPodTemplate,
+				}
+				pod[j].createUdnPod(oc)
+				defer removeResource(oc, true, true, "pod", pod[j].name, "-n", pod[j].namespace)
+				waitPodReady(oc, pod[j].namespace, pod[j].name)
+				nsPodMap[pod[j].namespace] = append(nsPodMap[pod[j].namespace], pod[j].name)
+			}
+		}
+
+		exutil.By("5. Validate traffic between pods in first namespace and from pods in second namespace")
+		CurlPod2PodFailUDN(oc, allNS[1], nsPodMap[allNS[1]][0], allNS[0], nsPodMap[allNS[0]][0])
+		CurlPod2PodFailUDN(oc, allNS[0], nsPodMap[allNS[0]][1], allNS[0], nsPodMap[allNS[0]][0])
+
+		exutil.By("6. Get node name and IPs of first pod in first namespace")
+		podNodeName, podNodeNameErr := exutil.GetPodNodeName(oc, allNS[0], nsPodMap[allNS[0]][0])
+		o.Expect(podNodeNameErr).NotTo(o.HaveOccurred())
+		o.Expect(podNodeName).NotTo(o.BeEmpty())
+
+		exutil.By("7. Validate verdict=drop message")
+		output, logErr := oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", podNodeName, "--path=ovn/acl-audit-log.log").Output()
+		o.Expect(logErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "verdict=drop")).To(o.BeTrue())
+
+		exutil.By("8. Create IP Block ingress policy to allow traffic from first pod in second namespace to first pod in first")
+		var cidrIpv4, cidrIpv6, cidr string
+		if ipStackType == "dualstack" {
+			exutil.By(fmt.Sprintf("Create ipBlock Ingress Dual CIDRs Policy in %s", allNS[0]))
+			pod1ns1IPv6, pod1ns1IPv4 := getPodIPUDN(oc, allNS[1], nsPodMap[allNS[1]][0], "ovn-udn1")
+			cidrIpv4 = pod1ns1IPv4 + "/32"
+			cidrIpv6 = pod1ns1IPv6 + "/128"
+			npIPBlockNS1 := ipBlockCIDRsDual{
+				name:      "ipblock-dual-cidrs-ingress",
+				template:  ipBlockIngressTemplateDual,
+				cidrIpv4:  cidrIpv4,
+				cidrIpv6:  cidrIpv6,
+				namespace: allNS[0],
+			}
+			npIPBlockNS1.createipBlockCIDRObjectDual(oc)
+			ipBlockPolicyName = npIPBlockNS1.name
+
+		} else {
+			pod1ns1, _ := getPodIPUDN(oc, allNS[1], nsPodMap[allNS[1]][0], "ovn-udn1")
+			if ipStackType == "ipv6single" {
+				cidr = pod1ns1 + "/128"
+			} else {
+				cidr = pod1ns1 + "/32"
+			}
+			npIPBlockNS1 := ipBlockCIDRsSingle{
+				name:      "ipblock-single-cidr-ingress",
+				template:  ipBlockIngressTemplateSingle,
+				cidr:      cidr,
+				namespace: allNS[0],
+			}
+			npIPBlockNS1.createipBlockCIDRObjectSingle(oc)
+			ipBlockPolicyName = npIPBlockNS1.name
+
+		}
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("networkpolicy", "-n", allNS[0]).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(ipBlockPolicyName))
+
+		exutil.By("9. Validate traffic to first pod in first namespace is allowed from first pod in second namespace and verdict=allow in ACL audit log")
+		CurlPod2PodPassUDN(oc, allNS[1], nsPodMap[allNS[1]][0], allNS[0], nsPodMap[allNS[0]][0])
+		output, logErr = oc.AsAdmin().WithoutNamespace().Run("adm").Args("node-logs", podNodeName, "--path=ovn/acl-audit-log.log").Output()
+		o.Expect(logErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "verdict=allow")).To(o.BeTrue())
+
+		exutil.By("10. Validate ingress traffic is not allowed from second pod in second namespace, pod in third namespace and pod in fourth (default network)")
+
+		CurlPod2PodFailUDN(oc, allNS[1], nsPodMap[allNS[1]][1], allNS[0], nsPodMap[allNS[0]][0])
+		CurlPod2PodFailUDN(oc, allNS[2], nsPodMap[allNS[2]][0], allNS[0], nsPodMap[allNS[0]][0])
+		CurlPod2PodFailUDN(oc, allNS[3], nsPodMap[allNS[3]][0], allNS[0], nsPodMap[allNS[0]][0])
+
+		exutil.By("11. Get node name of first pod in second namespace and schedule another pod on smae node")
+		podNodeName, podNodeNameErr = exutil.GetPodNodeName(oc, allNS[1], nsPodMap[allNS[1]][0])
+		o.Expect(podNodeNameErr).NotTo(o.HaveOccurred())
+		o.Expect(podNodeName).NotTo(o.BeEmpty())
+		newPod := udnPodResourceNode{
+			name:      "hello-pod-" + testID + "-1-2",
+			namespace: allNS[1],
+			label:     "hello-pod",
+			nodename:  podNodeName,
+			template:  udnPodNodeTemplate,
+		}
+		newPod.createUdnPodNode(oc)
+		defer removeResource(oc, true, true, "pod", newPod.name, "-n", newPod.namespace)
+		waitPodReady(oc, newPod.namespace, newPod.name)
+
+		exutil.By(fmt.Sprintf("12. Update the %s policy to include except clause to block the ingress from the first pod in second", ipBlockPolicyName))
+		var patchPayload string
+		if ipStackType == "dualstack" {
+			hostSubnetIPv4, hostSubnetIPv6 := getNodeSubnetDualStack(oc, podNodeName, "cluster_udn_"+cudnCRDName)
+			patchPayload = fmt.Sprintf("[{\"op\": \"replace\", \"path\":\"/spec/ingress/0/from\", \"value\": [{\"ipBlock\":{\"cidr\":%s,\"except\":[%s]}},{\"ipBlock\":{\"cidr\":%s,\"except\":[%s]}}] }]", hostSubnetIPv4, cidrIpv4, hostSubnetIPv6, cidrIpv6)
+		} else {
+			hostSubnetCIDR := getNodeSubnet(oc, podNodeName, "cluster_udn_"+cudnCRDName)
+			patchPayload = fmt.Sprintf("[{\"op\": \"replace\", \"path\":\"/spec/ingress/0/from\", \"value\": [{\"ipBlock\":{\"cidr\":%s,\"except\":[%s]}}] }]", hostSubnetCIDR, cidr)
+		}
+		patchReplaceResourceAsAdmin(oc, "networkpolicy/"+ipBlockPolicyName, patchPayload, allNS[0])
+		npRules, npErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("networkpolicy", ipBlockPolicyName, "-n", allNS[0], "-o=jsonpath={.spec}").Output()
+		o.Expect(npErr).NotTo(o.HaveOccurred())
+		e2e.Logf("\n Network policy after update: %s", npRules)
+
+		CurlPod2PodFailUDN(oc, allNS[1], nsPodMap[allNS[1]][0], allNS[0], nsPodMap[allNS[0]][0])
+		CurlPod2PodPassUDN(oc, allNS[1], newPod.name, allNS[0], nsPodMap[allNS[0]][0])
 
 	})
 
