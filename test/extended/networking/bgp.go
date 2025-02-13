@@ -176,14 +176,10 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 		}, "120s", "5s").Should(o.BeTrue(), "Not all podNetwork are advertised to external frr router after rebooting a node")
 
 		exutil.By("5. Verify bgp routes in ip routing table of each cluster node after node reboot")
-		overallResult := true
-		o.Eventually(func() bool {
-			for _, node := range allNodes {
-				result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
-				overallResult = overallResult && result
-			}
-			return overallResult
-		}, "60s", "10s").Should(o.BeTrue(), "ip routing table check on nodes failed after rebooting a node")
+		for _, node := range allNodes {
+			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table check on node %s failed after rebooting a node", node))
+		}
 
 	})
 
@@ -214,14 +210,10 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 		}, "60s", "10s").Should(o.BeTrue(), "Not all podNetwork are advertised to external frr router after OVNK restart")
 
 		exutil.By("5. Verify bgp routes in ip routing table of each cluster node after OVNK restart")
-		overallResult := true
-		o.Consistently(func() bool {
-			for _, node := range allNodes {
-				result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
-				overallResult = overallResult && result
-			}
-			return overallResult
-		}, "60s", "10s").Should(o.BeTrue(), "ip routing table check on nodes failed after OVNK restart")
+		for _, node := range allNodes {
+			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table check on node %s failed after OVNK restart", node))
+		}
 
 	})
 
@@ -250,11 +242,9 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 		o.Expect(result).To(o.BeTrue(), "Not all frr-k8s pods fully recovered from restart")
 
 		// Make sure frr-k8s ds successfully rolled out after restart
-		o.Consistently(func() bool {
-			status, err := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", frrNamespace, "ds", "frr-k8s", "--timeout", "5m").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			return strings.Contains(status, "successfully rolled out")
-		}, "60s", "10s").Should(o.BeTrue(), "frr-k8s ds did not successfully roll out")
+		status, err := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", frrNamespace, "ds", "frr-k8s", "--timeout", "5m").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(status, "successfully rolled out")).To(o.BeTrue(), "frr-k8s ds did not successfully roll out")
 
 		exutil.By("4. Verify bgp routes in ip routing table of external frr router after frr-k8s pods restart")
 		o.Expect(result).To(o.BeTrue(), "Not all podNetwork are advertised to external frr router")
@@ -264,14 +254,10 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 		}, "60s", "10s").Should(o.BeTrue(), "Not all podNetwork are advertised to external frr router after frr-k8s pods restart")
 
 		exutil.By("5. Verify bgp routes in ip routing table of each cluster node after frr-k8s pods restart")
-		overallResult := true
-		o.Consistently(func() bool {
-			for _, node := range allNodes {
-				result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
-				overallResult = overallResult && result
-			}
-			return overallResult
-		}, "60s", "10s").Should(o.BeTrue(), "ip routing table check on nodes failed after frr-k8s pods restart")
+		for _, node := range allNodes {
+			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table check on node %s failed after frr-k8s pods restart", node))
+		}
 
 	})
 

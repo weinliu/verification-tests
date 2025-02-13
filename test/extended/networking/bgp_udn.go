@@ -122,7 +122,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes bgp-udn", func() {
 
 		exutil.By("Check the UDN network was advertised to external router")
 
-		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, ns1+"."+udnName)
+		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, ns1+"_"+udnName)
 		o.Eventually(func() bool {
 			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
 			return result
