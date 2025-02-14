@@ -4180,7 +4180,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		e2e.Logf("Check if %v exists in the %v catalog", sub.operatorPackage, sub.catalogSourceName)
 		exists, err = clusterPackageExists(oc, sub)
 		if !exists {
-			e2e.Failf("FAIL:PackageMissing %v does not exist in catalog %v", sub.operatorPackage, sub.catalogSourceName)
+			g.Skip("learn operator does not exist")
 		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 
