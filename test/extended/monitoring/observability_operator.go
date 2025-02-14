@@ -27,7 +27,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 		architecture.SkipNonAmd64SingleArch(oc)
 		clID, region = getClusterDetails(oc)
 		exutil.By("Install Observability Operator and check if it is successfully installed") //57234-Observability Operator installation on OCP hypershift management
-		if !exutil.IsROSA() && !ifMonitoringStackCRDExists(oc) {
+		if !exutil.IsROSACluster(oc) && !ifMonitoringStackCRDExists(oc) {
 			createObservabilityOperator(oc, oboBaseDir)
 		}
 	})
@@ -48,13 +48,13 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 			template:  filepath.Join(oboBaseDir, "monitoringstack-secret.yaml"),
 		}
 		defer func() {
-			if !exutil.IsROSA() {
+			if !exutil.IsROSACluster(oc) {
 				deleteMonitoringStack(oc, msD, secD, "rosa_mc")
 			}
 		}()
 		exutil.By("Check observability operator pods liveliness")
 		checkOperatorPods(oc)
-		if !exutil.IsROSA() {
+		if !exutil.IsROSACluster(oc) {
 			exutil.By("Create monitoringstack CR")
 			createMonitoringStack(oc, msD, secD)
 		}
@@ -80,7 +80,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 		checkPodHealth(oc)
 	})
 	g.It("Author:Vibhu-HyperShiftMGMT-ROSA-High-59383-verify OBO discovered and collected metrics of HCP", func() {
-		if exutil.IsROSA() {
+		if exutil.IsROSACluster(oc) {
 			exutil.By("Check scrape targets")
 			checkHCPTargets(oc)
 			exutil.By("Check metric along with value")

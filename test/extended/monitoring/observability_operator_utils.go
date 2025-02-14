@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 
@@ -108,6 +109,11 @@ func createObservabilityOperator(oc *exutil.CLI, oboBaseDir string) {
 	smTemplate := filepath.Join(oboBaseDir, "obo-service-monitor.yaml")
 	msg, err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", smTemplate).Output()
 	e2e.Logf("err %v, msg %v", err, msg)
+	cooVersion, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-o=jsonpath={.items[?(@.spec.displayName==\"Cluster Observability Operator\")].metadata.name}", "-n", "openshift-monitoring").Output()
+	waitErr := oc.AsAdmin().WithoutNamespace().Run("wait").Args("csv/"+cooVersion, "--for=jsonpath={.status.phase}=Succeeded", "--timeout=5m", "-n", "openshift-monitoring").Execute()
+	if waitErr != nil {
+		g.Skip("COO is not ready or been installed")
+	}
 
 }
 func getClusterDetails(oc *exutil.CLI) (clusterID string, region string) {
