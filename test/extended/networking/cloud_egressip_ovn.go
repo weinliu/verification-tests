@@ -3753,7 +3753,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-ConnectedOnly-High-47163-High-47026-[FdpOvnOvs] Deleting EgressIP object and recreating it works,EgressIP was removed after delete egressIP object. [Serial]", func() {
+	g.It("Author:huirwang-ConnectedOnly-High-47163-High-47026-Deleting EgressIP object and recreating it works,EgressIP was removed after delete egressIP object. [Serial]", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 		egressIPTemplate := filepath.Join(buildPruningBaseDir, "egressip-config1-template.yaml")
