@@ -1029,6 +1029,8 @@ func (ck checkDescription) check(oc *exutil.CLI) {
 			getResource(oc, asAdmin, withoutNamespace, "og", "-n", oc.Namespace(), "-o", "yaml")
 			getResource(oc, asAdmin, withoutNamespace, "catalogsource", "-n", oc.Namespace(), "-o", "yaml")
 			getResource(oc, asAdmin, withoutNamespace, "subscription", "-n", oc.Namespace(), "-o", "yaml")
+			getResource(oc, asAdmin, withoutNamespace, "ip", "-n", oc.Namespace())
+			getResource(oc, asAdmin, withoutNamespace, "csv", "-n", oc.Namespace())
 			getResource(oc, asAdmin, withoutNamespace, "pods", "-n", oc.Namespace())
 		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("expected content %s not found by %v", ck.expectContent, ck.resource))

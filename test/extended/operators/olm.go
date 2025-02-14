@@ -14695,7 +14695,7 @@ var _ = g.Describe("[sig-operators] OLM on hypershift", func() {
 			namespace: ns,
 			// catalogSourceName:      "cs-45348",
 			catalogSourceName:      "qe-app-registry",
-			catalogSourceNamespace: ns,
+			catalogSourceNamespace: "openshift-marketplace",
 			channel:                "beta",
 			ipApproval:             "Automatic",
 			operatorPackage:        "learn",
