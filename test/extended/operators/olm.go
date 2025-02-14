@@ -452,7 +452,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			displayName: "QE Operators",
 			publisher:   "QE",
 			sourceType:  "grpc",
-			address:     "registry.redhat.io/redhat/redhat-operator-index:v4.14",
+			address:     "quay.io/olmqe/nginxolm-operator-index:v1",
 			template:    csImageTemplate,
 		}
 		defer cs.delete(itName, dr)
