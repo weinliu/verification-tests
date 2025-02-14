@@ -2816,7 +2816,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			for _, line := range lines {
 				if strings.Contains(line, "memcached-operator-44550-controller-manager") {
 					e2e.Logf("found pod memcached-operator-44550-controller-manager")
-					if strings.Contains(line, "2/2") {
+					if strings.Contains(line, "1/1") {
 						e2e.Logf("the status of pod memcached-operator-44550-controller-manager is Running")
 						return true, nil
 					}
@@ -2951,7 +2951,7 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			for _, line := range lines {
 				if strings.Contains(line, "memcached-operator-44551-controller-manager") {
 					e2e.Logf("found pod memcached-operator-44551-controller-manager")
-					if strings.Contains(line, "2/2") {
+					if strings.Contains(line, "1/1") {
 						e2e.Logf("the status of pod memcached-operator-44551-controller-manager is Running")
 						return true, nil
 					}
