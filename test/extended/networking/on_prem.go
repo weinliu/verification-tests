@@ -41,7 +41,9 @@ var _ = g.Describe("[sig-networking] SDN on-prem", func() {
 		for _, label := range allLabels {
 			podNames, error := oc.WithoutNamespace().AsAdmin().Run("get").Args("po", "-n", ns, "-l=app="+label, `-ojsonpath={.items[?(@.status.phase=="Running")].metadata.name}`).Output()
 			o.Expect(error).NotTo(o.HaveOccurred())
-			o.Expect(podNames).NotTo(o.BeEmpty())
+			if podNames == "" {
+				g.Skip("no related pods are running, so it's maybe use ELB, skip this testing")
+			}
 			podName := strings.Fields(podNames)
 			// Check if workload partioning annotation is added
 			podAnnotation, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("po", "-n", ns, podName[0], `-ojsonpath={.metadata.annotations}`).Output()
