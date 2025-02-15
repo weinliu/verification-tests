@@ -915,7 +915,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-High-61176-High-61177-[FdpOvnOvs] EgressFirewall should work with namespace that is longer than forth-three characters even after restart. [Disruptive]", func() {
+	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-High-61176-High-61177-79704-Medium-[FdpOvnOvs] EgressFirewall with dnsName in uppercase can be created, and EgressFirewall should work with namespace that is longer than forth-three characters even after restart. [Disruptive]", func() {
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressFWTemplate := filepath.Join(buildPruningBaseDir, "egressfirewall5-template.yaml")
@@ -933,7 +933,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			namespace:   ns,
 			ruletype1:   "Allow",
 			rulename1:   "dnsName",
-			rulevalue1:  "www.google.com",
+			rulevalue1:  "WWW.GOOGLE.COM",
 			protocol1:   "TCP",
 			portnumber1: 443,
 			ruletype2:   "Deny",
