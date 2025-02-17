@@ -51,7 +51,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 	})
 
 	// author: knarra@redhat.com
-	g.It("Author:knarra-ROSA-OSD_CCS-ARO-High-75260-Validate user is able to deploy openshift cli manager successfully [Serial]", func() {
+	g.It("Author:knarra-ROSA-OSD_CCS-ARO-High-75260-Validate user is able to deploy openshift cli manager successfully [Serial][Flaky]", func() {
 		cliManager := filepath.Join(buildPruningBaseDir, "cliManager.yaml")
 		ocMirrorPluginYamlT := filepath.Join(buildPruningBaseDir, "deployOCMirrorPlugin.yaml")
 		customCliRegistry := filepath.Join(buildPruningBaseDir, "cli_manager_cs.yaml")
