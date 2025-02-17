@@ -3921,6 +3921,10 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-NonHyperShiftHOST-Medium-20981-contain the source commit id", func() {
+		if os.Getenv("GITHUB_TOKEN") == "" {
+			g.Skip("Skip it since no GITHUB_TOKEN configured")
+		}
+
 		sameCommit := ""
 		subPods := []string{"catalog-operator", "olm-operator", "packageserver"}
 
