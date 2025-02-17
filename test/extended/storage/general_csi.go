@@ -6007,6 +6007,60 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
 	})
+
+	// author: rdeore@redhat.com
+	// OCP-79559-[CSI-Driver] [VolumeAttributesClass] Deletion of volumeAttributesClass (VAC) should not be successful while in use by PVC
+	g.It("Author:rdeore-High-79559-[CSI-Driver] [VolumeAttributesClass] Deletion of volumeAttributesClass (VAC) should not be successful while in use by PVC", func() {
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir = exutil.FixturePath("testdata", "storage")
+			vacTemplate        = filepath.Join(storageTeamBaseDir, "volumeattributesclass-template.yaml")
+			pvcTemplate        = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			vacParameters      = map[string]string{}
+		)
+
+		// TODO: Remove this check after feature GA
+		if !isTechPreviewNoUpgrade(oc) {
+			g.Skip("Skip test scenario, cluster under test is not TechPreviewNoUpgrade enabled")
+		}
+
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject()
+		// For this test scenario, valid provisioner value is not required, hence using non-existent provisioner and test will be executed on all platforms
+		vac := newVolumeAttributesClass(setVolumeAttributesClassTemplate(vacTemplate), setVolumeAttributesClassDriverName("none.csi.com"), setVolumeAttributesClassType("none"))
+		pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimAccessmode("ReadWriteOnce"), setPersistentVolumeClaimStorageClassName("none"))
+
+		exutil.By("#. Create a new volumeAttributesClass (VAC) resource")
+		vacParameters["type"] = vac.volumeType // At least one parameter is required to create VAC resource
+		vac.createWithExtraParameters(oc, vacParameters)
+		defer vac.deleteAsAdmin(oc)
+
+		exutil.By("#. Check VAC protection finalizer is present")
+		result, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("vac", vac.name, "-o=jsonpath={.metadata.finalizers}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(result).To(o.ContainSubstring("kubernetes.io/vac-protection"))
+
+		exutil.By("#. Create PVC resource with the volumeAttributesClass (VAC)")
+		pvc.createWithSpecifiedVAC(oc, vac.name)
+		defer pvc.deleteAsAdmin(oc)
+
+		exutil.By("#. Delete previously created VAC which is actively in use")
+		output, err := vac.deleteUntilTimeOut(oc.AsAdmin(), "3")
+		o.Expect(err).To(o.HaveOccurred()) // VAC deletion should not be successful
+		o.Expect(output).To(o.ContainSubstring("timed out waiting for the condition"))
+
+		exutil.By("#. Check VAC resource is still present")
+		o.Consistently(func() bool {
+			isPresent := isSpecifiedResourceExist(oc, "vac/"+vac.name, "")
+			return isPresent
+		}, 20*time.Second, 5*time.Second).Should(o.BeTrue())
+
+		exutil.By("#. Delete previously created PVC resource")
+		deleteSpecifiedResource(oc, "pvc", pvc.name, pvc.namespace)
+
+		exutil.By("#. Check VAC resource is removed successfully")
+		checkResourcesNotExist(oc.AsAdmin(), "vac", vac.name, "")
+	})
 })
 
 // Performing test steps for Online Volume Resizing

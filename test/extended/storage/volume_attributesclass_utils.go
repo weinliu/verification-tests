@@ -99,3 +99,8 @@ func (vac *volumeAttributesClass) createWithExtraParameters(oc *exutil.CLI, vacP
 func (vac *volumeAttributesClass) deleteAsAdmin(oc *exutil.CLI) {
 	oc.AsAdmin().WithoutNamespace().Run("delete").Args("volumeattributesclass", vac.name, "--ignore-not-found").Execute()
 }
+
+// Delete the VolumeAttributesClass and wait until timeout in seconds
+func (vac *volumeAttributesClass) deleteUntilTimeOut(oc *exutil.CLI, timeoutSeconds string) (string, error) {
+	return oc.AsAdmin().WithoutNamespace().Run("delete").Args("vac", vac.name, "--ignore-not-found", "--timeout="+timeoutSeconds+"s").Output()
+}
