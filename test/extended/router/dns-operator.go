@@ -58,27 +58,32 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 		// Store the clusterip from the cluster
 		clusterIp := getByJsonPath(oc, "openshift-dns", "service/dns-default", "{.spec.clusterIP}")
 
-		exutil.By("Step1: Scale the DNS operator pod to zero and delete the default DNS service")
+		exutil.By("Step1: Scale the CVO and DNS operator pod to zero and delete the default DNS service")
 		dnsOperatorPodName := getPodListByLabel(oc, "openshift-dns-operator", "name=dns-operator")[0]
 		defer func() {
-			exutil.By("Recover the DNS")
-			oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment.apps/dns-operator", "--replicas=1", "-n", "openshift-dns-operator").Output()
+			exutil.By("Recover the CVO and DNS")
+			oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment/cluster-version-operator", "--replicas=1", "-n", "openshift-cluster-version").Output()
+			oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment/dns-operator", "--replicas=1", "-n", "openshift-dns-operator").Output()
 			// if the dns-default svc didn't came up in given time, dns operator restoration will help
 			deleteDnsOperatorToRestore(oc)
 		}()
-		_, errScalpod := oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment.apps/dns-operator", "--replicas=0", "-n", "openshift-dns-operator").Output()
-		o.Expect(errScalpod).NotTo(o.HaveOccurred())
+		_, err := oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment/cluster-version-operator", "--replicas=0", "-n", "openshift-cluster-version").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment/dns-operator", "--replicas=0", "-n", "openshift-dns-operator").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		errPodDis := waitForResourceToDisappear(oc, "openshift-dns-operator", "pod/"+dnsOperatorPodName)
 		exutil.AssertWaitPollNoErr(errPodDis, fmt.Sprintf("resource %v does not disapper", "pod/"+dnsOperatorPodName))
 		err1 := oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "dns-default", "-n", "openshift-dns").Execute()
 		o.Expect(err1).NotTo(o.HaveOccurred())
+		err = waitForResourceToDisappear(oc, "openshift-dns", "service/dns-default")
+		exutil.AssertWaitPollNoErr(err, "the service/dns-default does not disapper within allowed time")
 
 		exutil.By("Step2: Create a test server with the Cluster IP and scale up the dns operator")
 		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", "svc-37912", "-n", "openshift-dns").Execute()
 		err2 := oc.AsAdmin().WithoutNamespace().Run("create").Args(
 			"svc", "clusterip", "svc-37912", "--tcp=53:53", "--clusterip="+clusterIp, "-n", "openshift-dns").Execute()
 		o.Expect(err2).NotTo(o.HaveOccurred())
-		oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment.apps/dns-operator", "--replicas=1", "-n", "openshift-dns-operator").Output()
+		oc.AsAdmin().WithoutNamespace().Run("scale").Args("deployment/dns-operator", "--replicas=1", "-n", "openshift-dns-operator").Output()
 		// wait for the dns operator pod to come up
 		ensurePodWithLabelReady(oc, "openshift-dns-operator", "name=dns-operator")
 
