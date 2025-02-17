@@ -166,8 +166,12 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		exutil.By("Check MCC Logs for Panic is not produced")
 		exutil.AssertAllPodsToBeReady(oc.AsAdmin(), MachineConfigNamespace)
 
-		o.Expect(mcc.GetPreviousLogs()).NotTo(o.Or(o.ContainSubstring("panic"), o.ContainSubstring("Panic")), "Panic is seen in MCC pod after deleting OCB resources")
-		o.Expect(mcc.GetLogs()).NotTo(o.Or(o.ContainSubstring("panic"), o.ContainSubstring("Panic")), "Panic is seen in MCC pod after deleting OCB resources")
+		mccPrevLogs, err := mcc.GetPreviousLogs()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting previous MCC logs")
+		o.Expect(mccPrevLogs).NotTo(o.Or(o.ContainSubstring("panic"), o.ContainSubstring("Panic")), "Panic is seen in MCC previous logs after deleting OCB resources:\n%s", mccPrevLogs)
+		mccLogs, err := mcc.GetLogs()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting MCC logs")
+		o.Expect(mccLogs).NotTo(o.Or(o.ContainSubstring("panic"), o.ContainSubstring("Panic")), "Panic is seen in MCC logs after deleting OCB resources:\n%s", mccLogs)
 		logger.Infof("OK!\n")
 	})
 
