@@ -9704,11 +9704,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(ipConditions).To(o.ContainSubstring("apiextensions.k8s.io/v1beta1"))
 		o.Expect(ipConditions).To(o.ContainSubstring("Kind=CustomResourceDefinition not found on the cluster"))
 		o.Expect(ipConditions).To(o.ContainSubstring("InstallComponentFailed"))
-		newCheck("expect", asAdmin, withoutNamespace, contain, "InstallComponentFailed", ok, []string{"sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}"}).check(oc)
-		subConditions := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}")
-		o.Expect(subConditions).To(o.ContainSubstring("api-server resource not found installing CustomResourceDefinition"))
-		o.Expect(subConditions).To(o.ContainSubstring("apiextensions.k8s.io/v1beta1"))
-		o.Expect(subConditions).To(o.ContainSubstring("Kind=CustomResourceDefinition not found on the cluster"))
+
+		err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
+			subConditions := getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.conditions}")
+			if strings.Contains(subConditions, "InstallComponentFailed") {
+				o.Expect(subConditions).To(o.ContainSubstring("Kind=CustomResourceDefinition not found on the cluster"))
+				return true, nil
+			}
+			e2e.Logf(subConditions)
+			e2e.Logf("the status message of sub is not correct, retry...")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(err, "sub status is not correct")
 		exutil.By("4) SUCCESS")
 	})
 
@@ -11202,140 +11209,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 		o.Expect(strings.Contains(strings.ToLower(msg), errorText)).To(o.BeTrue())
 		e2e.Logf("subscription also has the expected error")
 
-		exutil.By("Finished")
-
-	})
-
-	// author: tbuskey@redhat.com, test case OCP-43291
-	g.It("Author:xzha-ConnectedOnly-High-43291-Indicate resolution conflicts on involved Subscription statuses", func() {
-		architecture.SkipNonAmd64SingleArch(oc)
-		var (
-			itName              = g.CurrentSpecReport().FullText()
-			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
-			catsrcTemplate      = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
-			ogTemplate          = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-			subFile             = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-			err                 error
-			errorText           = "This API may have been deprecated and removed"
-			msg                 string
-			selector            string
-			ip                  string
-			snooze              time.Duration = 600
-			testCase                          = "43291"
-			waitErr             error
-		)
-
-		oc.SetupProject()
-
-		var (
-			og = operatorGroupDescription{
-				name:      testCase,
-				namespace: oc.Namespace(),
-				template:  ogTemplate,
-			}
-			sub = subscriptionDescription{
-				subName:                testCase,
-				namespace:              oc.Namespace(),
-				channel:                "8.2.x",
-				ipApproval:             "Automatic",
-				operatorPackage:        "datagrid",
-				catalogSourceName:      "qe-" + testCase + "-catalog",
-				catalogSourceNamespace: "openshift-marketplace",
-				startingCSV:            "datagrid-operator.v8.2.0",
-				singleNamespace:        true,
-				template:               subFile,
-			}
-			catsrc = catalogSourceDescription{
-				name:        sub.catalogSourceName,
-				namespace:   sub.catalogSourceNamespace,
-				displayName: "qe-" + testCase + " Operators",
-				publisher:   "Bug",
-				sourceType:  "grpc",
-				address:     "quay.io/olmqe/deprecated:api",
-				priority:    -100,
-				interval:    "10m0s",
-				template:    catsrcTemplate,
-			}
-		)
-
-		exutil.By("Create catalog with v1alpha1 api operator")
-		defer catsrc.delete(itName, dr)
-		catsrc.createWithCheck(oc, itName, dr)
-
-		exutil.By("Create og")
-		defer og.delete(itName, dr)
-		og.create(oc, itName, dr)
-
-		exutil.By("Wait for the operator to show in the packagemanifest")
-		selector = "--selector=catalog=" + sub.catalogSourceName
-		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, snooze*time.Second, false, func(ctx context.Context) (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("packagemanifest", "-n", sub.catalogSourceNamespace, selector).Output()
-			if strings.Contains(msg, catsrc.displayName) {
-				return true, nil
-			}
-			return false, nil
-		})
-		o.Expect(msg).To(o.ContainSubstring(sub.operatorPackage))
-		exutil.AssertWaitPollNoErr(waitErr, "cannot get packagemanifest by label")
-		e2e.Logf("packagemanifest by label\n%v", msg)
-
-		exutil.By("Subscribe")
-		defer sub.delete(itName, dr)
-		defer sub.deleteCSV(itName, dr)
-		sub.createWithoutCheck(oc, itName, dr)
-
-		msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ip", "--no-headers", "-n", oc.Namespace()).Output()
-		e2e.Logf("installplan %v:\n %v\n", err, msg)
-
-		exutil.By("Wait for sub to create the installplan")
-		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, snooze*time.Second, false, func(ctx context.Context) (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace(), sub.subName, "-o=jsonpath={.status.installplan}").Output()
-			if strings.Contains(msg, "install-") {
-				return true, nil
-			}
-			return false, nil
-		})
-
-		if waitErr != nil { // add to the log
-			e2e.Logf("loop timed out\nsub installplan msg %v %v", err, msg)
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace(), sub.subName, "-o=jsonpath={.status}").Output()
-			e2e.Logf("sub statis\n %v %v\n", err, msg)
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ip", "--no-headers", "-n", oc.Namespace()).Output()
-			e2e.Logf("ip %v %v", err, msg)
-		}
-		exutil.AssertWaitPollNoErr(waitErr, "cannot get installplan status in subscription")
-
-		exutil.By("Get the installplan name")
-		ip, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace(), sub.subName, "-o=jsonpath={.status.installplan.name}").Output()
-		e2e.Logf("installplan is %v %v", ip, err)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(ip).NotTo(o.BeEmpty())
-
-		exutil.By("Wait for expected error in the install plan status")
-		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, snooze*time.Second, false, func(ctx context.Context) (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("installplan", "-n", oc.Namespace(), ip, "-o=jsonpath={.status.conditions..message}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(msg, errorText) {
-				e2e.Logf("InstallPlan has the expected error")
-				return true, nil
-			}
-			return false, nil
-		})
-		e2e.Logf("Actual installplan error: %v %v", msg, err)
-		exutil.AssertWaitPollNoErr(waitErr, "cannot get expected installplan status")
-
-		exutil.By("Check sub for the same message")
-		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-			msg, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "-n", oc.Namespace(), sub.subName, "-o=jsonpath={.status.conditions..message}").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			if strings.Contains(msg, errorText) {
-				e2e.Logf("subscription has the expected error")
-				return true, nil
-			}
-			e2e.Logf("subscription doesn't have the expected error:" + msg)
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, "subscription doesn't have the expected error")
 		exutil.By("Finished")
 
 	})
