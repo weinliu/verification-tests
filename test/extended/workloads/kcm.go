@@ -617,7 +617,8 @@ var _ = g.Describe("[sig-apps] Workloads test kcm works well", func() {
 	})
 
 	// author: yinzhou@redhat.com
-	g.It("ROSA-OSD_CCS-ARO-Author:yinzhou-Medium-26247-Alert when pod has a PodDisruptionBudget with minAvailable 1 disruptionsAllowed 0", func() {
+	// since bug https://issues.redhat.com/browse/OCPBUGS-12436, add NonHypershift
+	g.It("Author:yinzhou-NonHyperShiftHOST-ROSA-OSD_CCS-ARO-Medium-26247-Alert when pod has a PodDisruptionBudget with minAvailable 1 disruptionsAllowed 0", func() {
 		ns26247 := oc.Namespace()
 
 		g.By("create deploy")
