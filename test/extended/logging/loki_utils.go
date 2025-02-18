@@ -448,29 +448,8 @@ func removeServiceAccountFromGCP(name string) error {
 	return nil
 }
 
-func createSecretForGCSBucketWithSTS(oc *exutil.CLI, projectNumber, poolID, serviceAccountEmail, ns, name, bucketName string) error {
-	providerName := "projects/" + projectNumber + "/locations/global/workloadIdentityPools/" + poolID + "/providers/" + poolID
-	audience, err := getGCPAudience(providerName)
-	if err != nil {
-		return err
-	}
-	key := `{
-		"universe_domain": "googleapis.com",
-		"type": "external_account",
-		"audience": "//iam.googleapis.com/` + providerName + `",
-		"subject_token_type": "urn:ietf:params:oauth:token-type:jwt",
-		"token_url": "https://sts.googleapis.com/v1/token",
-		"credential_source": {
-			"file": "/var/run/secrets/storage/serviceaccount/token",
-			"format": {
-				"type": "text"
-			}
-		},
-		"service_account_impersonation_url": "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/` + serviceAccountEmail + `:generateAccessToken"
-	}`
-
-	return oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "-n", ns, name,
-		"--from-literal=bucketname="+bucketName, "--from-literal=audience="+audience, "--from-literal=key.json="+key).Execute()
+func createSecretForGCSBucketWithSTS(oc *exutil.CLI, namespace, secretName, bucketName string) error {
+	return oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "-n", namespace, secretName, "--from-literal=bucketname="+bucketName).Execute()
 }
 
 // creates a secret for Loki to connect to gcs bucket
@@ -772,7 +751,10 @@ func (l lokiStack) prepareResourcesForLokiStack(oc *exutil.CLI) error {
 				if err4 != nil {
 					return fmt.Errorf("can't add roles to the serviceaccount: %v", err4)
 				}
-				err = createSecretForGCSBucketWithSTS(oc, projectNumber, poolID, sa.Email, l.namespace, l.storageSecret, l.bucketName)
+
+				patchLokiOperatorOnGCPSTSforCCO(oc, loNS, projectNumber, poolID, sa.Email)
+
+				err = createSecretForGCSBucketWithSTS(oc, l.namespace, l.storageSecret, l.bucketName)
 			} else {
 				err = createSecretForGCSBucket(oc, l.bucketName, l.storageSecret, l.namespace)
 			}
@@ -844,9 +826,12 @@ func (l lokiStack) waitForLokiStackToBeReady(oc *exutil.CLI) {
 	for _, ss := range []string{l.name + "-index-gateway", l.name + "-compactor", l.name + "-ruler", l.name + "-ingester"} {
 		waitForStatefulsetReady(oc, l.namespace, ss)
 	}
-	currentPlatform := exutil.CheckPlatform(oc)
-	if exutil.IsWorkloadIdentityCluster(oc) && (strings.ToLower(currentPlatform) == "aws" || strings.ToLower(currentPlatform) == "azure") {
-		validateCredentialsRequestGenerationOnSTS(oc, l.name, l.namespace)
+	if exutil.IsWorkloadIdentityCluster(oc) {
+		currentPlatform := exutil.CheckPlatform(oc)
+		switch currentPlatform {
+		case "aws", "azure", "gcp":
+			validateCredentialsRequestGenerationOnSTS(oc, l.name, l.namespace)
+		}
 	}
 }
 
@@ -1650,4 +1635,36 @@ func deleteLokiClusterRolesForReadAccess(oc *exutil.CLI) {
 			e2e.Logf("Failed to delete Loki RBAC role '%s': %s", role, msg)
 		}
 	}
+}
+
+// Patches Loki Operator running on a GCP WIF cluster. Operator is deployed with CCO mode after patching.
+func patchLokiOperatorOnGCPSTSforCCO(oc *exutil.CLI, namespace string, projectNumber string, poolID string, serviceAccount string) {
+	patchConfig := `{
+    	"spec": {
+        	"config": {
+            	"env": [
+               		{
+                    	"name": "PROJECT_NUMBER",
+                    	"value": "%s"
+                	},
+                	{
+                    	"name": "POOL_ID",
+                    	"value": "%s"
+                	},
+                	{
+                    	"name": "PROVIDER_ID",
+                    	"value": "%s"
+                	},
+                	{
+                    	"name": "SERVICE_ACCOUNT_EMAIL",
+                    	"value": "%s"
+                	}
+            	]
+        	}
+    	}
+	}`
+
+	err := oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("patch").Args("sub", "loki-operator", "-n", namespace, "-p", fmt.Sprintf(patchConfig, projectNumber, poolID, poolID, serviceAccount), "--type=merge").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	waitForPodReadyWithLabel(oc, loNS, "name=loki-operator-controller-manager")
 }
