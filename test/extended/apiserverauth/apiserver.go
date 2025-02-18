@@ -1405,6 +1405,7 @@ spec:
 					clientAccessLog, err := exec.Command("bash", "-c", cmd).Output()
 					o.Expect(err).NotTo(o.HaveOccurred())
 					if len(strings.TrimSpace(string(clientAccessLog))) > 0 {
+						e2e.Logf("The api %v which will be removed in release: %v is accessed by client components：", removeReleaseAPI, removeRelease)
 						e2e.Logf("%v", string(clientAccessLog))
 						e2e.Failf("Step 5, Test Failed: Client components access Apis logs found, file a bug.")
 					} else {
