@@ -226,8 +226,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge", func() {
 			unSecSvcName        = "service-unsecure"
 			secSvcName          = "service-secure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			e2eTestNamespace1   = "e2e-ne-ocp72802-" + getRandomString()
 			e2eTestNamespace2   = "e2e-ne-ocp72802-" + getRandomString()
 		)
@@ -252,14 +252,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge", func() {
 
 		exutil.By("3. create a client pod, a server pod and two services in one ns")
 		createResourceFromFile(oc, e2eTestNamespace1, clientPod)
-		ensurePodWithLabelReady(oc, e2eTestNamespace1, cltPodLabel)
+		ensurePodWithLabelReady(oc, e2eTestNamespace1, clientPodLabel)
 
 		createResourceFromFile(oc, e2eTestNamespace1, testPodSvc)
 		ensurePodWithLabelReady(oc, e2eTestNamespace1, "name="+srvrcInfo)
 
 		exutil.By("4. create a server pod and two services in the other ns")
 		createResourceFromFile(oc, e2eTestNamespace2, clientPod)
-		ensurePodWithLabelReady(oc, e2eTestNamespace2, cltPodLabel)
+		ensurePodWithLabelReady(oc, e2eTestNamespace2, clientPodLabel)
 
 		createResourceFromFile(oc, e2eTestNamespace2, testPodSvc)
 		ensurePodWithLabelReady(oc, e2eTestNamespace2, "name="+srvrcInfo)
@@ -327,7 +327,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge", func() {
 		srvPodName := getPodListByLabel(oc, e2eTestNamespace1, "name=web-server-deploy")
 		routerPodIP := getPodv4Address(oc, routerPodName, "openshift-ingress")
 		toDst := httpRoutehost + ":80:" + routerPodIP
-		cmdOnPod := []string{"-n", e2eTestNamespace1, cltPodName, "--", "curl", "http://" + httpRoutehost + "/path/index.html", "--resolve", toDst, "--connect-timeout", "10"}
+		cmdOnPod := []string{"-n", e2eTestNamespace1, clientPodName, "--", "curl", "http://" + httpRoutehost + "/path/index.html", "--resolve", toDst, "--connect-timeout", "10"}
 		result, _ := repeatCmdOnClient(oc, cmdOnPod, "http-8080", 30, 1)
 		o.Expect(result).To(o.ContainSubstring("http-8080"))
 		output, err = oc.Run("exec").Args(cmdOnPod...).Output()
@@ -336,7 +336,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge", func() {
 
 		exutil.By("10. curl the second HTTP route and check the result")
 		srvPodName = getPodListByLabel(oc, e2eTestNamespace2, "name=web-server-deploy")
-		cmdOnPod = []string{"-n", e2eTestNamespace1, cltPodName, "--", "curl", "http://" + httpRoutehost + "/test/index.html", "--resolve", toDst, "--connect-timeout", "10"}
+		cmdOnPod = []string{"-n", e2eTestNamespace1, clientPodName, "--", "curl", "http://" + httpRoutehost + "/test/index.html", "--resolve", toDst, "--connect-timeout", "10"}
 		result, _ = repeatCmdOnClient(oc, cmdOnPod, "http-8080", 60, 1)
 		o.Expect(result).To(o.ContainSubstring("Hello-OpenShift-Path-Test " + srvPodName[0] + " http-8080"))
 	})
@@ -459,8 +459,8 @@ fi
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			unsecsvcName        = "service-unsecure"
 			secsvcName          = "service-secure"
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			e2eTestNamespace    = "e2e-ne-ocp73152-" + getRandomString()
 		)
 
@@ -475,7 +475,7 @@ fi
 		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
 		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
 		createResourceFromFile(oc, e2eTestNamespace, clientPod)
-		ensurePodWithLabelReady(oc, e2eTestNamespace, cltPodLabel)
+		ensurePodWithLabelReady(oc, e2eTestNamespace, clientPodLabel)
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
 		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-deploy")
 
@@ -502,19 +502,19 @@ fi
 			o.ContainSubstring("route-reen")))
 
 		exutil.By("Curl the HTTP route")
-		routeReq := []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "http://" + httpRouteHost, "-I", "--resolve", httpRouteDst, "--connect-timeout", "10"}
+		routeReq := []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "http://" + httpRouteHost, "-I", "--resolve", httpRouteDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, routeReq, "200", 60, 1)
 
 		exutil.By("Curl the Edge route")
-		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + edgeRouteHost, "-k", "-I", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
+		routeReq = []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "https://" + edgeRouteHost, "-k", "-I", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, routeReq, "200", 60, 1)
 
 		exutil.By("Curl the Passthrough route")
-		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + passThRouteHost, "-k", "-I", "--resolve", passThRouteDst, "--connect-timeout", "10"}
+		routeReq = []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "https://" + passThRouteHost, "-k", "-I", "--resolve", passThRouteDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, routeReq, "200", 60, 1)
 
 		exutil.By("Curl the REEN route")
-		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + reenRouteHost, "-k", "-I", "--resolve", reenRouteDst, "--connect-timeout", "10"}
+		routeReq = []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "https://" + reenRouteHost, "-k", "-I", "--resolve", reenRouteDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, routeReq, "200", 60, 1)
 	})
 
@@ -525,8 +525,8 @@ fi
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			unsecsvcName        = "service-unsecure"
 			secsvcName          = "service-secure"
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			findIpCmd           = "ip address | grep \"inet \""
 			hostIPList          []string
 			e2eTestNamespace    = "e2e-ne-ocp73202-" + getRandomString()
@@ -565,7 +565,7 @@ fi
 
 		exutil.By("Deploy a backend pod and its services resources in the created ns")
 		createResourceFromFile(oc, e2eTestNamespace, clientPod)
-		ensurePodWithLabelReady(oc, e2eTestNamespace, cltPodLabel)
+		ensurePodWithLabelReady(oc, e2eTestNamespace, clientPodLabel)
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
 		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-deploy")
 
@@ -596,19 +596,19 @@ fi
 			reenRouteDst := reenRouteHost + ":443:" + lbIP
 
 			exutil.By("Curl the http route with destination " + lbIP)
-			routeReq := []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "http://" + httpRouteHost, "-I", "--resolve", httpRouteDst, "--connect-timeout", "10"}
+			routeReq := []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "http://" + httpRouteHost, "-I", "--resolve", httpRouteDst, "--connect-timeout", "10"}
 			repeatCmdOnClient(oc, routeReq, "200", 150, 1)
 
 			exutil.By("Curl the Edge route with destination " + lbIP)
-			routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + edgeRouteHost, "-k", "-I", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
+			routeReq = []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "https://" + edgeRouteHost, "-k", "-I", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
 			repeatCmdOnClient(oc, routeReq, "200", 60, 1)
 
 			exutil.By("Curl the Pass-through route with destination " + lbIP)
-			routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + passThRouteHost, "-k", "-I", "--resolve", passThRouteDst, "--connect-timeout", "10"}
+			routeReq = []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "https://" + passThRouteHost, "-k", "-I", "--resolve", passThRouteDst, "--connect-timeout", "10"}
 			repeatCmdOnClient(oc, routeReq, "200", 60, 1)
 
 			exutil.By("Curl the REEN route with destination " + lbIP)
-			routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + reenRouteHost, "-k", "-I", "--resolve", reenRouteDst, "--connect-timeout", "10"}
+			routeReq = []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "https://" + reenRouteHost, "-k", "-I", "--resolve", reenRouteDst, "--connect-timeout", "10"}
 			repeatCmdOnClient(oc, routeReq, "200", 60, 1)
 		}
 	})
@@ -620,8 +620,8 @@ fi
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
 			unsecsvcName        = "service-unsecure"
 			secsvcName          = "service-secure"
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			specifiedAddress    string
 			randHostIP          string
 			e2eTestNamespace    = "e2e-ne-ocp73203-" + getRandomString()
@@ -703,7 +703,7 @@ fi
 
 		exutil.By("Deploy a client pod, a backend pod and its services resources")
 		createResourceFromFile(oc, e2eTestNamespace, clientPod)
-		ensurePodWithLabelReady(oc, e2eTestNamespace, cltPodLabel)
+		ensurePodWithLabelReady(oc, e2eTestNamespace, clientPodLabel)
 		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
 		ensurePodWithLabelReady(oc, e2eTestNamespace, "name=web-server-deploy")
 
@@ -734,19 +734,19 @@ fi
 		// config firewall for ipv6 load balancer
 		configFwForLB(oc, e2eTestNamespace, nodeName, randHostIP)
 
-		routeReq := []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "http://" + httpRouteHost + ":10080", "-I", "--resolve", httpRouteDst, "--connect-timeout", "10"}
+		routeReq := []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "http://" + httpRouteHost + ":10080", "-I", "--resolve", httpRouteDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, routeReq, "200", 150, 1)
 
 		exutil.By("Curl the Edge route")
-		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + edgeRouteHost + ":10443", "-k", "-I", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
+		routeReq = []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "https://" + edgeRouteHost + ":10443", "-k", "-I", "--resolve", edgeRouteDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, routeReq, "200", 60, 1)
 
 		exutil.By("Curl the Passthrough route")
-		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + passThRouteHost + ":10443", "-k", "-I", "--resolve", passThRouteDst, "--connect-timeout", "10"}
+		routeReq = []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "https://" + passThRouteHost + ":10443", "-k", "-I", "--resolve", passThRouteDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, routeReq, "200", 60, 1)
 
 		exutil.By("Curl the REEN route")
-		routeReq = []string{"-n", e2eTestNamespace, cltPodName, "--", "curl", "https://" + reenRouteHost + ":10443", "-k", "-I", "--resolve", reenRouteDst, "--connect-timeout", "10"}
+		routeReq = []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "https://" + reenRouteHost + ":10443", "-k", "-I", "--resolve", reenRouteDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, routeReq, "200", 60, 1)
 	})
 

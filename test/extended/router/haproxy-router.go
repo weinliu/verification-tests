@@ -89,8 +89,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		testPodSvc := filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
 		unsecsvcName := "httpbin-svc-insecure"
 		clientPod := filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-		cltPodName := "hello-pod"
-		cltPodLabel := "app=hello-pod"
+		clientPodName := "hello-pod"
+		clientPodLabel := "app=hello-pod"
 		srv := "gunicorn"
 
 		baseTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
@@ -130,7 +130,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		project1 := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, project1)
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
 
@@ -139,7 +139,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
-		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routehost + "/headers", "-I", "--resolve", toDst, "--connect-timeout", "10"}
+		curlCmd := []string{"-n", project1, clientPodName, "--", "curl", "http://" + routehost + "/headers", "-I", "--resolve", toDst, "--connect-timeout", "10"}
 		createRoute(oc, project1, "http", unsecsvcName, unsecsvcName, []string{"--hostname=" + routehost})
 		waitForOutput(oc, project1, "route/"+unsecsvcName, "{.status.ingress[0].conditions[0].status}", "True")
 		repeatCmdOnClient(oc, curlCmd, "200", 60, 1)
@@ -736,8 +736,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 			srvrcInfo           = "web-server-deploy"
 			srvName             = "service-unsecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			http404page         = filepath.Join(buildPruningBaseDir, "error-page-404.http")
 			http503page         = filepath.Join(buildPruningBaseDir, "error-page-503.http")
 			cmName              = "my-custom-error-code-pages-42940"
@@ -784,7 +784,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		project1 := oc.Namespace()
 		exutil.By("create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 		exutil.By("create an unsecure service and its backend pod")
 		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name="+srvrcInfo)
@@ -797,13 +797,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 
 		exutil.By("curl a normal route from the client pod")
 		routestring := srvName + "-" + project1 + "." + ingctrl.name + "."
-		waitForCurl(oc, cltPodName, baseDomain, routestring, "200 OK", podIP)
+		waitForCurl(oc, clientPodName, baseDomain, routestring, "200 OK", podIP)
 
 		exutil.By("curl a non-existing route, expect to get custom http 404 Not Found error")
 		notExistRoute := "notexistroute" + "-" + project1 + "." + ingctrl.domain
 		toDst := routehost + ":80:" + podIP
 		toDst2 := notExistRoute + ":80:" + podIP
-		output, errCurlRoute := oc.Run("exec").Args(cltPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst2, "--connect-timeout", "10").Output()
+		output, errCurlRoute := oc.Run("exec").Args(clientPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst2, "--connect-timeout", "10").Output()
 		o.Expect(errCurlRoute).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("404 Not Found"))
 		o.Expect(output).To(o.ContainSubstring("Custom error page:The requested document was not found"))
@@ -815,7 +815,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForResourceToDisappear(oc, project1, "pod/"+podname)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+podname))
-		output, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-v", "http://"+routehost, "--resolve", toDst, "--connect-timeout", "10").Output()
+		output, err = oc.Run("exec").Args(clientPodName, "--", "curl", "-v", "http://"+routehost, "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("503 Service Unavailable"))
 		o.Expect(output).To(o.ContainSubstring("Custom error page:The requested application is not available"))
@@ -830,8 +830,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 			srvrcInfo           = "web-server-deploy"
 			srvName             = "service-unsecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			http404page         = filepath.Join(buildPruningBaseDir, "error-page-404.http")
 			http503page         = filepath.Join(buildPruningBaseDir, "error-page-503.http")
 			http404page2        = filepath.Join(buildPruningBaseDir, "error-page2-404.http")
@@ -879,7 +879,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		project1 := oc.Namespace()
 		exutil.By("create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 		exutil.By("create an unsecure service and its backend pod")
 		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name="+srvrcInfo)
@@ -890,13 +890,13 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		output, SrvErr := oc.Run("expose").Args("service", srvName, "--hostname="+routehost).Output()
 		o.Expect(SrvErr).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring(srvName))
-		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
+		cmdOnPod := []string{"-n", project1, clientPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, cmdOnPod, "200", 60, 1)
 
 		exutil.By("curl a non-existing route, expect to get custom http 404 Not Found error")
 		notExistRoute := "notexistroute" + "-" + project1 + "." + ingctrl.domain
 		toDst = notExistRoute + ":80:" + podIP
-		output, err := oc.Run("exec").Args("-n", project1, cltPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst, "--connect-timeout", "10").Output()
+		output, err := oc.Run("exec").Args("-n", project1, clientPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(output).Should(o.And(
 			o.ContainSubstring("404 Not Found"),
@@ -924,7 +924,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 
 		// the following test step will be added after bug 1990020 is fixed(https://bugzilla.redhat.com/show_bug.cgi?id=1990020)
 		// exutil.By("curl the non-existing route, expect to get the new custom http 404 Not Found error")
-		// output, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst).Output()
+		// output, err = oc.Run("exec").Args(clientPodName, "--", "curl", "-v", "http://"+notExistRoute, "--resolve", toDst).Output()
 		// o.Expect(err).NotTo(o.HaveOccurred())
 		// o.Expect(output).Should(o.And(
 		// o.ContainSubstring("404 Not Found"),
@@ -1573,8 +1573,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			ingctrl             = ingressControllerDescription{
 				name:      "55825",
 				namespace: "openshift-ingress-operator",
@@ -1594,14 +1594,14 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		project1 := oc.Namespace()
 		exutil.By("create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 
 		exutil.By("curl a non-existing route, and then check that Bootstrap portion of the license is removed")
 		podname := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, podname, "openshift-ingress")
 		notExistRoute := "notexistroute" + "-" + project1 + "." + ingctrl.domain
 		toDst := notExistRoute + ":80:" + podIP
-		output, err2 := oc.Run("exec").Args(cltPodName, "--", "curl", "-Iv", "http://"+notExistRoute, "--resolve", toDst, "--connect-timeout", "10").Output()
+		output, err2 := oc.Run("exec").Args(clientPodName, "--", "curl", "-Iv", "http://"+notExistRoute, "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		o.Expect(output).To(o.ContainSubstring("503"))
 		o.Expect(output).ShouldNot(o.And(
@@ -1619,8 +1619,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 			customTemp          = filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp56898",
 				namespace: "openshift-ingress-operator",
@@ -1645,7 +1645,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 
 		exutil.By("Create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 
 		exutil.By("Expose a route with the unsecure service inside the project")
 		routehost := "service-unsecure-" + project1 + "." + ingctrl.domain
@@ -1659,7 +1659,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		o.Expect(haproxyOutput).To(o.ContainSubstring("backend be_http:" + project1 + ":service-unsecure"))
 
 		exutil.By("Check the reachability of the insecure route")
-		waitForCurl(oc, cltPodName, baseDomain, "service-unsecure-"+project1+"."+"ocp56898.", "HTTP/1.1 200 OK", custContIP)
+		waitForCurl(oc, clientPodName, baseDomain, "service-unsecure-"+project1+"."+"ocp56898.", "HTTP/1.1 200 OK", custContIP)
 
 		exutil.By("Idle the insecure service")
 		idleOutput, err := oc.AsAdmin().WithoutNamespace().Run("idle").Args("service-unsecure", "-n", project1).Output()
@@ -1672,7 +1672,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		o.Expect(findAnnotation).To(o.ContainSubstring(`idling.alpha.openshift.io/unidle-targets":"[{\"kind\":\"Deployment\",\"name\":\"web-server-deploy\",\"group\":\"apps\",\"replicas\":1}]`))
 
 		exutil.By("Wake the Idle resource by accessing its route")
-		waitForCurl(oc, cltPodName, baseDomain, "service-unsecure-"+project1+"."+"ocp56898.", "HTTP/1.1 200 OK", custContIP)
+		waitForCurl(oc, clientPodName, baseDomain, "service-unsecure-"+project1+"."+"ocp56898.", "HTTP/1.1 200 OK", custContIP)
 
 		exutil.By("Confirm the Idle annotation got removed")
 		findAnnotation = getAnnotation(oc, project1, "svc", "service-unsecure")
@@ -1730,8 +1730,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 			srvrcInfo           = "web-server-deploy"
 			srvName             = "service-unsecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			ingctrl             = ingressControllerDescription{
 				name:      "54998",
 				namespace: "openshift-ingress-operator",
@@ -1781,11 +1781,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 
 		exutil.By("create a client pod to send traffic")
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 
 		exutil.By("curl the route from the client pod")
 		toDst := routehost + ":80:" + podIP
-		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
+		cmdOnPod := []string{"-n", project1, clientPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
 		result, _ := repeatCmdOnClient(oc, cmdOnPod, "Set-Cookie2 X=Y", 60, 1)
 		o.Expect(result).To(o.ContainSubstring("Set-Cookie2 X=Y"))
 	})
@@ -1984,8 +1984,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
 			unsecsvcName        = "httpbin-svc-insecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			srv                 = "gunicorn"
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp66560",
@@ -2007,7 +2007,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		project1 := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, project1)
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
 
@@ -2076,8 +2076,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("send traffic to the edge route, then check http headers in the request or response message")
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routeHost + ":80:" + podIP
-		curlHTTPRouteReq := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-v", "-e", "www.qe-test.com", "--resolve", toDst, "--connect-timeout", "10"}
-		curlHTTPRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-e", "www.qe-test.com", "--resolve", toDst, "--connect-timeout", "10"}
+		curlHTTPRouteReq := []string{"-n", project1, clientPodName, "--", "curl", "http://" + routeHost + "/headers", "-v", "-e", "www.qe-test.com", "--resolve", toDst, "--connect-timeout", "10"}
+		curlHTTPRouteRes := []string{"-n", project1, clientPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-e", "www.qe-test.com", "--resolve", toDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		repeatCmdOnClient(oc, curlHTTPRouteRes, "200", 60, 1)
@@ -2114,8 +2114,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 			secsvc              = filepath.Join(buildPruningBaseDir, "httpbin-service_secure.json")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
 			secsvcName          = "httpbin-svc-secure"
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			srv                 = "gunicorn"
 			srvCert             = "/src/example_wildcard_chain.pem"
 			srvKey              = "/src/example_wildcard.key"
@@ -2216,8 +2216,8 @@ DNS.2 = *.%s.%s.svc
 		exutil.By("Deploy the project with a client pod, a backend pod and its service resources")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "-f", clientPod).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
-		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, fileDir, project1+"/"+cltPodName+":"+fileDir).Execute()
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
+		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, fileDir, project1+"/"+clientPodName+":"+fileDir).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		operateResourceFromFile(oc, "create", project1, serverPod)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
@@ -2298,8 +2298,8 @@ DNS.2 = *.%s.%s.svc
 		o.Expect(strings.Contains(routeBackendCfg, "http-response del-header 'server'")).To(o.BeTrue())
 
 		exutil.By("send traffic to the reen route, then check http headers in the request or response message")
-		curlReenRouteReq := []string{"-n", project1, cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
-		curlReenRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
+		curlReenRouteReq := []string{"-n", project1, clientPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
+		curlReenRouteRes := []string{"-n", project1, clientPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		e2e.Logf("curlReenRouteRes is: %v", curlReenRouteRes)
@@ -2336,8 +2336,8 @@ DNS.2 = *.%s.%s.svc
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
 			unsecsvcName        = "httpbin-svc-insecure"
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			srv                 = "gunicorn"
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp62528",
@@ -2401,8 +2401,8 @@ DNS.2 = *.%s.%s.svc
 		exutil.SetNamespacePrivileged(oc, project1)
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "-f", clientPod).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
-		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, fileDir, project1+"/"+cltPodName+":"+fileDir).Execute()
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
+		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, fileDir, project1+"/"+clientPodName+":"+fileDir).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
@@ -2471,8 +2471,8 @@ DNS.2 = *.%s.%s.svc
 		o.Expect(strings.Contains(routeBackendCfg, "http-response del-header 'server'")).To(o.BeTrue())
 
 		exutil.By("send traffic to the edge route, then check http headers in the request or response message")
-		curlEdgeRouteReq := []string{"-n", project1, cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
-		curlEdgeRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
+		curlEdgeRouteReq := []string{"-n", project1, clientPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
+		curlEdgeRouteRes := []string{"-n", project1, clientPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		repeatCmdOnClient(oc, curlEdgeRouteRes, "200", 60, 1)
@@ -2508,8 +2508,8 @@ DNS.2 = *.%s.%s.svc
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
 			unsecsvcName        = "httpbin-svc-insecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			srv                 = "gunicorn"
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp66572",
@@ -2531,7 +2531,7 @@ DNS.2 = *.%s.%s.svc
 		project1 := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, project1)
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
 
@@ -2600,8 +2600,8 @@ DNS.2 = *.%s.%s.svc
 		exutil.By("send traffic to the edge route, then check http headers in the request or response message")
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		routeDst := routeHost + ":80:" + podIP
-		curlHTTPRouteReq := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-v", "-e", "www.qe-test.com", "--resolve", routeDst, "--connect-timeout", "10"}
-		curlHTTPRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-e", "www.qe-test.com", "--resolve", routeDst, "--connect-timeout", "10"}
+		curlHTTPRouteReq := []string{"-n", project1, clientPodName, "--", "curl", "http://" + routeHost + "/headers", "-v", "-e", "www.qe-test.com", "--resolve", routeDst, "--connect-timeout", "10"}
+		curlHTTPRouteRes := []string{"-n", project1, clientPodName, "--", "curl", "http://" + routeHost + "/headers", "-I", "-e", "www.qe-test.com", "--resolve", routeDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		repeatCmdOnClient(oc, curlHTTPRouteRes, "200", 60, 1)
@@ -2639,8 +2639,8 @@ DNS.2 = *.%s.%s.svc
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
 			unsecsvcName        = "httpbin-svc-insecure"
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			srv                 = "gunicorn"
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp67009",
@@ -2704,8 +2704,8 @@ DNS.2 = *.%s.%s.svc
 		exutil.SetNamespacePrivileged(oc, project1)
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "-f", clientPod).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
-		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, fileDir, project1+"/"+cltPodName+":"+fileDir).Execute()
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
+		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, fileDir, project1+"/"+clientPodName+":"+fileDir).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
@@ -2775,8 +2775,8 @@ DNS.2 = *.%s.%s.svc
 		exutil.By("send traffic to the edge route, then check http headers in the request or response message")
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		edgeRouteDst := edgeRouteHost + ":443:" + podIP
-		curlEdgeRouteReq := []string{"-n", project1, cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
-		curlEdgeRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
+		curlEdgeRouteReq := []string{"-n", project1, clientPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
+		curlEdgeRouteRes := []string{"-n", project1, clientPodName, "--", "curl", "https://" + edgeRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", edgeRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		repeatCmdOnClient(oc, curlEdgeRouteRes, "200", 60, 1)
@@ -2815,8 +2815,8 @@ DNS.2 = *.%s.%s.svc
 			secsvc              = filepath.Join(buildPruningBaseDir, "httpbin-service_secure.json")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
 			secsvcName          = "httpbin-svc-secure"
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			srv                 = "gunicorn"
 			srvCert             = "/src/example_wildcard_chain.pem"
 			srvKey              = "/src/example_wildcard.key"
@@ -2915,8 +2915,8 @@ DNS.2 = *.%s.%s.svc
 		exutil.By("Deploy the project with a client pod, a backend pod and its service resources")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "-f", clientPod).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
-		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, fileDir, project1+"/"+cltPodName+":"+fileDir).Execute()
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
+		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, fileDir, project1+"/"+clientPodName+":"+fileDir).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		operateResourceFromFile(oc, "create", project1, serverPod)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
@@ -3000,8 +3000,8 @@ DNS.2 = *.%s.%s.svc
 		exutil.By("send traffic to the reen route, then check http headers in the request or response message")
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		reenRouteDst := reenRouteHost + ":443:" + podIP
-		curlReenRouteReq := []string{"-n", project1, cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
-		curlReenRouteRes := []string{"-n", project1, cltPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
+		curlReenRouteReq := []string{"-n", project1, clientPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-v", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
+		curlReenRouteRes := []string{"-n", project1, clientPodName, "--", "curl", "https://" + reenRouteHost + "/headers", "-I", "--cacert", name + "-ca.pem", "--cert", customCert, "--key", customKey, "--resolve", reenRouteDst, "--connect-timeout", "10"}
 		lowSrv := strings.ToLower(srv)
 		base64Srv := base64.StdEncoding.EncodeToString([]byte(srv))
 		repeatCmdOnClient(oc, curlReenRouteRes, "200", 60, 1)
@@ -3039,8 +3039,8 @@ DNS.2 = *.%s.%s.svc
 			testPodSvc               = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
 			unsecsvcName             = "httpbin-svc-insecure"
 			clientPod                = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName               = "hello-pod"
-			cltPodLabel              = "app=hello-pod"
+			clientPodName            = "hello-pod"
+			clientPodLabel           = "app=hello-pod"
 			maxHTTPHeaders           = 20
 			maxLengthHTTPHeaderName  = 255
 			maxLengthHTTPHeaderValue = 16384
@@ -3064,7 +3064,7 @@ DNS.2 = *.%s.%s.svc
 		project1 := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, project1)
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
 
@@ -3101,9 +3101,9 @@ DNS.2 = *.%s.%s.svc
 		o.Expect(strings.Count(routeBackendCfg, "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
 
 		exutil.By("send traffic and check the max http headers specified in a route")
-		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-Is", "http://" + routehost + "/headers", "--resolve", toDst, "--connect-timeout", "10"}
+		cmdOnPod := []string{"-n", project1, clientPodName, "--", "curl", "-Is", "http://" + routehost + "/headers", "--resolve", toDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, cmdOnPod, "200", 60, 1)
-		resHeaders, err := oc.Run("exec").Args("-n", project1, cltPodName, "--", "curl", "-s", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
+		resHeaders, err := oc.Run("exec").Args("-n", project1, clientPodName, "--", "curl", "-s", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Count(strings.ToLower(resHeaders), "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
 
@@ -3131,7 +3131,7 @@ DNS.2 = *.%s.%s.svc
 		o.Expect(haproxyHeaderName).To(o.ContainSubstring(maxHeaderName))
 
 		exutil.By("send traffic and check the max header name specified in a route")
-		resHeaders, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-s", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
+		resHeaders, err = oc.Run("exec").Args(clientPodName, "--", "curl", "-s", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(strings.ToLower(resHeaders), maxHeaderName+"\": \"value123abc\"")).To(o.BeTrue())
 
@@ -3194,7 +3194,7 @@ DNS.2 = *.%s.%s.svc
 		o.Expect(strings.Count(routeBackendCfg, "ocp66566testheader")).To(o.Equal(maxHTTPHeaders))
 
 		exutil.By("send traffic and check the max http headers specified in an ingress controller")
-		icResHeaders, err := oc.Run("exec").Args(cltPodName, "--", "curl", "-Is", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
+		icResHeaders, err := oc.Run("exec").Args(clientPodName, "--", "curl", "-Is", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Count(strings.ToLower(icResHeaders), "ocp66566testheader") == maxHTTPHeaders).To(o.BeTrue())
 		output, err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(ingctrlResource, "-p", negPatchHeaders, "--type=merge", "-n", ingctrl.namespace).Output()
@@ -3226,7 +3226,7 @@ DNS.2 = *.%s.%s.svc
 		o.Expect(strings.Contains(routeBackendCfg, maxHeaderName)).To(o.BeTrue())
 
 		exutil.By("send traffic and check the header with max length name specified in an ingress controller")
-		icResHeaders, err = oc.Run("exec").Args(cltPodName, "--", "curl", "-Is", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
+		icResHeaders, err = oc.Run("exec").Args(clientPodName, "--", "curl", "-Is", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(strings.ToLower(icResHeaders), maxHeaderName+": value123abc")).To(o.BeTrue())
 
@@ -3269,8 +3269,8 @@ DNS.2 = *.%s.%s.svc
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
 			unsecsvcName        = "httpbin-svc-insecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp66568",
 				namespace: "openshift-ingress-operator",
@@ -3291,7 +3291,7 @@ DNS.2 = *.%s.%s.svc
 		project1 := oc.Namespace()
 		exutil.SetNamespacePrivileged(oc, project1)
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
 
@@ -3382,14 +3382,14 @@ DNS.2 = *.%s.%s.svc
 		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
-		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "--resolve", toDst, "--connect-timeout", "10"}
+		cmdOnPod := []string{"-n", project1, clientPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "--resolve", toDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, cmdOnPod, "200", 60, 1)
-		reqHeaders, err := oc.Run("exec").Args("-n", project1, cltPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
+		reqHeaders, err := oc.Run("exec").Args("-n", project1, clientPodName, "--", "curl", "http://"+routehost+"/headers", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(strings.ToLower(reqHeaders), "\"reqtestheader\": \"req111\"")).To(o.BeTrue())
 
 		exutil.By("send traffic, check the response header restestheader which should be set to resbbb by the ingress-controller")
-		resHeaders, err := oc.Run("exec").Args(cltPodName, "--", "curl", "http://"+routehost+"/headers", "-I", "--resolve", toDst, "--connect-timeout", "10").Output()
+		resHeaders, err := oc.Run("exec").Args(clientPodName, "--", "curl", "http://"+routehost+"/headers", "-I", "--resolve", toDst, "--connect-timeout", "10").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(resHeaders, "restestheader: resbbb")).To(o.BeTrue())
 	})
@@ -3537,8 +3537,8 @@ DNS.2 = *.%s.%s.svc
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "httpbin-deploy.yaml")
 			unsecsvcName        = "httpbin-svc-insecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			ingctrl             = ingressControllerDescription{
 				name:      "77284",
 				namespace: "openshift-ingress-operator",
@@ -3558,7 +3558,7 @@ DNS.2 = *.%s.%s.svc
 		exutil.By("2.0 Deploy a project with a client pod, a backend pod and its service resources")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name=httpbin-pod")
 
@@ -3571,7 +3571,7 @@ DNS.2 = *.%s.%s.svc
 		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
-		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "-H", `"transfer-encoding: chunked"`, "-H", `"transfer-encoding: chunked"`, "--resolve", toDst, "--connect-timeout", "10"}
+		cmdOnPod := []string{"-n", project1, clientPodName, "--", "curl", "-I", "http://" + routehost + "/headers", "-H", `"transfer-encoding: chunked"`, "-H", `"transfer-encoding: chunked"`, "--resolve", toDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, cmdOnPod, "400", 60, 1)
 
 		exutil.By("5.0: Check that the custom router pod is Running, not Terminating")
@@ -3743,8 +3743,8 @@ DNS.2 = *.%s.%s.svc
 			srvdmInfo           = "web-server-deploy"
 			svcName             = "service-secure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			dirname             = "/tmp/OCP-77906-ca"
 			caSubj              = "/CN=NE-Test-Root-CA"
 			caCrt               = dirname + "/77906-ca.crt"
@@ -3814,8 +3814,8 @@ DNS.2 = *.%s.%s.svc
 		ensurePodWithLabelReady(oc, project1, "name="+srvdmInfo)
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "-f", clientPod).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
-		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, dirname, project1+"/"+cltPodName+":"+dirname).Execute()
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
+		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, dirname, project1+"/"+clientPodName+":"+dirname).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("6.0 Create a reencrypt route inside the project")
@@ -3831,11 +3831,11 @@ DNS.2 = *.%s.%s.svc
 		exutil.By("8.0 Curl the reencrypt route with specified protocol http2")
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":443:" + podIP
-		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-sI", "--cacert", caCrt, "--cert", usrCrt, "--key", usrKey, "--http2", "--resolve", toDst, "--connect-timeout", "10"}
+		curlCmd := []string{"-n", project1, clientPodName, "--", "curl", "https://" + routehost, "-sI", "--cacert", caCrt, "--cert", usrCrt, "--key", usrKey, "--http2", "--resolve", toDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, curlCmd, "HTTP/2 200", 60, 1)
 
 		exutil.By("9.0 Curl the reencrypt route with specified protocol http1.1")
-		curlCmd = []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-sI", "--cacert", caCrt, "--cert", usrCrt, "--key", usrKey, "--http1.1", "--resolve", toDst, "--connect-timeout", "10"}
+		curlCmd = []string{"-n", project1, clientPodName, "--", "curl", "https://" + routehost, "-sI", "--cacert", caCrt, "--cert", usrCrt, "--key", usrKey, "--http1.1", "--resolve", toDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, curlCmd, "HTTP/1.1 200", 60, 1)
 	})
 
@@ -3853,8 +3853,8 @@ DNS.2 = *.%s.%s.svc
 			srvdmInfo           = "web-server-deploy"
 			svcName             = "service-unsecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			desiredReplicas     = 8
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp77892",
@@ -3883,14 +3883,14 @@ DNS.2 = *.%s.%s.svc
 		createRoute(oc, project1, "http", "unsecure77892", svcName, []string{"--hostname=" + routehost})
 		waitForOutput(oc, project1, "route/unsecure77892", "{.status.ingress[0].conditions[0].status}", "True")
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 
 		exutil.By("3.0 Curl the HTTP route")
 		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		e2e.Logf("init routerpod is: %s", routerpod)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":80:" + podIP
-		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "http://" + routehost, "-s", "--resolve", toDst, "--connect-timeout", "10"}
+		curlCmd := []string{"-n", project1, clientPodName, "--", "curl", "http://" + routehost, "-s", "--resolve", toDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, curlCmd, "Hello-OpenShift", 60, 1)
 
 		exutil.By("4.0 Check the route's backend configuration including server pod, dynamic pool, dynamic cookie")
@@ -3991,8 +3991,8 @@ DNS.2 = *.%s.%s.svc
 			unsecSvcName        = "service-unsecure"
 			secSvcName          = "service-secure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			desiredReplicas     = 8
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp78239",
@@ -4015,7 +4015,7 @@ DNS.2 = *.%s.%s.svc
 		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name="+srvdmInfo)
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 
 		exutil.By("3.0 Create the HTTP route and the reencrypt route")
 		createRoute(oc, project1, "http", "unsecure78239", unsecSvcName, []string{"--hostname=" + httpRoutehost})
@@ -4035,12 +4035,12 @@ DNS.2 = *.%s.%s.svc
 		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := httpRoutehost + ":80:" + podIP
-		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "http://" + httpRoutehost, "-s", "--resolve", toDst, "--connect-timeout", "10"}
+		curlCmd := []string{"-n", project1, clientPodName, "--", "curl", "http://" + httpRoutehost, "-s", "--resolve", toDst, "--connect-timeout", "10"}
 		checkDcmServersAccessible(oc, curlCmd, podList, 180, desiredReplicas)
 
 		exutil.By("7.0 Keep curing the reencrypt route, make sure all backend endpoints are hit")
 		toDst = reenRoutehost + ":443:" + podIP
-		curlCmd = []string{"-n", project1, cltPodName, "--", "curl", "https://" + reenRoutehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
+		curlCmd = []string{"-n", project1, clientPodName, "--", "curl", "https://" + reenRoutehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
 		checkDcmServersAccessible(oc, curlCmd, podList, 180, desiredReplicas)
 	})
 
@@ -4058,8 +4058,8 @@ DNS.2 = *.%s.%s.svc
 			srvdmInfo           = "web-server-deploy"
 			svcName             = "service-unsecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			desiredReplicas     = 8
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp77973",
@@ -4088,14 +4088,14 @@ DNS.2 = *.%s.%s.svc
 		createRoute(oc, project1, "edge", "edge77973", svcName, []string{"--hostname=" + routehost})
 		waitForOutput(oc, project1, "route/edge77973", "{.status.ingress[0].conditions[0].status}", "True")
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 
 		exutil.By("3.0 Curl the edge route")
 		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		e2e.Logf("init routerpod is: %s", routerpod)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":443:" + podIP
-		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
+		curlCmd := []string{"-n", project1, clientPodName, "--", "curl", "https://" + routehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, curlCmd, "Hello-OpenShift", 60, 1)
 
 		exutil.By("4.0 Check the route's backend configuration including server pod, dynamic pool and dynamic cookie")
@@ -4195,8 +4195,8 @@ DNS.2 = *.%s.%s.svc
 			srvdmInfo           = "web-server-deploy"
 			svcName             = "service-secure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			desiredReplicas     = 8
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp77974",
@@ -4225,14 +4225,14 @@ DNS.2 = *.%s.%s.svc
 		createRoute(oc, project1, "passthrough", "passth77974", svcName, []string{"--hostname=" + routehost})
 		waitForOutput(oc, project1, "route/passth77974", "{.status.ingress[0].conditions[0].status}", "True")
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 
 		exutil.By("3.0 Curl the passthrough route")
 		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		e2e.Logf("init routerpod is: %s", routerpod)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":443:" + podIP
-		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
+		curlCmd := []string{"-n", project1, clientPodName, "--", "curl", "https://" + routehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, curlCmd, "Hello-OpenShift", 60, 1)
 
 		exutil.By("4.0 Check the route's backend configuration including server pod and dynamic pool")
@@ -4332,8 +4332,8 @@ DNS.2 = *.%s.%s.svc
 			srvdmInfo           = "web-server-deploy"
 			svcName             = "service-secure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			desiredReplicas     = 8
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp77975",
@@ -4362,14 +4362,14 @@ DNS.2 = *.%s.%s.svc
 		createRoute(oc, project1, "reencrypt", "reen77975", svcName, []string{"--hostname=" + routehost})
 		waitForOutput(oc, project1, "route/reen77975", "{.status.ingress[0].conditions[0].status}", "True")
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 
 		exutil.By("3.0 Curl the reencrypt route")
 		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
 		e2e.Logf("init routerpod is: %s", routerpod)
 		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
 		toDst := routehost + ":443:" + podIP
-		curlCmd := []string{"-n", project1, cltPodName, "--", "curl", "https://" + routehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
+		curlCmd := []string{"-n", project1, clientPodName, "--", "curl", "https://" + routehost, "-ks", "--resolve", toDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, curlCmd, "Hello-OpenShift", 60, 1)
 
 		exutil.By("4.0 Check the route's backend configuration including server pod, dynamic pool, dynamic cookie")

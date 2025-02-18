@@ -1225,8 +1225,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 			syslogPodLabel      = "name=rsyslogd"
 			srvrcInfo           = "web-server-deploy"
 			srvName             = "service-unsecure"
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 		)
 
 		exutil.By("1. create a syslog pod for the log receiver")
@@ -1264,7 +1264,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 
 		exutil.By("4. create a client pod, a server pod and an unsecure service")
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 
 		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name="+srvrcInfo)
@@ -1280,7 +1280,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		toDst := routehost + ":80:" + podIP
 		jsonPath := "{.subsets[0].addresses[0].ip}:{.subsets[0].ports[0].port}"
 		ep := getByJsonPath(oc, project1, "endpoints/"+srvName, jsonPath)
-		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
+		cmdOnPod := []string{"-n", project1, clientPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
 		result, _ := repeatCmdOnClient(oc, cmdOnPod, "200", 30, 5)
 		o.Expect(result).To(o.ContainSubstring("200"))
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", project1, syslogPodName).Output()
@@ -1296,8 +1296,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 			srvrcInfo           = "web-server-deploy"
 			srvName             = "service-unsecure"
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			ingctrl             = ingressControllerDescription{
 				name:      "ocp30059",
 				namespace: "openshift-ingress-operator",
@@ -1322,7 +1322,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("3. create a client pod, a server pod and an unsecure service")
 		project1 := oc.Namespace()
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 
 		createResourceFromFile(oc, project1, testPodSvc)
 		ensurePodWithLabelReady(oc, project1, "name="+srvrcInfo)
@@ -1338,7 +1338,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		toDst := routehost + ":80:" + podIP
 		jsonPath := "{.subsets[0].addresses[0].ip}:{.subsets[0].ports[0].port}"
 		ep := getByJsonPath(oc, project1, "endpoints/"+srvName, jsonPath)
-		cmdOnPod := []string{"-n", project1, cltPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
+		cmdOnPod := []string{"-n", project1, clientPodName, "--", "curl", "-I", "http://" + routehost, "--resolve", toDst, "--connect-timeout", "10"}
 		result, _ := repeatCmdOnClient(oc, cmdOnPod, "200", 30, 1)
 		o.Expect(result).To(o.ContainSubstring("200"))
 		output := waitRouterLogsAppear(oc, routerpod, ep)

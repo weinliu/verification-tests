@@ -346,8 +346,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodName          = "hello-pod"
-			cltPodLabel         = "app=hello-pod"
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
 			coreDNSSrvPod       = filepath.Join(buildPruningBaseDir, "coreDNS-pod.yaml")
 			srvPodName          = "test-coredns"
 			srvPodLabel         = "name=test-coredns"
@@ -387,10 +387,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 
 		exutil.By("create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 
 		exutil.By("Let client send out SERVFAIL nslookup to the dns server, and check the desired SERVFAIL logs from a coredns pod")
-		output := nslookupsAndWaitForDNSlog(oc, cltPodName, failedDNSReq, podList, failedDNSReq+".")
+		output := nslookupsAndWaitForDNSlog(oc, clientPodName, failedDNSReq, podList, failedDNSReq+".")
 		o.Expect(output).To(o.ContainSubstring(failedDNSReq))
 
 		exutil.By("Patch dns operator with logLevel Debug for CoreDNS, and wait the Corefile is updated")
@@ -398,7 +398,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 		pollReadDnsCorefile(oc, oneDnsPod, "log", "-A2", "class denial error")
 
 		exutil.By("Let client send out NXDOMAIN nslookup to the dns server, and check the desired NXDOMAIN logs from a coredns pod")
-		output = nslookupsAndWaitForDNSlog(oc, cltPodName, nxDNSReq, podList, "-type=mx", nxDNSReq+".")
+		output = nslookupsAndWaitForDNSlog(oc, clientPodName, nxDNSReq, podList, "-type=mx", nxDNSReq+".")
 		o.Expect(output).To(o.ContainSubstring(nxDNSReq))
 
 		exutil.By("Patch dns operator with logLevel Trace for CoreDNS, and wait the Corefile is updated")
@@ -406,7 +406,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 		pollReadDnsCorefile(oc, oneDnsPod, "log", "-A2", "class all")
 
 		exutil.By("Let client send out normal nslookup which will get correct response, and check the desired TRACE logs from a coredns pod")
-		output = nslookupsAndWaitForDNSlog(oc, cltPodName, normalDNSReq, podList, normalDNSReq+".")
+		output = nslookupsAndWaitForDNSlog(oc, clientPodName, normalDNSReq, podList, normalDNSReq+".")
 		o.Expect(output).To(o.ContainSubstring(normalDNSReq))
 	})
 
@@ -415,8 +415,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodLabel         = "app=hello-pod"
-			cltPodName          = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
+			clientPodName       = "hello-pod"
 			ptrValue            = "10.0.30.172.in-addr.arpa"
 		)
 		project1 := oc.Namespace()
@@ -432,15 +432,15 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 
 		exutil.By("Create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 
 		exutil.By("Client send out a dig for google.com to check response")
-		digOutput, err2 := oc.Run("exec").Args(cltPodName, "--", "dig", "google.com").Output()
+		digOutput, err2 := oc.Run("exec").Args(clientPodName, "--", "dig", "google.com").Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		o.Expect(digOutput).To(o.ContainSubstring("udp: 1232"))
 
 		exutil.By("Client send out a dig for NXDOMAIN to check response")
-		digOutput1, err3 := oc.Run("exec").Args(cltPodName, "--", "dig", "nxdomain.google.com").Output()
+		digOutput1, err3 := oc.Run("exec").Args(clientPodName, "--", "dig", "nxdomain.google.com").Output()
 		o.Expect(err3).NotTo(o.HaveOccurred())
 		o.Expect(digOutput1).To(o.ContainSubstring("udp: 1232"))
 
@@ -668,21 +668,21 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			clientPod           = filepath.Join(buildPruningBaseDir, "testpod-60350.yaml")
-			cltPodLabel         = "app=testpod-60350"
-			cltPodName          = "testpod-60350"
+			clientPodLabel      = "app=testpod-60350"
+			clientPodName       = "testpod-60350"
 		)
 		project1 := oc.Namespace()
 
 		exutil.By("Create a pod with 32 DNS search list")
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 
 		exutil.By("Check the pod event logs and confirm there is no Search Line limits")
-		checkPodEvent := describePodResource(oc, cltPodName, project1)
+		checkPodEvent := describePodResource(oc, clientPodName, project1)
 		o.Expect(checkPodEvent).NotTo(o.ContainSubstring("Warning  DNSConfigForming"))
 
 		exutil.By("Check the resulting pod have all those search entries in its /etc/resolf.conf")
-		execOutput, err := oc.Run("exec").Args(cltPodName, "--", "sh", "-c", "cat /etc/resolv.conf").Output()
+		execOutput, err := oc.Run("exec").Args(clientPodName, "--", "sh", "-c", "cat /etc/resolv.conf").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(execOutput).To(o.ContainSubstring("8th.com 9th.com 10th.com 11th.com 12th.com 13th.com 14th.com 15th.com 16th.com 17th.com 18th.com 19th.com 20th.com 21th.com 22th.com 23th.com 24th.com 25th.com 26th.com 27th.com 28th.com 29th.com 30th.com 31th.com 32th.com"))
 	})
@@ -691,21 +691,21 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			clientPod           = filepath.Join(buildPruningBaseDir, "testpod-60492.yaml")
-			cltPodLabel         = "app=testpod-60492"
-			cltPodName          = "testpod-60492"
+			clientPodLabel      = "app=testpod-60492"
+			clientPodName       = "testpod-60492"
 		)
 		project1 := oc.Namespace()
 
 		exutil.By("Create a pod with a single search path with 253 characters")
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 
 		exutil.By("Check the pod event logs and confirm there is no Search Line limits")
-		checkPodEvent := describePodResource(oc, cltPodName, project1)
+		checkPodEvent := describePodResource(oc, clientPodName, project1)
 		o.Expect(checkPodEvent).NotTo(o.ContainSubstring("Warning  DNSConfigForming"))
 
 		exutil.By("Check the resulting pod have all those search entries in its /etc/resolf.conf")
-		execOutput, err := oc.Run("exec").Args(cltPodName, "--", "sh", "-c", "cat /etc/resolv.conf").Output()
+		execOutput, err := oc.Run("exec").Args(clientPodName, "--", "sh", "-c", "cat /etc/resolv.conf").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(execOutput).To(o.ContainSubstring("t47x6d4lzz1zxm1bakrmiceb0tljzl9n8r19kqu9s3731ectkllp9mezn7cldozt25nlenyh5jus5b9rr687u2icimakjpyf4rsux3c66giulc0d2ipsa6bpa6dykgd0mc25r1m89hvzjcix73sdwfbu5q67t0c131i1fqne0o7we20ve2emh1046h9m854wfxo0spb2gv5d65v9x2ibuiti7rhr2y8u72hil5cutp63sbhi832kf3v4vuxa0"))
 	})
@@ -1062,8 +1062,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodLabel         = "app=hello-pod"
-			cltPodName          = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
+			clientPodName       = "hello-pod"
 			egressFirewall      = filepath.Join(buildPruningBaseDir, "egressfirewall-wildcard.yaml")
 		)
 
@@ -1074,7 +1074,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 
 		exutil.By("2. Create a client pod")
 		createResourceFromFile(oc, project1, clientPod)
-		ensurePodWithLabelReady(oc, project1, cltPodLabel)
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
 
 		exutil.By("3. Verify the record created with the dns name in the DNSNameResolver CR")
 		wildcardDnsName := getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..spec.name}")
@@ -1082,9 +1082,9 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 
 		exutil.By("4. Verify the allowed rules which matches the wildcard take effect.")
 		// as per the egress firewall, only domains having "*.google.com" will only allowed
-		checkDomainReachability(oc, cltPodName, project1, "www.google.com", true)
-		checkDomainReachability(oc, cltPodName, project1, "www.redhat.com", false)
-		checkDomainReachability(oc, cltPodName, project1, "calendar.google.com", true)
+		checkDomainReachability(oc, clientPodName, project1, "www.google.com", true)
+		checkDomainReachability(oc, clientPodName, project1, "www.redhat.com", false)
+		checkDomainReachability(oc, clientPodName, project1, "calendar.google.com", true)
 
 		exutil.By("5. Confirm the wildcard entry is resolved to dnsName with IP address and TTL value")
 		// resolved DNS names
@@ -1108,8 +1108,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod.yaml")
-			cltPodLabel         = "app=hello-pod"
-			cltPodName          = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
+			clientPodName       = "hello-pod"
 			egressFirewall      = filepath.Join(buildPruningBaseDir, "egressfirewall-wildcard.yaml")
 			egressFirewall2     = filepath.Join(buildPruningBaseDir, "egressfirewall-multiDomain.yaml")
 		)
@@ -1121,7 +1121,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 			exutil.SetNamespacePrivileged(oc, project[i])
 			operateResourceFromFile(oc, "create", project[i], clientPod)
 			operateResourceFromFile(oc, "create", project[i], egressFirewall)
-			ensurePodWithLabelReady(oc, project[i], cltPodLabel)
+			ensurePodWithLabelReady(oc, project[i], clientPodLabel)
 			waitEgressFirewallApplied(oc, "default", project[i])
 			oc.SetupProject()
 		}
@@ -1130,7 +1130,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 		wildcardDnsName := getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..spec.name}")
 		o.Expect(wildcardDnsName).To(o.ContainSubstring("*.google.com."))
 		randomNS := getRandomElementFromList(project)
-		checkDomainReachability(oc, cltPodName, randomNS, "www.google.com", true)
+		checkDomainReachability(oc, clientPodName, randomNS, "www.google.com", true)
 
 		exutil.By("3. Edit some egressfirewalls")
 		updateValueTest1 := "[{\"op\":\"replace\",\"path\":\"/spec/egress/0/to/dnsName\", \"value\":\"www.yahoo.com\"}]"
@@ -1153,19 +1153,19 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 			"*.google.com."), o.ContainSubstring(
 			"www.redhat.com."), o.ContainSubstring(
 			"www.yahoo.com.")))
-		checkDomainReachability(oc, cltPodName, project[0], "www.yahoo.com", true)
-		checkDomainReachability(oc, cltPodName, project[0], "www.google.com", false)
-		checkDomainReachability(oc, cltPodName, project[1], "www.google.com", true)
-		checkDomainReachability(oc, cltPodName, project[1], "www.redhat.com", false)
-		checkDomainReachability(oc, cltPodName, project[2], "calendar.google.com", false)
-		checkDomainReachability(oc, cltPodName, project[2], "www.google.com", true)
-		checkDomainReachability(oc, cltPodName, project[3], "calendar.google.com", true)
+		checkDomainReachability(oc, clientPodName, project[0], "www.yahoo.com", true)
+		checkDomainReachability(oc, clientPodName, project[0], "www.google.com", false)
+		checkDomainReachability(oc, clientPodName, project[1], "www.google.com", true)
+		checkDomainReachability(oc, clientPodName, project[1], "www.redhat.com", false)
+		checkDomainReachability(oc, clientPodName, project[2], "calendar.google.com", false)
+		checkDomainReachability(oc, clientPodName, project[2], "www.google.com", true)
+		checkDomainReachability(oc, clientPodName, project[3], "calendar.google.com", true)
 
 		exutil.By("5. Delete an egressfirewall and confirm the same")
 		err1 := oc.AsAdmin().WithoutNamespace().Run("delete").Args("egressfirewall", "default", "-n", project[0]).Execute()
 		o.Expect(err1).NotTo(o.HaveOccurred())
 		// the firewall was previous blocking the dns resolution of 'google.com' in the namespace and now not
-		checkDomainReachability(oc, cltPodName, project[0], "www.google.com", true)
+		checkDomainReachability(oc, clientPodName, project[0], "www.google.com", true)
 		wildcardDnsName = getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..spec.name}")
 		o.Expect(wildcardDnsName).NotTo(o.ContainSubstring("www.yahoo.com."))
 
@@ -1176,7 +1176,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 		o.Expect(sedErr).NotTo(o.HaveOccurred())
 		operateResourceFromFile(oc, "create", project[0], egressFirewall)
 		waitEgressFirewallApplied(oc, "default", project[0])
-		checkDomainReachability(oc, cltPodName, project[0], "www.amazon.com", true)
+		checkDomainReachability(oc, clientPodName, project[0], "www.amazon.com", true)
 		wildcardDnsName = getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..spec.name}")
 		o.Expect(wildcardDnsName).To(o.ContainSubstring("www.amazon.com."))
 
@@ -1186,7 +1186,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 		operateResourceFromFile(oc, "create", project5, egressFirewall2)
 		waitEgressFirewallApplied(oc, "default", project5)
 		operateResourceFromFile(oc, "create", project5, clientPod)
-		ensurePodWithLabelReady(oc, project5, cltPodLabel)
+		ensurePodWithLabelReady(oc, project5, clientPodLabel)
 
 		exutil.By("8. Verify the  three dnsnameresolver records created in DNSNameResolver CR")
 		wildcardDnsNames := getByJsonPath(oc, "openshift-ovn-kubernetes", "dnsnameresolver", "{.items..spec.name}")
@@ -1194,10 +1194,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 			"www.facebook.com."), o.ContainSubstring("registry-1.docker.io.")))
 
 		exutil.By("9. Verify the dns records are resolved based on allowed rules only")
-		checkDomainReachability(oc, cltPodName, project5, "www.facebook.com:80", true)
-		checkDomainReachability(oc, cltPodName, project5, "registry-1.docker.io", true)
+		checkDomainReachability(oc, clientPodName, project5, "www.facebook.com:80", true)
+		checkDomainReachability(oc, clientPodName, project5, "registry-1.docker.io", true)
 		// as per the egress firewall, domain name having "www.facebook.com" with port 80 will only resolved
-		checkDomainReachability(oc, cltPodName, project5, "www.facebook.com:443", false)
+		checkDomainReachability(oc, clientPodName, project5, "www.facebook.com:443", false)
 
 		exutil.By("10. Confirm the dns records are resolved with IP address and TTL value")
 		// resolved DNS names
