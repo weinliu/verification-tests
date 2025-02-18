@@ -1618,7 +1618,13 @@ func waitForDeploymentPodsToBeReady(oc *exutil.CLI, namespace string, name strin
 		e2e.Logf("Waiting for full availability of %s deployment (%d/%d)\n", name, deployment.Status.AvailableReplicas, *deployment.Spec.Replicas)
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("deployment %s is not availabile", name))
+	if err != nil {
+		err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("--tail", "15", "deployment/"+name, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("describe").Args("deployment/"+name, "-n", namespace).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Failf("deployment %s is not availabile", name)
+	}
 }
 
 func addLabelToNode(oc *exutil.CLI, label string, workerNodeName string, resource string) {
