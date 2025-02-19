@@ -18,7 +18,6 @@ var _ = g.Describe("[sig-networking] SDN udn networkpolicy", func() {
 	var (
 		oc             = exutil.NewCLI("networking-udn", exutil.KubeConfigPath())
 		testDataDirUDN = exutil.FixturePath("testdata", "networking/udn")
-		ipStackType    = checkIPStackType(oc)
 	)
 
 	g.BeforeEach(func() {
@@ -40,7 +39,7 @@ var _ = g.Describe("[sig-networking] SDN udn networkpolicy", func() {
 			nadResourcename              = "l3-network-"
 			topology                     = "layer3"
 		)
-
+		ipStackType := checkIPStackType(oc)
 		var nadName string
 		var nadNS []string = make([]string, 0, 4)
 		nsDefaultNetwork := oc.Namespace()
@@ -196,7 +195,7 @@ var _ = g.Describe("[sig-networking] SDN udn networkpolicy", func() {
 			nadResourcename             = "l2-network-"
 			topology                    = "layer2"
 		)
-
+		ipStackType := checkIPStackType(oc)
 		var nadName string
 		var nadNS []string = make([]string, 0, 4)
 		nadNetworkName := []string{"l2-network-test-1", "l2-network-test-2"}
@@ -355,7 +354,7 @@ var _ = g.Describe("[sig-networking] SDN udn networkpolicy", func() {
 			cudnCRDName                  = "cudn-l3-network-" + testID
 			udnCRDName                   = "udn-l3-network-" + testID + "-0"
 		)
-
+		ipStackType := checkIPStackType(oc)
 		var allNS []string = make([]string, 0, 3)
 		var ipBlockPolicyName string
 		var podCount int
