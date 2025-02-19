@@ -618,6 +618,10 @@ func (a *AwsClient) GetSecurityGroupByGroupName(groupName string) (*ec2.Security
 	if err != nil {
 		return nil, err
 	}
+	// Check if SecurityGroups is empty
+	if len(ep.SecurityGroups) == 0 {
+		return nil, fmt.Errorf("no security group found with name: %s", groupName)
+	}
 
 	return ep.SecurityGroups[0], nil
 }

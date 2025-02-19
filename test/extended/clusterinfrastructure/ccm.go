@@ -156,6 +156,9 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure CCM", func() 
 		clusterinfra.GetAwsCredentialFromCluster(oc)
 		awsClient := exutil.InitAwsSession()
 		sg, err := awsClient.GetSecurityGroupByGroupName(groupname)
+		if sg == nil {
+			g.Skip("The profile might not have SecurityGrp for router-default")
+		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 		sgId := *sg.GroupId
 		e2e.Logf("sgId: %s", sgId)
