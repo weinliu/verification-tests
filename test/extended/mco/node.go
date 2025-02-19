@@ -1292,11 +1292,12 @@ func (n Node) CanUseDnfDownload() (bool, error) {
 // DnfDownload uses the "dnf download" command to download a rpm package. Returns the full name of the downloaded package
 func (n Node) DnfDownload(pkg, dir string) (string, error) {
 	out, err := n.DebugNodeWithChroot("dnf", "download", pkg, "--destdir", dir)
+	logger.Infof("Download output: %s", out)
 	if err != nil {
 		return "", err
 	}
 
-	expr := `(?P<package>` + pkg + `.*rpm)`
+	expr := `(?P<package>(?m)^` + pkg + `.*rpm)`
 	r := regexp.MustCompile(expr)
 	match := r.FindStringSubmatch(out)
 	if len(match) == 0 {
