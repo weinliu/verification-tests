@@ -29,6 +29,21 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		skipTestIfOCBIsEnabled(oc)
 	})
 
+	g.It("Author:sregidor-NonPreRelease-Medium-79172-OCB Inherit from global pull secret if baseImagePullSecret field is not specified [Disruptive]", func() {
+		var (
+			infraMcpName = "infra"
+		)
+
+		exutil.By("Create custom infra MCP")
+		// We add no workers to the infra pool, it is not necessary
+		infraMcp, err := CreateCustomMCP(oc.AsAdmin(), infraMcpName, 0)
+		defer infraMcp.delete()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating a new custom pool: %s", infraMcpName)
+		logger.Infof("OK!\n")
+
+		testContainerFile([]ContainerFile{}, MachineConfigNamespace, infraMcp, nil, true)
+	})
+
 	g.It("Author:sregidor-NonPreRelease-High-73494-[P1] OCB Wiring up Productionalized Build Controller. New 4.16 OCB API [Disruptive]", func() {
 		var (
 			infraMcpName = "infra"
@@ -211,7 +226,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 			}
 		)
 
-		testContainerFile([]ContainerFile{{Content: containerFileContent}}, MachineConfigNamespace, mcp, checkers)
+		testContainerFile([]ContainerFile{{Content: containerFileContent}}, MachineConfigNamespace, mcp, checkers, false)
 	})
 
 	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Medium-78001-[P2] The etc-pki-etitlement secret is created automatically for OCB Use custom Containerfile with rhel enablement [Disruptive]", func() {
@@ -242,7 +257,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 			g.Skip(fmt.Sprintf("There is no entitlement secret available in this cluster %s. This test case cannot be executed", entitlementSecret))
 		}
 
-		testContainerFile([]ContainerFile{{Content: containerFileContent}}, MachineConfigNamespace, mcp, checkers)
+		testContainerFile([]ContainerFile{{Content: containerFileContent}}, MachineConfigNamespace, mcp, checkers, false)
 	})
 
 	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-73947-OCB use OutputImage CurrentImagePullSecret [Disruptive]", func() {
@@ -259,7 +274,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 			}
 		)
 
-		testContainerFile([]ContainerFile{}, tmpNamespaceName, mcp, checkers)
+		testContainerFile([]ContainerFile{}, tmpNamespaceName, mcp, checkers, false)
 	})
 
 	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-High-72003-[P1] OCB Opting into on-cluster builds must respect maxUnavailable setting. Workers.[Disruptive]", func() {
@@ -699,7 +714,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Create the MOSC")
-		mosc, err := CreateMachineOSConfigUsingInternalRegistry(oc.AsAdmin(), MachineConfigNamespace, "test-78196-mosc", mcp.GetName(), []ContainerFile{{Content: containerFileContent}})
+		mosc, err := CreateMachineOSConfigUsingExternalOrInternalRegistry(oc.AsAdmin(), MachineConfigNamespace, "test-78196-mosc", mcp.GetName(), []ContainerFile{{Content: containerFileContent}})
 		defer DisableOCL(mosc)
 		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
 		logger.Infof("OK!\n")
@@ -737,7 +752,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 
 })
 
-func testContainerFile(containerFiles []ContainerFile, imageNamespace string, mcp *MachineConfigPool, checkers []Checker) {
+func testContainerFile(containerFiles []ContainerFile, imageNamespace string, mcp *MachineConfigPool, checkers []Checker, defaultPullSecret bool) {
 	var (
 		oc       = mcp.GetOC().AsAdmin()
 		mcpList  = NewMachineConfigPoolList(oc.AsAdmin())
@@ -748,7 +763,7 @@ func testContainerFile(containerFiles []ContainerFile, imageNamespace string, mc
 	switch imageNamespace {
 	case MachineConfigNamespace:
 		exutil.By("Configure OCB functionality for the new infra MCP. Create MOSC")
-		mosc, err = CreateMachineOSConfigUsingExternalOrInternalRegistry(oc, MachineConfigNamespace, moscName, mcp.GetName(), containerFiles)
+		mosc, err = createMachineOSConfigUsingExternalOrInternalRegistry(oc, MachineConfigNamespace, moscName, mcp.GetName(), containerFiles, defaultPullSecret)
 	default:
 		SkipTestIfCannotUseInternalRegistry(mcp.GetOC())
 
@@ -778,7 +793,7 @@ func testContainerFile(containerFiles []ContainerFile, imageNamespace string, mc
 		logger.Infof("OK!\n")
 
 		exutil.By("Configure OCB functionality for the new infra MCP. Create MOSC")
-		mosc, err = CreateMachineOSConfigUsingInternalRegistry(oc, tmpNamespace.GetName(), moscName, mcp.GetName(), containerFiles)
+		mosc, err = CreateMachineOSConfigUsingInternalRegistry(oc, tmpNamespace.GetName(), moscName, mcp.GetName(), containerFiles, defaultPullSecret)
 	}
 	defer DisableOCL(mosc)
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error creating the MachineOSConfig resource")
