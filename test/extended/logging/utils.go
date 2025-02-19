@@ -25,7 +25,6 @@ import (
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
-	"github.com/tidwall/gjson"
 	"google.golang.org/api/iterator"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -34,16 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
-
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
-	azarm "github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
-	azcloud "github.com/Azure/azure-sdk-for-go/sdk/azcore/cloud"
-	azpolicy "github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	azto "github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/Azure/azure-sdk-for-go/sdk/monitor/query/azlogs"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/operationalinsights/armoperationalinsights"
-	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources"
 )
 
 // SubscriptionObjects objects are used to create operators via OLM
@@ -1824,10 +1813,34 @@ func (e eventRouter) delete(oc *exutil.CLI) {
 // createSecretForGCL creates a secret for collector pods to forward logs to Google Cloud Logging
 func createSecretForGCL(oc *exutil.CLI, name, namespace string) error {
 	// get gcp-credentials from env var GOOGLE_APPLICATION_CREDENTIALS
-
 	gcsCred := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 	return oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", name, "-n", namespace, "--from-file=google-application-credentials.json="+gcsCred).Execute()
 
+}
+
+type googleApplicationCredentials struct {
+	CredentialType string `json:"type"`
+	ProjectID      string `json:"project_id"`
+	ClientID       string `json:"client_id"`
+}
+
+func getGCPProjectID(oc *exutil.CLI) (string, error) {
+	platform := exutil.CheckPlatform(oc)
+	if platform == "gcp" {
+		return exutil.GetGcpProjectID(oc)
+	}
+
+	credentialFile, present := os.LookupEnv("GOOGLE_APPLICATION_CREDENTIALS")
+	if !present {
+		g.Skip("Skip for the platform is not GCP and there is no GCP credentials")
+	}
+	file, err := os.ReadFile(credentialFile)
+	if err != nil {
+		return "", fmt.Errorf("can't read google application credentials: %v", err)
+	}
+	var gac googleApplicationCredentials
+	err = json.Unmarshal(file, &gac)
+	return gac.ProjectID, err
 }
 
 type googleCloudLogging struct {
@@ -2565,231 +2578,6 @@ func getPoolID(oc *exutil.CLI) (string, error) {
 	return strings.Split(strings.Split(issuer, "/")[1], "-oidc")[0], nil
 }
 
-type azureMonitorLog struct {
-	subscriptionID    string
-	resourceGroupName string
-	customerID        string
-	workspaceID       string
-	workspaceName     string
-	primaryKey        string
-	secondaryKey      string
-	tPrefixOrName     string // Depend on how we defined the logType in CLF template, it can be the table name or the table name name prefix.
-	location          string
-	azCred            *azidentity.DefaultAzureCredential
-	clientOpts        azpolicy.ClientOptions
-	host              string
-}
-
-// checkout the cloudType of this cluster's platform
-func getAzureCloudType(oc *exutil.CLI) string {
-	var err error
-	cloudType := exutil.CheckPlatform(oc)
-	if cloudType == "azure" {
-		cloudType, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
-		if err != nil {
-			cloudType = "azure"
-		}
-	}
-	return cloudType
-}
-
-func (azLog *azureMonitorLog) getSourceGroupLocation() error {
-	resourceGroupClient, err := armresources.NewResourceGroupsClient(azLog.subscriptionID, azLog.azCred,
-		&azarm.ClientOptions{
-			ClientOptions: azLog.clientOpts,
-		},
-	)
-	if err != nil {
-		return err
-	}
-
-	ctx := context.Background()
-	resourceGroupGetResponse, err := resourceGroupClient.Get(
-		ctx,
-		azLog.resourceGroupName,
-		nil,
-	)
-	if err != nil {
-		return err
-	}
-	azLog.location = *resourceGroupGetResponse.ResourceGroup.Location
-	return nil
-}
-
-func (azLog *azureMonitorLog) createLogWorkspace() error {
-	e2e.Logf("Create workspace ")
-	workspacesClient, err := armoperationalinsights.NewWorkspacesClient(azLog.subscriptionID, azLog.azCred,
-		&azarm.ClientOptions{
-			ClientOptions: azLog.clientOpts,
-		},
-	)
-	if err != nil {
-		return err
-	}
-	ctx := context.Background()
-	pollerResp, err := workspacesClient.BeginCreateOrUpdate(
-		ctx,
-		azLog.resourceGroupName,
-		azLog.workspaceName,
-		armoperationalinsights.Workspace{
-			Location:   azto.Ptr(azLog.location),
-			Properties: &armoperationalinsights.WorkspaceProperties{},
-		},
-		nil,
-	)
-	if err != nil {
-		return err
-	}
-	workspace, err := pollerResp.PollUntilDone(ctx, nil)
-	if err != nil {
-		return err
-	}
-	azLog.workspaceID = *workspace.ID
-	azLog.workspaceName = *workspace.Name
-	azLog.customerID = *workspace.Properties.CustomerID
-
-	shareKeyClient, err := armoperationalinsights.NewSharedKeysClient(azLog.subscriptionID, azLog.azCred,
-		&azarm.ClientOptions{
-			ClientOptions: azLog.clientOpts,
-		},
-	)
-	if err != nil {
-		return err
-	}
-	resp, err := shareKeyClient.GetSharedKeys(ctx, azLog.resourceGroupName, azLog.workspaceName, nil)
-	if err != nil {
-		return err
-	}
-	azLog.primaryKey = *resp.PrimarySharedKey
-	azLog.secondaryKey = *resp.SecondarySharedKey
-	return nil
-}
-
-// Get azureMonitoring from Envs. CreateOrUpdate Log Analytics workspace.
-func newAzureLog(oc *exutil.CLI, resouceGroupName string, workspaceName string, tPrefixOrName string) (azureMonitorLog, error) {
-	var azLog azureMonitorLog
-	var err error
-	azLog.resourceGroupName = resouceGroupName
-	//  The workspace name must be between 4 and 63 characters.
-	//  The workspace name can contain only letters, numbers and '-'. The '-' shouldn't be the first or the last symbol.
-	azLog.tPrefixOrName = tPrefixOrName
-	azLog.workspaceName = workspaceName
-	azLog.subscriptionID = os.Getenv("AZURE_SUBSCRIPTION_ID")
-	if len(azLog.subscriptionID) == 0 {
-		dat, err := oc.AsAdmin().WithoutNamespace().Run("get", "-n", "kube-system", "secret/azure-credentials", "-ojsonpath={.data.azure_subscription_id}").Output()
-		if err != nil {
-			return azLog, fmt.Errorf("failed to get secret/azure-credentials")
-		}
-		data, err := base64.StdEncoding.DecodeString(dat)
-		if err != nil {
-			return azLog, fmt.Errorf("failed to decode subscription_id from secret/azure-credentials")
-		}
-
-		azLog.subscriptionID = string(data)
-		if len(azLog.subscriptionID) == 0 {
-			return azLog, fmt.Errorf("failed as subscriptionID is empty")
-		}
-	}
-	cloudType := getAzureCloudType(oc)
-	switch strings.ToLower(cloudType) {
-	case "azurepubliccloud":
-		azLog.clientOpts = azcore.ClientOptions{Cloud: azcloud.AzurePublic}
-		azLog.host = "ods.opinsights.azure.com"
-	case "azureusgovernmentcloud":
-		azLog.clientOpts = azcore.ClientOptions{Cloud: azcloud.AzureGovernment}
-		azLog.host = "ods.opinsights.azure.us"
-	case "azurechinacloud":
-		azLog.clientOpts = azcore.ClientOptions{Cloud: azcloud.AzureChina}
-		return azLog, fmt.Errorf("skip on AzureChinaCloud")
-	case "azuregermancloud":
-		return azLog, fmt.Errorf("skip on AzureGermanCloud")
-	case "azurestackcloud":
-		return azLog, fmt.Errorf("skip on AzureStackCloud")
-	default:
-		return azLog, fmt.Errorf("skip on %s", cloudType)
-	}
-	azLog.azCred, err = azidentity.NewDefaultAzureCredential(
-		&azidentity.DefaultAzureCredentialOptions{ClientOptions: azLog.clientOpts},
-	)
-	if err != nil {
-		return azLog, err
-	}
-
-	err = azLog.getSourceGroupLocation()
-	if err != nil {
-		return azLog, err
-	}
-
-	err = azLog.createLogWorkspace()
-	if err != nil {
-		return azLog, err
-	}
-	return azLog, nil
-}
-
-// Create a secret for collector pods to forward logs to Log Analytics workspaces.
-func (azLog *azureMonitorLog) createSecret(oc *exutil.CLI, name, namespace string) error {
-	return oc.NotShowInfo().AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", name, "-n", namespace, "--from-literal=shared_key="+azLog.primaryKey).Execute()
-}
-
-// query logs per table in Log Analytics workspaces.
-func (azLog *azureMonitorLog) getLogByTable(logTable string) ([]azlogs.Row, error) {
-	queryString := logTable + "| where TimeGenerated > ago(5m)|top 10 by TimeGenerated"
-	e2e.Logf("query %v", queryString)
-	var entries []azlogs.Row
-
-	client, err := azlogs.NewClient(azLog.azCred,
-		&azlogs.ClientOptions{
-			ClientOptions: azLog.clientOpts,
-		},
-	)
-	if err != nil {
-		return entries, err
-	}
-
-	//https://learn.microsoft.com/en-us/cli/azure/monitor/log-analytics?view=azure-cli-latest
-	//https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/
-	err = wait.PollUntilContextTimeout(context.Background(), 30*time.Second, 180*time.Second, true, func(context.Context) (done bool, err error) {
-		res, err1 := client.QueryWorkspace(
-			context.TODO(),
-			azLog.customerID,
-			azlogs.QueryBody{
-				Query: azto.Ptr(queryString),
-			},
-			nil)
-		if err1 != nil {
-			e2e.Logf("azlogs QueryWorkspace error: %v. continue", err1)
-			return false, nil
-		}
-		if res.Error != nil {
-			e2e.Logf("azlogs QueryWorkspace response error: %v, continue", res.Error)
-			return false, nil
-		}
-		for _, table := range res.Tables {
-			entries = append(entries, table.Rows...)
-		}
-		return len(entries) > 0, nil
-	})
-
-	return entries, err
-}
-
-// Delete LogWorkspace
-func (azLog *azureMonitorLog) deleteWorkspace() error {
-	e2e.Logf("Delete workspace %v", azLog.workspaceName)
-	ctx := context.Background()
-	workspacesClient, err := armoperationalinsights.NewWorkspacesClient(azLog.subscriptionID, azLog.azCred,
-		&azarm.ClientOptions{
-			ClientOptions: azLog.clientOpts,
-		},
-	)
-	if err != nil {
-		return err
-	}
-	workspacesClient.BeginDelete(ctx, azLog.resourceGroupName, azLog.workspaceName, &armoperationalinsights.WorkspacesClientBeginDeleteOptions{Force: new(bool)})
-	return nil
-}
-
 // Create a linux audit policy to generate audit logs in one schedulable worker
 func genLinuxAuditLogsOnWorker(oc *exutil.CLI) (string, error) {
 	workerNodes, err := exutil.GetSchedulableLinuxWorkerNodes(oc)
@@ -2813,57 +2601,10 @@ func deleteLinuxAuditPolicyFromNode(oc *exutil.CLI, nodeName string) error {
 	return err
 }
 
-func getResourceGroupOnAzure(oc *exutil.CLI) (string, error) {
-	resourceGroup, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructures", "cluster", "-o=jsonpath={.status.platformStatus.azure.resourceGroupName}").Output()
-	return resourceGroup, err
-}
-
-// Get region/location of cluster running on Azure Cloud
-func getAzureClusterRegion(oc *exutil.CLI) (string, error) {
-	return oc.AsAdmin().WithoutNamespace().Run("get").Args("node", `-ojsonpath={.items[].metadata.labels.topology\.kubernetes\.io/region}`).Output()
-}
-
-// To read Azure subscription json file from local disk.
-// Also injects ENV vars needed to perform certain operations on Managed Identities.
-func readAzureCredentials() bool {
-	var azureCredFile string
-	envDir, present := os.LookupEnv("CLUSTER_PROFILE_DIR")
-	if present {
-		azureCredFile = filepath.Join(envDir, "osServicePrincipal.json")
-	} else {
-		authFileLocation, present := os.LookupEnv("AZURE_AUTH_LOCATION")
-		if present {
-			azureCredFile = authFileLocation
-		}
+func hasMaster(oc *exutil.CLI) bool {
+	masterNodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/master="})
+	if err != nil {
+		e2e.Logf("hit error when listing master nodes: %v", err)
 	}
-	if len(azureCredFile) > 0 {
-		fileContent, err := os.ReadFile(azureCredFile)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		subscriptionID := gjson.Get(string(fileContent), `azure_subscription_id`).String()
-		if subscriptionID == "" {
-			subscriptionID = gjson.Get(string(fileContent), `subscriptionId`).String()
-		}
-		os.Setenv("AZURE_SUBSCRIPTION_ID", subscriptionID)
-
-		tenantID := gjson.Get(string(fileContent), `azure_tenant_id`).String()
-		if tenantID == "" {
-			tenantID = gjson.Get(string(fileContent), `tenantId`).String()
-		}
-		os.Setenv("AZURE_TENANT_ID", tenantID)
-
-		clientID := gjson.Get(string(fileContent), `azure_client_id`).String()
-		if clientID == "" {
-			clientID = gjson.Get(string(fileContent), `clientId`).String()
-		}
-		os.Setenv("AZURE_CLIENT_ID", clientID)
-
-		clientSecret := gjson.Get(string(fileContent), `azure_client_secret`).String()
-		if clientSecret == "" {
-			clientSecret = gjson.Get(string(fileContent), `clientSecret`).String()
-		}
-		os.Setenv("AZURE_CLIENT_SECRET", clientSecret)
-		return true
-	}
-	return false
+	return len(masterNodes.Items) > 0
 }

@@ -4,6 +4,7 @@ package logging
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -64,9 +65,11 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		nodeName, err := genLinuxAuditLogsOnWorker(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
+		if !hasMaster(oc) {
+			nodeName, err := genLinuxAuditLogsOnWorker(oc)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer deleteLinuxAuditPolicyFromNode(oc, nodeName)
+		}
 
 		g.By("deploy loki stack")
 		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
@@ -169,11 +172,6 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	g.It("Author:qitang-CPaasrunBoth-ConnectedOnly-Critical-74926-[InterOps] Forward logs to cloudwatch.", func() {
-		platform := exutil.CheckPlatform(oc)
-		if platform != "aws" {
-			g.Skip("Skip for the platform is not AWS!!!")
-		}
-
 		clfNS := oc.Namespace()
 		cw := cloudwatchSpec{
 			collectorSAName: "cloudwatch-" + getRandomString(),
@@ -245,27 +243,22 @@ retry_max_duration_secs = 20`,
 
 	//author qitang@redhat.com
 	g.It("Author:qitang-CPaasrunBoth-ConnectedOnly-Critical-74924-Forward logs to GCL", func() {
-		platform := exutil.CheckPlatform(oc)
-		if platform != "gcp" {
-			g.Skip("Skip for the platform is not GCP!!!")
-		}
-
-		g.By("Create log producer")
-		appProj := oc.Namespace()
-		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
-		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		oc.SetupProject()
-		clfNS := oc.Namespace()
-
-		projectID, err := exutil.GetGcpProjectID(oc)
+		projectID, err := getGCPProjectID(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		gcl := googleCloudLogging{
 			projectID: projectID,
 			logName:   getInfrastructureName(oc) + "-74924",
 		}
 		defer gcl.removeLogs()
+
+		g.By("Create log producer")
+		appProj := oc.Namespace()
+		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
+		err = oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		oc.SetupProject()
+		clfNS := oc.Namespace()
 		gcpSecret := resource{"secret", "gcp-secret-74924", clfNS}
 		defer gcpSecret.clear(oc)
 		err = createSecretForGCL(oc, gcpSecret.name, gcpSecret.namespace)
@@ -307,28 +300,48 @@ retry_max_duration_secs = 20`,
 
 	//author anli@redhat.com
 	g.It("Author:anli-CPaasrunBoth-ConnectedOnly-Critical-71772-Forward logs to az Log Analytics -- full options", func() {
-		cloudType := getAzureCloudType(oc)
-		acceptedCloud := strings.ToLower(cloudType) == "azurepubliccloud" || strings.ToLower(cloudType) == "azureusgovernmentcloud"
-		if !acceptedCloud {
-			g.Skip("The case can only be running on Azure Public and Azure US Goverment now!")
+		platform := exutil.CheckPlatform(oc)
+		if platform == "azure" && exutil.IsWorkloadIdentityCluster(oc) {
+			g.Skip("Skip on the workload identity enabled cluster!")
+		}
+		var (
+			resourceGroupName string
+			location          string
+		)
+		infraName := getInfrastructureName(oc)
+		if platform != "azure" {
+			if !readAzureCredentials() {
+				g.Skip("Skip for the platform is not Azure and can't get credentials from env vars.")
+			}
+			resourceGroupName = infraName + "-logging-71772-rg"
+			azureSubscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
+			cred := createNewDefaultAzureCredential()
+			location = "westus" //TODO: define default location
+
+			_, err := createAzureResourceGroup(resourceGroupName, azureSubscriptionID, location, cred)
+			defer deleteAzureResourceGroup(resourceGroupName, azureSubscriptionID, cred)
+			if err != nil {
+				g.Skip("Failed to create azure resource group: " + err.Error() + ", skip the case.")
+			}
+			e2e.Logf("Successfully created resource group %s", resourceGroupName)
+		} else {
+			cloudName := getAzureCloudName(oc)
+			if !(cloudName == "azurepubliccloud" || cloudName == "azureusgovernmentcloud") {
+				g.Skip("The case can only be running on Azure Public and Azure US Goverment now!")
+			}
+			resourceGroupName, _ = exutil.GetAzureCredentialFromCluster(oc)
 		}
 
-		if exutil.IsSTSCluster(oc) {
-			g.Skip("Skip on the sts enabled cluster!")
-		}
+		g.By("Prepre Azure Log Storage Env")
+		workSpaceName := infraName + "case71772"
+		azLog, err := newAzureLog(oc, location, resourceGroupName, workSpaceName, "case71772")
+		defer azLog.deleteWorkspace()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Create log producer")
 		clfNS := oc.Namespace()
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
-		err := oc.WithoutNamespace().Run("new-app").Args("-n", clfNS, "-f", jsonLogFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		g.By("Prepre Azure Log Storage Env")
-		resourceGroupName, err := exutil.GetAzureCredentialFromCluster(oc)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		workSpaceName := getInfrastructureName(oc) + "case71772"
-		azLog, err := newAzureLog(oc, resourceGroupName, workSpaceName, "case71772")
-		defer azLog.deleteWorkspace()
+		err = oc.WithoutNamespace().Run("new-app").Args("-n", clfNS, "-f", jsonLogFile).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Deploy CLF to send logs to Log Analytics")
@@ -353,7 +366,7 @@ retry_max_duration_secs = 20`,
 		g.By("Verify the test result")
 		for _, tableName := range []string{azLog.tPrefixOrName + "infra_log_CL", azLog.tPrefixOrName + "audit_log_CL", azLog.tPrefixOrName + "app_log_CL"} {
 			_, err := azLog.getLogByTable(tableName)
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("logs are not found in %s in AzureLogWorkspace", tableName))
+			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("can't find logs from %s in AzureLogWorkspace", tableName))
 		}
 	})
 })

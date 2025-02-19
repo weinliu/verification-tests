@@ -896,7 +896,7 @@ func (l lokiStack) removeObjectStorage(oc *exutil.CLI) {
 	case "azure":
 		{
 			if exutil.IsWorkloadIdentityCluster(oc) {
-				resourceGroup, err := getResourceGroupOnAzure(oc)
+				resourceGroup, err := getAzureResourceGroupFromCluster(oc)
 				o.Expect(err).NotTo(o.HaveOccurred())
 				azureSubscriptionID := os.Getenv("AZURE_SUBSCRIPTION_ID")
 				cred := createNewDefaultAzureCredential()

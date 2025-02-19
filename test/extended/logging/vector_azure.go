@@ -4,7 +4,6 @@ package logging
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -36,13 +35,15 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 
 	//author anli@redhat.com
 	g.It("CPaasrunOnly-ConnectedOnly-Author:anli-High-71770-Forward logs to Azure Log Analytics -- Minimal Options", func() {
-		cloudType := getAzureCloudType(oc)
-		if strings.ToLower(cloudType) != "azurepubliccloud" {
+		if exutil.IsWorkloadIdentityCluster(oc) {
+			g.Skip("Skip on the workload identity enabled cluster!")
+		}
+
+		cloudName := getAzureCloudName(oc)
+		if cloudName != "azurepubliccloud" {
 			g.Skip("Skip as the cluster is not on Azure Public!")
 		}
-		if exutil.IsSTSCluster(oc) {
-			g.Skip("Skip on the sts enabled cluster!")
-		}
+
 		g.By("Create log producer")
 		clfNS := oc.Namespace()
 		jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -53,7 +54,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		resourceGroupName, err := exutil.GetAzureCredentialFromCluster(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		workSpaceName := getInfrastructureName(oc) + "case71770"
-		azLog, err := newAzureLog(oc, resourceGroupName, workSpaceName, "case71770")
+		azLog, err := newAzureLog(oc, "", resourceGroupName, workSpaceName, "case71770")
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Deploy CLF to send logs to Log Analytics")

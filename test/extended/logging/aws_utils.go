@@ -20,7 +20,6 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/openshift/openshift-tests-private/test/extended/util/clusterinfra"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -61,6 +60,25 @@ func checkAWSCredentials() bool {
 		return true
 	}
 	return false
+}
+
+func getAWSCredentialFromFile(file string) error {
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return err
+	}
+	s := strings.Split(string(data), "\n")
+	for i := 0; i < len(s); i++ {
+		if strings.Contains(s[i], "aws_access_key_id") {
+			aws_access_key_id := strings.TrimSpace(strings.Split(s[i], "=")[1])
+			os.Setenv("AWS_ACCESS_KEY_ID", aws_access_key_id)
+		}
+		if strings.Contains(s[i], "aws_secret_access_key") {
+			aws_secret_access_key := strings.TrimSpace(strings.Split(s[i], "=")[1])
+			os.Setenv("AWS_SECRET_ACCESS_KEY", aws_secret_access_key)
+		}
+	}
+	return nil
 }
 
 // get AWS Account ID
@@ -262,51 +280,65 @@ func validatesIfLogsArePushedToS3Bucket(s3Client *s3.Client, bucketName string, 
 
 // cloudWatchSpec the basic object which describe all common test options
 type cloudwatchSpec struct {
-	awsRoleName      string
-	awsRoleArn       string
-	awsRegion        string
-	awsPolicyName    string
-	awsPolicyArn     string
-	awsPartition     string //The partition in which the resource is located, valid when the cluster is STS, ref: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference-arns.html#arns-syntax
-	collectorSAName  string // the service account for collector pod to use
-	cwClient         *cloudwatchlogs.Client
-	groupName        string // the strategy for grouping logstreams, for example: '{.log_type||"none"}'
-	hasMaster        bool   // wether the cluster has master nodes or not
-	iamClient        *iam.Client
-	logTypes         []string //default: "['infrastructure','application', 'audit']"
-	nodes            []string // Cluster Nodes Names, required when checking infrastructure/audit logs and strict=true
-	ovnEnabled       bool     // if ovn is enabled
-	secretName       string   // the name of the secret for the collector to use
-	secretNamespace  string   // the namespace where the collector pods to be deployed
-	stsEnabled       bool     // Is sts enabled on the cluster
-	selAppNamespaces []string //The app namespaces should be collected and verified
-	selNamespacesID  []string // The UUIDs of all app namespaces should be collected
-	disAppNamespaces []string //The namespaces should not be collected and verified
+	awsRoleName         string
+	awsRoleArn          string
+	awsRegion           string
+	awsPolicyName       string
+	awsPolicyArn        string
+	awsPartition        string //The partition in which the resource is located, valid when the cluster is STS, ref: https://docs.aws.amazon.com/IAM/latest/UserGuide/reference-arns.html#arns-syntax
+	clusterPlatformType string
+	collectorSAName     string // the service account for collector pod to use
+	cwClient            *cloudwatchlogs.Client
+	groupName           string // the strategy for grouping logstreams, for example: '{.log_type||"none"}'
+	hasMaster           bool   // wether the cluster has master nodes or not
+	iamClient           *iam.Client
+	logTypes            []string //default: "['infrastructure','application', 'audit']"
+	nodes               []string // Cluster Nodes Names, required when checking infrastructure/audit logs and strict=true
+	ovnEnabled          bool     // if ovn is enabled
+	secretName          string   // the name of the secret for the collector to use
+	secretNamespace     string   // the namespace where the collector pods to be deployed
+	stsEnabled          bool     // Is sts enabled on the cluster
+	selAppNamespaces    []string //The app namespaces should be collected and verified
+	selNamespacesID     []string // The UUIDs of all app namespaces should be collected
+	disAppNamespaces    []string //The namespaces should not be collected and verified
 }
 
 // Set the default values to the cloudwatchSpec Object, you need to change the default in It if needs
 func (cw *cloudwatchSpec) init(oc *exutil.CLI) {
-	var err error
 	if checkNetworkType(oc) == "ovnkubernetes" {
 		cw.ovnEnabled = true
 	}
-	masterNodes, _ := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "node-role.kubernetes.io/master="})
-	if len(masterNodes.Items) > 0 {
-		cw.hasMaster = true
-	} else {
-		e2e.Logf("Can not get the master node status, assume that is a hypershift hosted cluster")
-	}
-	cw.stsEnabled = exutil.IsSTSCluster(oc)
-	if cw.stsEnabled {
-		if !checkAWSCredentials() {
-			g.Skip("Skip since no AWS credetial! No Env AWS_SHARED_CREDENTIALS_FILE, Env CLUSTER_PROFILE_DIR  or $HOME/.aws/credentials file")
+	cw.hasMaster = hasMaster(oc)
+	cw.clusterPlatformType = exutil.CheckPlatform(oc)
+	if cw.clusterPlatformType == "aws" {
+		if exutil.IsSTSCluster(oc) {
+			if !checkAWSCredentials() {
+				g.Skip("Skip since no AWS credetials.")
+			}
+			cw.stsEnabled = true
+		} else {
+			clusterinfra.GetAwsCredentialFromCluster(oc)
 		}
 	} else {
-		clusterinfra.GetAwsCredentialFromCluster(oc)
+		credFile, filePresent := os.LookupEnv("AWS_SHARED_CREDENTIALS_FILE")
+		if filePresent {
+			err := getAWSCredentialFromFile(credFile)
+			if err != nil {
+				g.Skip("Skip for the platform is not AWS and can't get credentials from file " + credFile)
+			}
+		} else {
+			_, keyIDPresent := os.LookupEnv("AWS_ACCESS_KEY_ID")
+			_, secretKeyPresent := os.LookupEnv("AWS_SECRET_ACCESS_KEY")
+			if !keyIDPresent || !secretKeyPresent {
+				g.Skip("Skip for the platform is not AWS and there is no AWS credentials set")
+			}
+		}
 	}
 	if cw.awsRegion == "" {
-		cw.awsRegion, err = exutil.GetAWSClusterRegion(oc)
-		if err != nil {
+		region, _ := exutil.GetAWSClusterRegion(oc)
+		if region != "" {
+			cw.awsRegion = region
+		} else {
 			// use us-east-2 as default region
 			cw.awsRegion = "us-east-2"
 		}
@@ -671,13 +703,21 @@ func (cw *cloudwatchSpec) checkInfraNodeLogs(strict bool) bool {
 	e2e.Logf("the infrastructure node log streams: %v", logStreams)
 	// when strict=true, return ture if we can find log streams from all nodes
 	if strict {
+		var expectedStreamNames []string
 		if len(cw.nodes) == 0 {
 			e2e.Logf("node name is empty, please get node names at first")
 			return false
 		}
 		//stream name: ip-10-0-152-69.journal.system
-		for _, node := range cw.nodes {
-			streamName := strings.Split(node, ".")[0] + ".journal.system"
+		if cw.clusterPlatformType == "aws" {
+			for _, node := range cw.nodes {
+				expectedStreamNames = append(expectedStreamNames, strings.Split(node, ".")[0])
+			}
+		} else {
+			expectedStreamNames = append(expectedStreamNames, cw.nodes...)
+		}
+		for _, name := range expectedStreamNames {
+			streamName := name + ".journal.system"
 			if !contain(logStreams, streamName) {
 				e2e.Logf("can't find log stream %s", streamName)
 				return false
@@ -736,8 +776,9 @@ func (cw *cloudwatchSpec) auditLogsFound(strict bool) bool {
 			e2e.Logf("node name is empty, please get node names at first")
 			return false
 		}
-		for _, expectedStream := range cw.nodes {
-			if !contain(logStreams, expectedStream) {
+		for _, node := range cw.nodes {
+			if !containSubstring(logStreams, node) {
+				e2e.Logf("can't find log stream from node: %s", node)
 				return false
 			}
 		}
