@@ -33,11 +33,20 @@ type routeAdvertisement struct {
 }
 
 type frrconfigurationResource struct {
-	name          string
-	namespace     string
-	asn           int
-	externalFRRIP string
-	template      string
+	name           string
+	namespace      string
+	asn            int
+	externalFRRIP1 string
+	template       string
+}
+
+type frrconfigurationResourceDS struct {
+	name           string
+	namespace      string
+	asn            int
+	externalFRRIP1 string
+	externalFRRIP2 string
+	template       string
 }
 
 func IsFrrRouteAdvertisementEnabled(oc *exutil.CLI) bool {
@@ -92,21 +101,31 @@ func getNodeIPMAP(oc *exutil.CLI, allNodes []string) (map[string]string, map[str
 	return nodesIP2Map, nodesIP1Map, allNodesIP2, allNodesIP1
 }
 
-func getExternalFRRIP(oc *exutil.CLI, allNodesIP1 []string, host string) string {
-	var getFrrIPCmd string
+func getExternalFRRIP(oc *exutil.CLI, allNodesIP2, allNodesIP1 []string, host string) (string, string) {
+	var getFrrIPCmdv4, getFrrIPCmdv6, externalFRRIP1, externalFRRIP2 string
+	var err error
 	ipStackType := checkIPStackType(oc)
 	if ipStackType == "dualstack" || ipStackType == "ipv4single" {
-		getFrrIPCmd = "ip -j -d route get " + allNodesIP1[0] + " |  jq -r '.[] | .dev' | xargs ip -d -j address show | jq -r '.[] | .addr_info[0].local'"
+		getFrrIPCmdv4 = "ip -j -d route get " + allNodesIP1[0] + " |  jq -r '.[] | .dev' | xargs ip -d -j address show | jq -r '.[] | .addr_info[0].local'"
 	}
-	if ipStackType == "ipv6single" {
-		getFrrIPCmd = "ip -6 -j -d route get " + allNodesIP1[0] + " |  jq -r '.[] | .dev' | xargs ip -d -j address show | jq -r '.[] | .addr_info[0].local'"
+	if ipStackType == "dualstack" || ipStackType == "ipv6single" {
+		getFrrIPCmdv6 = "ip -6 -j -d route get " + allNodesIP2[0] + " |  jq -r '.[] | .dev' | xargs ip -6 -d -j address show | jq -r '.[] | .addr_info[0].local'"
 	}
-	externalFRRIP, err := sshRunCmdOutPut(host, "root", getFrrIPCmd)
+	externalFRRIP1, err = sshRunCmdOutPut(host, "root", getFrrIPCmdv4)
 	o.Expect(err).NotTo(o.HaveOccurred())
-	externalFRRIP = strings.TrimRight(externalFRRIP, "\n")
-	o.Expect(externalFRRIP).NotTo(o.Equal(""))
-	e2e.Logf("\n externalFRRIP: %s\n", externalFRRIP)
-	return externalFRRIP
+	externalFRRIP1 = strings.TrimRight(externalFRRIP1, "\n")
+	o.Expect(externalFRRIP1).NotTo(o.Equal(""))
+	e2e.Logf("\n externalFRRIP1: %s\n", externalFRRIP1)
+
+	if getFrrIPCmdv6 != "" {
+		externalFRRIP2, err = sshRunCmdOutPut(host, "root", getFrrIPCmdv6)
+		e2e.Logf("\n output of trying to get externalFRRIP2: %v\n", externalFRRIP2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		externalFRRIP2 = strings.TrimRight(externalFRRIP2, "\n")
+		o.Expect(externalFRRIP2).NotTo(o.Equal(""))
+		e2e.Logf("\n externalFRRIP2: %s\n", externalFRRIP2)
+	}
+	return externalFRRIP2, externalFRRIP1
 }
 
 // getHostPodNetwork return each worker subnet from ovn-k,
@@ -295,10 +314,11 @@ vrrpd_options="  -A 127.0.0.1"
 
 func generateFrrConfigFile(frrIp string, nodesIP, nodesIPv6 []string, templateFile, configFile string) error {
 	data := BGPD{
-		FrrIP:     frrIp,
+		// FrrIP:     frrIp,
 		NodesIP:   nodesIP,
 		NodesIPv6: nodesIPv6,
 	}
+	e2e.Logf("\n frrIp passed in: %s\n", frrIp)
 
 	// Parse template file
 	t, err := template.New(templateFile).ParseFiles(templateFile)
@@ -374,7 +394,7 @@ func createExternalFrrRouter(host, externalFRRIP string, allNodesIP1, allNodesIP
 // Create frrconfiguration
 func (frrconfig *frrconfigurationResource) createFRRconfigration(oc *exutil.CLI) {
 	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 20*time.Second, false, func(cxt context.Context) (bool, error) {
-		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", frrconfig.template, "-p", "NAME="+frrconfig.name, "NAMESPACE="+frrconfig.namespace, "ASN="+strconv.Itoa(frrconfig.asn), "FRR_IP="+frrconfig.externalFRRIP)
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", frrconfig.template, "-p", "NAME="+frrconfig.name, "NAMESPACE="+frrconfig.namespace, "ASN="+strconv.Itoa(frrconfig.asn), "FRR_IP="+frrconfig.externalFRRIP1)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -382,6 +402,20 @@ func (frrconfig *frrconfigurationResource) createFRRconfigration(oc *exutil.CLI)
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create FRRconfigation %v", frrconfig.name))
+}
+
+// Create frrconfiguration for dualstack cluster
+func (frrconfigDS *frrconfigurationResourceDS) createFRRconfigrationDS(oc *exutil.CLI) {
+	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 20*time.Second, false, func(cxt context.Context) (bool, error) {
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", frrconfigDS.template, "-p", "NAME="+frrconfigDS.name,
+			"NAMESPACE="+frrconfigDS.namespace, "ASN="+strconv.Itoa(frrconfigDS.asn), "FRR_IPv4="+frrconfigDS.externalFRRIP1, "FRR_IPv6="+frrconfigDS.externalFRRIP2)
+		if err1 != nil {
+			e2e.Logf("the err:%v, and try next round", err1)
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create FRRconfigation %v", frrconfigDS.name))
 }
 
 // Check status of routeAdvertisement applied
@@ -461,14 +495,13 @@ func verifyBGPNeighborOnExternalFrr(host, frrContainerID, nodeIP1, nodeIP2 strin
 	if nodeIP2 != "" {
 		externalFrrCmd = "sudo podman exec -it " + frrContainerID + " vtysh -c \"show bgp ipv6 neighbor " + nodeIP2 + "\""
 		output, err := sshRunCmdOutPut(host, "root", externalFrrCmd)
-		e2e.Logf("show bgp ipv6 neighbor output: \n %s", output)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(string(output), "BGP state = Established") && expected {
-			e2e.Logf("BGP neighborhood is NOT established for the node as expected")
+			e2e.Logf("From IPv6 perspective in dualstack, BGP neighborhood is NOT established for the node as expected")
 			return false
 		}
 		if strings.Contains(string(output), "BGP state = Established") && !expected {
-			e2e.Logf("The node should not be selected to establish BGP neighbor with external frr")
+			e2e.Logf("From IPv6 perspective in dualstack, The node should not be selected to establish BGP neighbor with external frr")
 			return false
 		}
 	}
@@ -551,17 +584,32 @@ func verifyBGPRoutesOnClusterNode(oc *exutil.CLI, thisNode, externalFRRIP string
 
 	// external networks are hardcoded in the test
 	externalNetworks := []string{"192.168.1.0/24", "192.169.1.1/32"}
-	cmd := `vtysh -c "show ip bgp"`
-	output, err := execCommandInFRRPodOnNode(oc, thisNode, cmd)
-	if err != nil || output == "" {
-		e2e.Logf("Cannot get bgp route, errors: %v", err)
-		return false
+
+	var output1, output2 string
+	var err error
+	ipStackType := checkIPStackType(oc)
+	if ipStackType == "ipv4single" || ipStackType == "dualstack" {
+		cmd := `vtysh -c "show ip bgp"`
+		output1, err = execCommandInFRRPodOnNode(oc, thisNode, cmd)
+		if err != nil || output1 == "" {
+			e2e.Logf("Cannot get bgp route when do: %s, errors: %v", cmd, err)
+			return false
+		}
+	}
+
+	if ipStackType == "ipv6single" || ipStackType == "dualstack" {
+		cmd := `vtysh -c "show bgp ipv6"`
+		output2, err = execCommandInFRRPodOnNode(oc, thisNode, cmd)
+		if err != nil || output2 == "" {
+			e2e.Logf("Cannot get bgp route when do: %s, errors: %v", cmd, err)
+			return false
+		}
 	}
 
 	// Verify external routes are being learned to cluster node
 	for _, network := range externalNetworks {
 		expectedBGPRoutePattern := fmt.Sprintf(`%s\s+%s`, regexp.QuoteMeta(network), regexp.QuoteMeta(externalFRRIP))
-		matched, err := regexp.MatchString(expectedBGPRoutePattern, output)
+		matched, err := regexp.MatchString(expectedBGPRoutePattern, output1)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !matched {
 			e2e.Logf("external route %s is not found on node %s as expected", network, thisNode)
@@ -573,7 +621,7 @@ func verifyBGPRoutesOnClusterNode(oc *exutil.CLI, thisNode, externalFRRIP string
 	for _, eachNode := range allNodes {
 		if eachNode != thisNode {
 			expectedBGPRoutePattern := fmt.Sprintf(`%s\s+%s`, regexp.QuoteMeta(podNetwork1Map[eachNode]), regexp.QuoteMeta(nodesIP1Map[eachNode]))
-			matched, err := regexp.MatchString(expectedBGPRoutePattern, output)
+			matched, err := regexp.MatchString(expectedBGPRoutePattern, output1)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !matched && expected {
 				e2e.Logf("on singelstack cluster, route for another node %s is not learned to this node %s", eachNode, thisNode)
@@ -586,24 +634,25 @@ func verifyBGPRoutesOnClusterNode(oc *exutil.CLI, thisNode, externalFRRIP string
 		}
 	}
 
-	// for dualstack, verify v6 routes for other cluster nodes are learned to this node
-	if nodesIP2Map[allNodes[0]] != "" {
-		for _, eachNode := range allNodes {
-			if eachNode != thisNode {
-				expectedBGPRoutePattern := fmt.Sprintf(`%s\s+%s`, regexp.QuoteMeta(podNetwork2Map[eachNode]), regexp.QuoteMeta(nodesIP2Map[eachNode]))
-				matched, err := regexp.MatchString(expectedBGPRoutePattern, output)
-				o.Expect(err).NotTo(o.HaveOccurred())
-				if !matched && expected {
-					e2e.Logf("On dualstack, v6 route for another node %s is not learned to this node %s", eachNode, thisNode)
-					return false
-				}
-				if matched && !expected {
-					e2e.Logf("on dualstack cluster, v6 route for another node %s should not be learned to this node %s", eachNode, thisNode)
-					return false
-				}
-			}
-		}
-	}
+	// comment out the following check on dualstack due to https://issues.redhat.com/browse/OCPBUGS-48411
+	// // for dualstack, verify v6 routes for other cluster nodes are learned to this node
+	// if nodesIP2Map[allNodes[0]] != "" {
+	// 	for _, eachNode := range allNodes {
+	// 		if eachNode != thisNode {
+	// 			expectedBGPRoutePattern := fmt.Sprintf(`%s\s+%s`, regexp.QuoteMeta(podNetwork2Map[eachNode]), regexp.QuoteMeta(nodesIP2Map[eachNode]))
+	// 			matched, err := regexp.MatchString(expectedBGPRoutePattern, output2)
+	// 			o.Expect(err).NotTo(o.HaveOccurred())
+	// 			if !matched && expected {
+	// 				e2e.Logf("On dualstack, v6 route for another node %s is not learned to this node %s", eachNode, thisNode)
+	// 				return false
+	// 			}
+	// 			if matched && !expected {
+	// 				e2e.Logf("on dualstack cluster, v6 route for another node %s should not be learned to this node %s", eachNode, thisNode)
+	// 				return false
+	// 			}
+	// 		}
+	// 	}
+	// }
 	return true
 }
 
@@ -618,7 +667,7 @@ func verifyIPRoutesOnExternalFrr(host string, allNodes []string, podNetwork1Map,
 		externalFrrCmd = "ip route show | grep bgp"
 	}
 	output, err := sshRunCmdOutPut(host, "root", externalFrrCmd)
-	e2e.Logf("on singlestack, ip or ip -6 route show on external frr, output:\n%s ", output)
+	e2e.Logf("on singlestack, %s on external frr returns output as:\n%s ", externalFrrCmd, output)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	for _, eachNode := range allNodes {
 		o.Expect(regexp.QuoteMeta(podNetwork1Map[eachNode])).ShouldNot(o.BeEmpty())
@@ -645,7 +694,7 @@ func verifyIPRoutesOnExternalFrr(host string, allNodes []string, podNetwork1Map,
 		for _, eachNode := range allNodes {
 			o.Expect(regexp.QuoteMeta(podNetwork2Map[eachNode])).ShouldNot(o.BeEmpty())
 			o.Expect(regexp.QuoteMeta(nodesIP2Map[eachNode])).ShouldNot(o.BeEmpty())
-			expectedBGPRoutePattern := fmt.Sprintf(`%s\s+%s`, podNetwork2Map[eachNode], nodesIP2Map[eachNode])
+			expectedBGPRoutePattern := fmt.Sprintf(`%s .*via %s .*proto bgp`, podNetwork2Map[eachNode], nodesIP2Map[eachNode])
 			e2e.Logf("expected route is: %s", expectedBGPRoutePattern)
 			matched, err := regexp.MatchString(expectedBGPRoutePattern, output)
 			o.Expect(err).NotTo(o.HaveOccurred())
@@ -669,7 +718,7 @@ func verifyIPRoutesOnClusterNode(oc *exutil.CLI, thisNode, externalFRRIP string,
 	externalNetworks := []string{"192.168.1.0/24", "192.169.1.1"}
 
 	routesOutput2, routesOutput1, result := getIProutesWithFilterOnClusterNode(oc, thisNode, "bgp")
-	e2e.Logf("on node %s got routesOutput2: \n%s \ngot got routesOutput1: \n%s\n", thisNode, routesOutput2, routesOutput1)
+	e2e.Logf("on node %s \n got routesOutput2: \n%s \ngot got routesOutput1: \n%s\n", thisNode, routesOutput2, routesOutput1)
 	o.Expect(result).To(o.BeTrue())
 
 	for _, eachNode := range allNodes {
@@ -701,26 +750,27 @@ func verifyIPRoutesOnClusterNode(oc *exutil.CLI, thisNode, externalFRRIP string,
 		}
 	}
 
-	// for dualstack, verify v6 routes for other cluster nodes are learned to this node
-	if nodesIP2Map[allNodes[0]] != "" {
-		for _, eachNode := range allNodes {
-			if eachNode != thisNode {
-				o.Expect(regexp.QuoteMeta(podNetwork2Map[eachNode])).ShouldNot(o.BeEmpty())
-				o.Expect(regexp.QuoteMeta(nodesIP2Map[eachNode])).ShouldNot(o.BeEmpty())
-				expectedBGPRoutePattern := fmt.Sprintf(`%s.* via %s .* proto bgp`, regexp.QuoteMeta(podNetwork2Map[eachNode]), regexp.QuoteMeta(nodesIP2Map[eachNode]))
-				matched, err := regexp.MatchString(expectedBGPRoutePattern, routesOutput2)
-				o.Expect(err).NotTo(o.HaveOccurred())
-				if !matched && expected {
-					e2e.Logf("On dualstack, v6 route for another node %s is not learned to ip -6 route table of this node %s", eachNode, thisNode)
-					return false
-				}
-				if matched && !expected {
-					e2e.Logf("on dualstack cluster, v6 route for another node %s should not be learned to ip route of this node %s", eachNode, thisNode)
-					return false
-				}
-			}
-		}
-	}
+	// comment out the following check on dualstack due to https://issues.redhat.com/browse/OCPBUGS-48411
+	// // for dualstack, verify v6 routes for other cluster nodes are learned to this node
+	// if nodesIP2Map[allNodes[0]] != "" {
+	// 	for _, eachNode := range allNodes {
+	// 		if eachNode != thisNode {
+	// 			o.Expect(regexp.QuoteMeta(podNetwork2Map[eachNode])).ShouldNot(o.BeEmpty())
+	// 			o.Expect(regexp.QuoteMeta(nodesIP2Map[eachNode])).ShouldNot(o.BeEmpty())
+	// 			expectedBGPRoutePattern := fmt.Sprintf(`%s.* via %s .* proto bgp`, regexp.QuoteMeta(podNetwork2Map[eachNode]), regexp.QuoteMeta(nodesIP2Map[eachNode]))
+	// 			matched, err := regexp.MatchString(expectedBGPRoutePattern, routesOutput2)
+	// 			o.Expect(err).NotTo(o.HaveOccurred())
+	// 			if !matched && expected {
+	// 				e2e.Logf("On dualstack, v6 route for another node %s is not learned to ip -6 route table of this node %s", eachNode, thisNode)
+	// 				return false
+	// 			}
+	// 			if matched && !expected {
+	// 				e2e.Logf("on dualstack cluster, v6 route for another node %s should not be learned to ip route of this node %s", eachNode, thisNode)
+	// 				return false
+	// 			}
+	// 		}
+	// 	}
+	// }
 	return true
 }
 

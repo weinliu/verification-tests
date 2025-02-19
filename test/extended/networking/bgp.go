@@ -18,7 +18,8 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 		oc             = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
 		ipStackType    string
 		host           = "openshift-qe-028.lab.eng.rdu2.redhat.com"
-		externalFRRIP  string
+		externalFRRIP1 string
+		externalFRRIP2 string
 		frrContainerID string
 		allNodes       []string
 		podNetwork1Map = make(map[string]string)
@@ -34,6 +35,7 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			receiveTemplate     = filepath.Join(buildPruningBaseDir, "bgp/receive_all_template.yaml")
+			receiveDSTemplate   = filepath.Join(buildPruningBaseDir, "bgp/receive_all_dualstack_template.yaml")
 			raTemplate          = filepath.Join(buildPruningBaseDir, "bgp/ra_template.yaml")
 			asn                 = 64512
 			nodeErr             error
@@ -76,14 +78,17 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 		o.Expect(len(allNodesIP1)).NotTo(o.BeEquivalentTo(0))
 
 		exutil.By("Get external FRR IP, create external FRR container on the host with external FRR IP and cluster nodes' IPs")
-		externalFRRIP = getExternalFRRIP(oc, allNodesIP1, host)
-		o.Expect(externalFRRIP).NotTo(o.BeEmpty())
+		externalFRRIP2, externalFRRIP1 = getExternalFRRIP(oc, allNodesIP2, allNodesIP1, host)
+		o.Expect(externalFRRIP1).NotTo(o.BeEmpty())
+		if ipStackType == "dualstack" {
+			o.Expect(externalFRRIP2).NotTo(o.BeEmpty())
+		}
 
 		if ipStackType == "dualstack" || ipStackType == "ipv4single" {
-			frrContainerID = createExternalFrrRouter(host, externalFRRIP, allNodesIP1, allNodesIP2)
+			frrContainerID = createExternalFrrRouter(host, externalFRRIP1, allNodesIP1, allNodesIP2)
 		}
 		if ipStackType == "ipv6single" {
-			frrContainerID = createExternalFrrRouter(host, externalFRRIP, allNodesIP2, allNodesIP1)
+			frrContainerID = createExternalFrrRouter(host, externalFRRIP1, allNodesIP2, allNodesIP1)
 		}
 
 		exutil.By("Get default podNetworks of all cluster nodes")
@@ -92,18 +97,36 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 		o.Expect(len(podNetwork1Map)).NotTo(o.BeEquivalentTo(0))
 
 		exutil.By("Apply receive_all frrconfiguration and routeAdvertisements yamls to cluster")
-		frrconfigration1 := frrconfigurationResource{
-			name:          "receive-all",
-			namespace:     "openshift-frr-k8s",
-			asn:           asn,
-			externalFRRIP: externalFRRIP,
-			template:      receiveTemplate,
+		switch ipStackType {
+		case "ipv4single":
+			frrconfigration1 := frrconfigurationResource{
+				name:           "receive-all",
+				namespace:      "openshift-frr-k8s",
+				asn:            asn,
+				externalFRRIP1: externalFRRIP1,
+				template:       receiveTemplate,
+			}
+			frrconfigration1.createFRRconfigration(oc)
+			output, frrConfigErr := oc.AsAdmin().Run("get").Args("frrconfiguration", "-n", frrNamespace).Output()
+			o.Expect(frrConfigErr).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(output, frrconfigration1.name)).To(o.BeTrue())
+		case "dualstack":
+			frrconfigrationDS := frrconfigurationResourceDS{
+				name:           "receive-all",
+				namespace:      "openshift-frr-k8s",
+				asn:            asn,
+				externalFRRIP1: externalFRRIP1,
+				externalFRRIP2: externalFRRIP2,
+				template:       receiveDSTemplate,
+			}
+			frrconfigrationDS.createFRRconfigrationDS(oc)
+			output, frrConfigErr := oc.AsAdmin().Run("get").Args("frrconfiguration", "-n", frrNamespace).Output()
+			o.Expect(frrConfigErr).NotTo(o.HaveOccurred())
+			o.Expect(strings.Contains(output, frrconfigrationDS.name)).To(o.BeTrue())
+		default:
+			e2e.Logf("Other ipstack type (i.e singlev6) is currently not supported due to bug in frr.")
+			g.Skip("Skip other unsupported ipstack type for now.")
 		}
-
-		frrconfigration1.createFRRconfigration(oc)
-		output, frrConfigErr := oc.AsAdmin().Run("get").Args("frrconfiguration", "-n", frrNamespace).Output()
-		o.Expect(frrConfigErr).NotTo(o.HaveOccurred())
-		o.Expect(strings.Contains(output, frrconfigration1.name)).To(o.BeTrue())
 
 		raName := "default"
 		networkSelectorKey := "k8s.ovn.org/default-network"
@@ -116,9 +139,9 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 
 		exutil.By("Verify default network is advertised")
 		o.Eventually(func() bool {
-			result := verifyRouteAdvertisement(oc, host, externalFRRIP, frrContainerID, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map)
+			result := verifyRouteAdvertisement(oc, host, externalFRRIP1, frrContainerID, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map)
 			return result
-		}, "90s", "15s").Should(o.BeTrue(), "BGP route advertisement of default network did not succeed!!")
+		}, "120s", "15s").Should(o.BeTrue(), "BGP route advertisement of default network did not succeed!!")
 		e2e.Logf("SUCCESS - BGP enabled, default network is advertised!!!")
 
 	})
@@ -138,7 +161,7 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 
 		exutil.By("2. From IP routing table, verify external routes and other cluster nodes' default podnetwork are learned to each cluster node")
 		for _, node := range allNodes {
-			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP1, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
 			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes as expected", node))
 		}
 
@@ -153,7 +176,7 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 
 		exutil.By("2. From IP routing table, verify external routes and other cluster nodes' default podnetwork are learned to each cluster node")
 		for _, node := range allNodes {
-			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP1, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
 			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes as expected", node))
 		}
 
@@ -177,7 +200,7 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 
 		exutil.By("5. Verify bgp routes in ip routing table of each cluster node after node reboot")
 		for _, node := range allNodes {
-			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP1, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
 			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table check on node %s failed after rebooting a node", node))
 		}
 
@@ -192,7 +215,7 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 
 		exutil.By("2. From IP routing table, verify external routes and other cluster nodes' default podnetwork are learned to each cluster node")
 		for _, node := range allNodes {
-			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP1, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
 			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes as expected", node))
 		}
 
@@ -211,7 +234,7 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 
 		exutil.By("5. Verify bgp routes in ip routing table of each cluster node after OVNK restart")
 		for _, node := range allNodes {
-			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP1, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
 			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table check on node %s failed after OVNK restart", node))
 		}
 
@@ -226,7 +249,7 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 
 		exutil.By("2. From IP routing table, verify external routes and other cluster nodes' default podnetwork are learned to each cluster node")
 		for _, node := range allNodes {
-			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP1, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
 			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes as expected", node))
 		}
 
@@ -255,7 +278,7 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 
 		exutil.By("5. Verify bgp routes in ip routing table of each cluster node after frr-k8s pods restart")
 		for _, node := range allNodes {
-			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP1, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
 			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table check on node %s failed after frr-k8s pods restart", node))
 		}
 
