@@ -191,10 +191,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		ingctrl1.create(oc)
 		defer ingctrl2.delete(oc)
 		ingctrl2.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl1.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl1.name))
-		err = waitForCustomIngressControllerAvailable(oc, ingctrl2.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl2.name))
+		ensureCustomIngressControllerAvailable(oc, ingctrl1.name)
+		ensureCustomIngressControllerAvailable(oc, ingctrl2.name)
 
 		exutil.By("check the default dnsManagementPolicy value of ingress-controller1 matching the base domain, which should be Managed")
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(ingctrlResource1, "-n", ingctrl1.namespace, "-o=jsonpath={.spec.endpointPublishingStrategy.loadBalancer.dnsManagementPolicy}").Output()
@@ -492,8 +490,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureCustomIngressControllerAvailable(oc, ingctrl.name)
 
 		exutil.By("Create the custom-restricted SecurityContextConstraints")
 		defer operateResourceFromFile(oc, "delete", "openshift-ingress", scc)
@@ -508,7 +505,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		podList1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-l", "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl.name, "-o=jsonpath={.items[*].metadata.name}", "-n", "openshift-ingress").Output()
 		o.Expect(err1).NotTo(o.HaveOccurred())
 		routerpod := getOneRouterPodNameByIC(oc, ingctrl.name)
-		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", routerpod, "-n", "openshift-ingress").Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", routerpod, "-n", "openshift-ingress").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		err = waitForResourceToDisappear(oc, "openshift-ingress", "pod/"+routerpod)
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("resource %v does not disapper", "pod/"+routerpod))
@@ -994,8 +991,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 			o.Expect(changeScopeErr).NotTo(o.HaveOccurred())
 
 			exutil.By("3.1 Check the state of custom ingress operator")
-			err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-			exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+			ensureCustomIngressControllerAvailable(oc, ingctrl.name)
 
 			exutil.By("3.2 Check the pods are in running state")
 			podList, podListErr := exutil.GetAllPodsWithLabel(oc, namespace, "ingresscontroller.operator.openshift.io/deployment-ingresscontroller="+ingctrl.name)
@@ -1093,10 +1089,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		ingctrl1.create(oc)
 		defer ingctrl2.delete(oc)
 		ingctrl2.create(oc)
-		err1 := waitForCustomIngressControllerAvailable(oc, ingctrl1.name)
-		err2 := waitForCustomIngressControllerAvailable(oc, ingctrl2.name)
-		exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl1.name))
-		exutil.AssertWaitPollNoErr(err2, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl2.name))
+		ensureCustomIngressControllerAvailable(oc, ingctrl1.name)
+		ensureCustomIngressControllerAvailable(oc, ingctrl2.name)
 
 		exutil.By("8. Check the custom DNS management status")
 		dnsManagementPolicy1 := getByJsonPath(oc, "openshift-ingress-operator", "dnsrecords/ocp64611external-wildcard", "{.spec.dnsManagementPolicy}")
@@ -1389,10 +1383,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		ingctrl34757one.create(oc)
 		defer ingctrl34757two.delete(oc)
 		ingctrl34757two.create(oc)
-		err = waitForCustomIngressControllerAvailable(oc, ingctrl34757one.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl34757one.name))
-		err = waitForCustomIngressControllerAvailable(oc, ingctrl34757two.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl34757one.name))
+		ensureCustomIngressControllerAvailable(oc, ingctrl34757one.name)
+		ensureCustomIngressControllerAvailable(oc, ingctrl34757two.name)
 
 		exutil.By("3. Check the logs again after the custom ingresscontrollers are ready, which should not contain updated internal service")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress-operator", "deployment/ingress-operator").Output()
@@ -1442,10 +1434,8 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		ingctrlhp34888one.create(oc)
 		defer ingctrlhp34888two.delete(oc)
 		ingctrlhp34888two.create(oc)
-		err = waitForCustomIngressControllerAvailable(oc, ingctrlhp34888one.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp34888one.name))
-		err = waitForCustomIngressControllerAvailable(oc, ingctrlhp34888two.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp34888two.name))
+		ensureCustomIngressControllerAvailable(oc, ingctrlhp34888one.name)
+		ensureCustomIngressControllerAvailable(oc, ingctrlhp34888two.name)
 
 		exutil.By("6. Check there was not the updated router deployment log")
 		output, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", "openshift-ingress-operator", "-c", "ingress-operator", "deployment/ingress-operator").Output()
@@ -1532,8 +1522,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		ingctrlhp35454.domain = ingctrlhp35454.name + "." + baseDomain
 		defer ingctrlhp35454.delete(oc)
 		ingctrlhp35454.create(oc)
-		err = waitForCustomIngressControllerAvailable(oc, ingctrlhp35454.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrlhp35454.name))
+		ensureCustomIngressControllerAvailable(oc, ingctrlhp35454.name)
 
 		exutil.By(`6. Check the service's spec ports of http/https/metrics`)
 		output = getByJsonPath(oc, "openshift-ingress", "service/router-internal-"+ingctrlhp35454.name, "{.spec.ports}")
@@ -1871,8 +1860,7 @@ spec:
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err = waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureCustomIngressControllerAvailable(oc, ingctrl.name)
 
 		exutil.By("4.0: Check the ingress co, it should be upgradable")
 		jsonPath := `{.status.conditions[?(@.type=="Upgradeable")].status}`

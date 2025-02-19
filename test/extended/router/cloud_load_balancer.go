@@ -150,8 +150,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureCustomIngressControllerAvailable(oc, ingctrl.name)
 
 		exutil.By("patch the existing custom ingress controller with NLB")
 		patchResourceAsAdmin(oc, ingctrl.namespace, "ingresscontroller/ocp52837", "{\"spec\":{\"endpointPublishingStrategy\":{\"loadBalancer\":{\"providerParameters\":{\"aws\":{\"type\":\"NLB\"}}}}}}")

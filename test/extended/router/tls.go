@@ -36,8 +36,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureCustomIngressControllerAvailable(oc, ingctrl.name)
 
 		// OCP-25703
 		exutil.By("check default TLS config and it should be same to Intermediate profile")

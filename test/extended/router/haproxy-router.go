@@ -123,8 +123,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureCustomIngressControllerAvailable(oc, ingctrl.name)
 
 		exutil.By("2.0 Deploy a project with a client pod, a backend pod and its service resources")
 		project1 := oc.Namespace()
@@ -2000,8 +1999,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureCustomIngressControllerAvailable(oc, ingctrl.name)
 
 		exutil.By("Deploy a project with a client pod, a backend pod and its service resources")
 		project1 := oc.Namespace()
@@ -2015,7 +2013,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		routeHost := "service-unsecure66560" + "." + ingctrl.domain
 		lowHost := strings.ToLower(routeHost)
 		base64Host := base64.StdEncoding.EncodeToString([]byte(routeHost))
-		err = oc.Run("expose").Args("svc/"+unsecsvcName, "--hostname="+routeHost).Execute()
+		err := oc.Run("expose").Args("svc/"+unsecsvcName, "--hostname="+routeHost).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		routeOutput := getRoutes(oc, project1)
 		o.Expect(routeOutput).To(o.ContainSubstring(unsecsvcName))
@@ -3552,8 +3550,7 @@ DNS.2 = *.%s.%s.svc
 		ingctrl.domain = ingctrl.name + "." + baseDomain
 		defer ingctrl.delete(oc)
 		ingctrl.create(oc)
-		err := waitForCustomIngressControllerAvailable(oc, ingctrl.name)
-		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("ingresscontroller %s conditions not available", ingctrl.name))
+		ensureCustomIngressControllerAvailable(oc, ingctrl.name)
 
 		exutil.By("2.0 Deploy a project with a client pod, a backend pod and its service resources")
 		project1 := oc.Namespace()
