@@ -2328,12 +2328,8 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 		//SNO cluster do not have PDB under openshift-monitoring
-		if !exutil.IsSNOCluster(oc) {
-			exutil.By("check PodDisruptionBudget")
-			output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("PodDisruptionBudget", "monitoring-plugin", "-n", "openshift-monitoring").Output()
-			o.Expect(output).NotTo(o.ContainSubstring("not found"))
-			o.Expect(err).NotTo(o.HaveOccurred())
-		}
+		//hypershift-hosted cluster do not have master node
+		checkPodDisruptionBudgetIfNotSNO(oc)
 
 		exutil.By("check monitoring-plugin pods are ready")
 		getReadyPodsWithLabels(oc, "openshift-monitoring", "app.kubernetes.io/component=monitoring-plugin")
@@ -2341,6 +2337,8 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		exutil.By("get monitoring-plugin pod name")
 		monitoringPluginPodNames, err := getAllRunningPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/component=monitoring-plugin")
 		o.Expect(err).NotTo(o.HaveOccurred())
+		getDeploymentReplicas(oc, "openshift-monitoring", "monitoring-plugin")
+		waitForPodsToMatchReplicas(oc, "openshift-monitoring", "monitoring-plugin", "app.kubernetes.io/component=monitoring-plugin")
 
 		exutil.By("check monitoring-plugin pod config")
 		e2e.Logf("monitoringPluginPodNames: %v", monitoringPluginPodNames)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -534,4 +535,111 @@ func getNodesWithLabel(oc *exutil.CLI, label string) ([]string, error) {
 		return []string{}, err
 	}
 	return strings.Split(nodes, " "), err
+}
+
+// isSNOEnvironment confirm whether this env is single node cluster
+func isSNOEnvironment(oc *exutil.CLI) (bool, error) {
+	nodes, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("nodes", "-o=jsonpath={.items[*].metadata.name}").Output()
+	if err != nil {
+		return false, err
+	}
+
+	nodeList := strings.Split(nodes, " ")
+
+	if len(nodeList) <= 1 {
+		e2e.Logf("Detected SNO environment with %d node(s)", len(nodeList))
+		return true, nil
+	}
+
+	e2e.Logf("Detected multi-node environment with %d nodes", len(nodeList))
+	return false, nil
+}
+
+// checkPodDisruptionBudgetIfNotSNO check pdb if its not sno env
+func checkPodDisruptionBudgetIfNotSNO(oc *exutil.CLI) {
+	isSNO, err := isSNOEnvironment(oc)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	if isSNO {
+		exutil.By("Skipping PodDisruptionBudget check in SNO environment")
+		return
+	}
+
+	exutil.By("Waiting for PodDisruptionBudget to be available in multi-node environment")
+
+	err = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 120*time.Second, false, func(context.Context) (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("PodDisruptionBudget", "monitoring-plugin", "-n", "openshift-monitoring").Output()
+		if err != nil {
+			return false, nil
+		}
+		if !strings.Contains(output, "not found") {
+			return true, nil
+		}
+		return false, nil
+	})
+
+	o.Expect(err).NotTo(o.HaveOccurred(), "PodDisruptionBudget monitoring-plugin was not found within the timeout period")
+
+	exutil.By("Checking PodDisruptionBudget after it is ready")
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("PodDisruptionBudget", "monitoring-plugin", "-n", "openshift-monitoring").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(output).NotTo(o.ContainSubstring("not found"))
+}
+
+func getDeploymentReplicas(oc *exutil.CLI, ns string, deployName string) (int, error) {
+	var expectedReplicas int
+
+	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", deployName, "-n", ns, "-o", "jsonpath={.spec.replicas}").Output()
+		if err != nil {
+			e2e.Logf("Failed to get deployment %s: %v", deployName, err)
+			return false, nil
+		}
+
+		expectedReplicas, err = strconv.Atoi(output)
+		if err != nil {
+			e2e.Logf("Failed to parse replica count for deployment %s: %v", deployName, err)
+			return false, nil
+		}
+
+		if expectedReplicas >= 1 {
+			return true, nil
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to get replica count for deployment %s: %v", deployName, err)
+	}
+
+	e2e.Logf("Deployment %s expects %d replicas", deployName, expectedReplicas)
+	return expectedReplicas, nil
+}
+
+// waitForPodsToMatchReplicas Poll to check if the number of running Pods matches the number of replicas expected by the Deployment
+func waitForPodsToMatchReplicas(oc *exutil.CLI, namespace string, deployName string, label string) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 10*time.Minute, true, func(ctx context.Context) (bool, error) {
+		expectedReplicas, err := getDeploymentReplicas(oc, namespace, deployName)
+		if err != nil {
+			e2e.Logf("Error getting expected replicas: %v", err)
+			return false, nil
+		}
+
+		runningPods, err := getAllRunningPodsWithLabel(oc, namespace, label)
+		if err != nil {
+			e2e.Logf("Error getting running pods: %v", err)
+			return false, nil
+		}
+
+		if len(runningPods) != expectedReplicas {
+			e2e.Logf("Mismatch: expected %d running pods, but found %d", expectedReplicas, len(runningPods))
+			return false, nil
+		}
+
+		e2e.Logf("Pods match expected replicas: %d/%d", len(runningPods), expectedReplicas)
+		return true, nil
+	})
+
+	exutil.AssertWaitPollNoErr(err, "Pods did not reach the expected number!")
 }
