@@ -55,8 +55,11 @@ export const ClusterSettingPage = {
   toggleConsolePlugin: (plugin_name: string, toggle_action: string) => {
     cy.get(`a[data-test="${plugin_name}"]`).parent().parent().parent('tr').within(() => {
       cy.get('button[data-test="edit-console-plugin"]').click({force: true});
+      return;
     });
-    cy.get(`form input[data-test="${toggle_action}-radio-input"]`).click({force: true});
-    cy.get('form button[data-test="confirm-action"]').click({force: true});
+    cy.get('form[class*="modal"]').within(($modal) => {
+      cy.get(`input[data-test="${toggle_action}-radio-input"]`).click({force: true});
+      cy.get('button[data-test="confirm-action"]').click({force: true});
+    });
   }
 }

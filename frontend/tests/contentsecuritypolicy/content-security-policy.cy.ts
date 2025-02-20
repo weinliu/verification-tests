@@ -1,4 +1,6 @@
 import { ClusterSettingPage } from '../../views/cluster-setting';
+import { statusCard } from '../../views/overview';
+import { nav } from 'upstream/views/nav';
 
 describe('Content Security Policy tests', () => {
   const [ login_idp, login_user, login_password, kubeconfig ] = [ Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'), Cypress.env('KUBECONFIG_PATH')];
@@ -6,11 +8,19 @@ describe('Content Security Policy tests', () => {
   const query_console_customization_plugin_pod = `oc get deployment console-customization-plugin -n console-customization-plugin -o jsonpath='{.status.conditions[?(@.type=="Available")].status}'`;
   const query_console_configmap = `oc get cm console-config -n openshift-console -o jsonpath='{.data}' --kubeconfig ${kubeconfig}`;
   let checkCSPStatus = (plugin_name, csp_status) => {
-    cy.get(`a[data-test="${plugin_name}"]`).parent().parent().parent('tr').within(() => {
-      cy.get('td[data-label="csp-violations"]').should('include.text', csp_status);
+    cy.get(`a[data-test="${plugin_name}"]`).parent().parent().parent('tr').within(($div) => {
+      cy.get('td[data-label="csp-violations"]').then($csp_value => {
+        expect($csp_value).to.contain(csp_status);
+      });
     })
   };
-  before(() => {
+  before(function() {
+    cy.isTechPreviewNoUpgradeEnabled().then(value => {
+      if (value === false) {
+        cy.log('Skip the case because TP not enabled!!');
+        this.skip();
+      }
+    });
     cy.adminCLI('oc apply -f ./fixtures/contentsecuritypolicy/console-demo-plugin-manifests-csp.yaml');
     cy.adminCLI('oc apply -f ./fixtures/contentsecuritypolicy/console-customization-manifests-csp.yaml');
     cy.checkCommandResult(query_console_dmeo_plugin_pod, 'True', { retries: 4, interval: 15000 }).then(() => {
@@ -50,7 +60,7 @@ describe('Content Security Policy tests', () => {
     // content-security-policy-report-only header exist
     cy.request('/').then((response) => {
       const csp_report_only = response.headers['content-security-policy-report-only'];
-      expect(csp_report_only).to.include("script-src 'self' 'unsafe-eval' 'nonce-");
+      expect(csp_report_only).to.include("script-src 'self' console.redhat.com 'unsafe-eval' 'nonce-");
     });
     cy.wait(5000);
     cy.visit('/dynamic-route-1', {
@@ -62,19 +72,18 @@ describe('Content Security Policy tests', () => {
     cy.wait(10000);
     cy.get('@console.warn').should('be.calledWith', "Content Security Policy violation seems to originate from plugin console-demo-plugin");
 
-    // show CSP violation status in Console plugins tab
-    // due to OCPBUGS-44991,csp status is always No
-    ClusterSettingPage.goToConsolePlugins();
-    checkCSPStatus('console-demo-plugin', 'No');
+    // show CSP violation status in Dynamic Plugins status card and Console plugins tab
+    cy.wait(10000);
+    nav.sidenav.clickNavLink(['Home', 'Overview']);
+    statusCard.toggleItemPopover("Dynamic Plugins");
+    cy.get('h4').contains('One or more plugins might have Content Security Policy violations').should('exist');
+    cy.get('[class*="popover__body"]').within(($div) => {
+      cy.get('a:contains(View all)').click({force: true});
+    });
+    checkCSPStatus('console-demo-plugin', 'Yes');
   });
 
-  it('(OCP-77059,yapei,UserInterface)Console-operator should configure console with the CSP allowed directives)',{tags:['@userinterface','@techpreview','admin','@hypershift-hosted']}, function() {
-    cy.isTechPreviewNoUpgradeEnabled().then(value => {
-      if (value === false) {
-        cy.log('Skip the case because TP not enabled!!');
-        this.skip();
-      }
-    });
+  it('(OCP-77059,yapei,UserInterface)Console-operator should configure console with the CSP allowed directives',{tags:['@userinterface','@techpreview','admin','@hypershift-hosted']}, function() {
     const patch_console_customization = `oc patch consoleplugin console-customization -p '{"spec":{"contentSecurityPolicy":[{"directive": "ScriptSrc","values":["https://script1.com","https://script2.com"]},{"directive":"StyleSrc","values":["http://style1.com","http://style2.com"]}]}}' --type merge`;
     const patch_console_demo_plugin = `oc patch consoleplugin console-demo-plugin -p '{"spec":{"contentSecurityPolicy":[{"directive": "ScriptSrc","values":["https://script1.com","https://script3.com"]},{"directive":"ImgSrc","values":["https://imagesource1.com"]},{"directive":"DefaultSrc","values":["https://defaultsource1.com","https://defaultsource2.com","catfact.ninja"]}]}}' --type merge`;
     cy.consoleBeforeUpdate();
@@ -88,7 +97,7 @@ describe('Content Security Policy tests', () => {
     cy.uiLogin(login_idp, login_user, login_password);
     cy.request('/').then((response) => {
       const csp_report_only = response.headers['content-security-policy-report-only'];
-      expect(csp_report_only).to.include("default-src 'self' catfact.ninja https://defaultsource1.com https://defaultsource2.com");
+      expect(csp_report_only).to.include("default-src 'self' console.redhat.com catfact.ninja https://defaultsource1.com https://defaultsource2.com");
     });
     cy.visit('/dynamic-route-1', {
       onBeforeLoad (win) {
