@@ -1642,6 +1642,136 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
 		}
 	})
+
+	// author: wduan@redhat.com
+	// OCP-79594 - [Raw Block] Allow migrated vsphere in-tree PVs to be resized
+	g.It("Author:wduan-Medium-79594-[Raw Block] Allow migrated vsphere in-tree PVs to be resized", func() {
+		// Define the test scenario support provisioners
+		// Currently only vSphere supports such scenario, it might expand to other clouds
+		cloudProvider = getCloudProvider(oc)
+		if !strings.Contains(cloudProvider, "vsphere") {
+			g.Skip("Skip for non-supported cloud provider!!!")
+		}
+		supportProvisioners := []string{"kubernetes.io/vsphere-volume"}
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate   = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+			extraParameters      = map[string]interface{}{
+				"allowVolumeExpansion": true,
+			}
+		)
+		// Set up a specified project share for all the phases
+		exutil.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner = range supportProvisioners {
+			// Set the resource definition for the scenario
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimVolumemode("Block"), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name), setDeploymentVolumeType("volumeDevices"), setDeploymentVolumeTypePath("devicePath"), setDeploymentMountpath("/dev/dblock"))
+
+			exutil.By("Create a in-tree storageclass")
+			storageClass.provisioner = provisioner
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc)
+
+			// Performing the Test Steps for Online resize volume
+			resizeOnlineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
+		}
+	})
+
+	// author: wduan@redhat.com
+	// OCP-79599 - [Filesystem xfs] Allow migrated vsphere in-tree PVs to be resized
+	g.It("Author:wduan-Medium-79599-[Filesystem xfs] Allow migrated vsphere in-tree PVs to be resized", func() {
+		// Define the test scenario support provisioners
+		// Currently only vSphere supports such scenario, it might expand to other clouds
+		cloudProvider = getCloudProvider(oc)
+		if !strings.Contains(cloudProvider, "vsphere") {
+			g.Skip("Skip for non-supported cloud provider!!!")
+		}
+		supportProvisioners := []string{"kubernetes.io/vsphere-volume"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate     = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+			storageClassParameters = map[string]string{
+				"fstype": "xfs",
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+
+		// Set up a specified project share for all the phases
+		exutil.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner = range supportProvisioners {
+			// Set the resource definition for the scenario
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+			exutil.By("Create a in-tree storageclass")
+			storageClass.provisioner = provisioner
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc)
+
+			// Performing the Test Steps for Online resize volume
+			resizeOnlineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
+		}
+	})
+
+	// author: wduan@redhat.com
+	// OCP-79601 - [Filesystem ext4] Allow migrated vsphere in-tree PVs to be resized
+	g.It("Author:wduan-Medium-79601-[Filesystem ext4] Allow migrated vsphere in-tree PVs to be resized", func() {
+		// Define the test scenario support provisioners
+		// Currently only vSphere supports such scenario, it might expand to other clouds
+		cloudProvider = getCloudProvider(oc)
+		if !strings.Contains(cloudProvider, "vsphere") {
+			g.Skip("Skip for non-supported cloud provider!!!")
+		}
+		supportProvisioners := []string{"kubernetes.io/vsphere-volume"}
+
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir     = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate   = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate            = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			deploymentTemplate     = filepath.Join(storageTeamBaseDir, "dep-template.yaml")
+			storageClassParameters = map[string]string{
+				"fstype": "ext4",
+			}
+			extraParameters = map[string]interface{}{
+				"parameters":           storageClassParameters,
+				"allowVolumeExpansion": true,
+			}
+		)
+
+		// Set up a specified project share for all the phases
+		exutil.By("Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner = range supportProvisioners {
+			// Set the resource definition for the scenario
+			storageClass := newStorageClass(setStorageClassTemplate(storageClassTemplate))
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(storageClass.name))
+			dep := newDeployment(setDeploymentTemplate(deploymentTemplate), setDeploymentPVCName(pvc.name))
+
+			exutil.By("Create a in-tree storageclass")
+			storageClass.provisioner = provisioner
+			storageClass.createWithExtraParameters(oc, extraParameters)
+			defer storageClass.deleteAsAdmin(oc)
+
+			// Performing the Test Steps for Online resize volume
+			resizeOnlineCommonTestSteps(oc, pvc, dep, cloudProvider, provisioner)
+		}
+	})
+
 	// author: chaoyang@redhat.com
 	//[CSI-Driver] [Dynamic PV] [Security] CSI volume security testing when privileged is false
 	g.It("ROSA-OSD_CCS-ARO-Author:chaoyang-Critical-44908-[CSI-Driver] [Dynamic PV] CSI volume security testing when privileged is false ", func() {
