@@ -16,6 +16,7 @@ objects:
         logLevel: debug
         overlaySize: 8G
         logSizeMax: "-1"
+        defaultRuntime: runc
 parameters:
   - name: NAME
   - name: POOL
