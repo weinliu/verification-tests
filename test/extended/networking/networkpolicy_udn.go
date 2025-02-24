@@ -10,6 +10,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-networking] SDN udn networkpolicy", func() {
@@ -525,6 +526,205 @@ var _ = g.Describe("[sig-networking] SDN udn networkpolicy", func() {
 
 		CurlPod2PodFailUDN(oc, allNS[1], nsPodMap[allNS[1]][0], allNS[0], nsPodMap[allNS[0]][0])
 		CurlPod2PodPassUDN(oc, allNS[1], newPod.name, allNS[0], nsPodMap[allNS[0]][0])
+
+	})
+
+	g.It("Author:asood-High-79094-Validate egress CIDR block with and without except clause network policies in Layer 3 CUDN.", func() {
+		var (
+			testID                      = "79094"
+			testDataDir                 = exutil.FixturePath("testdata", "networking")
+			udnPodTemplate              = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
+			udnPodNodeTemplate          = filepath.Join(testDataDirUDN, "udn_test_pod_template_node.yaml")
+			egressDenyFile              = filepath.Join(testDataDir, "networkpolicy/default-deny-egress.yaml")
+			egressAllowFile             = filepath.Join(testDataDir, "networkpolicy/egress-allow-all.yaml")
+			ipBlockEgressTemplateDual   = filepath.Join(testDataDir, "networkpolicy/ipblock/ipBlock-egress-dual-CIDRs-template.yaml")
+			ipBlockEgressTemplateSingle = filepath.Join(testDataDir, "networkpolicy/ipblock/ipBlock-egress-single-CIDR-template.yaml")
+			nsPodMap                    = make(map[string][]string)
+			topology                    = "layer3"
+			matchLabelKey               = "test.io"
+			matchLabelVal               = "ns-" + testID
+			cudnCRDName                 = "cudn-l3-network-" + testID
+			udnCRDName                  = "udn-l3-network-" + testID + "-0"
+		)
+		ipStackType := checkIPStackType(oc)
+		var allNS []string = make([]string, 0, 3)
+		var ipBlockPolicyName string
+		var podCount int
+
+		exutil.By("1. Create 3 UDN namespaces")
+		for i := 0; i < 3; i++ {
+			oc.CreateNamespaceUDN()
+			ns := oc.Namespace()
+			allNS = append(allNS, ns)
+			// Label first two for CUDN
+			if i < 2 {
+				defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, fmt.Sprintf("%s-", matchLabelKey)).Execute()
+				err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, fmt.Sprintf("%s=%s", matchLabelKey, matchLabelVal)).Execute()
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+		}
+
+		var cidr0, ipv4cidr0, ipv6cidr0, cidr1, ipv4cidr1, ipv6cidr1 string
+		if ipStackType == "ipv4single" {
+			cidr0 = "10.150.0.0/16"
+			cidr1 = "10.152.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr0 = "2010:100:200::0/48"
+				cidr1 = "2012:100:200::0/48"
+			} else {
+				ipv4cidr0 = "10.150.0.0/16"
+				ipv4cidr1 = "10.152.0.0/16"
+				ipv6cidr0 = "2010:100:200::0/48"
+				ipv6cidr1 = "2012:100:200::0/48"
+
+			}
+		}
+
+		exutil.By("2. Create default deny egress type networkpolicy in first namespace before UDN is created")
+		createResourceFromFile(oc, allNS[0], egressDenyFile)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("networkpolicy", "-n", allNS[0]).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("default-deny-egress"))
+
+		exutil.By("3. Create Layer 3 UDN in first two namespaces with CUDN resource and UDN in third")
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", cudnCRDName)
+		_, cudnErr := applyCUDNtoMatchLabelNS(oc, matchLabelKey, matchLabelVal, cudnCRDName, ipv4cidr0, ipv6cidr0, cidr0, topology)
+		o.Expect(cudnErr).NotTo(o.HaveOccurred())
+		defer removeResource(oc, true, true, "userdefinednetwork", udnCRDName)
+		createGeneralUDNCRD(oc, allNS[2], udnCRDName, ipv4cidr1, ipv6cidr1, cidr1, topology)
+
+		exutil.By("4. Create two pods in each namespace")
+		podCount = 2
+		pod := make([]udnPodResource, 4)
+		for i := 0; i < len(allNS); i++ {
+			if i == 2 {
+				podCount = 1
+			}
+			for j := 0; j < podCount; j++ {
+				pod[j] = udnPodResource{
+					name:      "hello-pod-" + testID + "-" + strconv.Itoa(i) + "-" + strconv.Itoa(j),
+					namespace: allNS[i],
+					label:     "test-pods",
+					template:  udnPodTemplate,
+				}
+				pod[j].createUdnPod(oc)
+				defer removeResource(oc, true, true, "pod", pod[j].name, "-n", pod[j].namespace)
+				waitPodReady(oc, pod[j].namespace, pod[j].name)
+				nsPodMap[pod[j].namespace] = append(nsPodMap[pod[j].namespace], pod[j].name)
+			}
+		}
+
+		exutil.By("5. Validate traffic between pods in first namespace and from pods in second namespace")
+		CurlPod2PodFailUDN(oc, allNS[0], nsPodMap[allNS[0]][0], allNS[1], nsPodMap[allNS[1]][0])
+		CurlPod2PodFailUDN(oc, allNS[0], nsPodMap[allNS[0]][0], allNS[0], nsPodMap[allNS[0]][1])
+
+		exutil.By("6. Create IP Block egress policy to allow traffic from first pod in first namespace to first pod in second namespace")
+		var cidrIpv4, cidrIpv6, cidr string
+		if ipStackType == "dualstack" {
+			exutil.By(fmt.Sprintf("Create ipBlock Egress Dual CIDRs Policy in %s", allNS[0]))
+			pod1ns1IPv6, pod1ns1IPv4 := getPodIPUDN(oc, allNS[1], nsPodMap[allNS[1]][0], "ovn-udn1")
+			cidrIpv4 = pod1ns1IPv4 + "/32"
+			cidrIpv6 = pod1ns1IPv6 + "/128"
+			npIPBlockNS1 := ipBlockCIDRsDual{
+				name:      "ipblock-dual-cidrs-egress",
+				template:  ipBlockEgressTemplateDual,
+				cidrIpv4:  cidrIpv4,
+				cidrIpv6:  cidrIpv6,
+				namespace: allNS[0],
+			}
+			npIPBlockNS1.createipBlockCIDRObjectDual(oc)
+			ipBlockPolicyName = npIPBlockNS1.name
+
+		} else {
+			pod1ns1, _ := getPodIPUDN(oc, allNS[1], nsPodMap[allNS[1]][0], "ovn-udn1")
+			if ipStackType == "ipv6single" {
+				cidr = pod1ns1 + "/128"
+			} else {
+				cidr = pod1ns1 + "/32"
+			}
+			npIPBlockNS1 := ipBlockCIDRsSingle{
+				name:      "ipblock-single-cidr-egress",
+				template:  ipBlockEgressTemplateSingle,
+				cidr:      cidr,
+				namespace: allNS[0],
+			}
+			npIPBlockNS1.createipBlockCIDRObjectSingle(oc)
+			ipBlockPolicyName = npIPBlockNS1.name
+
+		}
+
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("networkpolicy", "-n", allNS[0]).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(ipBlockPolicyName))
+
+		exutil.By("7. Validate ingress traffic is not allowed from second pod in second namespace, pod in third namespace and pod in fourth (default network)")
+		CurlPod2PodPassUDN(oc, allNS[0], nsPodMap[allNS[0]][0], allNS[1], nsPodMap[allNS[1]][0])
+		CurlPod2PodFailUDN(oc, allNS[0], nsPodMap[allNS[0]][0], allNS[1], nsPodMap[allNS[1]][1])
+		CurlPod2PodFailUDN(oc, allNS[0], nsPodMap[allNS[0]][0], allNS[2], nsPodMap[allNS[2]][0])
+
+		exutil.By("8. Get node name of first pod in second namespace and schedule another pod on smae node")
+		podNodeName, podNodeNameErr := exutil.GetPodNodeName(oc, allNS[1], nsPodMap[allNS[1]][0])
+		o.Expect(podNodeNameErr).NotTo(o.HaveOccurred())
+		o.Expect(podNodeName).NotTo(o.BeEmpty())
+		newPodNS2 := udnPodResourceNode{
+			name:      "hello-pod-" + testID + "-1-2",
+			namespace: allNS[1],
+			label:     "test-pods",
+			nodename:  podNodeName,
+			template:  udnPodNodeTemplate,
+		}
+		newPodNS2.createUdnPodNode(oc)
+		defer removeResource(oc, true, true, "pod", newPodNS2.name, "-n", newPodNS2.namespace)
+		waitPodReady(oc, newPodNS2.namespace, newPodNS2.name)
+
+		exutil.By(fmt.Sprintf("9. Update the %s policy to include except clause to block the egress to the first pod in second namespace", ipBlockPolicyName))
+		var patchPayload string
+		if ipStackType == "dualstack" {
+			hostSubnetIPv4, hostSubnetIPv6 := getNodeSubnetDualStack(oc, podNodeName, "cluster_udn_"+cudnCRDName)
+			patchPayload = fmt.Sprintf("[{\"op\": \"replace\", \"path\":\"/spec/egress/0/to\", \"value\": [{\"ipBlock\":{\"cidr\":%s,\"except\":[%s]}},{\"ipBlock\":{\"cidr\":%s,\"except\":[%s]}}] }]", hostSubnetIPv4, cidrIpv4, hostSubnetIPv6, cidrIpv6)
+		} else {
+			hostSubnetCIDR := getNodeSubnet(oc, podNodeName, "cluster_udn_"+cudnCRDName)
+			patchPayload = fmt.Sprintf("[{\"op\": \"replace\", \"path\":\"/spec/egress/0/to\", \"value\": [{\"ipBlock\":{\"cidr\":%s,\"except\":[%s]}}] }]", hostSubnetCIDR, cidr)
+		}
+		patchReplaceResourceAsAdmin(oc, "networkpolicy/"+ipBlockPolicyName, patchPayload, allNS[0])
+		npRules, npErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("networkpolicy", ipBlockPolicyName, "-n", allNS[0], "-o=jsonpath={.spec}").Output()
+		o.Expect(npErr).NotTo(o.HaveOccurred())
+		e2e.Logf("\n Network policy after update: %s", npRules)
+
+		CurlPod2PodFailUDN(oc, allNS[0], nsPodMap[allNS[0]][0], allNS[1], nsPodMap[allNS[1]][0])
+		CurlPod2PodPassUDN(oc, allNS[0], nsPodMap[allNS[0]][0], allNS[1], newPodNS2.name)
+
+		exutil.By("10. Validate egress traffic from first namespace to DNS works with allow-all-egress policy only from pod labeled test-pods")
+		newPodNS1 := udnPodResource{
+			name:      "hello-pod-" + testID + "-0-2",
+			namespace: allNS[0],
+			label:     "hello-pod",
+			template:  udnPodTemplate,
+		}
+		defer removeResource(oc, true, true, "pod", newPodNS1.name, "-n", newPodNS1.namespace)
+		newPodNS1.createUdnPod(oc)
+		waitPodReady(oc, newPodNS1.namespace, newPodNS1.name)
+
+		digOutput, digErr := e2eoutput.RunHostCmd(allNS[0], nsPodMap[allNS[0]][0], "dig kubernetes.default")
+		o.Expect(digErr).To(o.HaveOccurred())
+		o.Expect(digOutput).ShouldNot(o.ContainSubstring("Got answer"))
+		o.Expect(digOutput).Should(o.ContainSubstring("connection timed out"))
+
+		createResourceFromFile(oc, allNS[0], egressAllowFile)
+		output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("networkpolicy", "-n", allNS[0]).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("allow-all-egress"))
+
+		digOutput, digErr = e2eoutput.RunHostCmd(allNS[0], nsPodMap[allNS[0]][0], "dig kubernetes.default")
+		o.Expect(digErr).NotTo(o.HaveOccurred())
+		o.Expect(digOutput).Should(o.ContainSubstring("Got answer"))
+		o.Expect(digOutput).ShouldNot(o.ContainSubstring("connection timed out"))
+
+		digOutput, digErr = e2eoutput.RunHostCmd(allNS[0], newPodNS1.name, "dig kubernetes.default")
+		o.Expect(digErr).To(o.HaveOccurred())
+		o.Expect(digOutput).ShouldNot(o.ContainSubstring("Got answer"))
+		o.Expect(digOutput).Should(o.ContainSubstring("connection timed out"))
 
 	})
 
