@@ -622,6 +622,11 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		awsConfig, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
 		o.Expect(err).NotTo(o.HaveOccurred())
+		partition := "aws"
+		if strings.Contains(region, "us-gov") {
+			e2e.Logf("set AWS partition to 'aws-us-gov' as running on AWS Gov cloud")
+			partition = "aws-us-gov"
+		}
 		// STS client
 		stsClient := sts.NewFromConfig(awsConfig)
 		getCallerIdentityOutput, err := stsClient.GetCallerIdentity(context.TODO(), &sts.GetCallerIdentityInput{})
@@ -640,7 +645,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 				{
 					"Effect": "Allow",
 					"Principal": {
-						"Federated": "arn:aws:iam::%s:oidc-provider/%s"
+						"Federated": "arn:%s:iam::%s:oidc-provider/%s"
 					},
 					"Action": "sts:AssumeRoleWithWebIdentity",
 					"Condition": {
@@ -653,7 +658,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 				}
 			]
 		}`
-		roleTrustPolicy = fmt.Sprintf(roleTrustPolicy, accountID, oidcProvider, oidcProvider)
+		roleTrustPolicy = fmt.Sprintf(roleTrustPolicy, partition, accountID, oidcProvider, oidcProvider)
 		createRoleOutput, err := iamClient.CreateRole(context.TODO(), &iam.CreateRoleInput{
 			AssumeRolePolicyDocument: aws.String(roleTrustPolicy),
 			RoleName:                 aws.String(roleName),
@@ -673,7 +678,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 				{
 					"Effect": "Allow",
 					"Action": "route53:GetChange",
-					"Resource": "arn:aws:route53:::change/*"
+					"Resource": "arn:%s:route53:::change/*"
 				},
 				{
 					"Effect": "Allow",
@@ -681,7 +686,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 						"route53:ChangeResourceRecordSets",
 						"route53:ListResourceRecordSets"
 					],
-					"Resource": "arn:aws:route53:::hostedzone/*"
+					"Resource": "arn:%s:route53:::hostedzone/*"
 				},
 				{
 					"Effect": "Allow",
@@ -690,6 +695,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 				}
 			]
 		}`
+		dnsPolicy = fmt.Sprintf(dnsPolicy, partition, partition)
 		createPolicyOutput, err := iamClient.CreatePolicy(context.TODO(), &iam.CreatePolicyInput{
 			PolicyDocument: aws.String(dnsPolicy),
 			PolicyName:     aws.String(policyName),
@@ -801,6 +807,11 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		awsConfig, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
 		o.Expect(err).NotTo(o.HaveOccurred())
+		partition := "aws"
+		if strings.HasPrefix(region, "us-gov") {
+			e2e.Logf("set AWS partition to 'aws-us-gov' as running on AWS Gov cloud")
+			partition = "aws-us-gov"
+		}
 		// STS client
 		stsClient := sts.NewFromConfig(awsConfig)
 		getCallerIdentityOutput, err := stsClient.GetCallerIdentity(context.TODO(), &sts.GetCallerIdentityInput{})
@@ -819,7 +830,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 				{
 					"Effect": "Allow",
 					"Principal": {
-						"Federated": "arn:aws:iam::%s:oidc-provider/%s"
+						"Federated": "arn:%s:iam::%s:oidc-provider/%s"
 					},
 					"Action": "sts:AssumeRoleWithWebIdentity",
 					"Condition": {
@@ -832,7 +843,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 				}
 			]
 		}`
-		roleTrustPolicy = fmt.Sprintf(roleTrustPolicy, accountID, oidcProvider, oidcProvider)
+		roleTrustPolicy = fmt.Sprintf(roleTrustPolicy, partition, accountID, oidcProvider, oidcProvider)
 		createRoleOutput, err := iamClient.CreateRole(context.TODO(), &iam.CreateRoleInput{
 			AssumeRolePolicyDocument: aws.String(roleTrustPolicy),
 			RoleName:                 aws.String(roleName),
@@ -852,7 +863,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 				{
 					"Effect": "Allow",
 					"Action": "route53:GetChange",
-					"Resource": "arn:aws:route53:::change/*"
+					"Resource": "arn:%s:route53:::change/*"
 				},
 				{
 					"Effect": "Allow",
@@ -860,7 +871,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 						"route53:ChangeResourceRecordSets",
 						"route53:ListResourceRecordSets"
 					],
-					"Resource": "arn:aws:route53:::hostedzone/*"
+					"Resource": "arn:%s:route53:::hostedzone/*"
 				},
 				{
 					"Effect": "Allow",
@@ -869,6 +880,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 				}
 			]
 		}`
+		dnsPolicy = fmt.Sprintf(dnsPolicy, partition, partition)
 		createPolicyOutput, err := iamClient.CreatePolicy(context.TODO(), &iam.CreatePolicyInput{
 			PolicyDocument: aws.String(dnsPolicy),
 			PolicyName:     aws.String(policyName),
