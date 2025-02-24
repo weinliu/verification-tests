@@ -81,6 +81,118 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	})
 
 	// author: shudili@redhat.com
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-High-27628-router support HTTP2 for passthrough route and reencrypt route with custom certs", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
+			srvdmInfo           = "web-server-deploy"
+			svcName             = "service-secure"
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
+			dirname             = "/tmp/OCP-27628-ca"
+			caSubj              = "/CN=NE-Test-Root-CA"
+			caCrt               = dirname + "/27628-ca.crt"
+			caKey               = dirname + "/27628-ca.key"
+			userSubj            = "/CN=example-ne.com"
+			usrCrt              = dirname + "/27628-usr.crt"
+			usrKey              = dirname + "/27628-usr.key"
+			usrCsr              = dirname + "/27628-usr.csr"
+			cmName              = "ocp27628"
+		)
+
+		// enabled mTLS for http/2 traffic testing, if not, the frontend haproxy will use http/1.1
+		baseTemp := filepath.Join(buildPruningBaseDir, "ingresscontroller-np.yaml")
+		extraParas := fmt.Sprintf(`
+    clientTLS:
+      clientCA:
+        name: %s
+      clientCertificatePolicy: Required
+`, cmName)
+		customTemp := addExtraParametersToYamlFile(baseTemp, "spec:", extraParas)
+		defer os.Remove(customTemp)
+
+		var (
+			ingctrl = ingressControllerDescription{
+				name:      "ocp27628",
+				namespace: "openshift-ingress-operator",
+				domain:    "",
+				template:  customTemp,
+			}
+		)
+
+		exutil.By("1.0 Get the domain info for testing")
+		ingctrl.domain = ingctrl.name + "." + getBaseDomain(oc)
+		routehost := "reen27628" + "." + ingctrl.domain
+
+		exutil.By("2.0: Start to use openssl to create ca certification&key and user certification&key")
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2.1: Create a new self-signed CA including the ca certification and ca key")
+		opensslNewCa(caKey, caCrt, caSubj)
+
+		exutil.By("2.2: Create a user CSR and the user key for the reen route")
+		opensslNewCsr(usrKey, usrCsr, userSubj)
+
+		exutil.By("2.3: Sign the user CSR and generate the certificate for the reen route")
+		san := "subjectAltName = DNS:*." + ingctrl.domain
+		opensslSignCsr(san, usrCsr, caCrt, caKey, usrCrt)
+
+		exutil.By("3.0: create a cm with date ca certification, then create the custom ingresscontroller")
+		defer deleteConfigMap(oc, "openshift-config", cmName)
+		createConfigMapFromFile(oc, "openshift-config", cmName, "ca-bundle.pem="+caCrt)
+
+		defer ingctrl.delete(oc)
+		ingctrl.create(oc)
+		ensureCustomIngressControllerAvailable(oc, ingctrl.name)
+
+		exutil.By("4.0: enable http2 on the custom ingresscontroller by the annotation if env ROUTER_DISABLE_HTTP2 is true")
+		jsonPath := "{.spec.template.spec.containers[0].env[?(@.name==\"ROUTER_DISABLE_HTTP2\")].value}"
+		envValue := getByJsonPath(oc, "openshift-ingress", "deployment/router-"+ingctrl.name, jsonPath)
+		if envValue == "true" {
+			setAnnotationAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, `ingress.operator.openshift.io/default-enable-http2=true`)
+			ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		}
+
+		exutil.By("5.0 Deploy a project with a deployment and a client pod")
+		project1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, project1)
+		createResourceFromFile(oc, project1, testPodSvc)
+		ensurePodWithLabelReady(oc, project1, "name="+srvdmInfo)
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", project1, "-f", clientPod).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ensurePodWithLabelReady(oc, project1, clientPodLabel)
+		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", project1, dirname, project1+"/"+clientPodName+":"+dirname).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("6.0 Create a reencrypt route and a passthrough route inside the project")
+		createRoute(oc, project1, "reencrypt", "route-reen", svcName, []string{"--hostname=" + routehost, "--ca-cert=" + caCrt, "--cert=" + usrCrt, "--key=" + usrKey})
+		waitForOutput(oc, project1, "route/route-reen", "{.status.ingress[0].conditions[0].status}", "True")
+		routehost2 := "pass27628" + "." + ingctrl.domain
+		createRoute(oc, project1, "passthrough", "route-pass", svcName, []string{"--hostname=" + routehost2})
+		waitForOutput(oc, project1, "route/route-reen", "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("7.0 Check the cert_config.map for the reencypt route with custom cert")
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, ingctrl.name)
+		output, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "cat cert_config.map").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(`route-reen.pem [alpn h2,http/1.1] ` + routehost))
+
+		exutil.By("8.0 Curl the reencrypt route with specified protocol http2")
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst := routehost + ":443:" + podIP
+		curlCmd := []string{"-n", project1, clientPodName, "--", "curl", "https://" + routehost, "-sI", "--cacert", caCrt, "--cert", usrCrt, "--key", usrKey, "--http2", "--resolve", toDst, "--connect-timeout", "10"}
+		repeatCmdOnClient(oc, curlCmd, "HTTP/2 200", 60, 1)
+
+		exutil.By("9.0 Curl the pass route with specified protocol http2")
+		toDst = routehost2 + ":443:" + podIP
+		curlCmd = []string{"-n", project1, clientPodName, "--", "curl", "https://" + routehost2, "-skI", "--http2", "--resolve", toDst, "--connect-timeout", "10"}
+		repeatCmdOnClient(oc, curlCmd, "HTTP/2 200", 60, 1)
+	})
+
+	// author: shudili@redhat.com
 	// incorporate OCP-34157 and OCP-34163 into one
 	// OCP-34157 [HAProxy-frontend-capture] capture and log specific http Request header via "httpCaptureHeaders" option
 	// OCP-34163 [HAProxy-frontend-capture] capture and log specific http Response headers via "httpCaptureHeaders" option
@@ -3800,9 +3912,13 @@ DNS.2 = *.%s.%s.svc
 		ingctrl.create(oc)
 		ensureCustomIngressControllerAvailable(oc, ingctrl.name)
 
-		exutil.By("4.0: enable http2 on the custom ingresscontroller by the annotation")
-		setAnnotationAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, `ingress.operator.openshift.io/default-enable-http2=true`)
-		ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		exutil.By("4.0: enable http2 on the custom ingresscontroller by the annotation if env ROUTER_DISABLE_HTTP2 is true")
+		jsonPath := "{.spec.template.spec.containers[0].env[?(@.name==\"ROUTER_DISABLE_HTTP2\")].value}"
+		envValue := getByJsonPath(oc, "openshift-ingress", "deployment/router-"+ingctrl.name, jsonPath)
+		if envValue == "true" {
+			setAnnotationAsAdmin(oc, ingctrl.namespace, "ingresscontroller/"+ingctrl.name, `ingress.operator.openshift.io/default-enable-http2=true`)
+			ensureRouterDeployGenerationIs(oc, ingctrl.name, "2")
+		}
 
 		exutil.By("5.0 Deploy a project with a deployment and a client pod")
 		project1 := oc.Namespace()
