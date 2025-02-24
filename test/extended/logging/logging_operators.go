@@ -56,8 +56,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 
 	// author qitang@redhat.com
 	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53407-Cluster Logging upgrade with Vector as collector - minor version.[Serial][Slow]", func() {
-		g.Skip("Skip for logging 6.1 is not released!")
-		var targetchannel = "stable-6.1"
+		g.Skip("Skip for logging 6.2 is not released!")
+		var targetchannel = "stable-6.2"
 		var oh OperatorHub
 		g.By("check source/redhat-operators status in operatorhub")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("operatorhub/cluster", "-ojson").Output()
@@ -230,8 +230,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 		catsrc.applyFromTemplate(oc, "-f", catsrcTemplate, "-n", catsrc.namespace, "-p", "NAME="+catsrc.name, "-p", "IMAGE=quay.io/openshift-qe-optional-operators/aosqe-index:v"+tag)
 		waitForPodReadyWithLabel(oc, catsrc.namespace, "olm.catalogSource="+catsrc.name)
 
-		// for 6.1, test upgrade from 6.0 to 6.1
-		preSource := CatalogSourceObjects{"stable-6.0", catsrc.name, catsrc.namespace}
+		// for 6.2, test upgrade from 6.1 to 6.2
+		preSource := CatalogSourceObjects{"stable-6.1", catsrc.name, catsrc.namespace}
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", preSource.Channel))
 		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
 		preCLO := SubscriptionObjects{

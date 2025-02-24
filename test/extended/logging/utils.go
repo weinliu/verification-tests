@@ -177,7 +177,7 @@ func (so *SubscriptionObjects) waitForPackagemanifestAppear(oc *exutil.CLI, chSo
 func (so *SubscriptionObjects) setCatalogSourceObjects(oc *exutil.CLI) {
 	// set channel
 	if so.CatalogSource.Channel == "" {
-		so.CatalogSource.Channel = "stable-6.1"
+		so.CatalogSource.Channel = "stable-6.2"
 	}
 
 	// set source namespace
