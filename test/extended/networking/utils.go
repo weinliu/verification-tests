@@ -643,6 +643,12 @@ func checkPodReady(oc *exutil.CLI, namespace string, podName string) (bool, erro
 	return contains(status, podOutPut), err
 }
 
+func checkPodNotReady(oc *exutil.CLI, namespace string, podName string) (bool, error) {
+	podOutPut, err := getPodStatus(oc, namespace, podName)
+	status := []string{"Pending", "ContainerCreating"}
+	return contains(status, podOutPut), err
+}
+
 func contains(s []string, str string) bool {
 	for _, v := range s {
 		if v == str {

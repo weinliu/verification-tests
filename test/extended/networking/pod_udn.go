@@ -3321,4 +3321,53 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		//default network connectivity should be isolated
 		CurlPod2PodFail(oc, pods[0].namespace, pods[0].name, pods[1].namespace, pods[1].name)
 	})
+
+	g.It("Author:anusaxen-Critical-79910-Deployed resources under UDN namesapce without CRD should not block deployments under another UDN namespace with CRD [Disruptive]", func() {
+		var (
+			udnPodTemplate = filepath.Join(testDataDirUDN, "udn_test_pod_template.yaml")
+		)
+
+		ipStackType := checkIPStackType(oc)
+		exutil.By("1. Create 1st UDN namespace")
+		oc.CreateNamespaceUDN()
+		ns1 := oc.Namespace()
+
+		exutil.By("2. Create 2nd UDN namespace")
+		oc.CreateNamespaceUDN()
+		ns2 := oc.Namespace()
+
+		exutil.By("create a hello pod in ns1")
+		pod1 := udnPodResource{
+			name:      "hello-pod-ns1",
+			namespace: ns1,
+			label:     "hello-pod",
+			template:  udnPodTemplate,
+		}
+		pod1.createUdnPod(oc)
+		checkPodNotReady(oc, ns1, pod1.name)
+
+		var cidr, ipv4cidr, ipv6cidr string
+
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/48"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/48"
+			}
+		}
+		createGeneralUDNCRD(oc, ns2, "l3-network-"+ns2, ipv4cidr, ipv6cidr, cidr, "layer3")
+
+		exutil.By("create a hello pod in ns2")
+		pod2 := udnPodResource{
+			name:      "hello-pod-ns2",
+			namespace: ns2,
+			label:     "hello-pod",
+			template:  udnPodTemplate,
+		}
+		pod2.createUdnPod(oc)
+		waitPodReady(oc, pod2.namespace, pod2.name)
+	})
 })
