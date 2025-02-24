@@ -2895,4 +2895,103 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
+	// author: knarra@redhat.com
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Critical-79215-oc mirror v2 to support creating clustercatalog [Serial]", func() {
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-79215.yaml")
+		sa79215 := filepath.Join(ocmirrorBaseDir, "sa-79215.yaml")
+		ceFile79215 := filepath.Join(ocmirrorBaseDir, "ceFile-79215.yaml")
+
+		dirname := "/tmp/case79215"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = getRouteCAToFile(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+
+		exutil.By("Configure the Registry Certificate as trusted for cincinnati")
+		addCA, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config.openshift.io/cluster", "-o=jsonpath={.spec.additionalTrustedCA}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer restoreAddCA(oc, addCA, "trusted-ca-79215")
+		err = trustCert(oc, serInfo.serviceName, dirname+"/tls.crt", "trusted-ca-79215")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Start mirror2mirror")
+		defer os.RemoveAll(".oc-mirror.log")
+		waitErr := wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--dest-tls-verify=false").Execute()
+			if err != nil {
+				e2e.Logf("The mirror2mirror failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror still failed")
+
+		exutil.By("Create the catalogsource, idms and itms")
+		defer operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "delete")
+		operateCSAndMs(oc, dirname+"/working-dir/cluster-resources", "create")
+		exutil.By("Check for the catalogsource pod status")
+		assertPodOutput(oc, "olm.catalogSource=cs-redhat-operator-index-v4-17", "openshift-marketplace", "Running")
+
+		exutil.By("Check if cluster catalog has been created")
+		clusterCatalogExist, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clustercatalog").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(clusterCatalogExist).To(o.ContainSubstring("cc-redhat-operator-index-v4-17"))
+
+		exutil.By("Create namespace, sa, clusterRole & clusterRoleBinding")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", "ns-79215").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "ns-79215").Execute()
+
+		exutil.By("Create sa, clusterRole & clusterRoleBinding")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", sa79215).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", sa79215).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create clusterExtension")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", ceFile79215).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", ceFile79215).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check clusterExtension got created")
+		waitErr = wait.Poll(30*time.Second, 900*time.Second, func() (bool, error) {
+			clusterExtensionExist, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterExtension", "extension-79215", "-n", "ns-79215").Output()
+			if err != nil {
+				e2e.Logf("Retreving ClusterExtension failed, retrying...")
+				return false, nil
+			}
+			if strings.Contains(clusterExtensionExist, "extension-79215") && strings.Contains(clusterExtensionExist, "security-profiles-operator.v0.8.6") {
+				e2e.Logf("ClusterExtension has been installed Successfully")
+				return true, nil
+			}
+			return false, nil
+
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but cluster extension has not been installed yet")
+
+		exutil.By("Get all the pods in the namespace are running")
+		waitForDaemonsetPodsToBeReady(oc, "ns-79215", "spod")
+
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("all", "-n", "ns-79215").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("output is %v", output)
+	})
+
 })
