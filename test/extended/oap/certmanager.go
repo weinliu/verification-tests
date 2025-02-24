@@ -211,7 +211,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("Author:geliu-ROSA-ARO-ConnectedOnly-Medium-62006-RH cert-manager operator can be uninstalled from CLI and then reinstalled [Serial]", func() {
+	g.It("Author:geliu-ROSA-ARO-Medium-62006-RH cert-manager operator can be uninstalled from CLI and then reinstalled [Serial]", func() {
 		e2e.Logf("uninstall the cert-manager operator and cleanup its operand resources")
 		cleanupCertManagerOperator(oc)
 
@@ -225,7 +225,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("Author:geliu-ROSA-ConnectedOnly-Medium-62582-Need override dns args when the target hosted zone in ACME dns01 solver overlaps with the cluster's default private hosted zone [Disruptive]", func() {
+	g.It("Author:geliu-ROSA-ConnectedOnly-Medium-62582-Need override dns args when the target hosted zone in ACME dns01 solver overlaps with the cluster's default private hosted zone [Serial]", func() {
 		var (
 			issuerName = "clusterissuer-acme-dns01-hosted-zone-overlapped"
 			certName   = "cert-from-" + issuerName
@@ -1120,7 +1120,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-High-74267-Route TLS secret can be managed by cert-manager", func() {
+	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-High-74267-Route TLS secret can be managed by cert-manager", func() {
 		var (
 			appImage        = "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83"
 			serviceName     = "hello-openshift"
@@ -1216,7 +1216,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-LEVEL0-Medium-73293-Certificates with duplicate secretName should not cause flood of re-issuance attempt", func() {
+	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-LEVEL0-Medium-73293-Certificates with duplicate secretName should not cause flood of re-issuance attempt", func() {
 		var (
 			minSupportedVersion = "1.14.0"
 			issuerName          = "default-ca"
@@ -1303,7 +1303,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("Author:yuewu-ConnectedOnly-Low-63583-Check operand metrics by using user-workload-monitoring [Serial]", func() {
+	g.It("Author:yuewu-Low-63583-Check operand metrics by using user-workload-monitoring [Serial]", func() {
 		var (
 			operandNamespace                = "cert-manager"
 			clusterMonitoringNamespace      = "openshift-monitoring"
@@ -1378,7 +1378,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-65031-Operand and operator log levels can be set [Serial]", func() {
+	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-Medium-65031-Operand and operator log levels can be set [Serial]", func() {
 		var (
 			operandNamespace  = "cert-manager"
 			operandLabel      = "app.kubernetes.io/instance=cert-manager"
@@ -1559,7 +1559,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-65028-Vault issuer should work well when authenticating with Vault AppRole", func() {
+	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-Medium-65028-Vault issuer should work well when authenticating with Vault AppRole", func() {
 		var (
 			vaultReleaseName = "vault-65028"
 			vaultRoleName    = "cert-manager"
@@ -1613,7 +1613,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-65029-Vault issuer should work well when authenticating with Vault token", func() {
+	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-Medium-65029-Vault issuer should work well when authenticating with Vault token", func() {
 		var (
 			vaultReleaseName = "vault-65029"
 			vaultSecretName  = "cert-manager-vault-token"
@@ -1658,7 +1658,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Low-65030-Vault issuer should work well when authenticating with Kubernetes static service account", func() {
+	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-Low-65030-Vault issuer should work well when authenticating with Kubernetes static service account", func() {
 		var (
 			vaultReleaseName   = "vault-65030"
 			serviceAccountName = "cert-manager-vault-static-serviceaccount"
@@ -1705,7 +1705,7 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 	})
 
 	// author: yuewu@redhat.com
-	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-66907-Vault issuer should work well when authenticating with Kubernetes bound service account through Kubernetes auth", func() {
+	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-Medium-66907-Vault issuer should work well when authenticating with Kubernetes bound service account through Kubernetes auth", func() {
 		var (
 			minSupportedVersion = "1.12.0"
 			vaultReleaseName    = "vault-66907"
@@ -1755,7 +1755,7 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 	})
 
 	// author: yuewu@redhat.com
-	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-76515-Vault issuer should work well when authenticating with Kubernetes bound service account through JWT/OIDC auth", func() {
+	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-Medium-76515-Vault issuer should work well when authenticating with Kubernetes bound service account through JWT/OIDC auth", func() {
 		var (
 			minSupportedVersion = "1.12.0"
 			vaultReleaseName    = "vault-76515"
