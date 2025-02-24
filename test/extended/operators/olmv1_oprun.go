@@ -14,6 +14,7 @@ import (
 	olmv1util "github.com/openshift/openshift-tests-private/test/extended/operators/olmv1util"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"github.com/openshift/openshift-tests-private/test/extended/util/architecture"
+	"github.com/tidwall/gjson"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
@@ -1945,6 +1946,42 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		metricsMsg, _ = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-operator-lifecycle-manager", catalogPodname, "-i", "--", "curl", "-k", "-H", fmt.Sprintf("Authorization: Bearer %v", wrongToken), queryContent).Output()
 		o.Expect(metricsMsg).To(o.ContainSubstring("Authorization denied"))
 
+	})
+
+	g.It("Author:xzha-ConnectedOnly-NonHyperShiftHOST-High-79770-metrics are collected by default", func() {
+		podnameStr, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", "openshift-monitoring", "-l", "prometheus==k8s", "-o=jsonpath='{..metadata.name}'").Output()
+		o.Expect(podnameStr).NotTo(o.BeEmpty())
+		k8sPodname := strings.Split(strings.Trim(podnameStr, "'"), " ")[0]
+
+		exutil.By("1) check status of Metrics targets is up")
+		targetsUrl := "http://localhost:9090/api/v1/targets"
+		targetsContent, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", k8sPodname, "--", "curl", "-s", targetsUrl).Output()
+		status := gjson.Get(targetsContent, `data.activeTargets.#(labels.namespace=="openshift-catalogd").health`).String()
+		if strings.Compare(status, "up") != 0 {
+			statusAll := gjson.Get(targetsContent, `data.activeTargets.#(labels.namespace=="openshift-catalogd")`).String()
+			e2e.Logf(statusAll)
+			o.Expect(status).To(o.Equal("up"))
+		}
+		status = gjson.Get(targetsContent, `data.activeTargets.#(labels.namespace=="openshift-operator-controller").health`).String()
+		if strings.Compare(status, "up") != 0 {
+			statusAll := gjson.Get(targetsContent, `data.activeTargets.#(labels.namespace=="openshift-operator-controller")`).String()
+			e2e.Logf(statusAll)
+			o.Expect(status).To(o.Equal("up"))
+		}
+
+		exutil.By("2) check metrics are collected")
+		queryUrl := "http://localhost:9090/api/v1/query"
+		query1 := `query=catalogd_http_request_duration_seconds_count{code="200"}`
+		queryResult1, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", k8sPodname, "--", "curl", "-G", "--data-urlencode", query1, queryUrl).Output()
+		e2e.Logf(queryResult1)
+		o.Expect(queryResult1).To(o.ContainSubstring("value"))
+
+		query2 := `query=controller_runtime_reconcile_total{controller="clusterextension",result="success"}`
+		queryResult2, _ := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-monitoring", k8sPodname, "--", "curl", "-G", "--data-urlencode", query2, queryUrl).Output()
+		e2e.Logf(queryResult2)
+		o.Expect(queryResult2).To(o.ContainSubstring("value"))
+
+		exutil.By("3) test SUCCESS")
 	})
 
 	// author: bandrade@redhat.com
