@@ -4268,7 +4268,6 @@ func collectMustGather(oc *exutil.CLI, dstDir string, imageStream string, parame
 func verifyPodConnCrossNodes(oc *exutil.CLI) bool {
 	buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 	helloDaemonset := filepath.Join(buildPruningBaseDir, "hello-pod-daemonset.yaml")
-	pass := true
 
 	exutil.By("Create a temporay project for pods to pods connection checking.")
 	oc.SetupProject()
@@ -4280,41 +4279,7 @@ func verifyPodConnCrossNodes(oc *exutil.CLI) bool {
 	exutil.AssertWaitPollNoErr(err, "ipsec pods are not ready after killing pluto")
 
 	exutil.By("Checking pods connection")
-	pods := getPodName(oc, ns, "name=hello-pod")
-	for _, srcPod := range pods {
-		for _, targetPod := range pods {
-			if targetPod != srcPod {
-				podIP1, podIP2 := getPodIP(oc, ns, targetPod)
-				e2e.Logf("Curling from pod: %s with IP: %s\n", srcPod, podIP1)
-				_, err := e2eoutput.RunHostCmd(ns, srcPod, "curl --connect-timeout 10 -s "+net.JoinHostPort(podIP1, "8080"))
-				if err != nil {
-					e2e.Logf("pods connection failed from %s to %s:8080", srcPod, podIP1)
-					srcNode, err := exutil.GetPodNodeName(oc, ns, srcPod)
-					o.Expect(err).NotTo(o.HaveOccurred())
-					dstnode, err := exutil.GetPodNodeName(oc, ns, targetPod)
-					o.Expect(err).NotTo(o.HaveOccurred())
-					e2e.Logf("pods connection failed between nodes %s and %s", srcNode, dstnode)
-					pass = false
-				}
-				if podIP2 != "" {
-					e2e.Logf("Curling from pod: %s with IP: %s\n", srcPod, podIP2)
-					_, err := e2eoutput.RunHostCmd(ns, srcPod, "curl --connect-timeout 10 -s "+net.JoinHostPort(podIP2, "8080"))
-					if err != nil {
-						e2e.Logf("pods connection failed from %s to %s:8080", srcPod, podIP2)
-						srcNode, err := exutil.GetPodNodeName(oc, ns, srcPod)
-						o.Expect(err).NotTo(o.HaveOccurred())
-						dstnode, err := exutil.GetPodNodeName(oc, ns, targetPod)
-						o.Expect(err).NotTo(o.HaveOccurred())
-						e2e.Logf("pods connection failed between nodes %s and %s", srcNode, dstnode)
-						pass = false
-					}
-				}
-
-			}
-		}
-	}
-	e2e.Logf("The pods connection pass check is %v ", pass)
-	return pass
+	return verifyPodConnCrossNodesSpecNS(oc, ns, "name=hello-pod")
 }
 
 func waitForPodsCount(oc *exutil.CLI, namespace, labelSelector string, expectedCount int, interval, timeout time.Duration) error {
@@ -4330,4 +4295,72 @@ func waitForPodsCount(oc *exutil.CLI, namespace, labelSelector string, expectedC
 		e2e.Logf("Expected %d pods, but found %d. Retrying...", expectedCount, len(allPods))
 		return false, nil
 	})
+}
+
+func verifyPodConnCrossNodesSpecNS(oc *exutil.CLI, namespace, podLabel string) bool {
+	pass := true
+	pods := getPodName(oc, namespace, podLabel)
+
+	for _, srcPod := range pods {
+		for _, targetPod := range pods {
+			if targetPod != srcPod {
+				podIP1, podIP2 := getPodIP(oc, namespace, targetPod)
+				e2e.Logf("Curling from pod: %s with IP: %s\n", srcPod, podIP1)
+				_, err := e2eoutput.RunHostCmd(namespace, srcPod, "curl --connect-timeout 10 -s "+net.JoinHostPort(podIP1, "8080"))
+				if err != nil {
+					e2e.Logf("pods connection failed from %s to %s:8080", srcPod, podIP1)
+					srcNode, err := exutil.GetPodNodeName(oc, namespace, srcPod)
+					o.Expect(err).NotTo(o.HaveOccurred())
+					dstNode, err := exutil.GetPodNodeName(oc, namespace, targetPod)
+					o.Expect(err).NotTo(o.HaveOccurred())
+					e2e.Logf("pods connection failed between nodes %s and %s", srcNode, dstNode)
+					pass = false
+				}
+				if podIP2 != "" {
+					e2e.Logf("Curling from pod: %s with IP: %s\n", srcPod, podIP2)
+					_, err := e2eoutput.RunHostCmd(namespace, srcPod, "curl --connect-timeout 10 -s "+net.JoinHostPort(podIP2, "8080"))
+					if err != nil {
+						e2e.Logf("pods connection failed from %s to %s:8080", srcPod, podIP2)
+						srcNode, err := exutil.GetPodNodeName(oc, namespace, srcPod)
+						o.Expect(err).NotTo(o.HaveOccurred())
+						dstNode, err := exutil.GetPodNodeName(oc, namespace, targetPod)
+						o.Expect(err).NotTo(o.HaveOccurred())
+						e2e.Logf("pods connection failed between nodes %s and %s", srcNode, dstNode)
+						pass = false
+					}
+				}
+
+			}
+		}
+	}
+	e2e.Logf("The pods connection pass check is %v ", pass)
+	return pass
+}
+
+func checkIPSecNATTEanbled(oc *exutil.CLI) bool {
+	ovnPod := getOVNKMasterOVNkubeNode(oc)
+	cmd := "ovn-nbctl --no-leader-only get NB_Global . options"
+	e2e.Logf("The command is: %v", cmd)
+	out, err := exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnPod, "nbdb", cmd)
+	if err != nil {
+		e2e.Logf("Execute command failed with  err:%v  and output is %v.", err, out)
+	}
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	if strings.Contains(out, `ipsec_encapsulation="true"`) {
+		e2e.Logf("The cluster is IPSec enabled NAT-T.")
+		return true
+	} else {
+		e2e.Logf("The cluster is IPSec enabled with ESP.")
+		return false
+	}
+}
+
+func verifyIPSecLoaded(oc *exutil.CLI, nodeName string, num int) {
+	expectedNum := (num - 1) * 2
+	cmd := `ipsec status | grep "Total IPsec connections"`
+	out, err := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", cmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("Total  IPsec connection is : \n%s", out)
+	o.Expect(strings.Contains(out, fmt.Sprintf("loaded %v, active %v", expectedNum, expectedNum))).Should(o.BeTrue())
 }

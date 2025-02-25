@@ -188,6 +188,162 @@ var _ = g.Describe("[sig-networking] SDN IPSEC", func() {
 			g.Fail("Pods connection checking cross nodes failed!!")
 		}
 	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-PreChkUpgrade-Critical-44834-pod2pod cross nodes connections work and pod2pod traffics get encrypted post upgrade", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		helloDaemonset := filepath.Join(buildPruningBaseDir, "hello-pod-daemonset.yaml")
+		ns := "44834-upgrade-ipsec"
+
+		exutil.By("Verify IPSec loaded")
+		nodes, err := exutil.GetAllNodes(oc)
+		e2e.Logf("The cluster has %v nodes", len(nodes))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		verifyIPSecLoaded(oc, nodes[0], len(nodes))
+
+		exutil.By("Verify ipsec pods running well before upgrade.")
+		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovn-ipsec")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("create new namespace")
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", ns).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create hello-pod-daemonset in namespace.")
+		createResourceFromFile(oc, ns, helloDaemonset)
+		err = waitForPodWithLabelReady(oc, ns, "name=hello-pod")
+		exutil.AssertWaitPollNoErr(err, "hello pods are not ready before upgrade!")
+
+		exutil.By("Checking pods connection cross nodes")
+		if !verifyPodConnCrossNodesSpecNS(oc, ns, "name=hello-pod") {
+			g.Fail("Pods connection checking cross nodes failed!!")
+		}
+
+		exutil.By("Verify the pod2pod traffic got encrypted.")
+		pods := getPodName(oc, ns, "name=hello-pod")
+		pod1 := pods[0]
+		pod2 := pods[1]
+		pod2Node, err := exutil.GetPodNodeName(oc, ns, pod2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The source pod is  %s, the target pod is %s, the targe pod is on node %s", pod1, pod2, pod2Node)
+
+		exutil.By("Check cluster is NAT-T enabled or not.")
+		nattEnabled := checkIPSecNATTEanbled(oc)
+		exutil.SetNamespacePrivileged(oc, ns)
+		var tcpdumpCmd string
+		if nattEnabled {
+			tcpdumpCmd = "timeout 60s tcpdump -c 4 -nni br-ex udp port 4500 and greater 1300 "
+		} else {
+			tcpdumpCmd = "timeout 60s tcpdump -c 4 -nni br-ex esp and greater 1300 "
+		}
+		e2e.Logf("The tcpdump command is %s", tcpdumpCmd)
+
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+pod2Node, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
+		time.Sleep(5 * time.Second)
+
+		e2e.Logf("From pod %s ping pod %s", pod1, pod2)
+		pod2IP1, pod2IP2 := getPodIP(oc, ns, pod2)
+		if pod2IP2 != "" {
+			_, err := e2eoutput.RunHostCmd(ns, pod1, "ping -s 1500 -c4 "+pod2IP1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			_, err = e2eoutput.RunHostCmd(ns, pod1, "ping -s 1500 -c4 "+pod2IP2)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			_, err := e2eoutput.RunHostCmd(ns, pod1, "ping -s 1500 -c4 "+pod2IP1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("Verify the pod2pod traffic got encrypted,no clear icmp text in the output")
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
+		if nattEnabled {
+			o.Expect(strings.Contains(cmdOutput.String(), "UDP-encap")).Should(o.BeTrue())
+		} else {
+			o.Expect(strings.Contains(cmdOutput.String(), "ESP")).Should(o.BeTrue())
+		}
+		o.Expect(strings.Contains(cmdOutput.String(), "icmp")).ShouldNot(o.BeTrue())
+
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-PstChkUpgrade-Critical-44834-pod2pod cross nodes connections work and pod2pod traffics get encrypted post upgrade", func() {
+		ns := "44834-upgrade-ipsec"
+		nsErr := oc.AsAdmin().WithoutNamespace().Run("get").Args("ns", ns).Execute()
+		if nsErr != nil {
+			g.Skip("Skip the PstChkUpgrade test as 44834-upgrade-ipsec namespace does not exist, PreChkUpgrade test did not run")
+		}
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", ns, "--ignore-not-found=true").Execute()
+
+		exutil.By("Verify IPSec loaded")
+		nodes, err := exutil.GetAllNodes(oc)
+		e2e.Logf("The cluster has %v nodes", len(nodes))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		verifyIPSecLoaded(oc, nodes[0], len(nodes))
+
+		exutil.By("Verify ipsec pods running well post upgrade.")
+		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovn-ipsec")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Check hello-pod-daemonset in namespace 44834-upgrade-ipsec.")
+		err = waitForPodWithLabelReady(oc, ns, "name=hello-pod")
+		exutil.AssertWaitPollNoErr(err, "hello pods are not ready post upgrade.")
+
+		exutil.By("Checking pods connection")
+		if !verifyPodConnCrossNodesSpecNS(oc, ns, "name=hello-pod") {
+			g.Fail("Pods connection checking cross nodes failed!!")
+		}
+
+		exutil.By("Verify the pod2pod traffic got encrypted.")
+		pods := getPodName(oc, ns, "name=hello-pod")
+		pod1 := pods[0]
+		pod2 := pods[1]
+		pod2Node, err := exutil.GetPodNodeName(oc, ns, pod2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The source pod is  %s, the target pod is %s, the targe pod is on node %s", pod1, pod2, pod2Node)
+
+		exutil.By("Check cluster is NAT-T enabled or not.")
+		nattEnabled := checkIPSecNATTEanbled(oc)
+		exutil.SetNamespacePrivileged(oc, ns)
+		var tcpdumpCmd string
+		if nattEnabled {
+			tcpdumpCmd = "timeout 60s tcpdump -c 4 -nni br-ex udp port 4500 and greater 1300 "
+		} else {
+			tcpdumpCmd = "timeout 60s tcpdump -c 4 -nni br-ex esp and greater 1300 "
+		}
+		e2e.Logf("The tcpdump command is %s", tcpdumpCmd)
+
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+pod2Node, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
+		time.Sleep(5 * time.Second)
+
+		e2e.Logf("From pod %s ping pod %s", pod1, pod2)
+		pod2IP1, pod2IP2 := getPodIP(oc, ns, pod2)
+		if pod2IP2 != "" {
+			_, err := e2eoutput.RunHostCmd(ns, pod1, "ping -s 1500 -c4 "+pod2IP1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			_, err = e2eoutput.RunHostCmd(ns, pod1, "ping -s 1500 -c4 "+pod2IP2)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			_, err := e2eoutput.RunHostCmd(ns, pod1, "ping -s 1500 -c4 "+pod2IP1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("Verify the pod2pod traffic got encrypted,no clear icmp text in the output")
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
+		if nattEnabled {
+			o.Expect(strings.Contains(cmdOutput.String(), "UDP-encap")).Should(o.BeTrue())
+		} else {
+			o.Expect(strings.Contains(cmdOutput.String(), "ESP")).Should(o.BeTrue())
+		}
+		o.Expect(strings.Contains(cmdOutput.String(), "icmp")).ShouldNot(o.BeTrue())
+
+	})
 })
 
 var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {
