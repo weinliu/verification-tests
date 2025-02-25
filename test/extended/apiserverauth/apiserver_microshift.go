@@ -646,6 +646,17 @@ roleRef:
 		templateErr := oc.AsAdmin().Run("create").Args("-f", template, "-n", namespace).Execute()
 		o.Expect(templateErr).NotTo(o.HaveOccurred())
 
+		cronErr := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 90*time.Second, false, func(cxt context.Context) (bool, error) {
+			crdOutput := getResourceToBeReady(oc, asAdmin, withoutNamespace, "crd", "crontabs.ms.qe.com", `-o=jsonpath={.status.conditions[?(@.type=="Established")].status}`)
+			if crdOutput == "True" {
+				e2e.Logf("CRD crontabs.ms.qe.com ready...")
+				return true, nil
+			}
+			e2e.Logf("CRD crontabs.ms.qe.com not ready... trying again..")
+			return false, nil
+		})
+		exutil.AssertWaitPollNoErr(cronErr, "CRD crontabs.ms.qe.com not created..")
+
 		exutil.By("3. Create custom crontab " + crontab + " object")
 		mycrontabyaml := tmpdir + "/my-ocp55677-crontab.yaml"
 		mycrontabCMD := fmt.Sprintf(`cat > %v << EOF
