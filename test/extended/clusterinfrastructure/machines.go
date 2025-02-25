@@ -1132,7 +1132,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		clusterinfra.WaitForMachineFailed(oc, machinesetName)
 		machineName := clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
 		out, _ = oc.AsAdmin().WithoutNamespace().Run("describe").Args(mapiMachine, machineName, "-n", machineAPINamespace).Output()
-		o.Expect(out).Should(o.ContainSubstring("e2-medium does not support accelerators. Only A2 and N1 machine type families support guest acceleartors"))
+		o.Expect(out).Should(o.ContainSubstring("MachineType e2-medium does not support accelerators. Only A2, A3 and N1 machine type families support guest accelerators"))
 		clusterinfra.ScaleMachineSet(oc, machinesetName, 0)
 
 		g.By("4.Update machineset with A100 GPUs (A2 family) nvidia-tesla-a100, onHostMaintenance is set to Migrate")
@@ -1153,7 +1153,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		clusterinfra.WaitForMachineFailed(oc, machinesetName)
 		machineName = clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
 		out, _ = oc.AsAdmin().WithoutNamespace().Run("describe").Args(mapiMachine, machineName, "-n", machineAPINamespace).Output()
-		o.Expect(strings.Contains(out, "Number of accelerator cards attached to an instance must be one of [1, 2, 4]") || strings.Contains(out, "AcceleratorType nvidia-tesla-p100 not available in the zone")).To(o.BeTrue())
+		o.Expect(strings.Contains(out, "Only A2, A3 and N1 machine type families support guest accelerators") || strings.Contains(out, "AcceleratorType nvidia-tesla-p100 not available in the zone")).To(o.BeTrue())
 		clusterinfra.ScaleMachineSet(oc, machinesetName, 0)
 
 		g.By("8.Update machineset with other GPU types,  type with an empty value")
@@ -1166,7 +1166,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		clusterinfra.WaitForMachineFailed(oc, machinesetName)
 		machineName = clusterinfra.GetMachineNamesFromMachineSet(oc, machinesetName)[0]
 		out, _ = oc.AsAdmin().WithoutNamespace().Run("describe").Args(mapiMachine, machineName, "-n", machineAPINamespace).Output()
-		o.Expect(out).Should(o.ContainSubstring("AcceleratorType invalid not available"))
+		o.Expect(strings.Contains(out, "Only A2, A3 and N1 machine type families support guest accelerators") || strings.Contains(out, "AcceleratorType invalid not available in the zone")).To(o.BeTrue())
 	})
 
 	// author: huliu@redhat.com
