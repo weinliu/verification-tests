@@ -185,3 +185,55 @@ func rotateTLSSecretOrFail(secret *Secret) string {
 
 	return newCert
 }
+
+// verifyMcsCASecretRotateOrFail helps to edit the annotation MCS-CA secret and verify the cert update in *-user-data-* secret and mcs-ca config map.
+func verifyMcsCASecretRotateOrFail(secret *Secret) {
+	var (
+		oc                          = secret.GetOC()
+		cm                          = NewConfigMap(oc.AsAdmin(), "openshift-machine-config-operator", "machine-config-server-ca")
+		workerUserDataSecret        = NewSecret(oc.AsAdmin(), "openshift-machine-api", "worker-user-data")
+		masterUserDataSecret        = NewSecret(oc.AsAdmin(), "openshift-machine-api", "master-user-data")
+		workerUserDataManagedSecret = NewSecret(oc.AsAdmin(), "openshift-machine-api", "worker-user-data-managed")
+		masterUserDataManagedSecret = NewSecret(oc.AsAdmin(), "openshift-machine-api", "worker-user-data-managed")
+	)
+
+	logger.Infof("Get the initial machine-config-server-ca config map ")
+	initialCMCert := cm.GetDataValueOrFail("ca-bundle.crt")
+	logger.Debugf("Current certificate: %s", initialCMCert)
+
+	logger.Infof("Edit the annotation in %s secret", secret)
+	o.Expect(
+		secret.Patch("merge", `{"metadata": {"annotations": {"auth.openshift.io/certificate-not-after": null}}}`),
+	).To(o.Succeed(),
+		"The secret %s could not be patched in order to rotate the certificate", secret)
+
+	logger.Infof("Verify the config map is updated by comparing it *-userdata-* secret in openshift-machine-api")
+
+	o.Eventually(cm.GetDataValueOrFail, "3m", "20s").WithArguments("ca-bundle.crt").
+		ShouldNot(exutil.Secure(o.Equal(initialCMCert)),
+			"The certificate was not updated in %s", cm)
+	logger.Infof("MCS-CA Config Map is updated! ")
+
+	updatedCMCert := cm.GetDataValueOrFail("ca-bundle.crt") // get the latest cert of CM
+	base64EncodedCert := base64.StdEncoding.EncodeToString([]byte(updatedCMCert))
+
+	o.Eventually(masterUserDataSecret.GetDataValueOrFail, "3m", "20s").WithArguments("userData").
+		Should(exutil.Secure(o.ContainSubstring(base64EncodedCert)),
+			"MCS-CA Config Map cert is not present in master-user-data secret")
+	logger.Infof("MCS-CA Config Map cert is present in master-user-data secret !\n")
+
+	o.Eventually(workerUserDataSecret.GetDataValueOrFail, "3m", "20s").WithArguments("userData").
+		Should(exutil.Secure(o.ContainSubstring(base64EncodedCert)),
+			"MCS-CA Config Map cert is present in worker-user-data secret")
+	logger.Infof("MCS-CA Config Map cert is present in worker-user-data secret !\n")
+
+	o.Eventually(masterUserDataManagedSecret.GetDataValueOrFail, "3m", "20s").WithArguments("userData").
+		Should(exutil.Secure(o.ContainSubstring(base64EncodedCert)),
+			"MCS-CA Config Map cert is present in master-user-data-managed secret")
+	logger.Infof("MCS-CA Config Map cert is present in master-user-data-managed secret !\n")
+
+	o.Eventually(workerUserDataManagedSecret.GetDataValueOrFail, "3m", "20s").WithArguments("userData").
+		Should(exutil.Secure(o.ContainSubstring(base64EncodedCert)),
+			"MCS-CA Config Map cert is present in worker-user-data-managed secret")
+	logger.Infof("MCS-CA Config Map cert is present in worker-user-data-managed secret !\n")
+}

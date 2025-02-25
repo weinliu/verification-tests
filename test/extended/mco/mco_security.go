@@ -810,6 +810,56 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		logger.Infof("OK!\n")
 
 	})
+
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-High-77784-[P2]Implement a Controller Path for Managing User-Data Secrets and Rotating MCS TLS Certificates [Disruptive]", func() {
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
+
+		var (
+			mcsCaSecret        = NewSecret(oc.AsAdmin(), "openshift-machine-config-operator", "machine-config-server-ca")
+			mcsTLSSecret       = NewSecret(oc.AsAdmin(), "openshift-machine-config-operator", "machine-config-server-tls")
+			notAfterAnnotaion  = "auth.openshift.io/certificate-not-after"
+			notBeforeAnnotaion = "auth.openshift.io/certificate-not-before"
+		)
+
+		exutil.By("To verify the MCS-CA and MCS-TLS secret present with required annotation")
+		o.Expect(mcsCaSecret).To(Exist())
+		o.Expect(mcsTLSSecret).To(Exist())
+
+		o.Expect(mcsCaSecret.GetAnnotationOrFail(notAfterAnnotaion)).NotTo(o.BeEmpty())
+		o.Expect(mcsCaSecret.GetAnnotationOrFail(notBeforeAnnotaion)).NotTo(o.BeEmpty())
+		o.Expect(mcsTLSSecret.GetAnnotationOrFail(notAfterAnnotaion)).NotTo(o.BeEmpty())
+		o.Expect(mcsTLSSecret.GetAnnotationOrFail(notBeforeAnnotaion)).NotTo(o.BeEmpty())
+
+		logger.Infof("OK!\n")
+
+		exutil.By("Edit the MCS-TLS Secret and check the certificate rotated")
+		newCert := rotateTLSSecretOrFail(mcsTLSSecret)
+		logger.Debugf("New TLS cert:\n%s", newCert)
+		logger.Infof("OK!\n")
+
+		exutil.By("Edit the MCS-CA Secret and check config map update with new one")
+		verifyMcsCASecretRotateOrFail(mcsCaSecret)
+		logger.Infof("OK!\n")
+
+		exutil.By("Verify if able to add new worker node.")
+		msl, err := NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAll()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Get machinesets failed")
+		o.Expect(msl).ShouldNot(o.BeEmpty(), "Machineset list is empty")
+		ms := msl[0]
+
+		o.Expect(ms.AddToScale(1)).NotTo(o.HaveOccurred())
+
+		defer func() {
+			exutil.By("Scale to orignal no. of worker node")
+			ms.AddToScale(-1)
+			mcp.waitForComplete()
+		}()
+
+		o.Eventually(ms.GetIsReady, "20m", "2m").Should(o.BeTrue(), "MachineSet %s is not ready", ms.GetName())
+
+		logger.Infof("OK!\n")
+
+	})
 })
 
 // EventuallyFileExistsInNode fails the test if the certificate file does not exist in the node after the time specified as parameters
