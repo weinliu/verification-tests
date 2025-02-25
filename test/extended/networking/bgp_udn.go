@@ -165,32 +165,33 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes bgp-udn", func() {
 			pingPodTemplate      = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 			networkselectorkey   = "app"
 			networkselectorvalue = "udn"
-			udnNames             = []string{"layer3-udn-78339-1", "layer3-udn-78339-2"}
+			udnNames             = []string{"layer3-udn-78339-1", "layer3-udn-78339-2", "layer3-udn-78339-3"}
+			udnNS                []string
 		)
 
 		exutil.By("1. Create two UDN namespaces, create a layer3 UDN in each UDN namespace, the two UDNs should NOT be overlapping")
 		ipStackType := checkIPStackType(oc)
 		var cidr, ipv4cidr, ipv6cidr []string
-		ipv4cidr = []string{"10.150.0.0/16", "10.151.0.0/16"}
-		ipv6cidr = []string{"2010:100:200::0/48", "2011:100:200::0/48"}
-		cidr = []string{"10.150.0.0/16", "10.151.0.0/16"}
+		ipv4cidr = []string{"10.150.0.0/16", "20.150.0.0/16", "30.150.0.0/16"}
+		ipv6cidr = []string{"2010:100:200::0/48", "2011:100:200::0/48", "2012:100:200::0/48"}
+		cidr = []string{"10.150.0.0/16", "20.150.0.0/16", "30.150.0.0/16"}
 		if ipStackType == "ipv6single" {
-			cidr = []string{"2010:100:200::0/48", "2011:100:200::0/48"}
+			cidr = []string{"2010:100:200::0/48", "2011:100:200::0/48", "2012:100:200::0/48"}
 		}
 
-		oc.CreateNamespaceUDN()
-		ns1 := oc.Namespace()
-		oc.CreateNamespaceUDN()
-		ns2 := oc.Namespace()
-		udnNS := []string{ns1, ns2}
+		for i := 0; i < 3; i++ {
+			oc.CreateNamespaceUDN()
+			ns := oc.Namespace()
+			udnNS = append(udnNS, ns)
+			createGeneralUDNCRD(oc, ns, udnNames[i], ipv4cidr[i], ipv6cidr[i], cidr[i], "layer3")
+		}
 
-		createGeneralUDNCRD(oc, ns1, udnNames[0], ipv4cidr[0], ipv6cidr[0], cidr[0], "layer3")
-		createGeneralUDNCRD(oc, ns2, udnNames[1], ipv4cidr[1], ipv6cidr[1], cidr[1], "layer3")
-
-		exutil.By("2. Only label the first UDN with label that matches networkSelector in routeAdvertisement")
-		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", ns1, "userdefinednetwork", udnNames[0], networkselectorkey+"-").Execute()
-		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", ns1, "userdefinednetwork", udnNames[0], networkselectorkey+"="+networkselectorvalue).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("2. Only label the first two UDNs with label that matches networkSelector in routeAdvertisement")
+		for i := 0; i < 2; i++ {
+			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", udnNS[i], "userdefinednetwork", udnNames[i], networkselectorkey+"-").Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", udnNS[i], "userdefinednetwork", udnNames[i], networkselectorkey+"="+networkselectorvalue).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
 
 		exutil.By("3. Apply a routeAdvertisement with matching networkSelector")
 		raname := "ra-udn"
@@ -201,18 +202,28 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes bgp-udn", func() {
 		exutil.AssertWaitPollNoErr(raErr, "routeAdvertisement applied does not have the right condition status")
 		e2e.Logf("SUCCESS - UDN routeAdvertisement applied is accepted")
 
-		exutil.By("4. Verify the first UDN with matching networkSelector is advertised")
-		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, ns1+"_"+udnNames[0])
-		o.Eventually(func() bool {
-			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
-			return result
-		}, "60s", "10s").Should(o.BeTrue(), "UDN with matching networkSelector was not advertised as expected!!")
+		exutil.By("4. Verify the first two UDNs with matching networkSelector are advertised")
+		var UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 map[string]string
+		for i := 0; i < 2; i++ {
+			UDNnetwork_ipv6_ns, UDNnetwork_ipv4_ns := getHostPodNetwork(oc, allNodes, udnNS[i]+"_"+udnNames[i])
 
-		exutil.By("5. Verify the second UDN without matching networkSelector is NOT advertised")
-		UDNnetwork_ipv6_ns2, UDNnetwork_ipv4_ns2 := getHostPodNetwork(oc, allNodes, ns2+"_"+udnNames[1])
-		result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns2, UDNnetwork_ipv6_ns2, nodesIP1Map, nodesIP2Map, false)
-		o.Expect(result).To(o.BeTrue())
+			// save pod nework info of first UDN, it will be be used in step 8
+			if i == 0 {
+				UDNnetwork_ipv6_ns1 = UDNnetwork_ipv6_ns
+				UDNnetwork_ipv4_ns1 = UDNnetwork_ipv4_ns
+			}
+			o.Eventually(func() bool {
+				result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns, UDNnetwork_ipv6_ns, nodesIP1Map, nodesIP2Map, true)
+				return result
+			}, "60s", "10s").Should(o.BeTrue(), "UDN with matching networkSelector was not advertised as expected!!")
+		}
 
+		exutil.By("5. Verify the third UDN without matching networkSelector is NOT advertised")
+		UDNnetwork_ipv6_ns3, UDNnetwork_ipv4_ns3 := getHostPodNetwork(oc, allNodes, udnNS[2]+"_"+udnNames[2])
+		result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns3, UDNnetwork_ipv6_ns3, nodesIP1Map, nodesIP2Map, false)
+		o.Expect(result).To(o.BeTrue(), "Unlablled UDN should not be advertised, but their routes are in routing table")
+
+		exutil.By("6.1 Create a UDN pod in each UDN namespace associating with its UDN")
 		testpods := make([]pingPodResource, len(udnNS))
 		for i := 0; i < len(udnNS); i++ {
 			testpods[i] = pingPodResource{
@@ -222,12 +233,35 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes bgp-udn", func() {
 			}
 			testpods[i].createPingPod(oc)
 			waitPodReady(oc, testpods[i].namespace, testpods[i].name)
-			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 
-		exutil.By("5. Verify UDN pod in first UDN namespace can be accessed from external but the UDN pod in second UDN namespace is not accessible as its UDN was not advertised")
-		Curlexternal2UDNPodPass(oc, host, ns1, testpods[0].name)
-		Curlexternal2UDNPodFail(oc, host, ns2, testpods[1].name)
+		exutil.By("6.2 Verify UDN pod in first two UDN namespaces can be accessed from external but the UDN pod in 3rd UDN namespace is not accessible as its UDN was not advertised")
+		Curlexternal2UDNPodPass(oc, host, udnNS[0], testpods[0].name)
+		Curlexternal2UDNPodPass(oc, host, udnNS[1], testpods[1].name)
+		Curlexternal2UDNPodFail(oc, host, udnNS[2], testpods[2].name)
+
+		// comment out the rest of test steps due to https://issues.redhat.com/browse/OCPBUGS-51142, will add it back after the bug is fixed
+		// exutil.By("7.1 Unlabel the second UDN, verify the second UDN is not longer advertised")
+		// err := oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", udnNS[1], "userdefinednetwork", udnNames[1], networkselectorkey+"-").Execute()
+		// o.Expect(err).NotTo(o.HaveOccurred())
+		// UDNnetwork_ipv6_ns2, UDNnetwork_ipv4_ns2 := getHostPodNetwork(oc, allNodes, udnNS[1]+"_"+udnNames[1])
+		// o.Eventually(func() bool {
+		// 	result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns2, UDNnetwork_ipv6_ns2, nodesIP1Map, nodesIP2Map, false)
+		// 	return result
+		// }, "60s", "10s").Should(o.BeTrue(), "advertised routes for unlabelled UDN were not cleaned up as expected!!")
+
+		// exutil.By("7.2 UDN pod in second UDN should not be accessible from external any more")
+		// time.Sleep(60 * time.Second)
+		// Curlexternal2UDNPodFail(oc, host, udnNS[1], testpods[1].name)
+
+		exutil.By("8. Delete the UDN pod of first UDN, then delete the first UDN, verify the first UDN is not longer advertised")
+		removeResource(oc, true, true, "pod", testpods[0].name, "-n", testpods[0].namespace)
+		removeResource(oc, true, true, "userdefinednetwork", udnNames[0], "-n", udnNS[0])
+
+		o.Eventually(func() bool {
+			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, false)
+			return result
+		}, "60s", "10s").Should(o.BeTrue(), "advertised routes for deleted UDN were not cleaned up as expected!!")
 
 		e2e.Logf("SUCCESS - UDN route advertisement through VRF-default and route filtering through networkSelector work correctly!!!")
 	})

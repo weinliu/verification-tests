@@ -151,7 +151,7 @@ func getHostPodNetwork(oc *exutil.CLI, allNodes []string, network string) (map[s
 			podNetwork2Map[node] = ""
 		}
 	}
-	e2e.Logf("\n Get default network podNetwork1Map: %v, \n podNetwork2Map: %v\n", podNetwork1Map, podNetwork2Map)
+	e2e.Logf("\n Get network for network %s as podNetwork1Map: %v, \n podNetwork2Map: %v\n", network, podNetwork1Map, podNetwork2Map)
 	return podNetwork2Map, podNetwork1Map
 }
 
@@ -379,7 +379,7 @@ func createExternalFrrRouter(host, externalFRRIP string, allNodesIP1, allNodesIP
 
 	exutil.By("Create external frr container in iBGP mode, get its container id")
 	frrContainerName := "frr-" + exutil.GetRandomString()
-	externalFrrCreateCmd := fmt.Sprintf("sudo podman run -d --privileged --network host --rm --ulimit core=-1 --name %s --volume %s:/etc/frr quay.io/frrouting/frr:9.1.0", frrContainerName, tmpdir)
+	externalFrrCreateCmd := fmt.Sprintf("sudo podman run -d --privileged --network host --rm --ulimit core=-1 --name %s --volume %s:/etc/frr quay.io/frrouting/frr:10.2.1", frrContainerName, tmpdir)
 	err = sshRunCmd(host, "root", externalFrrCreateCmd)
 	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to run frr podmand command: %v, \n getting error: %v", externalFrrCreateCmd, err))
 

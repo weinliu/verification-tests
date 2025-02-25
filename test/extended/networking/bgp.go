@@ -147,9 +147,9 @@ var _ = g.Describe("[sig-networking] SDN bgp", func() {
 	})
 
 	g.JustAfterEach(func() {
-		sshRunCmd(host, "root", "sudo podman rm -f "+frrContainerID)
 		removeResource(oc, true, true, "frrconfiguration", "receive-all", "-n", frrNamespace)
 		removeResource(oc, true, true, "ra", "default")
+		sshRunCmd(host, "root", "sudo podman rm -f "+frrContainerID)
 	})
 
 	// author: jechen@redhat.com
