@@ -12298,29 +12298,56 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			ogAllTemplate       = filepath.Join(buildPruningBaseDir, "og-allns.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-			sub                 = subscriptionDescription{
-				subName:                "keda",
-				namespace:              "openshift-operators",
+			ogAll               = operatorGroupDescription{
+				name:      "og-all",
+				namespace: "",
+				template:  ogAllTemplate,
+			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-operator",
+				namespace:   "",
+				displayName: "Test Catsrc Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/nginx-ok-index:vokv25679",
+				template:    catsrcImageTemplate,
+			}
+			sub = subscriptionDescription{
+				subName:                "nginx-ok-v25679",
+				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "keda",
-				catalogSourceName:      "community-operators",
-				catalogSourceNamespace: "openshift-marketplace",
-				startingCSV:            "", //get it from package based on currentCSV if ipApproval is Automatic
+				operatorPackage:        "nginx-ok-v25679",
+				catalogSourceName:      catsrc.name,
+				catalogSourceNamespace: "",
+				startingCSV:            "",
 				currentCSV:             "",
 				installedCSV:           "",
 				template:               subTemplate,
 				singleNamespace:        false,
 			}
-			crdName      = "kedacontrollers.keda.sh"
-			crName       = "KedaController"
-			podLabelName = "keda"
+			crdName      = "okv25679s.cache.example.com"
+			crName       = "Okv25679"
+			podLabelName = "controller-manager"
 			cl           = checkList{}
 		)
 
 		// OCP-25679, OCP-21418
+		exutil.By("Create og")
+		ns := oc.Namespace()
+		ogAll.namespace = ns
+		ogAll.create(oc, itName, dr)
+
+		exutil.By("create catalog source")
+		catsrc.namespace = ns
+		catsrc.createWithCheck(oc, itName, dr)
+
 		exutil.By("Create operator targeted at all namespace")
+		sub.namespace = ns
+		sub.catalogSourceNamespace = catsrc.namespace
 		sub.create(oc, itName, dr)
 
 		// OCP-25679, OCP-21418
@@ -12330,10 +12357,11 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		o.Expect(clusterResources).NotTo(o.BeEmpty())
 		cl.add(newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"clusterrole", clusterResources[1]}))
 		cl.add(newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"sa", clusterResources[2], "-n", sub.namespace}))
+		getResource(oc, asAdmin, withoutNamespace, "pod", "-n", sub.namespace, "-o=yaml")
 
 		// OCP-21418
 		exutil.By("Check the pods of the operator is running")
-		cl.add(newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pod", fmt.Sprintf("--selector=name=%s", podLabelName), "-n", sub.namespace, "-o=jsonpath={.items[*].status.phase}"}))
+		cl.add(newCheck("expect", asAdmin, withoutNamespace, contain, "Running", ok, []string{"pod", fmt.Sprintf("--selector=control-plane=%s", podLabelName), "-n", sub.namespace, "-o=jsonpath={.items[*].status.phase}"}))
 
 		// OCP-21418
 		exutil.By("Check no resource of new crd")
@@ -12359,7 +12387,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 
 		// OCP-21418
 		exutil.By("Check the pods of the operator is deleted")
-		cl.add(newCheck("expect", asAdmin, withoutNamespace, compare, "", ok, []string{"pod", fmt.Sprintf("--selector=name=%s", podLabelName), "-n", sub.namespace, "-o=jsonpath={.items[*].status.phase}"}))
+		cl.add(newCheck("expect", asAdmin, withoutNamespace, compare, "", ok, []string{"pod", fmt.Sprintf("--selector=control-plane=%s", podLabelName), "-n", sub.namespace, "-o=jsonpath={.items[*].status.phase}"}))
 
 		cl.check(oc)
 
@@ -12386,12 +12414,17 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			ogAllTemplate       = filepath.Join(buildPruningBaseDir, "og-allns.yaml")
 			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-
+			ogAll               = operatorGroupDescription{
+				name:      "og-all",
+				namespace: "",
+				template:  ogAllTemplate,
+			}
 			catsrc = catalogSourceDescription{
 				name:        "catsrc-25783-operator",
-				namespace:   "openshift-marketplace",
+				namespace:   "",
 				displayName: "Test Catsrc 25783 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
@@ -12400,12 +12433,12 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			}
 			subCockroachdb = subscriptionDescription{
 				subName:                "nginx-ok-v25783",
-				namespace:              "openshift-operators",
+				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
 				operatorPackage:        "nginx-ok-v25783",
 				catalogSourceName:      catsrc.name,
-				catalogSourceNamespace: catsrc.namespace,
+				catalogSourceNamespace: "",
 				startingCSV:            "", //get it from package based on currentCSV if ipApproval is Automatic
 				currentCSV:             "",
 				installedCSV:           "",
@@ -12415,7 +12448,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 
 			csvCockroachdb = csvDescription{
 				name:      "",
-				namespace: "openshift-operators",
+				namespace: "",
 			}
 		)
 
@@ -12428,14 +12461,23 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			g.Skip("it is not supported")
 		}
 
+		exutil.By("Create og")
+		ns := oc.Namespace()
+		ogAll.namespace = ns
+		ogAll.create(oc, itName, dr)
+
 		exutil.By("create catsrc")
+		catsrc.namespace = ns
 		catsrc.create(oc, itName, dr)
 		defer catsrc.delete(itName, dr)
 
 		exutil.By("create operator nginx-ok")
+		subCockroachdb.catalogSourceNamespace = catsrc.namespace
+		subCockroachdb.namespace = catsrc.namespace
 		defer subCockroachdb.delete(itName, dr)
 		subCockroachdb.create(oc, itName, dr)
 		csvCockroachdb.name = subCockroachdb.installedCSV
+		csvCockroachdb.name = subCockroachdb.namespace
 		defer csvCockroachdb.delete(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", subCockroachdb.installedCSV, "-n", subCockroachdb.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
 	})
@@ -12530,16 +12572,32 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		var (
 			itName              = g.CurrentSpecReport().FullText()
 			buildPruningBaseDir = exutil.FixturePath("testdata", "olm")
+			ogAllTemplate       = filepath.Join(buildPruningBaseDir, "og-allns.yaml")
+			catsrcImageTemplate = filepath.Join(buildPruningBaseDir, "catalogsource-image.yaml")
 			subTemplate         = filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
-			sub                 = subscriptionDescription{
-				subName:                "keda",
-				namespace:              "openshift-operators",
+			ogAll               = operatorGroupDescription{
+				name:      "og-all",
+				namespace: "",
+				template:  ogAllTemplate,
+			}
+			catsrc = catalogSourceDescription{
+				name:        "catsrc-operator",
+				namespace:   "",
+				displayName: "Test Catsrc Operators",
+				publisher:   "Red Hat",
+				sourceType:  "grpc",
+				address:     "quay.io/olmqe/nginx-ok-index:vokv24906",
+				template:    catsrcImageTemplate,
+			}
+			sub = subscriptionDescription{
+				subName:                "nginx-ok-v24906",
+				namespace:              "",
 				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "keda",
-				catalogSourceName:      "community-operators",
-				catalogSourceNamespace: "openshift-marketplace",
-				startingCSV:            "", //get it from package based on currentCSV if ipApproval is Automatic
+				operatorPackage:        "nginx-ok-v24906",
+				catalogSourceName:      catsrc.name,
+				catalogSourceNamespace: "",
+				startingCSV:            "",
 				currentCSV:             "",
 				installedCSV:           "",
 				template:               subTemplate,
@@ -12548,7 +12606,18 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 			cl = checkList{}
 		)
 
+		exutil.By("Create og")
+		ns := oc.Namespace()
+		ogAll.namespace = ns
+		ogAll.create(oc, itName, dr)
+
+		exutil.By("create catalog source")
+		catsrc.namespace = ns
+		catsrc.createWithCheck(oc, itName, dr)
+
 		exutil.By("Create operator targeted at all namespace")
+		sub.namespace = ns
+		sub.catalogSourceNamespace = catsrc.namespace
 		sub.create(oc, itName, dr)
 		sub.update(oc, itName, dr)
 
