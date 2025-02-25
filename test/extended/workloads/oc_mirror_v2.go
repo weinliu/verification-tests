@@ -2994,4 +2994,66 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		e2e.Logf("output is %v", output)
 	})
 
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-79452-v2 be able to delete the image mirrored by oc-mirror plugin v1 [Serial]", func() {
+		exutil.By("Set registry config")
+		dirname := "/tmp/case79452"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = locatePodmanCred(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+		setRegistryVolume(oc, "deploy", "registry", oc.Namespace(), "30G", "/var/lib/registry")
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-79452-v1.yaml")
+		imageSetYamlFileS := filepath.Join(ocmirrorBaseDir, "config-79452-v2.yaml")
+		imageDeleteYamlFileF := filepath.Join(ocmirrorBaseDir, "delete-config-79452.yaml")
+
+		exutil.By("Start mirror2mirror for v1")
+		defer os.RemoveAll("~/.oc-mirror/")
+		defer os.RemoveAll("~/.oc-mirror.log")
+		defer os.RemoveAll("oc-mirror-workspace")
+		waitErr := wait.PollImmediate(30*time.Second, 900*time.Second, func() (bool, error) {
+			_, err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "docker://"+serInfo.serviceName, "--dest-skip-tls", "--dest-use-http").Output()
+			if err != nil {
+				e2e.Logf("The mirror2mirror for v1 failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2mirror failed for v1")
+
+		exutil.By("Start mirror2disk with v2")
+		defer os.RemoveAll("~/.oc-mirror/")
+		defer os.RemoveAll(".oc-mirror.log")
+		waitErr = wait.PollImmediate(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileS, "file://"+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Execute()
+			if err != nil {
+				e2e.Logf("The mirror2disk2 for with oc-mirror v2 failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "max time reached but the mirror2disk with oc-mirror v2 failed")
+
+		exutil.By("Generete delete image file using v2 for v1 images")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--config", imageDeleteYamlFileF, "docker://"+serInfo.serviceName, "--v2", "--workspace", "file://"+dirname, "--authfile", dirname+"/.dockerconfigjson", "--generate", "--delete-v1-images").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Execute delete")
+		_, err = oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("delete", "--delete-yaml-file", dirname+"/working-dir/delete/delete-images.yaml", "docker://"+serInfo.serviceName, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+
 })
