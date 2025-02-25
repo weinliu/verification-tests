@@ -587,33 +587,55 @@ func checkPodDisruptionBudgetIfNotSNO(oc *exutil.CLI) {
 }
 
 func getDeploymentReplicas(oc *exutil.CLI, ns string, deployName string) (int, error) {
-	var expectedReplicas int
+	var expectedReplicas, readyReplicas, updatedReplicas int
 
+	// Wait for deployment to be available
+	waitErr := oc.AsAdmin().WithoutNamespace().Run("wait").Args("deployment/"+deployName, "-n", ns, "--for=condition=Available", "--timeout=120s").Execute()
+	o.Expect(waitErr).NotTo(o.HaveOccurred())
+
+	// Poll until all replicas match
 	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", deployName, "-n", ns, "-o", "jsonpath={.spec.replicas}").Output()
+		// Get spec.replicas
+		specReplicas, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", deployName, "-n", ns, "-o", "jsonpath={.spec.replicas}").Output()
 		if err != nil {
-			e2e.Logf("Failed to get deployment %s: %v", deployName, err)
+			e2e.Logf("Failed to get spec.replicas for deployment %s: %v", deployName, err)
+			return false, nil
+		}
+		expectedReplicas, err = strconv.Atoi(specReplicas)
+		if err != nil {
+			e2e.Logf("Failed to parse spec.replicas for deployment %s: %v", deployName, err)
 			return false, nil
 		}
 
-		expectedReplicas, err = strconv.Atoi(output)
+		// Get status.readyReplicas
+		readyReplicasStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", deployName, "-n", ns, "-o", "jsonpath={.status.readyReplicas}").Output()
 		if err != nil {
-			e2e.Logf("Failed to parse replica count for deployment %s: %v", deployName, err)
+			e2e.Logf("Failed to get readyReplicas for deployment %s: %v", deployName, err)
 			return false, nil
 		}
+		readyReplicas, _ = strconv.Atoi(readyReplicasStr)
 
-		if expectedReplicas >= 1 {
+		// Get status.updatedReplicas
+		updatedReplicasStr, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", deployName, "-n", ns, "-o", "jsonpath={.status.updatedReplicas}").Output()
+		if err != nil {
+			e2e.Logf("Failed to get updatedReplicas for deployment %s: %v", deployName, err)
+			return false, nil
+		}
+		updatedReplicas, _ = strconv.Atoi(updatedReplicasStr)
+
+		// Ensure all replicas match
+		if expectedReplicas == readyReplicas && expectedReplicas == updatedReplicas {
 			return true, nil
 		}
 
+		e2e.Logf("Waiting for deployment %s to have matching replicas: spec=%d, ready=%d, updated=%d", deployName, expectedReplicas, readyReplicas, updatedReplicas)
 		return false, nil
 	})
 
 	if err != nil {
-		return 0, fmt.Errorf("failed to get replica count for deployment %s: %v", deployName, err)
+		return 0, fmt.Errorf("failed to get matching replicas for deployment %s: %v", deployName, err)
 	}
-
-	e2e.Logf("Deployment %s expects %d replicas", deployName, expectedReplicas)
+	e2e.Logf("Deployment %s has matching replicas: %d", deployName, expectedReplicas)
 	return expectedReplicas, nil
 }
 
