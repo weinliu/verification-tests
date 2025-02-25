@@ -152,7 +152,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 
 	// author: iamin@redhat.com
 	// combine OCP-9651, OCP-9717
-	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-11036-NetworkEdge Set insecureEdgeTerminationPolicy to Redirect for passthrough/edge/reencrypt route", func() {
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-NonHyperShiftHOST-Critical-11036-NetworkEdge Set insecureEdgeTerminationPolicy to Redirect for passthrough/edge/reencrypt route", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
@@ -217,7 +217,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	})
 
 	// author: iamin@redhat.com
-	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-13753-NetworkEdge Check the cookie if using secure mode when insecureEdgeTerminationPolicy to Redirect for edge/reencrypt route", func() {
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-NonHyperShiftHOST-Critical-13753-NetworkEdge Check the cookie if using secure mode when insecureEdgeTerminationPolicy to Redirect for edge/reencrypt route", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
@@ -269,7 +269,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 
 	// author: iamin@redhat.com
 	//combine OCP-9650
-	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-13839-NetworkEdge Set insecureEdgeTerminationPolicy to Allow for reencrypt/edge route", func() {
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-NonHyperShiftHOST-Critical-13839-NetworkEdge Set insecureEdgeTerminationPolicy to Allow for reencrypt/edge route", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
@@ -549,7 +549,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 	})
 
 	// author: iamin@redhat.com
-	g.It("Author:iamin-ROSA-OSD_CCS-ARO-Critical-14678-NetworkEdge Only the host in whitelist could access unsecure/edge/reencrypt/passthrough routes", func() {
+	g.It("Author:iamin-ROSA-OSD_CCS-ARO-NonHyperShiftHOST-Critical-14678-NetworkEdge Only the host in whitelist could access unsecure/edge/reencrypt/passthrough routes", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
 			unSecSvcName        = "service-unsecure"
