@@ -1578,7 +1578,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			unpackedReason, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].reason}`)
 			unpackedMessage, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", `jsonpath={.status.conditions[?(@.type=="Progressing")].message}`)
-			if !strings.Contains(unpackedReason, "Retrying") || !strings.Contains(unpackedMessage, "error resolving canonical reference") {
+			if !strings.Contains(unpackedReason, "Retrying") || !strings.Contains(unpackedMessage, "manifest unknown for resolved bundle") {
 				return false, nil
 			}
 			return true, nil

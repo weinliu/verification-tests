@@ -1075,7 +1075,7 @@ var _ = g.Describe("[sig-operators] OLM v1 opeco should", func() {
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
 		clusterextension.CheckClusterExtensionCondition(oc, "Progressing", "message",
-			`default value "\"default-string-xzha\"" added when there was no default previously for resolved bundle`, 10, 60, 0)
+			`default value "\"default-string-jitli\"" added when there was no default previously for resolved bundle`, 10, 60, 0)
 
 		exutil.By("upgrade will be prevented if The default value of a field is changed")
 		err = oc.AsAdmin().Run("patch").Args("clusterextension", clusterextension.Name, "-p", `{"spec":{"source":{"catalog":{"version":"1.0.3","upgradeConstraintPolicy":"SelfCertified"}}}}`, "--type=merge").Execute()
