@@ -1525,6 +1525,24 @@ func CurlNode2PodPass(oc *exutil.CLI, nodeName string, namespace string, podName
 	}
 }
 
+// CurlNode2PodFail checks node to pod disconnectivity regardless of network addressing type on cluster
+func CurlNode2PodFail(oc *exutil.CLI, nodeName string, namespace string, podName string) {
+	//getPodIP returns IPv6 and IPv4 in order on dual stack in PodIP1 and PodIP2 respectively and main IP in case of single stack (v4 or v6) in PodIP1, and nil in PodIP2
+	podIP1, podIP2 := getPodIP(oc, namespace, podName)
+	if podIP2 != "" {
+		podv6URL := net.JoinHostPort(podIP1, "8080")
+		podv4URL := net.JoinHostPort(podIP2, "8080")
+		_, err := exutil.DebugNode(oc, nodeName, "curl", podv4URL, "-s", "--connect-timeout", "5")
+		o.Expect(err).To(o.HaveOccurred())
+		_, err = exutil.DebugNode(oc, nodeName, "curl", podv6URL, "-s", "--connect-timeout", "5")
+		o.Expect(err).To(o.HaveOccurred())
+	} else {
+		podURL := net.JoinHostPort(podIP1, "8080")
+		_, err := exutil.DebugNode(oc, nodeName, "curl", podURL, "-s", "--connect-timeout", "5")
+		o.Expect(err).To(o.HaveOccurred())
+	}
+}
+
 // CurlNode2SvcPass checks node to svc connectivity regardless of network addressing type on cluster
 func CurlNode2SvcPass(oc *exutil.CLI, nodeName string, namespace string, svcName string) {
 	svcIP1, svcIP2 := getSvcIP(oc, namespace, svcName)
@@ -4363,4 +4381,40 @@ func verifyIPSecLoaded(oc *exutil.CLI, nodeName string, num int) {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	e2e.Logf("Total  IPsec connection is : \n%s", out)
 	o.Expect(strings.Contains(out, fmt.Sprintf("loaded %v, active %v", expectedNum, expectedNum))).Should(o.BeTrue())
+}
+
+func PingNode2PodPass(oc *exutil.CLI, nodeName string, namespaceDst string, podNameDst string) {
+	podIP1, podIP2 := getPodIP(oc, namespaceDst, podNameDst)
+	if podIP2 != "" {
+		_, err := exutil.DebugNode(oc, nodeName, "ping6", "-c", "4", podIP1)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		_, err = exutil.DebugNode(oc, nodeName, "ping", "-c", "4", podIP2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		if netutils.IsIPv6String(podIP1) {
+			_, err := exutil.DebugNode(oc, nodeName, "ping6", "-c", "4", podIP1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			_, err := exutil.DebugNode(oc, nodeName, "ping", "-c", "4", podIP1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+	}
+}
+
+func PingNode2PodFail(oc *exutil.CLI, nodeName string, namespaceDst string, podNameDst string) {
+	podIP1, podIP2 := getPodIP(oc, namespaceDst, podNameDst)
+	if podIP2 != "" {
+		_, err := exutil.DebugNode(oc, nodeName, "ping6", "-c", "4", podIP1)
+		o.Expect(err).To(o.HaveOccurred())
+		_, err = exutil.DebugNode(oc, nodeName, "ping", "-c", "4", podIP2)
+		o.Expect(err).To(o.HaveOccurred())
+	} else {
+		if netutils.IsIPv6String(podIP1) {
+			_, err := exutil.DebugNode(oc, nodeName, "ping6", "-c", "4", podIP1)
+			o.Expect(err).To(o.HaveOccurred())
+		} else {
+			_, err := exutil.DebugNode(oc, nodeName, "ping", "-c", "4", podIP1)
+			o.Expect(err).To(o.HaveOccurred())
+		}
+	}
 }
