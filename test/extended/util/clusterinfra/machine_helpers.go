@@ -268,6 +268,13 @@ func WaitForMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetName st
 		e2e.Failf("Expected %v  machines are not Running after waiting up to 20 minutes ...", machineNumber)
 	}
 	e2e.Logf("All machines are Running ...")
+	e2e.Logf("Check nodes haven't uninitialized taints...")
+	for _, nodeName := range GetNodeNamesFromMachineSet(oc, machineSetName) {
+		taints, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.spec.taints}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(taints).ShouldNot(o.ContainSubstring("uninitialized"))
+	}
+	e2e.Logf("All nodes haven't uninitialized taints ...")
 }
 
 // WaitForMachineFailed check if all the machines are Failed in a MachineSet

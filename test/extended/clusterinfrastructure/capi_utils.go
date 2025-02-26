@@ -234,6 +234,13 @@ func waitForCapiMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetNam
 	})
 	exutil.AssertWaitPollNoErr(pollErr, fmt.Sprintf("Expected %v  machines are not Running after waiting up to 20 minutes ...", machineNumber))
 	e2e.Logf("All machines are Running ...")
+	e2e.Logf("Check nodes haven't uninitialized taints...")
+	for _, nodeName := range getNodeNamesFromCapiMachineSet(oc, machineSetName) {
+		taints, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.spec.taints}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(taints).ShouldNot(o.ContainSubstring("uninitialized"))
+	}
+	e2e.Logf("All nodes haven't uninitialized taints ...")
 }
 
 // waitForCapiMachinesDisapper check if all the machines are Dissappered in a MachineSet
@@ -282,4 +289,15 @@ func matchProviderIDWithNode(oc *exutil.CLI, resourceType, resourceName, namespa
 	}
 	e2e.Logf("Node & machine provider ID matched")
 	return true, nil
+}
+
+// getNodeNamesFromCapiMachineSet get all Nodes in a CAPI Machineset
+func getNodeNamesFromCapiMachineSet(oc *exutil.CLI, machineSetName string) []string {
+	e2e.Logf("Getting all Nodes in a CAPI Machineset ...")
+	nodeNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(capiMachine, "-o=jsonpath={.items[*].status.nodeRef.name}", "-l", "cluster.x-k8s.io/set-name="+machineSetName, "-n", clusterAPINamespace).Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if nodeNames == "" {
+		return []string{}
+	}
+	return strings.Split(nodeNames, " ")
 }
