@@ -1599,4 +1599,41 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		o.Expect(err).To(o.HaveOccurred())
 		o.Expect(output).To(o.BeEmpty())
 	})
+
+	g.It("Author:qiowang-High-48945-network should recover after NetworkManager restart on host [Disruptive]", func() {
+		//Bug: https://bugzilla.redhat.com/show_bug.cgi?id=2048352
+		nodeList, getNodeErr := exutil.GetAllNodesbyOSType(oc, "linux")
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList) < 1 {
+			g.Skip("Not enough node for the test, skip it!!")
+		}
+
+		exutil.By("1. restart NetworkManager on host")
+		nodeName := nodeList[0]
+		nodeIP1, nodeIP2 := getNodeIP(oc, nodeName)
+		_, cmdErr := exutil.DebugNodeWithChroot(oc, nodeName, "systemctl", "restart", "NetworkManager")
+		o.Expect(cmdErr).NotTo(o.HaveOccurred())
+		defer func() {
+			e2e.Logf("restart ovnkube-node pod to recover the masquerade ip")
+			podName, getPodNameErr := exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+			o.Expect(getPodNameErr).NotTo(o.HaveOccurred())
+			delPodErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", podName, "-n", "openshift-ovn-kubernetes", "--ignore-not-found=true").Execute()
+			o.Expect(delPodErr).NotTo(o.HaveOccurred())
+			podName, getPodNameErr = exutil.GetPodName(oc, "openshift-ovn-kubernetes", "app=ovnkube-node", nodeName)
+			o.Expect(getPodNameErr).NotTo(o.HaveOccurred())
+			waitPodReady(oc, "openshift-ovn-kubernetes", podName)
+		}()
+
+		exutil.By("2. check network, should recover after NetworkManager restart")
+		checkNodeStatus(oc, nodeName, "Ready")
+		ovnErr := waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovnkube-node")
+		o.Expect(ovnErr).NotTo(o.HaveOccurred())
+		ifaceConf, ifaceErr := exutil.DebugNodeWithChroot(oc, nodeName, "ip", "address", "show", "br-ex")
+		o.Expect(ifaceErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(ifaceConf, nodeIP2)).Should(o.BeTrue())
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "dualstack" {
+			o.Expect(strings.Contains(ifaceConf, nodeIP1)).Should(o.BeTrue())
+		}
+	})
 })
