@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -383,7 +384,7 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		}
 		logger.Infof("OK!\n")
 
-		exutil.AssertAllPodsToBeReady(oc.AsAdmin(), MachineConfigNamespace)
+		waitForAllMCOPodsReady(oc.AsAdmin(), 10*time.Minute)
 		logger.Infof("OK!\n")
 	})
 
@@ -928,6 +929,19 @@ func ValidateSuccessfulMOSC(mosc *MachineOSConfig, checkers []Checker) {
 	o.Eventually(mosb, "2m", "20s").Should(HaveConditionField("Failed", "status", FalseString), "Build was failed")
 	logger.Infof("Check that the build job was deleted")
 	o.Eventually(mosb.GetJob, "2m", "20s").ShouldNot(Exist(), "Build job was not cleaned")
+	logger.Infof("OK!\n")
+
+	exutil.By("Check that the digested image value was properly updated in MOSB and MOSC resources")
+	mosbStatusDigestedImagePullSpec := ""
+	o.Eventually(func() (string, error) {
+		var err error
+		mosbStatusDigestedImagePullSpec, err = mosb.GetStatusDigestedImagePullSpec()
+		return mosbStatusDigestedImagePullSpec, err
+	}, "5m", "10s").ShouldNot(o.BeEmpty(),
+		"The MOSB resource was not updated with the digestedImagePullSpec value.\n%s", mosb.PrettyString())
+
+	o.Eventually(mosc.GetStatusCurrentImagePullSpec, "5m", "10s").Should(o.Equal(mosbStatusDigestedImagePullSpec),
+		"The MOSC resource was not updated with the MOSB's digestedImagePullSpec.\n%s", mosc.PrettyString())
 	logger.Infof("OK!\n")
 
 	numNodes, err := mcp.getMachineCount()
