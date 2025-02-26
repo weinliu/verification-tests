@@ -54,12 +54,12 @@ func createMachineOSConfig(oc *exutil.CLI, name, pool string, baseImagePullSecre
 		containerFilesString = "[]"
 		moscTemplateFile     = "generic-machine-os-config-nobaseimagepull.yaml"
 		parameters           = []string{"-p", "NAME=" + name, "POOL=" + pool,
-			"RENDEREDIMAGEPUSHSECRET=" + renderedImagePushSecret, "PUSHSPEC=" + pushSpec, "CONTAINERFILE=" + containerFilesString}
+			"RENDEREDIMAGEPUSHSECRET=" + renderedImagePushSecret, "PUSHSPEC=" + pushSpec}
 	)
 	if baseImagePullSecret != nil {
 		moscTemplateFile = "generic-machine-os-config.yaml"
 		parameters = append(parameters, "BASEIMAGEPULLSECRET="+*baseImagePullSecret)
-		logger.Infof("Creating MachineOSConfig %s in pool %s with pullSecret %s pushSecret %s and pushSpec %s", name, pool, baseImagePullSecret, renderedImagePushSecret, pushSpec)
+		logger.Infof("Creating MachineOSConfig %s in pool %s with pullSecret %s pushSecret %s and pushSpec %s", name, pool, *baseImagePullSecret, renderedImagePushSecret, pushSpec)
 	} else {
 		logger.Infof("Creating MachineOSConfig %s in pool %s with default pullSecret pushSecret %s and pushSpec %s", name, pool, renderedImagePushSecret, pushSpec)
 	}
@@ -72,6 +72,8 @@ func createMachineOSConfig(oc *exutil.CLI, name, pool string, baseImagePullSecre
 		}
 		containerFilesString = string(containerFilesBytes)
 	}
+
+	parameters = append(parameters, "CONTAINERFILE="+containerFilesString)
 	logger.Infof("Using custom Containerfile %s", containerFilesString)
 
 	err := NewMCOTemplate(oc, moscTemplateFile).Create(parameters...)
