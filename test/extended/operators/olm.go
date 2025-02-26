@@ -6266,7 +6266,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 	})
 
 	// It will cover test case: OCP-29723, author: kuiwang@redhat.com
-	g.It("Author:kuiwang-ConnectedOnly-ROSA-OSD_CCS-ARO-Medium-29723-As cluster admin find abnormal status condition via components of operator resource", func() {
+	g.It("Author:kuiwang-ConnectedOnly-NonHyperShiftHOST-Medium-29723-As cluster admin find abnormal status condition via components of operator resource", func() {
 		architecture.SkipNonAmd64SingleArch(oc)
 		var (
 			itName              = g.CurrentSpecReport().FullText()
@@ -12357,7 +12357,6 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 		o.Expect(clusterResources).NotTo(o.BeEmpty())
 		cl.add(newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"clusterrole", clusterResources[1]}))
 		cl.add(newCheck("present", asAdmin, withoutNamespace, present, "", ok, []string{"sa", clusterResources[2], "-n", sub.namespace}))
-		getResource(oc, asAdmin, withoutNamespace, "pod", "-n", sub.namespace, "-o=yaml")
 
 		// OCP-21418
 		exutil.By("Check the pods of the operator is running")
