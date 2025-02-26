@@ -3471,7 +3471,7 @@ spec:
 		var (
 			testCaseID = "41212"
 			cdName     = "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
-			stackName  = "endpointvpc-stack-" + testCaseID
+			stackName  = "vpc-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
 			// Should not overlap with the CIDR of the associate VPC
 			cidr = "10.1.0.0/16"
 			// Number of AZs for the endpoint VPC. Can be different from the equivalent for the associated VPC.
