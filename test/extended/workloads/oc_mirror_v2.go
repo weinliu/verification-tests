@@ -3056,4 +3056,110 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	})
 
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-79408-Validate cache dir flags works fine for m2d,d2m workflow [Serial]", func() {
+		dirname := "/tmp/case79408"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-79408.yaml")
+
+		err = getRouteCAToFile(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+
+		exutil.By("Start mirro2disk with --cachedir flag")
+		waitErr := wait.Poll(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "file://"+dirname, "--cache-dir="+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson").Execute()
+			if err != nil {
+				e2e.Logf("The mirror2disk with --cache-dir failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2disk with --cache-dir flag have not been completed")
+
+		exutil.By("Start disk2mirror with --cachedir flag")
+		waitErr = wait.Poll(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--from", "file://"+dirname, "docker://"+serInfo.serviceName, "--cache-dir="+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
+			if err != nil {
+				e2e.Logf("The disk2mirror with --cache-dir flag failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but disk2mirror for --cache-dir flag still failed")
+
+		// Validate if /tmp/79408 has the oc mirror cache folder
+		exutil.By("Validate if --cache-dir flag has been respected")
+		checkCacheDirPresent, err := exec.Command("bash", "-c", fmt.Sprintf("ls -al %s", dirname)).Output()
+		e2e.Logf("cache dir content  is %s", checkCacheDirPresent)
+		if err != nil {
+			e2e.Logf("Error reading cache dir directory", err)
+		}
+		o.Expect(strings.Contains(string(checkCacheDirPresent), ".oc-mirror")).To(o.BeTrue())
+	})
+
+	g.It("Author:knarra-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-Medium-79409-Validate cache dir flags works fine for m2m workflow [Serial]", func() {
+		dirname := "/tmp/case79409"
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", "--to="+dirname, "--confirm").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		ocmirrorBaseDir := exutil.FixturePath("testdata", "workloads")
+		imageSetYamlFileF := filepath.Join(ocmirrorBaseDir, "config-79408.yaml")
+
+		err = getRouteCAToFile(oc, dirname)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create an internal registry")
+		registry := registry{
+			dockerImage: "quay.io/openshifttest/registry@sha256:1106aedc1b2e386520bc2fb797d9a7af47d651db31d8e7ab472f2352da37d1b3",
+			namespace:   oc.Namespace(),
+		}
+
+		exutil.By("Trying to launch a registry app")
+		defer registry.deleteregistry(oc)
+		serInfo := registry.createregistry(oc)
+		e2e.Logf("Registry is %s", registry)
+
+		exutil.By("Start mirro2mirror with --cachedir flag")
+		waitErr := wait.Poll(300*time.Second, 3600*time.Second, func() (bool, error) {
+			err := oc.WithoutNamespace().WithoutKubeconf().Run("mirror").Args("-c", imageSetYamlFileF, "--workspace", "file://"+dirname, "docker://"+serInfo.serviceName, "--cache-dir="+dirname, "--v2", "--authfile", dirname+"/.dockerconfigjson", "--dest-tls-verify=false").Execute()
+			if err != nil {
+				e2e.Logf("The mirror2mirror with --cache-dir flag failed, retrying...")
+				return false, nil
+			}
+			return true, nil
+
+		})
+		exutil.AssertWaitPollNoErr(waitErr, "Max time reached but mirror2mirror for --cache-dir flag still failed")
+
+		// Validate if /tmp/79409 has the oc mirror cache folder
+		exutil.By("Validate if --cache-dir flag has been respected during m2m workflow")
+		checkCacheDirPresent, err := exec.Command("bash", "-c", fmt.Sprintf("ls -al %s", dirname)).Output()
+		e2e.Logf("cache dir content  is %s", checkCacheDirPresent)
+		if err != nil {
+			e2e.Logf("Error reading cache dir directory", err)
+		}
+		o.Expect(strings.Contains(string(checkCacheDirPresent), ".oc-mirror")).To(o.BeTrue())
+	})
 })
