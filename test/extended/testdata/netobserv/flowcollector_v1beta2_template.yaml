@@ -22,6 +22,9 @@ objects:
           features: "${{EBPFeatures}}"
           logLevel: info
           privileged: "${{EBPFPrivileged}}"
+          flowFilter:
+            enable: "${{EBPFFilterEnable}}"
+            rules: "${{EBPFFilterRules}}"
           metrics:
             enable: "${{EBPFMetrics}}"
             server:
@@ -124,6 +127,10 @@ parameters:
     value: "Disabled"
   - name: EBPFeatures
     value: '[]'
+  - name: EBPFFilterEnable
+    value: "true"
+  - name: EBPFFilterRules
+    value: '[{"action": "Accept","cidr": "0.0.0.0/0"}]'
   - name: CacheMaxFlows
     value: "100000"
   - name: MultiClusterDeployment

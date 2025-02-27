@@ -40,6 +40,8 @@ type Flowcollector struct {
 	EBPFMetricServerTLSType           string
 	EBPFCacheActiveTimeout            string
 	EBPFPrivileged                    string
+	EBPFFilterEnable                  string
+	EBPFFilterRules                   string
 	Sampling                          string
 	EBPFMetrics                       string
 	EBPFeatures                       []string
@@ -92,6 +94,7 @@ type Flowlog struct {
 	Bytes           int
 	Duplicate       bool
 	AgentIP         string
+	Sampling        int
 	HashId          string `json:"_HashId,omitempty"`
 	IsFirst         bool   `json:"_IsFirst,omitempty"`
 	RecordType      string `json:"_RecordType,omitempty"`

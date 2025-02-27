@@ -140,14 +140,25 @@ func verifyEBPFMetrics(oc *exutil.CLI) {
 }
 
 // verify eBPF filter metrics
-func verifyEBPFFilterMetrics(oc *exutil.CLI) {
-	query := "sum(netobserv_agent_filtered_flows_total)"
-	pollMetrics(oc, query)
+func verifyEBPFFilterMetrics(oc *exutil.CLI, reason string) {
+	query := fmt.Sprintf(`100 * sum(rate(netobserv_agent_filtered_flows_total{reason="%s"}[1m])) / sum(rate(netobserv_agent_filtered_flows_total[1m]))`, reason)
+	metrics := pollMetrics(oc, query)
+	switch reason {
+	case "FilterAccept":
+		// Expected to be around 1
+		o.Expect(metrics).Should(o.BeNumerically("~", 0.01, 2), "Accept metrics are beyond threshold values")
+	case "FilterNoMatch":
+		// Expected to be around 100
+		o.Expect(metrics).Should(o.BeNumerically("~", 98, 100), "NoMatch metrics are beyond threshold values")
+	case "FilterReject":
+		// Expected to be around 2
+		o.Expect(metrics).Should(o.BeNumerically("~", 1, 5), "Reject metrics are beyond threshold values")
+	}
 }
 
 // verify eBPF feature metrics
 func verifyEBPFFeatureMetrics(oc *exutil.CLI, feature string) {
-	query := fmt.Sprintf("100 * sum(rate(netobserv_agent_flows_enrichment_total{has%s=\"true\"}[1m])) / sum(rate(netobserv_agent_flows_enrichment_total[1m]))", feature)
+	query := fmt.Sprintf(`100 * sum(rate(netobserv_agent_flows_enrichment_total{has%s="true"}[1m])) / sum(rate(netobserv_agent_flows_enrichment_total[1m]))`, feature)
 	metrics := pollMetrics(oc, query)
 	switch feature {
 	case "Drops":

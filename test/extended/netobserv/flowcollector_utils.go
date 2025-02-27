@@ -299,14 +299,7 @@ func verifyFlowCorrectness(objectSize string, flowRecords []FlowRecord) {
 }
 
 // Verify Packet Translation feature flows
-func verifyPacketTranslationFlows(oc *exutil.CLI, serverNS, clientNS string, flowRecords []FlowRecord) {
-	var nginxPodName []string
-	nginxPodName, err := exutil.GetAllPods(oc, serverNS)
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	nginxPodIP := getPodIPv4(oc, serverNS, nginxPodName[0])
-	clientPodIP := getPodIPv4(oc, clientNS, "client")
-
+func verifyPacketTranslationFlows(nginxPodIP, nginxPodName, clientPodIP string, flowRecords []FlowRecord) {
 	for _, r := range flowRecords {
 		o.Expect(r.Flowlog.XlatDstAddr).To(o.Equal(nginxPodIP))
 		o.Expect(r.Flowlog.XlatDstK8S_Name).To(o.Equal(nginxPodName[0]))

@@ -677,3 +677,29 @@ func getKubeAdminToken(oc *exutil.CLI, kubeAdminPasswd, serverUrl, currentContex
 	o.Expect(rollbackCtxErr).NotTo(o.HaveOccurred())
 	return kubeadminToken
 }
+
+// get nginx pod name, IP and client IP
+func getClientServerInfo(oc *exutil.CLI, serverNS, clientNS string) (map[string]map[string]string, error) {
+	nginxPodName, err := exutil.GetAllPodsWithLabel(oc, serverNS, "app=nginx")
+	nginxPodIP := getPodIPv4(oc, serverNS, nginxPodName[0])
+
+	clientPodIP := getPodIPv4(oc, clientNS, "client")
+
+	serviceIP := getServiceIPv4(oc, serverNS, "nginx-service")
+
+	clientServerMap := map[string]map[string]string{
+		"client": {
+			"ip":   clientPodIP,
+			"name": "client",
+		},
+		"server": {
+			"ip":   nginxPodIP,
+			"name": nginxPodName[0],
+		},
+		"service": {
+			"ip":   serviceIP,
+			"name": "nginx-service",
+		},
+	}
+	return clientServerMap, err
+}

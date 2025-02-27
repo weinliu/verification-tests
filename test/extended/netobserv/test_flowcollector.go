@@ -48,6 +48,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			OperatorGroup: filePath.Join(subscriptionDir, "allnamespace-og.yaml"),
 			CatalogSource: &NOSource,
 		}
+
 		// Loki Operator variables
 		lokiNS          = "openshift-operators-redhat"
 		lokiPackageName = "loki-operator"
@@ -478,9 +479,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		flow.LogType = "Conversations"
 		flow.CreateFlowcollector(oc)
-
-		g.By("Ensure flows are observed and all pods are running")
-		flow.WaitForFlowcollectorReady(oc)
 
 		g.By("Escalate SA to cluster admin")
 		bearerToken = getSAToken(oc, "netobserv-plugin", namespace)
@@ -1060,6 +1058,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 	g.It("Author:memodi-NonPreRelease-Longduration-Medium-60664-Medium-61482-Alerts-with-NetObserv [Serial][Slow]", func() {
 		namespace := oc.Namespace()
+
 		flow := Flowcollector{
 			Namespace:     namespace,
 			Template:      flowFixturePath,
@@ -1250,31 +1249,71 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		// TODO: once supported add a check for flowcollector dumped file.
 	})
 
-	g.It("Author:aramesha-NonPreRelease-High-73175-Verify eBPF agent filtering [Serial]", func() {
+	g.It("Author:aramesha-NonPreRelease-Longduration-High-73175-Verify eBPF agent filtering [Serial]", func() {
 		namespace := oc.Namespace()
 
-		g.By("Deploy FlowCollector with eBPF agent flowFilter to Reject flows with SrcPort 53 and UDP protocol")
+		g.By("Deploy test server and client pods")
+		serverTemplate := filePath.Join(baseDir, "test-nginx-server_template.yaml")
+		testServerTemplate := TestServerTemplate{
+			ServerNS: "test-server-73175",
+			Template: serverTemplate,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testServerTemplate.ServerNS)
+		err := testServerTemplate.createServer(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testServerTemplate.ServerNS)
+
+		clientTemplate := filePath.Join(baseDir, "test-nginx-client_template.yaml")
+		testClientTemplate := TestClientTemplate{
+			ServerNS: testServerTemplate.ServerNS,
+			ClientNS: "test-client-73175",
+			Template: clientTemplate,
+		}
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(testClientTemplate.ClientNS)
+		err = testClientTemplate.createClient(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.AssertAllPodsToBeReady(oc, testClientTemplate.ClientNS)
+
+		clientServiceInfo, err := getClientServerInfo(oc, testClientTemplate.ServerNS, testClientTemplate.ClientNS)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		// Scenario 1:
+		// Accept TCP flows between client pod and nginx-service
+		// Accept ICMP flows between client and nginx pod
+		// Default Reject all other flows
+		g.By("Deploy FlowCollector with eBPF filter")
+		filterRulesConfig := []map[string]interface{}{
+			{
+				"action":   "Accept",
+				"cidr":     clientServiceInfo["service"]["ip"] + "/32",
+				"peerIP":   clientServiceInfo["client"]["ip"],
+				"protocol": "TCP",
+				"ports":    "80",
+				"sampling": 2,
+			},
+			{
+				"action":   "Accept",
+				"cidr":     clientServiceInfo["client"]["ip"] + "/32",
+				"peerCIDR": clientServiceInfo["server"]["ip"] + "/32",
+				"protocol": "ICMP",
+				"icmpType": 8,
+				"sampling": 3,
+			},
+		}
+
+		config, err := json.Marshal(filterRulesConfig)
+		o.Expect(err).ToNot(o.HaveOccurred())
+		filter := string(config)
+
 		flow := Flowcollector{
-			Namespace:     namespace,
-			Template:      flowFixturePath,
-			LokiNamespace: namespace,
+			Namespace:       namespace,
+			Template:        flowFixturePath,
+			LokiNamespace:   namespace,
+			EBPFFilterRules: filter,
 		}
 
 		defer flow.DeleteFlowcollector(oc)
 		flow.CreateFlowcollector(oc)
-
-		// Scenario1: With REJECT action
-		g.By("Patch flowcollector with eBPF agent flowFilter to Reject flows with SrcPort 53 and UDP Protocol")
-		action := "Reject"
-		patchValue := `{"action": "` + action + `", "cidr": "0.0.0.0/0", "protocol": "UDP", "sourcePorts": "53", "enable": true}`
-		oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/agent/ebpf/flowFilter", "value": `+patchValue+`}]`, "--type=json").Output()
-
-		g.By("Ensure flowcollector is ready with Reject flowFilter")
-		flow.WaitForFlowcollectorReady(oc)
-		// check if patch is successful
-		flowPatch, err := oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.agent.ebpf.flowFilter.action}'").Output()
-		o.Expect(err).ToNot(o.HaveOccurred())
-		o.Expect(flowPatch).To(o.Equal(`'Reject'`))
 
 		// verify logs
 		g.By("Escalate SA to cluster admin")
@@ -1287,8 +1326,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
 
-		g.By("Wait for a min before logs gets collected and written to loki")
+		g.By("Ping nginx pod from client pod")
 		startTime := time.Now()
+		e2eoutput.RunHostCmd(testClientTemplate.ClientNS, clientServiceInfo["client"]["name"], "ping -c 10 "+clientServiceInfo["server"]["ip"])
+
+		g.By("Wait for a min before logs gets collected and written to loki")
 		time.Sleep(60 * time.Second)
 
 		lokilabels := Lokilabels{
@@ -1296,47 +1338,83 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		}
 
 		g.By("Verify number of flows with on UDP Protcol with SrcPort 53 = 0")
-		parameters := []string{"Proto=\"17\"", "SrcPort=\"53\""}
-		flowRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
+		lokiParams := []string{"Proto=\"17\"", "SrcPort=\"53\""}
+		flowRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, lokiParams...)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(flowRecords)).Should(o.BeNumerically("==", 0), "expected number of flows on UDP with SrcPort 53 = 0")
 
-		g.By("Verify number of flows on TCP Protocol > 0")
-		parameters = []string{"Proto=\"6\""}
-		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
+		g.By("Verify flows from client pod to nginx pod > 0")
+		lokilabels.SrcK8S_Namespace = testClientTemplate.ClientNS
+		lokilabels.DstK8S_Namespace = testClientTemplate.ServerNS
+		lokiParams = []string{"SrcAddr=" + "\"" + clientServiceInfo["client"]["ip"] + "\"", "DstAddr=" + "\"" + clientServiceInfo["server"]["ip"] + "\""}
+
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, lokiParams...)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows on TCP > 0")
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows from client pod to nginx pod > 0")
 
-		// Scenario2: With ACCEPT action
-		g.By("Patch flowcollector with eBPF agent flowFilter to Accept flows with SrcPort 53")
-		action = "Accept"
-		oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/agent/ebpf/flowFilter/action", "value": `+action+`}]`, "--type=json").Output()
+		for _, r := range flowRecords {
+			o.Expect(r.Flowlog.Proto).Should(o.BeNumerically("==", 1))
+			o.Expect(r.Flowlog.IcmpType).Should(o.BeNumerically("==", 8))
+			o.Expect(r.Flowlog.Sampling).Should(o.BeNumerically("==", 3))
+		}
 
-		g.By("Ensure flowcollector is ready with Accept flowFilter")
-		flow.WaitForFlowcollectorReady(oc)
-		// check if patch is successful
-		flowPatch, err = oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.agent.ebpf.flowFilter.action}'").Output()
+		g.By("Verify flows from client pod to nginx-service > 0")
+		lokilabels.DstK8S_Type = "Service"
+
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows from client pod to nginx-service > 0")
+
+		for _, r := range flowRecords {
+			o.Expect(r.Flowlog.Proto).Should(o.BeNumerically("==", 6))
+			o.Expect(r.Flowlog.Sampling).Should(o.BeNumerically("==", 2))
+		}
+
+		g.By("Verify prometheus is able to scrape eBPF metrics")
+		verifyEBPFFilterMetrics(oc, "FilterAccept")
+		verifyEBPFFilterMetrics(oc, "FilterNoMatch")
+
+		// Scenario2:
+		// Accept only flows with drops
+		g.By("Deploy flowcollector with eBPF filter for flows with drops")
+		filterRulesConfig = []map[string]interface{}{
+			{
+				"action":   "Accept",
+				"cidr":     "172.30.0.0/16",
+				"pktDrops": true,
+			},
+		}
+
+		config, err = json.Marshal(filterRulesConfig)
 		o.Expect(err).ToNot(o.HaveOccurred())
-		o.Expect(flowPatch).To(o.Equal(`'Accept'`))
+		filter = string(config)
+
+		flow.DeleteFlowcollector(oc)
+		flow.EBPFPrivileged = "true"
+		flow.EBPFeatures = []string{"\"PacketDrop\""}
+		flow.EBPFFilterRules = filter
+		flow.CreateFlowcollector(oc)
+
+		// verify logs
+		bearerToken = getSAToken(oc, "netobserv-plugin", namespace)
 
 		g.By("Wait for a min before logs gets collected and written to loki")
 		startTime = time.Now()
 		time.Sleep(60 * time.Second)
 
-		g.By("Verify number of flows on UDP Protocol with SrcPort 53 > 0")
-		parameters = []string{"Proto=\"17\"", "SrcPort=\"53\""}
-		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows on UDP with SrcPort 53 > 0")
+		lokilabels = Lokilabels{
+			App: "netobserv-flowcollector",
+		}
+		lokiParams = []string{"Proto=\"6\""}
 
-		g.By("Verify number of flows on TCP Protocol = 0")
-		parameters = []string{"Proto=\"6\""}
-		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, parameters...)
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, lokiParams...)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(len(flowRecords)).Should(o.BeNumerically("==", 0), "expected number of flows on TCP = 0")
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows with drops > 0")
 
-		g.By("Verify prometheus is able to scrape eBPF metrics")
-		verifyEBPFFilterMetrics(oc)
+		for _, r := range flowRecords {
+			o.Expect(r.Flowlog.PktDropBytes).Should(o.BeNumerically(">", 0))
+			o.Expect(r.Flowlog.PktDropPackets).Should(o.BeNumerically(">", 0))
+		}
 	})
 
 	g.It("Author:memodi-Medium-53844-Sanity Test NetObserv [Serial]", func() {
@@ -1467,24 +1545,32 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		kubeadminToken := getKubeAdminToken(oc, kubeAdminPasswd, serverUrl, currentContext)
 		o.Expect(kubeadminToken).NotTo(o.BeEmpty())
 
-		g.By("Deploy FlowCollector")
+		g.By("Deploy flowcollector with eBPF filter to Reject flows with tcpFlags SYN-ACK and TCP Protocol")
+		filterRulesConfig := []map[string]string{
+			{
+				"action":   "Reject",
+				"cidr":     "0.0.0.0/0",
+				"protocol": "TCP",
+				"tcpFlags": "SYN-ACK",
+			},
+		}
+
+		config, err := json.Marshal(filterRulesConfig)
+		o.Expect(err).ToNot(o.HaveOccurred())
+		filter := string(config)
+
 		flow := Flowcollector{
-			Namespace:     namespace,
-			Template:      flowFixturePath,
-			LokiNamespace: namespace,
+			Namespace:       namespace,
+			Template:        flowFixturePath,
+			LokiNamespace:   namespace,
+			EBPFFilterRules: filter,
 		}
 
 		defer flow.DeleteFlowcollector(oc)
 		flow.CreateFlowcollector(oc)
 
-		g.By("Patch flowcollector with eBPF agent flowFilter to Reject flows with tcpFlags SYN-ACK and TCP Protocol")
-		patchValue := `{"action": "Reject", "cidr": "0.0.0.0/0", "protocol": "TCP", "tcpFlags": "SYN-ACK", "enable": true}`
-		oc.AsAdmin().WithoutNamespace().Run("patch").Args("flowcollector", "cluster", "-p", `[{"op": "replace", "path": "/spec/agent/ebpf/flowFilter", "value": `+patchValue+`}]`, "--type=json").Output()
-
 		g.By("Ensure flowcollector is ready with Reject flowFilter")
-		flow.WaitForFlowcollectorReady(oc)
-		// check if patch is successful
-		flowPatch, err := oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.agent.ebpf.flowFilter.action}'").Output()
+		flowPatch, err := oc.AsAdmin().Run("get").Args("flowcollector", "cluster", "-n", namespace, "-o", "jsonpath='{.spec.agent.ebpf.flowFilter.rules[0].action}'").Output()
 		o.Expect(err).ToNot(o.HaveOccurred())
 		o.Expect(flowPatch).To(o.Equal(`'Reject'`))
 
@@ -1538,6 +1624,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			}
 		}
 		o.Expect(count).Should(o.BeNumerically("==", 0), "expected number of flows with SYN_ACK TCPFlag = 0")
+		verifyEBPFFilterMetrics(oc, "FilterReject")
 
 		g.By("Verify SYN flooding flows")
 		parameters = []string{"Flags=\"SYN\"", "DstAddr=\"192.168.1.159\""}
@@ -1836,7 +1923,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, lokiParams...)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of PacketTranslation flows > 0")
-		verifyPacketTranslationFlows(oc, testClientTemplate.ServerNS, testClientTemplate.ClientNS, flowRecords)
+
+		clientServiceInfo, err := getClientServerInfo(oc, testClientTemplate.ServerNS, testClientTemplate.ClientNS)
+		verifyPacketTranslationFlows(clientServiceInfo["server"]["ip"], clientServiceInfo["server"]["name"], clientServiceInfo["client"]["ip"], flowRecords)
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		g.By("Verify eBPF feature metrics")
 		verifyEBPFFeatureMetrics(oc, "Drops")
@@ -1908,7 +1998,10 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		flowRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime, lokiParams...)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of PacketTranslation flows > 0")
-		verifyPacketTranslationFlows(oc, testClientTemplate.ServerNS, testClientTemplate.ClientNS, flowRecords)
+
+		clientServiceInfo, err := getClientServerInfo(oc, testClientTemplate.ServerNS, testClientTemplate.ClientNS)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		verifyPacketTranslationFlows(clientServiceInfo["server"]["ip"], clientServiceInfo["server"]["name"], clientServiceInfo["client"]["ip"], flowRecords)
 	})
 
 	// NetworkEvents ebpf hook only supported for OCP >= 4.17
