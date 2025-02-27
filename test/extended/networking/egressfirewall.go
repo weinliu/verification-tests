@@ -617,6 +617,13 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		if err != nil {
 			g.Skip("Ping node IP failed, skip the test in this environment.")
 		}
+		if node1IP1 != "" {
+			_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "ping -c 2 "+node1IP1)
+			if err != nil {
+				g.Skip("Ping node IP failed, skip the test in this environment.")
+			}
+
+		}
 
 		exutil.By("Create an EgressFirewall object with rule nodeSelector.")
 		egressFW2 := egressFirewall2{
@@ -702,6 +709,12 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 		_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "ping -c 2 "+node1IP2)
 		if err != nil {
 			g.Skip("Ping node IP failed, skip the test in this environment.")
+		}
+		if node1IP1 != "" {
+			_, err = e2eoutput.RunHostCmd(pod1.namespace, pod1.name, "ping -c 2 "+node1IP1)
+			if err != nil {
+				g.Skip("Ping node IP failed, skip the test in this environment.")
+			}
 		}
 
 		exutil.By("Create an EgressFirewall object with rule nodeSelector.")
