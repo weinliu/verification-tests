@@ -21,7 +21,7 @@ var _ = g.Describe("[sig-networking] SDN sriov installation", func() {
 		if checkFips(oc) {
 			g.Skip("Skip this case since sriov pod cannot be running on fips")
 		}
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
+		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "-A").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if strings.Contains(msg, "sriov.openshift-qe.sdn.com") {
 			g.Skip("Skip this case since sriov cluster already setup the operator during deploying the cluster")

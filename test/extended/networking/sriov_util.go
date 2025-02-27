@@ -810,6 +810,9 @@ func getInterfaceMac(oc *exutil.CLI, namespace, podName, interfaceName string) s
 
 // get the catlogsource name
 func getOperatorSource(oc *exutil.CLI, namespace string) string {
+	if isBaselineCapsSet(oc) && !(isEnabledCapability(oc, "OperatorLifecycleManager")) {
+		g.Skip("Skipping the test as baselinecaps have been set and OperatorLifecycleManager capability is not enabled!")
+	}
 	catalogSourceNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", "-n", namespace, "-o=jsonpath={.items[*].metadata.name}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	if strings.Contains(catalogSourceNames, "auto-release-app-registry") {
