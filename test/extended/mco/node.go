@@ -1461,14 +1461,14 @@ func quietRecoverNamespaceRestricted(oc *exutil.CLI, namespace string) error {
 // BreakRebootInNode break the reboot process in a node, so that errors will happen when the node is rebooted
 func BreakRebootInNode(node *Node) error {
 	logger.Infof("Breaking reboot process in node %s", node.GetName())
-	_, err := node.DebugNodeWithChroot("sh", "-c", "mount -o remount,rw /usr; mv /usr/bin/systemd-run /usr/bin/systemd-run2")
+	_, err := node.DebugNodeWithChroot("sh", "-c", "touch /tmp/dummy-systemd-run; nsenter --mount=/proc/1/ns/mnt mount --bind /tmp/dummy-systemd-run /usr/bin/systemd-run")
 	return err
 }
 
 // FixRebootInNode fixes the problem what BreaKRebootInNode function created in a node
 func FixRebootInNode(node *Node) error {
 	logger.Infof("Fixing reboot process in node %s", node.GetName())
-	_, err := node.DebugNodeWithChroot("sh", "-c", "mount -o remount,rw /usr; mv /usr/bin/systemd-run2 /usr/bin/systemd-run")
+	_, err := node.DebugNodeWithChroot("sh", "-c", "nsenter --mount=/proc/1/ns/mnt umount /usr/bin/systemd-run")
 	return err
 }
 
