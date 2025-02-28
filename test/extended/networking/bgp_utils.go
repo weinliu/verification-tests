@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"math/rand"
 	"net"
 	"os"
 	"os/exec"
@@ -883,4 +884,221 @@ func setUDNLabel(oc *exutil.CLI, namespace string, name string, label string) {
 		e2e.Failf("UserDefinedNetwork do not have correct label: %s", label)
 	}
 
+}
+
+// generateRandomUnusedPublicIPv4 generates a random public routable IPv4 address that is not used in the cluster
+func generateRandomUnusedPublicIPv4(oc *exutil.CLI) string {
+
+	for {
+		// Seed the random number generator to ensure different results each time
+		source := rand.NewSource(time.Now().UnixNano())
+		rand := rand.New(source)
+
+		// Generate 4 random octets (between 0 and 255)
+		octet1 := rand.Intn(256)
+		octet2 := rand.Intn(256)
+		octet3 := rand.Intn(256)
+		octet4 := rand.Intn(256)
+
+		var ip string
+		if !isPrivateIP(octet1, octet2, octet3, octet4) {
+			// Format the IP address as a string
+			ip = fmt.Sprintf("%d.%d.%d.%d", octet1, octet2, octet3, octet4)
+		}
+
+		// Check if this IP address is used in the cluster
+		pingCmd := "ping -c4 -t1 " + ip
+		_, err := execCommandInNetworkingPod(oc, pingCmd)
+		if err != nil {
+			e2e.Logf("%s is not used!\n", ip)
+			return ip
+		} else {
+			e2e.Logf("Try again ....\n")
+		}
+	}
+}
+
+// Check if an IP is a private IP (for private ranges defined by RFC1918)
+func isPrivateIP(octet1, octet2, octet3, octet4 int) bool {
+	// Check for private IP ranges
+	return (octet1 == 10) ||
+		(octet1 == 172 && octet2 >= 16 && octet2 <= 31) ||
+		(octet1 == 192 && octet2 == 168)
+}
+
+func generateRandomGlobalIPv6(oc *exutil.CLI) string {
+	source := rand.NewSource(time.Now().UnixNano()) // Create a new random source
+	randGen := rand.New(source)
+
+	// Keep generating until a valid global IPv6 address is found
+	for {
+		// Generate each 16-bit block of the IPv6 address
+		block1 := randGen.Intn(65536) // Generate a random 16-bit value (0 to 65535)
+		block2 := randGen.Intn(65536)
+		block3 := randGen.Intn(65536)
+		block4 := randGen.Intn(65536)
+		block5 := randGen.Intn(65536)
+		block6 := randGen.Intn(65536)
+		block7 := randGen.Intn(65536)
+		block8 := randGen.Intn(65536)
+
+		// Check if the generated IPv6 address is not in the link-local or private range
+		var ipv6 string
+		if !isPrivateOrLinkLocalIPv6(block1, block2) {
+			// Format the IPv6 address in standard notation
+			ipv6 = fmt.Sprintf("%x:%x:%x:%x:%x:%x:%x:%x", block1, block2, block3, block4, block5, block6, block7, block8)
+		}
+
+		// Check if this IP address is used in the cluster
+		pingCmd := "ping -c4 -t1 -6 " + ipv6
+		_, err := execCommandInNetworkingPod(oc, pingCmd)
+		if err != nil {
+			e2e.Logf("%s is not used!\n", ipv6)
+			return ipv6
+		} else {
+			e2e.Logf("Try again ....\n")
+		}
+	}
+}
+
+// Check if the generated IPv6 address falls within private or link-local ranges
+func isPrivateOrLinkLocalIPv6(block1, block2 int) bool {
+	// Check if the first block is in the range for link-local addresses (fe80::/10)
+	// fe80::/10 is represented by block1 == 0xfe80 to 0xfebf
+	if block1 == 0xfe80 {
+		return true
+	}
+
+	// Check if the address falls within the Unique Local Address (ULA) range (fc00::/7)
+	// fc00::/7 is represented by block1 == 0xfc00 to 0xfdff
+	if block1 >= 0xfc00 && block1 <= 0xfdff {
+		return true
+	}
+
+	// Otherwise, this is a valid public (global) address
+	return false
+}
+
+// Verify a single route is learned into ip routing table on external frr container, this function is likely to be used to verify egressIP advertisement
+func verifySingleBGPRouteOnExternalFrr(host string, ip, nexthop string, expected bool) bool {
+	var externalFrrCmd string
+
+	if netutils.IsIPv6String(ip) {
+		externalFrrCmd = "ip -6 route show | grep bgp"
+	}
+
+	if netutils.IsIPv4String(ip) {
+		externalFrrCmd = "ip route show | grep bgp"
+	}
+	output, err := sshRunCmdOutPut(host, "root", externalFrrCmd)
+	e2e.Logf("on singlestack, ip or ip -6 route show on external frr, output:\n%s ", output)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	expectedBGPRoutePattern := fmt.Sprintf(`%s .*via %s .*proto bgp`, ip, nexthop)
+	e2e.Logf("expected route is: %s", expectedBGPRoutePattern)
+	matched, err := regexp.MatchString(expectedBGPRoutePattern, output)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	if !matched && expected {
+		e2e.Logf("BGP route for %s is not in ip route table of external frr as expected", ip)
+		return false
+	}
+	if matched && !expected {
+		e2e.Logf("BGP route for %s shows up when it should not be in ip routing table of external frr", ip)
+		return false
+	}
+	return true
+}
+
+// Verify a single route is learned into ip routing table for cluster nodes, this function is likely to be used to verify egressIP advertisement
+func verifySingleBGPRouteOnClusterNode(oc *exutil.CLI, thisNode string, allNodes []string, ip, nexthop string, expected bool) bool {
+
+	ipStackType := checkIPStackType(oc)
+	for _, eachNode := range allNodes {
+		// Verify the route is being learned to the cluster nodes' ip routing table
+		expectedBGPRoutePattern := fmt.Sprintf(`%s.* via %s .* proto bgp`, regexp.QuoteMeta(ip), regexp.QuoteMeta(nexthop))
+		var matched bool
+		var err error
+		if eachNode != thisNode {
+			routesOutput2, routesOutput1, result := getIProutesWithFilterOnClusterNode(oc, eachNode, "bgp")
+			e2e.Logf("\n on node %s got routesOutput2: \n%s \n got routesOutput1: \n%s\n", eachNode, routesOutput2, routesOutput1)
+			o.Expect(result).To(o.BeTrue())
+			if ipStackType == "ipv4single" || ipStackType == "ipv6single" || (ipStackType == "dualstack" && netutils.IsIPv4String(ip)) {
+				matched, err = regexp.MatchString(expectedBGPRoutePattern, routesOutput1)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+			if ipStackType == "dualstack" && netutils.IsIPv6String(ip) {
+				matched, err = regexp.MatchString(expectedBGPRoutePattern, routesOutput2)
+				o.Expect(err).NotTo(o.HaveOccurred())
+			}
+			// e2e.Logf("\n Did it match? : %v\n", matched)
+			if !matched && expected {
+				e2e.Logf("route for %s is not learned to ip route table of this node %s as expected", ip, thisNode)
+				return false
+			}
+			if matched && !expected {
+				e2e.Logf("route for %s shows up in ip route tabe of node %s while it should not be learned to ip route table of the node", ip, thisNode)
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// Add iptables rules to assist test
+func addIPtablesRules(host, intf, ipAddr, externalFRRIP string) error {
+	e2e.Logf("\n\n ipAddr: %s", ipAddr)
+	ip, ipnet, err := net.ParseCIDR(ipAddr + "/24")
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("\n\n ip: %v, ipnet: %v", ip, ipnet)
+
+	if netutils.IsIPv4String(ipAddr) {
+		ruleAdd1 := "sudo iptables -t filter -I FORWARD -s " + ipnet.String() + " -i " + intf + " -j ACCEPT"
+		e2e.Logf("\n\n Adding rule: %s", ruleAdd1)
+		err := sshRunCmd(host, "root", ruleAdd1)
+		if err != nil {
+			e2e.Logf("Failed to add iptables rule - %s: %v", ruleAdd1, err)
+			return err
+		}
+		ruleAdd2 := "sudo iptables -t filter -I FORWARD -d " + ipnet.String() + " -o " + intf + " -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT"
+		e2e.Logf("\n\n Adding rule: %s", ruleAdd2)
+		err = sshRunCmd(host, "root", ruleAdd2)
+		if err != nil {
+			e2e.Logf("Failed to add iptables rule - %s: %v", ruleAdd2, err)
+			return err
+		}
+		ruleAdd3 := "sudo iptables -t nat -I POSTROUTING -s " + ipnet.String() + " ! -d " + externalFRRIP + "/24 -j MASQUERADE"
+		e2e.Logf("\n\n Adding rule: %s", ruleAdd3)
+		err = sshRunCmd(host, "root", ruleAdd3)
+		if err != nil {
+			e2e.Logf("Failed to add iptables rule - %s: %v", ruleAdd3, err)
+			return err
+		}
+	}
+
+	if netutils.IsIPv6String(ipAddr) {
+		ruleAdd1 := "sudo ip6tables -t filter -I FORWARD -s " + ipnet.String() + " -i " + intf + " -j ACCEPT"
+		e2e.Logf("\n\n Adding rule: %s", ruleAdd1)
+		err := sshRunCmd(host, "root", ruleAdd1)
+		if err != nil {
+			e2e.Logf("Failed to add iptables rule - %s: %v", ruleAdd1, err)
+			return err
+		}
+		ruleAdd2 := "sudo ip6tables -t filter -I FORWARD -d " + ipnet.String() + " -o " + intf + " -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT"
+		e2e.Logf("\n\n Adding rule: %s", ruleAdd2)
+		err = sshRunCmd(host, "root", ruleAdd2)
+		if err != nil {
+			e2e.Logf("Failed to add iptables rule - %s: %v", ruleAdd2, err)
+			return err
+		}
+
+		ruleAdd3 := "sudo ip6tables -t nat -I POSTROUTING -s " + ipnet.String() + " ! -d " + externalFRRIP + "/64 -j MASQUERADE"
+		e2e.Logf("\n\n Adding rule: %s", ruleAdd3)
+		err = sshRunCmd(host, "root", ruleAdd3)
+		if err != nil {
+			e2e.Logf("Failed to add iptables rule - %s: %v", ruleAdd3, err)
+			return err
+		}
+	}
+
+	return nil
 }

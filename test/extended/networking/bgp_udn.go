@@ -10,7 +10,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-networking] SDN ovn-kubernetes bgp-udn", func() {
+var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 	defer g.GinkgoRecover()
 
 	var (
@@ -265,5 +265,4 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes bgp-udn", func() {
 
 		e2e.Logf("SUCCESS - UDN route advertisement through VRF-default and route filtering through networkSelector work correctly!!!")
 	})
-
 })
