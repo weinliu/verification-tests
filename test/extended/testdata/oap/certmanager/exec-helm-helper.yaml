@@ -31,7 +31,7 @@ objects:
       serviceAccount: "${SA_NAME}"
       containers:
         - name: helm
-          image: alpine/helm:latest
+          image: docker.io/alpine/helm:latest
           imagePullPolicy: IfNotPresent
           command:
             - "sh"

@@ -28,24 +28,17 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-// Get the cloud provider type of the test environment
-func getCloudProvider(oc *exutil.CLI) string {
-	var (
-		errMsg error
-		output string
-	)
-	waitErr := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-		output, errMsg = oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.type}").Output()
-		if errMsg != nil {
-			e2e.Logf("Get cloudProvider *failed with* :\"%v\",wait 5 seconds retry.", errMsg)
-			return false, errMsg
-		}
-		e2e.Logf("The test cluster cloudProvider is :\"%s\".", strings.ToLower(output))
-		return true, nil
-	})
-	exutil.AssertWaitPollNoErr(waitErr, "Waiting for get cloudProvider timeout")
-	return strings.ToLower(output)
-}
+const (
+	subscriptionName       = "openshift-cert-manager-operator"
+	operatorNamespace      = "cert-manager-operator"
+	operatorLabel          = "name=cert-manager-operator"
+	operatorDeploymentName = "cert-manager-operator-controller-manager"
+	controllerNamespace    = "cert-manager"
+	controllerLabel        = "app.kubernetes.io/name=cert-manager"
+	operandNamespace       = "cert-manager"
+	operandLabel           = "app.kubernetes.io/instance=cert-manager"
+	defaultOperandPodNum   = 3
+)
 
 // Get the credential from cluster
 func getCredentialFromCluster(oc *exutil.CLI, cloudProvider string) (string, string) {
@@ -243,13 +236,8 @@ func isDeploymentReady(oc *exutil.CLI, namespace string, deploymentName string) 
 // Create Cert Manager Operator
 func createCertManagerOperator(oc *exutil.CLI) {
 	var (
-		testMode              = "PROD"
-		subscriptionName      = "openshift-cert-manager-operator"
-		subscriptionNamespace = "cert-manager-operator"
-		channelName           = "stable-v1"
-		operandNamespace      = "cert-manager"
-		operandPodLabel       = "app.kubernetes.io/instance=cert-manager"
-		operandPodNum         = 3
+		testMode    = "PROD"
+		channelName = "stable-v1"
 	)
 	e2e.Logf("=> create the operator namespace")
 	buildPruningBaseDir := exutil.FixturePath("testdata", "oap/certmanager")
@@ -284,7 +272,7 @@ func createCertManagerOperator(oc *exutil.CLI) {
 		// TODO: until the Konflux pipeline is configured to add a deterministic tag, update this pull spec whenever a new stage build is out
 		fbcImage := "quay.io/redhat-user-workloads/cert-manager-oape-tenant/cert-manager-operator-1-15/cert-manager-operator-fbc-1-15:edb257f20c2c0261200e2f0f7bf8118099567745"
 		catalogSourceName = "konflux-fbc-cert-manager"
-		catalogSourceNamespace = "cert-manager-operator"
+		catalogSourceNamespace = operatorNamespace
 		e2e.Logf("=> create the file-based catalog")
 		createFBC(oc, catalogSourceName, catalogSourceNamespace, fbcImage)
 	} else {
@@ -300,27 +288,27 @@ func createCertManagerOperator(oc *exutil.CLI) {
 	e2e.Logf("=> create the subscription")
 	subscriptionTemplate := filepath.Join(buildPruningBaseDir, "subscription.yaml")
 	params := []string{"-f", subscriptionTemplate, "-p", "NAME=" + subscriptionName, "SOURCE=" + catalogSourceName, "SOURCE_NAMESPACE=" + catalogSourceNamespace, "CHANNEL=" + channelName}
-	exutil.ApplyNsResourceFromTemplate(oc, subscriptionNamespace, params...)
+	exutil.ApplyNsResourceFromTemplate(oc, operatorNamespace, params...)
 	// Wait for subscription state to become AtLatestKnown
 	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, true, func(context.Context) (bool, error) {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", subscriptionNamespace, "-o=jsonpath={.status.state}").Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", operatorNamespace, "-o=jsonpath={.status.state}").Output()
 		if strings.Contains(output, "AtLatestKnown") {
 			return true, nil
 		}
 		return false, nil
 	})
 	if err != nil {
-		dumpResource(oc, subscriptionNamespace, "sub", subscriptionName, "-o=jsonpath={.status}")
+		dumpResource(oc, operatorNamespace, "sub", subscriptionName, "-o=jsonpath={.status}")
 	}
 	exutil.AssertWaitPollNoErr(err, "timeout waiting for subscription state to become AtLatestKnown")
 
 	e2e.Logf("=> retrieve the installed CSV name")
-	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", subscriptionNamespace, "-o=jsonpath={.status.installedCSV}").Output()
+	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(csvName).NotTo(o.BeEmpty())
 	// Wait for csv phase to become Succeeded
 	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 180*time.Second, true, func(context.Context) (bool, error) {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", subscriptionNamespace, "-o=jsonpath={.status.phase}").Output()
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", csvName, "-n", operatorNamespace, "-o=jsonpath={.status.phase}").Output()
 		if strings.Contains(output, "Succeeded") {
 			e2e.Logf("csv '%s' installed successfully", csvName)
 			return true, nil
@@ -328,35 +316,27 @@ func createCertManagerOperator(oc *exutil.CLI) {
 		return false, nil
 	})
 	if err != nil {
-		dumpResource(oc, subscriptionNamespace, "csv", csvName, "-o=jsonpath={.status}")
+		dumpResource(oc, operatorNamespace, "csv", csvName, "-o=jsonpath={.status}")
 	}
 	exutil.AssertWaitPollNoErr(err, "timeout waiting for csv phase to become Succeeded")
 
 	e2e.Logf("=> checking the cert-manager operand pods readiness")
 	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, true, func(context.Context) (bool, error) {
-		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", operandNamespace, "-l", operandPodLabel, "--field-selector=status.phase=Running", "-o=jsonpath={.items[*].metadata.name}").Output()
-		if len(strings.Fields(output)) == operandPodNum {
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", operandNamespace, "-l", operandLabel, "--field-selector=status.phase=Running", "-o=jsonpath={.items[*].metadata.name}").Output()
+		if len(strings.Fields(output)) == defaultOperandPodNum {
 			e2e.Logf("all operand pods are up and running!")
 			return true, nil
 		}
 		return false, nil
 	})
 	if err != nil {
-		oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", operandNamespace, "-l", operandPodLabel).Execute()
+		oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", operandNamespace, "-l", operandLabel).Execute()
 	}
 	exutil.AssertWaitPollNoErr(err, "timeout waiting for all operand pods phase to become Running")
 }
 
 // uninstall cert-manager operator and cleanup its operand resources
 func cleanupCertManagerOperator(oc *exutil.CLI) {
-	var (
-		subscriptionName  = "openshift-cert-manager-operator"
-		operatorNamespace = "cert-manager-operator"
-		operatorLabel     = "name=cert-manager-operator"
-		operandNamespace  = "cert-manager"
-		operandLabel      = "app.kubernetes.io/instance=cert-manager"
-	)
-
 	e2e.Logf("=> delete the subscription and installed CSV")
 	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
@@ -642,7 +622,7 @@ func createFBC(oc *exutil.CLI, name, namespace, image string) {
 
 // Get installed cert-manager Operator version. The return value format is semantic 'x.y.z'.
 func getCertManagerOperatorVersion(oc *exutil.CLI) string {
-	version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", "openshift-cert-manager-operator", "-n", "cert-manager-operator", "-o=jsonpath={.status.installedCSV}").Output()
+	version, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("sub", subscriptionName, "-n", operatorNamespace, "-o=jsonpath={.status.installedCSV}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(version).NotTo(o.BeEmpty())
 	return strings.TrimPrefix(version, "cert-manager-operator.v")
