@@ -1875,6 +1875,13 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 
 	// author: jiazha@redhat.com
 	g.It("Author:jiazha-ROSA-OSD_CCS-ARO-High-21548-aggregates CR roles to standard admin/view/edit", func() {
+		isExternalOIDCCluster, odcErr := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(odcErr).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			// https://github.com/openshift/release/pull/42250/files#diff-8f1e971323cb1821595fd1633ab701de55de169795027930c53aa5e736d7301dR38-R52
+			g.Skip("Skipping the test as we are running against an external OIDC cluster, which the user has the cluster-admin role")
+		}
+
 		oc.SetupProject()
 		msg, err := oc.Run("whoami").Args("").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
