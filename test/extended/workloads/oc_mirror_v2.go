@@ -774,8 +774,7 @@ var _ = g.Describe("[sig-cli] Workloads ocmirror v2 works well", func() {
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Mirror command failed with %s", err))
 	})
 
-	// Adding flaky tag due to bug https://issues.redhat.com/browse/OCPBUGS-44103
-	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-74650-Should no warning about eus when use the eus channel with minor versions range < 2  for V1[Serial][Flaky]", func() {
+	g.It("Author:yinzhou-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-Longduration-High-74650-Should no warning about eus when use the eus channel with minor versions range < 2  for V1[Serial]", func() {
 		dirname := "/tmp/case74650"
 		err := os.MkdirAll(dirname, 0755)
 		o.Expect(err).NotTo(o.HaveOccurred())
