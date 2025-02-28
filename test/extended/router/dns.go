@@ -85,15 +85,10 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_DNS", func() {
 			"service", "image-registry", "-n", "openshift-image-registry", "-o=jsonpath={.spec.clusterIP}").Output()
 		o.Expect(err2).NotTo(o.HaveOccurred())
 		o.Expect(newClusterIP).NotTo(o.ContainSubstring(clusterIP))
+		e2e.Logf("The new cluster IP is %v", newClusterIP)
 
 		exutil.By("Step5: SSH to the node and confirm the /etc/hosts details, after deletion")
-		hostOutput1, err3 := exutil.DebugNodeRetryWithOptionsAndChroot(oc, node, []string{}, "cat", "/etc/hosts")
-		o.Expect(err3).NotTo(o.HaveOccurred())
-		o.Expect(hostOutput1).To(o.And(
-			o.ContainSubstring("127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4"),
-			o.ContainSubstring("::1         localhost localhost.localdomain localhost6 localhost6.localdomain6"),
-			o.ContainSubstring(newClusterIP+" image-registry.openshift-image-registry.svc image-registry.openshift-image-registry.svc.cluster.local")))
-		o.Expect(hostOutput1).NotTo(o.And(o.ContainSubstring("error"), o.ContainSubstring("failed"), o.ContainSubstring("timed out")))
+		waitForOutputOnDebugNodeBasedOnEtcHosts(oc, node, newClusterIP)
 	})
 
 	// author: shudili@redhat.com

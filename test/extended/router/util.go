@@ -1883,6 +1883,25 @@ func convertV6AddressToPTR(ipv6Address string) string {
 	return PtrString
 }
 
+// this function checks the output of the /etc/hosts
+func waitForOutputOnDebugNodeBasedOnEtcHosts(oc *exutil.CLI, node string, clusterIP string) {
+	var expectedString = "127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4\n::1         localhost localhost.localdomain localhost6 localhost6.localdomain6\n" + clusterIP + " image-registry.openshift-image-registry.svc image-registry.openshift-image-registry.svc.cluster.local # openshift-generated-node-resolver"
+	waitErr := wait.Poll(10*time.Second, 90*time.Second, func() (bool, error) {
+		hostOutput, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, node, []string{}, "cat", "/etc/hosts")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The /etc/hosts output is: %v", hostOutput)
+
+		// Comparing the output
+		if strings.Contains(hostOutput, expectedString) {
+			e2e.Logf("the cluster ip of the image-registry in /etc/hosts string is matching...")
+			return true, nil
+		}
+		o.Expect(hostOutput).NotTo(o.And(o.ContainSubstring("error"), o.ContainSubstring("failed"), o.ContainSubstring("timed out")))
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached and the expected ip %v is not in the output string", clusterIP))
+}
+
 // Get clusterIP of a service
 func getSvcClusterIPByName(oc *exutil.CLI, ns, serviceName string) string {
 	clusterIP, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", ns, "svc", serviceName, "-o=jsonpath={.spec.clusterIP}").Output()
