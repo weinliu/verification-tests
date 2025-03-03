@@ -863,6 +863,16 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				exutil.By("label project not being monitored")
 				labelNameSpace(oc, ns, "openshift.io/user-monitoring=false")
 
+				exutil.By("make sure the namespace is labeled with openshift.io/user-monitoring=false")
+				result, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("namespace", ns, "-ojsonpath={.metadata.labels}").Output()
+				if err != nil {
+					o.Expect(result).To(o.ContainSubstring(`"openshift.io/user-monitoring":"false"`))
+				}
+				if !strings.Contains(result, `"openshift.io/user-monitoring":"false"`) {
+					e2e.Logf("namespace %s does not have openshift.io/user-monitoring=false label, relabel it again", ns)
+					labelNameSpace(oc, ns, "openshift.io/user-monitoring=false")
+				}
+
 				//create example app and alert rule under the project
 				exutil.By("Create example alert rule!")
 				createResourceFromYaml(oc, ns, exampleAppRule)
