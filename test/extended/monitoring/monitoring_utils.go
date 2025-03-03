@@ -509,21 +509,27 @@ func alertmanagerTestPodCheck(oc *exutil.CLI) {
 // getReadyPodsWithLabels poll check pod through a given label until pod is ready
 func getReadyPodsWithLabels(oc *exutil.CLI, ns string, label string) {
 	podCheck := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 10*time.Minute, true, func(context.Context) (bool, error) {
-		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Output()
-		if err != nil || strings.Contains(output, "Terminating") ||
-			strings.Contains(output, "ContainerCreating") ||
-			strings.Contains(output, "Pending") ||
-			strings.Contains(output, "ErrImagePull") ||
-			strings.Contains(output, "CrashLoopBackOff") ||
-			strings.Contains(output, "ImagePullBackOff") {
+		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label, "-o", "jsonpath={.items[*].status.phase}").Output()
+		if err != nil {
 			return false, nil
+		}
+		podList := strings.Fields(output)
+		if len(podList) == 0 {
+			return false, nil
+		}
+		for _, status := range strings.Fields(output) {
+			if status != "Running" {
+				return false, nil
+			}
 		}
 		return true, nil
 	})
+
 	if podCheck != nil {
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-n", ns, "-l", label).Output()
 		e2e.Logf("pods not ready: \n%v", output)
 	}
+
 	exutil.AssertWaitPollNoErr(podCheck, "some pods are not ready!")
 }
 
