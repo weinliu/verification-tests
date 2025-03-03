@@ -133,7 +133,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
 
 		e2e.Logf("As the normal user, create certificate.")
-		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}", "--context=admin").Output()
+		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		dnsName := constructDNSName(ingressDomain)
 		certHTTP01File := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
@@ -207,7 +207,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
 
 		e2e.Logf("As the normal user, create certificate.")
-		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}", "--context=admin").Output()
+		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		dnsName := constructDNSName(ingressDomain)
 		certHTTP01File := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
