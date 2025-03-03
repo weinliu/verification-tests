@@ -62,6 +62,8 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		testrunConfigmapName             = "osc-config"
 		scratchRpmName                   string
 		trusteeRouteHost                 string
+		operatorCsvVersion               string
+		caaDaemonName                    = "osc-caa-ds" // after 1.9.0
 	)
 
 	subscription := SubscriptionDescription{
@@ -130,7 +132,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		// run once on startup to populate vars, create ns, og, label nodes
 		// always log cluster setup on each test
 		if testrun.checked {
-			e2e.Logf("\n    Cluster: %v.%v on %v\n    configmapExists %v\n    testrun %v\n    subscription %v\n    kataconfig %v\n\n", ocpMajorVer, ocpMinorVer, cloudPlatform, configmapExists, testrun, subscription, kataconfig)
+			e2e.Logf("\n    Cluster: %v.%v on %v\n    configmapExists %v\n    testrun %v\n    subscription %v\n    kataconfig %v\ncsv version %v\n", ocpMajorVer, ocpMinorVer, cloudPlatform, configmapExists, testrun, subscription, kataconfig, operatorCsvVersion)
 			if scratchRpmName != "" {
 				e2e.Logf("Scratch rpm %v was installed", scratchRpmName)
 			}
@@ -181,7 +183,17 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		err = ensureOperatorIsSubscribed(oc, subscription, subTemplate)
 		o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("%v", err))
-		e2e.Logf("---------- subscription %v succeeded with channel %v %v", subscription.subName, subscription.channel, err)
+
+		// get CSV version from the operator and set caaDaemonName if needed
+		csvName, err := oc.AsAdmin().Run("get").Args("sub", subscription.operatorPackage, "-o=jsonpath={.status.installedCSV}", "-n", subscription.namespace).Output()
+		operatorCsvVersion, found := strings.CutPrefix(csvName, subscription.operatorPackage+".")
+		o.Expect(found).To(o.BeTrue(), fmt.Sprintf("Could not get csv subscription version from %v.  Got %v", csvName, operatorCsvVersion))
+
+		e2e.Logf("---------- subscription %v ver %v succeeded with channel %v %v", subscription.subName, operatorCsvVersion, subscription.channel, err)
+
+		if semver.Compare(operatorCsvVersion, "v1.9.0") == -1 { // The operator is before 1.9.0.
+			caaDaemonName = "peerpodconfig-ctrl-caa-daemon" // use this name on older versions
+		}
 
 		err = checkKataconfigIsCreated(oc, subscription, kataconfig.name)
 		if err == nil {
@@ -304,8 +316,6 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 			msg, err = oc.AsAdmin().Run("patch").Args("configmap", ppConfigMapName, "-n", opNamespace, "--type", "merge",
 				"--patch", cocoDefaultSize[cloudPlatform]).Output()
 			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Could not patch default instance for coco \n error: %v %v", msg, err))
-
-			// oc set env ds/peerpodconfig-ctrl-caa-daemon -n openshift-sandboxed-containers-operator REBOOT="$(date)"
 		}
 
 		// should check kataconfig here & already have checked subscription
@@ -316,7 +326,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 		// this should be a seperate day0 test for control pods
 		if kataconfig.enablePeerPods {
 			//TODO implement single function with the list of deployments for kata/peer pod/ coco
-			checkPeerPodControl(oc, opNamespace, podRunState)
+			checkPeerPodControl(oc, opNamespace, podRunState, caaDaemonName)
 		}
 
 		// kata wasn't installed before so this isn't skipped
@@ -1510,8 +1520,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		if kataconfig.enablePeerPods {
 			testControlPod("deployment", "peer-pods-webhook", "-o=jsonpath={.spec.replicas}", "-o=jsonpath={.status.readyReplicas}", "app=peer-pods-webhook")
-			testControlPod("daemonset", "peerpodconfig-ctrl-caa-daemon", "-o=jsonpath={.status.desiredNumberScheduled}", "-o=jsonpath={.status.numberReady}", "name=peerpodconfig-ctrl-caa-daemon")
-
+			testControlPod("daemonset", caaDaemonName, "-o=jsonpath{.status.desiredNumberScheduled}", "-o=jsonpath={.status.numberReady}", "name="+caaDaemonName)
 			// Check for the peer pod RuntimeClass
 			msg, err := checkResourceExists(oc, "RuntimeClass", ppRuntimeClass, subscription.namespace, duration, interval)
 			if err != nil || msg == "" {
@@ -1915,8 +1924,8 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		g.By("verify control plane pods are running")
 		if kataconfig.enablePeerPods {
-			msg, err = testControlPod(oc, subscription.namespace, "daemonset", "peerpodconfig-ctrl-caa-daemon",
-				"-o=jsonpath={.status.desiredNumberScheduled}", "-o=jsonpath={.status.numberReady}", "name=peerpodconfig-ctrl-caa-daemon")
+			msg, err = testControlPod(oc, subscription.namespace, "daemonset", caaDaemonName,
+				"-o=jsonpath={.status.desiredNumberScheduled}", "-o=jsonpath={.status.numberReady}", "name="+caaDaemonName)
 			o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("msg:%v err:%v", msg, err))
 			msg, err = testControlPod(oc, subscription.namespace, "deployment", "peer-pods-webhook",
 				"-o=jsonpath={.spec.replicas}", "-o=jsonpath={.status.readyReplicas}", "app=peer-pods-webhook")

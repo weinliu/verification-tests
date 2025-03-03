@@ -874,7 +874,7 @@ func checkPeerPodConfigMap(oc *exutil.CLI, opNamespace, provider, ppConfigMapNam
 	return msg, err
 }
 
-func checkPeerPodControl(oc *exutil.CLI, opNamespace, expStatus string) (msg string, err error) {
+func checkPeerPodControl(oc *exutil.CLI, opNamespace, expStatus, caaDaemonName string) (msg string, err error) {
 	// This would check peer pod webhook pod , peerpodconfig-ctrl-caa pods , webhook service and endpoints attached to the svc
 	//TODO: should add podvm image builder pod completed?
 	var (
@@ -924,7 +924,7 @@ func checkPeerPodControl(oc *exutil.CLI, opNamespace, expStatus string) (msg str
 	// checkResourceJsonpath needs a podname
 	errCheck = wait.PollImmediate(10*time.Second, podSnooze*time.Second, func() (bool, error) {
 		msg, err = oc.AsAdmin().Run("get").Args("pod", "-o=jsonpath={.items..metadata.name}", "-n", opNamespace).Output()
-		if strings.Contains(msg, "peerpodconfig-ctrl-caa-daemon") {
+		if strings.Contains(msg, caaDaemonName) {
 			return true, nil
 		}
 		return false, nil
