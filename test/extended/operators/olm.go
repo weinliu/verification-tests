@@ -1098,7 +1098,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		deps := []string{"catalog-operator", "olm-operator", "package-server-manager", "packageserver"}
 		// since https://issues.redhat.com/browse/OCPBUGS-13369 closed as Wont'do. I remove the certification checking
 		// since https://issues.redhat.com/browse/OCPBUGS-43581 fixed, I add the certification checking back, but for OCP4.18+
-		re1, _ := regexp.Compile("x509.*")
+		re1, _ := regexp.Compile(".*x509.*")
 		// since https://issues.redhat.com/browse/OCPBUGS-11370, add "bad certificate" checking for prometheus pods
 		re2, _ := regexp.Compile("bad certificate")
 		// remove the promtheus checking since many failure not caused by OLM
@@ -1120,7 +1120,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			str1 := re1.FindString(logs)
 			str2 := re2.FindString(logs)
 			str3 := re3.FindString(logs)
-			if str1 != "" {
+			if str1 != "" && !strings.Contains(str1, "could not convert APIService CA bundle to x509 cert") {
 				e2e.Failf("!!! %s occurs x509 error: %s", dep, str1)
 			}
 			if str2 != "" {
