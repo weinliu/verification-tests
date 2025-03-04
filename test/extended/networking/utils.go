@@ -1761,10 +1761,17 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pingPodTemplate := filepath.Join(buildPruningBaseDir, "MultiNetworkPolicy-pod-template.yaml")
 	patchSResource := "networks.operator.openshift.io/cluster"
 
+	exutil.By("Getting the ready-schedulable worker nodes")
+	nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+	o.Expect(nodeErr).NotTo(o.HaveOccurred())
+	if len(nodeList.Items) < 1 {
+		g.Skip("The cluster has no ready node for the testing")
+	}
+
 	exutil.By("Enable MacvlanNetworkpolicy in the cluster")
 	patchResourceAsAdmin(oc, patchSResource, patchInfo)
-	waitForNetworkOperatorState(oc, 20, 10, "True.*True.*False")
-	waitForNetworkOperatorState(oc, 20, 20, "True.*False.*False")
+	waitForNetworkOperatorState(oc, 10, 5, "True.*True.*False")
+	waitForNetworkOperatorState(oc, 60, 15, "True.*False.*False")
 
 	exutil.By("Create MultiNetworkPolicy-NAD1 in ns1")
 	err1 := oc.AsAdmin().Run("create").Args("-f", netAttachDefFile1, "-n", ns1).Execute()
@@ -1777,7 +1784,7 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod1ns1 := testPodMultinetwork{
 		name:      "blue-pod-1",
 		namespace: ns1,
-		nodename:  "worker-0",
+		nodename:  nodeList.Items[0].Name,
 		nadname:   "macvlan-nad1",
 		labelname: "blue-openshift",
 		template:  pingPodTemplate,
@@ -1789,7 +1796,7 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod2ns1 := testPodMultinetwork{
 		name:      "blue-pod-2",
 		namespace: ns1,
-		nodename:  "worker-1",
+		nodename:  nodeList.Items[1].Name,
 		nadname:   "macvlan-nad1",
 		labelname: "blue-openshift",
 		template:  pingPodTemplate,
@@ -1801,7 +1808,7 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod3ns1 := testPodMultinetwork{
 		name:      "red-pod-1",
 		namespace: ns1,
-		nodename:  "worker-0",
+		nodename:  nodeList.Items[0].Name,
 		nadname:   "macvlan-nad1",
 		labelname: "red-openshift",
 		template:  pingPodTemplate,
@@ -1820,7 +1827,7 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod1ns2 := testPodMultinetwork{
 		name:      "blue-pod-3",
 		namespace: ns2,
-		nodename:  "worker-0",
+		nodename:  nodeList.Items[0].Name,
 		nadname:   "macvlan-nad2",
 		labelname: "blue-openshift",
 		template:  pingPodTemplate,
@@ -1832,7 +1839,7 @@ func prepareMultinetworkTest(oc *exutil.CLI, ns1 string, ns2 string, patchInfo s
 	pod2ns2 := testPodMultinetwork{
 		name:      "red-pod-2",
 		namespace: ns2,
-		nodename:  "worker-0",
+		nodename:  nodeList.Items[0].Name,
 		nadname:   "macvlan-nad2",
 		labelname: "red-openshift",
 		template:  pingPodTemplate,

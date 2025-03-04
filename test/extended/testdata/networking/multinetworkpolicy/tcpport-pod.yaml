@@ -24,4 +24,4 @@ spec:
     ports:
     - containerPort: 8888
       protocol: TCP
-  nodeName: worker-0
+

@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
@@ -63,8 +65,8 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		defer func() {
 			patchResourceAsAdmin(oc, patchSResource, patchInfoFalse)
 			exutil.By("NetworkOperatorStatus should back to normal after disable useMultiNetworkPolicy")
-			waitForNetworkOperatorState(oc, 20, 10, "True.*True.*False")
-			waitForNetworkOperatorState(oc, 20, 20, "True.*False.*False")
+			waitForNetworkOperatorState(oc, 10, 5, "True.*True.*False")
+			waitForNetworkOperatorState(oc, 60, 15, "True.*False.*False")
 		}()
 		prepareMultinetworkTest(oc, ns1, ns2, patchInfoTrue)
 
@@ -146,8 +148,8 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		defer func() {
 			patchResourceAsAdmin(oc, patchSResource, patchInfoFalse)
 			exutil.By("NetworkOperatorStatus should back to normal after disable useMultiNetworkPolicy")
-			waitForNetworkOperatorState(oc, 20, 10, "True.*True.*False")
-			waitForNetworkOperatorState(oc, 20, 20, "True.*False.*False")
+			waitForNetworkOperatorState(oc, 10, 5, "True.*True.*False")
+			waitForNetworkOperatorState(oc, 60, 15, "True.*False.*False")
 		}()
 		prepareMultinetworkTest(oc, ns1, ns2, patchInfoTrue)
 
@@ -228,8 +230,8 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		defer func() {
 			patchResourceAsAdmin(oc, patchSResource, patchInfoFalse)
 			exutil.By("NetworkOperatorStatus should back to normal after disable useMultiNetworkPolicy")
-			waitForNetworkOperatorState(oc, 20, 10, "True.*True.*False")
-			waitForNetworkOperatorState(oc, 20, 20, "True.*False.*False")
+			waitForNetworkOperatorState(oc, 10, 5, "True.*True.*False")
+			waitForNetworkOperatorState(oc, 60, 15, "True.*False.*False")
 		}()
 		prepareMultinetworkTest(oc, ns1, ns2, patchInfoTrue)
 
@@ -307,8 +309,8 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		defer func() {
 			patchResourceAsAdmin(oc, patchSResource, patchInfoFalse)
 			exutil.By("NetworkOperatorStatus should back to normal after disable useMultiNetworkPolicy")
-			waitForNetworkOperatorState(oc, 20, 10, "True.*True.*False")
-			waitForNetworkOperatorState(oc, 20, 20, "True.*False.*False")
+			waitForNetworkOperatorState(oc, 10, 5, "True.*True.*False")
+			waitForNetworkOperatorState(oc, 60, 15, "True.*False.*False")
 		}()
 		prepareMultinetworkTest(oc, ns1, ns2, patchInfoTrue)
 
@@ -363,16 +365,23 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		patchInfoTrue := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":true}}")
 		patchInfoFalse := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":false}}")
 
+		exutil.By("Getting the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("The cluster has no ready node for the testing")
+		}
+
 		exutil.By("1. Enable MacvlanNetworkpolicy in the cluster")
 		defer func() {
 			patchResourceAsAdmin(oc, patchSResource, patchInfoFalse)
 			exutil.By("NetworkOperatorStatus should back to normal after disable useMultiNetworkPolicy")
-			waitForNetworkOperatorState(oc, 20, 10, "True.*True.*False")
-			waitForNetworkOperatorState(oc, 20, 20, "True.*False.*False")
+			waitForNetworkOperatorState(oc, 10, 5, "True.*True.*False")
+			waitForNetworkOperatorState(oc, 60, 15, "True.*False.*False")
 		}()
 		patchResourceAsAdmin(oc, patchSResource, patchInfoTrue)
-		waitForNetworkOperatorState(oc, 20, 10, "True.*True.*False")
-		waitForNetworkOperatorState(oc, 20, 20, "True.*False.*False")
+		waitForNetworkOperatorState(oc, 10, 5, "True.*True.*False")
+		waitForNetworkOperatorState(oc, 60, 15, "True.*False.*False")
 
 		exutil.By("2. Create a namespace")
 		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
@@ -398,7 +407,7 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		pod1ns1 := testPodMultinetwork{
 			name:      "blue-pod-1",
 			namespace: ns1,
-			nodename:  "worker-0",
+			nodename:  nodeList.Items[0].Name,
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -409,7 +418,7 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		pod2ns1 := testPodMultinetwork{
 			name:      "blue-pod-2",
 			namespace: ns1,
-			nodename:  "worker-0",
+			nodename:  nodeList.Items[0].Name,
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -420,7 +429,7 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		pod3ns1 := testPodMultinetwork{
 			name:      "blue-pod-3",
 			namespace: ns1,
-			nodename:  "worker-0",
+			nodename:  nodeList.Items[0].Name,
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -431,7 +440,7 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		pod4ns1 := testPodMultinetwork{
 			name:      "blue-pod-4",
 			namespace: ns1,
-			nodename:  "worker-1",
+			nodename:  nodeList.Items[1].Name,
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -442,7 +451,7 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		pod5ns1 := testPodMultinetwork{
 			name:      "blue-pod-5",
 			namespace: ns1,
-			nodename:  "worker-1",
+			nodename:  nodeList.Items[1].Name,
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -453,7 +462,7 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		pod6ns1 := testPodMultinetwork{
 			name:      "blue-pod-6",
 			namespace: ns1,
-			nodename:  "worker-1",
+			nodename:  nodeList.Items[1].Name,
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -529,17 +538,23 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		patchInfoTrue := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":true}}")
 		patchInfoFalse := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":false}}")
 
+		exutil.By("Getting the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("The cluster has no ready node for the testing")
+		}
+
 		exutil.By("1. Enable MacvlanNetworkpolicy in the cluster")
 		defer func() {
 			patchResourceAsAdmin(oc, patchSResource, patchInfoFalse)
 			exutil.By("NetworkOperatorStatus should back to normal after disable useMultiNetworkPolicy")
-			waitForNetworkOperatorState(oc, 20, 10, "True.*True.*False")
-			waitForNetworkOperatorState(oc, 20, 20, "True.*False.*False")
+			waitForNetworkOperatorState(oc, 10, 5, "True.*True.*False")
+			waitForNetworkOperatorState(oc, 60, 15, "True.*False.*False")
 		}()
 		patchResourceAsAdmin(oc, patchSResource, patchInfoTrue)
-		waitForNetworkOperatorState(oc, 20, 10, "True.*True.*False")
-		waitForNetworkOperatorState(oc, 20, 20, "True.*False.*False")
-
+		waitForNetworkOperatorState(oc, 10, 5, "True.*True.*False")
+		waitForNetworkOperatorState(oc, 60, 15, "True.*False.*False")
 		exutil.By("2. Create a namespace")
 		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
 		o.Expect(contxtErr).NotTo(o.HaveOccurred())
@@ -564,7 +579,7 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		pod1ns1 := testPodMultinetwork{
 			name:      "blue-pod-1",
 			namespace: ns1,
-			nodename:  "worker-0",
+			nodename:  nodeList.Items[0].Name,
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -575,7 +590,7 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		pod2ns1 := testPodMultinetwork{
 			name:      "blue-pod-2",
 			namespace: ns1,
-			nodename:  "worker-0",
+			nodename:  nodeList.Items[0].Name,
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -586,7 +601,7 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		pod3ns1 := testPodMultinetwork{
 			name:      "blue-pod-3",
 			namespace: ns1,
-			nodename:  "worker-0",
+			nodename:  nodeList.Items[0].Name,
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -597,7 +612,7 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		pod4ns1 := testPodMultinetwork{
 			name:      "blue-pod-4",
 			namespace: ns1,
-			nodename:  "worker-1",
+			nodename:  nodeList.Items[1].Name,
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -608,7 +623,7 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		pod5ns1 := testPodMultinetwork{
 			name:      "blue-pod-5",
 			namespace: ns1,
-			nodename:  "worker-1",
+			nodename:  nodeList.Items[1].Name,
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -619,7 +634,7 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		pod6ns1 := testPodMultinetwork{
 			name:      "blue-pod-6",
 			namespace: ns1,
-			nodename:  "worker-1",
+			nodename:  nodeList.Items[1].Name,
 			nadname:   "ipblock-net",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -696,16 +711,23 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		patchInfoTrue := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":true}}")
 		patchInfoFalse := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":false}}")
 
+		exutil.By("Getting the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("The cluster has no ready node for the testing")
+		}
+
 		exutil.By("1. Enable MacvlanNetworkpolicy in the cluster")
 		defer func() {
 			patchResourceAsAdmin(oc, patchSResource, patchInfoFalse)
 			exutil.By("NetworkOperatorStatus should back to normal after disable useMultiNetworkPolicy")
-			waitForNetworkOperatorState(oc, 20, 10, "True.*True.*False")
-			waitForNetworkOperatorState(oc, 20, 20, "True.*False.*False")
+			waitForNetworkOperatorState(oc, 10, 5, "True.*True.*False")
+			waitForNetworkOperatorState(oc, 60, 15, "True.*False.*False")
 		}()
 		patchResourceAsAdmin(oc, patchSResource, patchInfoTrue)
-		waitForNetworkOperatorState(oc, 20, 10, "True.*True.*False")
-		waitForNetworkOperatorState(oc, 20, 20, "True.*False.*False")
+		waitForNetworkOperatorState(oc, 10, 5, "True.*True.*False")
+		waitForNetworkOperatorState(oc, 60, 15, "True.*False.*False")
 
 		exutil.By("2. Create a namespace")
 		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
@@ -737,7 +759,7 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		pod1ns1 := testPodMultinetwork{
 			name:      "blue-pod-1",
 			namespace: ns,
-			nodename:  "worker-1",
+			nodename:  nodeList.Items[0].Name,
 			nadname:   "macvlan-nad1",
 			labelname: "blue-openshift",
 			template:  pingPodTemplate,
@@ -777,6 +799,13 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		patchSResource := "networks.operator.openshift.io/cluster"
 		patchInfoTrue := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":true}}")
 		patchInfoFalse := fmt.Sprintf("{\"spec\":{\"useMultiNetworkPolicy\":false}}")
+
+		exutil.By("Getting the ready-schedulable worker nodes")
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 1 {
+			g.Skip("The cluster has no ready node for the testing")
+		}
 
 		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
 		o.Expect(contxtErr).NotTo(o.HaveOccurred())
@@ -855,8 +884,8 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		exutil.By("9. Disable MultiNetworkpolicy in the cluster")
 		patchResourceAsAdmin(oc, patchSResource, patchInfoFalse)
 		exutil.By("NetworkOperatorStatus should back to normal after disable useMultiNetworkPolicy")
-		waitForNetworkOperatorState(oc, 20, 10, "True.*True.*False")
-		waitForNetworkOperatorState(oc, 20, 20, "True.*False.*False")
+		waitForNetworkOperatorState(oc, 10, 5, "True.*True.*False")
+		waitForNetworkOperatorState(oc, 60, 15, "True.*False.*False")
 
 		exutil.By("10. All curl should pass again after disabling MacvlanNetworkpolicy")
 		curlPod2PodMultiNetworkPass(oc, ns1, "blue-pod-1", pod3ns1IPv4, pod3ns1IPv6)
