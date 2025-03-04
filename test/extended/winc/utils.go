@@ -552,10 +552,46 @@ func configureMachineset(oc *exutil.CLI, iaasPlatform, machineSetName string, fi
 			o.Expect(err).NotTo(o.HaveOccurred(), "Could not fetch region from the existing machineset")
 		}
 		zone := getAvailabilityZone(oc)
+		// Try to get subnet ID from Windows MachineSet first
+		subnetID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(
+			"machinesets", "-n", "openshift-machine-api",
+			"-o=jsonpath={.items[*].spec.template.spec.providerSpec.value.subnet.id}",
+		).Output()
+
+		if err != nil || subnetID == "" {
+			// Fall back to getting subnet ID from the first MachineSet if Windows MachineSet not found
+			subnetID, err = oc.AsAdmin().WithoutNamespace().Run("get").Args(
+				"machinesets", "-n", "openshift-machine-api",
+				"-o=jsonpath={.items[0].spec.template.spec.providerSpec.value.subnet.id}",
+			).Output()
+			if err != nil {
+				e2e.Failf("Failed to get subnet ID: %v", err)
+			}
+		}
+		// Clean up subnet ID by removing whitespace and handling potential duplicates
+		subnetID = strings.TrimSpace(subnetID)
+		if strings.Contains(subnetID, " ") {
+			// If there are multiple subnet IDs, take only the first one
+			subnetID = strings.Fields(subnetID)[0]
+		}
+		if strings.Contains(subnetID, " ") {
+			// If there's a space, take just the first part as the real subnet ID
+			subnetID = strings.Fields(subnetID)[0]
+		}
+		e2e.Logf("Using Windows MachineSet subnet ID: %s", subnetID)
+		e2e.Logf("Using subnet ID: %s", subnetID)
+		// This handles the composite placeholder that combines infrastructureID and zone
+		subnetNamePattern := "<infrastructureID>-subnet-private-<zone>"
+		subnetNameValue := infrastructureID + "-subnet-private-" + zone
+
 		manifestFile, err := exutil.GenerateManifestFile(
-			oc, "winc", fileName, map[string]string{"<name>": machineSetName},
+			oc, "winc", fileName,
+			map[string]string{"<name>": machineSetName},
 			map[string]string{"<infrastructureID>": infrastructureID},
-			map[string]string{"<region>": region}, map[string]string{"<zone>": zone},
+			map[string]string{"<region>": region},
+			map[string]string{"<zone>": zone},
+			map[string]string{subnetNamePattern: subnetNameValue}, // Add specific replacement for subnet pattern
+			map[string]string{"<subnet_id>": subnetID},            // Add subnet ID replacement
 			map[string]string{"<windows_image_with_container_runtime_installed>": imageID},
 		)
 		o.Expect(err).NotTo(o.HaveOccurred())

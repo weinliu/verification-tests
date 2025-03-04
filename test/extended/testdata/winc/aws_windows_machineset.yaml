@@ -58,6 +58,7 @@ spec:
             - name: tag:Name
               values:
               - <infrastructureID>-subnet-private-<zone>
+            id: <subnet_id>
           tags:
             - name: kubernetes.io/cluster/<infrastructureID>
               value: owned
