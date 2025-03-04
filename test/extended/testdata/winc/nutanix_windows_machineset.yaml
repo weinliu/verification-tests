@@ -48,7 +48,7 @@ spec:
           systemDiskSize: 120Gi
           userDataSecret:
             name: windows-user-data
-          vcpuSockets: 4
+          vcpuSockets: 2
           vcpusPerSocket: 1
 
           
