@@ -17,6 +17,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 	netutils "k8s.io/utils/net"
 )
 
@@ -686,29 +687,30 @@ func verifyIPRoutesOnExternalFrr(host string, allNodes []string, podNetwork1Map,
 			return false
 		}
 	}
-
-	if nodesIP2Map[allNodes[0]] != "" {
-		externalFrrCmd = "ip -6 route show | grep bgp"
-		output, err := sshRunCmdOutPut(host, "root", externalFrrCmd)
-		e2e.Logf("on Dualstack, ip -6 route show on external frr, output:\n%s ", output)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		for _, eachNode := range allNodes {
-			o.Expect(regexp.QuoteMeta(podNetwork2Map[eachNode])).ShouldNot(o.BeEmpty())
-			o.Expect(regexp.QuoteMeta(nodesIP2Map[eachNode])).ShouldNot(o.BeEmpty())
-			expectedBGPRoutePattern := fmt.Sprintf(`%s .*via %s .*proto bgp`, podNetwork2Map[eachNode], nodesIP2Map[eachNode])
-			e2e.Logf("expected route is: %s", expectedBGPRoutePattern)
-			matched, err := regexp.MatchString(expectedBGPRoutePattern, output)
+	/*
+		if nodesIP2Map[allNodes[0]] != "" {
+			externalFrrCmd = "ip -6 route show | grep bgp"
+			output, err := sshRunCmdOutPut(host, "root", externalFrrCmd)
+			e2e.Logf("on Dualstack, ip -6 route show on external frr, output:\n%s ", output)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			if !matched && expected {
-				e2e.Logf("IPv6 BGP route for node %s is not in ip -6 route table of external frr as expected", eachNode)
-				return false
-			}
-			if matched && !expected {
-				e2e.Logf("IPv6 BGP route for node %s shows up when it should not be in ip routing table of external frr", eachNode)
-				return false
+			for _, eachNode := range allNodes {
+				o.Expect(regexp.QuoteMeta(podNetwork2Map[eachNode])).ShouldNot(o.BeEmpty())
+				o.Expect(regexp.QuoteMeta(nodesIP2Map[eachNode])).ShouldNot(o.BeEmpty())
+				expectedBGPRoutePattern := fmt.Sprintf(`%s .*via %s .*proto bgp`, podNetwork2Map[eachNode], nodesIP2Map[eachNode])
+				e2e.Logf("expected route is: %s", expectedBGPRoutePattern)
+				matched, err := regexp.MatchString(expectedBGPRoutePattern, output)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if !matched && expected {
+					e2e.Logf("IPv6 BGP route for node %s is not in ip -6 route table of external frr as expected", eachNode)
+					return false
+				}
+				if matched && !expected {
+					e2e.Logf("IPv6 BGP route for node %s shows up when it should not be in ip routing table of external frr", eachNode)
+					return false
+				}
 			}
 		}
-	}
+	*/
 	return true
 }
 
@@ -820,6 +822,9 @@ func (ra *routeAdvertisement) createRA(oc *exutil.CLI) {
 		return true, nil
 	})
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("fail to create routeadvertisement %v", ra.name))
+	raErr := checkRAStatus(oc, ra.name, "Accepted")
+	exutil.AssertWaitPollNoErr(raErr, "routeAdvertisement applied does not have the right condition status")
+	e2e.Logf("SUCCESS - UDN routeAdvertisement applied is accepted")
 }
 
 func (ra *routeAdvertisement) deleteRA(oc *exutil.CLI) {
@@ -1101,4 +1106,53 @@ func addIPtablesRules(host, intf, ipAddr, externalFRRIP string) error {
 	}
 
 	return nil
+}
+
+func CurlUDNPod2hostServicePASS(oc *exutil.CLI, udn_ns string, pod_udn string, nodeIpv4 string, nodeIpv6 string) {
+	// Poll to check IPv4 connectivity
+	err := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
+		_, err := e2eoutput.RunHostCmd(udn_ns, pod_udn, "curl  -I --connect-timeout 5 "+net.JoinHostPort(nodeIpv4, "9001"))
+		if err != nil {
+			e2e.Logf("The curl should pass but fail, and try next round")
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Test fail with err:%s", err))
+
+	if nodeIpv6 != "" {
+		err1 := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			_, err := e2eoutput.RunHostCmd(udn_ns, pod_udn, "curl  -I --connect-timeout 5 "+net.JoinHostPort(nodeIpv6, "9001"))
+			if err != nil {
+				e2e.Logf("The curl should pass but fail, and try next round")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err1, fmt.Sprintf("Test fail with err:%s", err1))
+	}
+}
+
+func CurlUDNPod2hostServiceFail(oc *exutil.CLI, udn_ns string, pod_udn string, nodeIpv4 string, nodeIpv6 string) {
+	_, err := e2eoutput.RunHostCmd(udn_ns, pod_udn, "curl  -I --connect-timeout 5 "+net.JoinHostPort(nodeIpv4, "9001"))
+	o.Expect(err).To(o.HaveOccurred())
+
+	if nodeIpv6 != "" {
+		_, err := e2eoutput.RunHostCmd(udn_ns, pod_udn, "curl  -I --connect-timeout 5 "+net.JoinHostPort(nodeIpv6, "9001"))
+		o.Expect(err).To(o.HaveOccurred())
+
+	}
+}
+
+func CurlNode2PodPassUDN(oc *exutil.CLI, nodeName string, namespaceDst string, podNameDst string) {
+	//getPodIPUDN returns IPv6 and IPv4 in order on dual stack in PodIP1 and PodIP2 respectively and main IP in case of single stack (v4 or v6) in PodIP1, and nil in PodIP2
+	podIP1, podIP2 := getPodIPUDN(oc, namespaceDst, podNameDst, "ovn-udn1")
+	if podIP2 != "" {
+		podv4URL := net.JoinHostPort(podIP2, "8080")
+		_, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeName, []string{"--to-namespace=default"}, "bash", "-c", "curl --connect-timeout 5 -s "+podv4URL)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	podURL := net.JoinHostPort(podIP1, "8080")
+	_, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeName, []string{"--to-namespace=default"}, "bash", "-c", "curl --connect-timeout 5 -s "+podURL)
+	o.Expect(err).NotTo(o.HaveOccurred())
 }

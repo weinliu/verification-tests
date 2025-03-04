@@ -1995,6 +1995,7 @@ func getNodeSubnetDualStack(oc *exutil.CLI, nodeName string, network string) (st
 
 	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.metadata.annotations.k8s\\.ovn\\.org/node-subnets}").Output()
 	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("output is %v", output)
 	var data map[string]interface{}
 	json.Unmarshal([]byte(output), &data)
 	hostSubnets := data[network].([]interface{})

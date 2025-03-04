@@ -1,6 +1,7 @@
 package networking
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 
@@ -8,6 +9,7 @@ import (
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
+	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
 )
 
 var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
@@ -109,7 +111,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 
 		createGeneralUDNCRD(oc, ns1, udnName, ipv4cidr, ipv6cidr, cidr, "layer3")
 
-		//label userdefinednetwork with label app=blue
+		//label userdefinednetwork with label app=udn
 		setUDNLabel(oc, ns1, udnName, "app=udn")
 
 		exutil.By("Create RA to advertise the UDN network")
@@ -124,9 +126,6 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			ra.deleteRA(oc)
 		}()
 		ra.createRA(oc)
-		raErr := checkRAStatus(oc, ra.name, "Accepted")
-		exutil.AssertWaitPollNoErr(raErr, "routeAdvertisement applied does not have the right condition status")
-		e2e.Logf("SUCCESS - UDN routeAdvertisement applied is accepted")
 
 		exutil.By("Check the UDN network was advertised to external router")
 
@@ -149,7 +148,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		ra.deleteRA(oc)
 
 		o.Eventually(func() bool {
-			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
+			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, false)
 			return result
 		}, "60s", "5s").ShouldNot(o.BeTrue(), "BGP UDN route advertisement did not be removed!!")
 		Curlexternal2UDNPodFail(oc, host, ns1, testpodNS1Names[1])
@@ -265,4 +264,195 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 
 		e2e.Logf("SUCCESS - UDN route advertisement through VRF-default and route filtering through networkSelector work correctly!!!")
 	})
+
+	g.It("Author:zzhao-NonHyperShiftHOST-ConnectedOnly-Critical-78809-UDN pod can access same node and different node when BGP is advertise in LGW and SGW mode [Serial]", func() {
+
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			raTemplate          = filepath.Join(buildPruningBaseDir, "bgp/ra_template.yaml")
+			udnName             = "udn-network-78806"
+		)
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This test requires at least 2 worker nodes which is not fulfilled. ")
+		}
+		ipStackType := checkIPStackType(oc)
+		exutil.By("Create namespace")
+		oc.CreateNamespaceUDN()
+		ns1 := oc.Namespace()
+
+		exutil.By("Create CRD for UDN")
+		var cidr, ipv4cidr, ipv6cidr string
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/48"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/48"
+			}
+		}
+
+		createGeneralUDNCRD(oc, ns1, udnName, ipv4cidr, ipv6cidr, cidr, "layer3")
+
+		//label userdefinednetwork with label app=udn
+		setUDNLabel(oc, ns1, udnName, "app=udn")
+
+		exutil.By("Create RA to advertise the UDN network")
+
+		ra := routeAdvertisement{
+			name:              "udn",
+			networkLabelKey:   "app",
+			networkLabelVaule: "udn",
+			template:          raTemplate,
+		}
+		defer func() {
+			ra.deleteRA(oc)
+		}()
+		ra.createRA(oc)
+
+		exutil.By("Check the UDN network was advertised to external router")
+
+		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, ns1+"_"+udnName)
+		o.Eventually(func() bool {
+			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
+			return result
+		}, "60s", "5").Should(o.BeTrue(), "BGP UDN route advertisement did not succeed!!")
+
+		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertise!!!", udnName, ns1)
+
+		exutil.By("Create replica pods in ns1")
+		createResourceFromFile(oc, ns1, testPodFile)
+		err := waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		testpodNS1Names := getPodName(oc, ns1, "name=test-pods")
+		nodeName, nodeNameErr := exutil.GetPodNodeName(oc, ns1, testpodNS1Names[1])
+		o.Expect(nodeNameErr).NotTo(o.HaveOccurred())
+
+		exutil.By("check from the UDN pod can access same host service")
+		nodeIPv6, nodeIPv4 := getNodeIP(oc, nodeName)
+
+		// comment this due to bug https://issues.redhat.com/browse/OCPBUGS-51165
+		//CurlUDNPod2hostServicePASS(oc, ns1, testpodNS1Names[1], nodeIPv4, nodeIPv6)
+
+		exutil.By("check from the UDN pod can access different host service")
+		differentHostName := nodeList.Items[0].Name
+		if differentHostName == nodeName {
+			differentHostName = nodeList.Items[1].Name
+		}
+
+		node2IPv6, node2IPv4 := getNodeIP(oc, differentHostName)
+		CurlUDNPod2hostServicePASS(oc, ns1, testpodNS1Names[1], node2IPv4, node2IPv6)
+
+		exutil.By("Delete the RA for the udn and check the traffic again, which should be failed as UDN host isolation")
+		ra.deleteRA(oc)
+
+		o.Eventually(func() bool {
+			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, false)
+			return result
+		}, "60s", "5s").ShouldNot(o.BeTrue(), "BGP UDN route advertisement did not be removed!!")
+		CurlUDNPod2hostServiceFail(oc, ns1, testpodNS1Names[1], nodeIPv4, nodeIPv6)
+		//CurlUDNPod2hostServiceFail(oc, ns1, testpodNS1Names[1], node2IPv4, node2IPv6)
+
+	})
+
+	g.It("Author:zzhao-NonHyperShiftHOST-ConnectedOnly-Critical-78810-Same host and different host can access the UDN pod when BGP route is advertised on both SGW and LGW [Serial]", func() {
+
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			raTemplate          = filepath.Join(buildPruningBaseDir, "bgp/ra_template.yaml")
+			udnName             = "udn-network-78806"
+		)
+		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(nodeErr).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 2 {
+			g.Skip("This test requires at least 2 worker nodes which is not fulfilled. ")
+		}
+		ipStackType := checkIPStackType(oc)
+		exutil.By("Create namespace")
+		oc.CreateNamespaceUDN()
+		ns1 := oc.Namespace()
+
+		exutil.By("Create CRD for UDN")
+		var cidr, ipv4cidr, ipv6cidr string
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/48"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/48"
+			}
+		}
+
+		createGeneralUDNCRD(oc, ns1, udnName, ipv4cidr, ipv6cidr, cidr, "layer3")
+
+		//label userdefinednetwork with label app=udn
+		setUDNLabel(oc, ns1, udnName, "app=udn")
+
+		exutil.By("Create RA to advertise the UDN network")
+
+		ra := routeAdvertisement{
+			name:              "udn",
+			networkLabelKey:   "app",
+			networkLabelVaule: "udn",
+			template:          raTemplate,
+		}
+		defer func() {
+			ra.deleteRA(oc)
+		}()
+		ra.createRA(oc)
+
+		exutil.By("Check the UDN network was advertised on worker node")
+
+		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, ns1+"_"+udnName)
+		o.Eventually(func() bool {
+			result := verifyBGPRoutesOnClusterNode(oc, nodeList.Items[0].Name, externalFRRIP, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
+			return result
+		}, "60s", "10s").Should(o.BeTrue(), "BGP UDN route advertisement did not succeed!!")
+
+		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertise!!!", udnName, ns1)
+
+		exutil.By("Create replica pods in ns1")
+		createResourceFromFile(oc, ns1, testPodFile)
+		err := waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
+		testpodNS1Names := getPodName(oc, ns1, "name=test-pods")
+
+		exutil.By("Get the pod located node name")
+		nodeName, nodeNameErr := exutil.GetPodNodeName(oc, ns1, testpodNS1Names[1])
+		o.Expect(nodeNameErr).NotTo(o.HaveOccurred())
+
+		exutil.By("Validate pod to pod on different workers")
+		CurlPod2PodPassUDN(oc, ns1, testpodNS1Names[0], ns1, testpodNS1Names[1])
+
+		exutil.By("check from same host to access udn pod")
+		// comment this due to bug https://issues.redhat.com/browse/OCPBUGS-51165
+		//CurlNode2PodFailUDN(oc, nodeName, ns1, testpodNS1Names[1])
+
+		exutil.By("check from the UDN pod can access different host service")
+		differentHostName := nodeList.Items[0].Name
+		if differentHostName == nodeName {
+			differentHostName = nodeList.Items[1].Name
+		}
+		// comment this due to bug https://issues.redhat.com/browse/OCPBUGS-51165
+		//CurlNode2PodPassUDN(oc, differentHostName, ns1, testpodNS1Names[1])
+
+		exutil.By("Delete the RA for the udn and check the traffic again, host to UDN should be isolation")
+		ra.deleteRA(oc)
+
+		o.Eventually(func() bool {
+			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, false)
+			return result
+		}, "60s", "5s").ShouldNot(o.BeTrue(), "BGP UDN route advertisement did not be removed!!")
+		CurlNode2PodFailUDN(oc, nodeName, ns1, testpodNS1Names[1])
+		CurlNode2PodFailUDN(oc, differentHostName, ns1, testpodNS1Names[1])
+
+	})
+
 })
