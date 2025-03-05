@@ -1818,10 +1818,9 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		ns := oc.Namespace()
 		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		if len(nodeList.Items) < 2 {
-			g.Skip("This case requires 2 nodes, but the cluster has less than two nodes")
+		if len(nodeList.Items) < 3 {
+			g.Skip("This case requires 3 nodes, but the cluster has less than three nodes")
 		}
-		masterNode, err := exutil.GetFirstMasterNode(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		//Required for hostnetwork pod
 		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-scc-to-group", "privileged", "system:serviceaccounts:"+ns).Execute()
@@ -1887,8 +1886,8 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		CurlPod2NodePortFail(oc, ns, pods[0].name, nodeList.Items[1].Name, nodePort)
 
 		exutil.By("8. Validate host to nodePort with hostnetwork pod backend on same/diff workers when externalTrafficPolicy=Local")
-		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodePort)
-		CurlNodePortFail(oc, masterNode, nodeList.Items[1].Name, nodePort)
+		CurlNodePortPass(oc, nodeList.Items[2].Name, nodeList.Items[0].Name, nodePort)
+		CurlNodePortFail(oc, nodeList.Items[2].Name, nodeList.Items[1].Name, nodePort)
 
 		exutil.By("9. Validate pod to nodeport with hostnetwork pod backend on diff workers when externalTrafficPolicy=Cluster")
 		exutil.By("9.1 Create nodeport service with externalTrafficPolicy=Cluster in ns1 and ns2")
@@ -1903,8 +1902,8 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		CurlPod2NodePortPass(oc, ns, pods[0].name, nodeList.Items[1].Name, nodePort)
 
 		exutil.By("10. Validate host to nodePort with hostnetwork pod backend on same/diff workers when externalTrafficPolicy=Cluster")
-		CurlNodePortPass(oc, masterNode, nodeList.Items[0].Name, nodePort)
-		CurlNodePortPass(oc, masterNode, nodeList.Items[1].Name, nodePort)
+		CurlNodePortPass(oc, nodeList.Items[2].Name, nodeList.Items[0].Name, nodePort)
+		CurlNodePortPass(oc, nodeList.Items[2].Name, nodeList.Items[1].Name, nodePort)
 	})
 
 })

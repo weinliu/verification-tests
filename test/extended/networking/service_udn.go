@@ -946,15 +946,16 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		svcs := make([]genericServiceResource, 2)
 		for i := 0; i < 2; i++ {
 			exutil.By(fmt.Sprintf("3.%d Create pod and nodeport service with externalTrafficPolicy=Local in %s", i, ns[i]))
-			pods[i] = pingPodResourceNode{
-				name:      "hello-pod" + strconv.Itoa(i),
-				namespace: ns[i],
-				nodename:  nodeList.Items[0].Name,
-				template:  pingPodNodeTemplate,
+			for j := 0; j < 2; j++ {
+				pods[j] = pingPodResourceNode{
+					name:      "hello-pod" + strconv.Itoa(j),
+					namespace: ns[i],
+					nodename:  nodeList.Items[j].Name,
+					template:  pingPodNodeTemplate,
+				}
+				pods[j].createPingPodNode(oc)
+				waitPodReady(oc, ns[i], pods[j].name)
 			}
-			pods[i].createPingPodNode(oc)
-			waitPodReady(oc, ns[i], pods[i].name)
-
 			svcs[i] = genericServiceResource{
 				servicename:           "test-service" + strconv.Itoa(i),
 				namespace:             ns[i],
@@ -976,13 +977,15 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 		for i := 0; i < 2; i++ {
 			exutil.By(fmt.Sprintf("4.1.%d Validate pod to nodeport service with externalTrafficPolicy=Local traffic in %s", i, ns[i]))
 			CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[0].Name, nodeportsLocal[i])
-			CurlPod2NodePortFail(oc, ns[i], pods[i].name, nodeList.Items[1].Name, nodeportsLocal[i])
+			CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[1].Name, nodeportsLocal[i])
+			CurlPod2NodePortFail(oc, ns[i], pods[i].name, nodeList.Items[2].Name, nodeportsLocal[i])
 		}
 		exutil.By("4.2 Validate host to nodeport service with externalTrafficPolicy=Local traffic on default network")
 		CurlNodePortPass(oc, nodeList.Items[2].Name, nodeList.Items[0].Name, nodeportsLocal[0])
-		CurlNodePortFail(oc, nodeList.Items[2].Name, nodeList.Items[1].Name, nodeportsLocal[0])
+		CurlNodePortPass(oc, nodeList.Items[2].Name, nodeList.Items[1].Name, nodeportsLocal[0])
+
 		exutil.By("4.3 Validate UDN pod to default network nodeport service with externalTrafficPolicy=Local traffic")
-		CurlPod2NodePortFail(oc, ns[1], pods[1].name, nodeList.Items[0].Name, nodeportsLocal[0])
+		CurlPod2NodePortPass(oc, ns[1], pods[1].name, nodeList.Items[0].Name, nodeportsLocal[0])
 		CurlPod2NodePortFail(oc, ns[1], pods[1].name, nodeList.Items[1].Name, nodeportsLocal[0])
 
 		exutil.By("5. Create nodeport service with externalTrafficPolicy=Cluster in ns1 and ns2")
@@ -1002,10 +1005,13 @@ var _ = g.Describe("[sig-networking] SDN udn services", func() {
 			exutil.By(fmt.Sprintf("6.1.%d Validate pod to nodeport service with externalTrafficPolicy=Cluster traffic in %s", i, ns[i]))
 			CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[0].Name, nodeportsCluster[i])
 			CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[1].Name, nodeportsCluster[i])
+			CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[2].Name, nodeportsCluster[i])
+
 		}
 		exutil.By("6.2 Validate host to nodeport service with externalTrafficPolicy=Cluster traffic on default network")
 		CurlNodePortPass(oc, nodeList.Items[2].Name, nodeList.Items[0].Name, nodeportsCluster[0])
 		CurlNodePortPass(oc, nodeList.Items[2].Name, nodeList.Items[1].Name, nodeportsCluster[0])
+
 		exutil.By("6.3 Validate UDN pod to default network nodeport service with externalTrafficPolicy=Cluster traffic")
 		CurlPod2NodePortFail(oc, ns[1], pods[1].name, nodeList.Items[0].Name, nodeportsLocal[0])
 		CurlPod2NodePortFail(oc, ns[1], pods[1].name, nodeList.Items[1].Name, nodeportsLocal[0])
