@@ -2,16 +2,15 @@ package oap
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
 	"math/rand"
-	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -202,20 +201,6 @@ func getParentDomain(domain string) (string, error) {
 	}
 	parentDomain := strings.Join(parts[1:], ".")
 	return parentDomain, nil
-}
-
-// Get cluster's DNS Public Zone. Returning "" generally means cluster is private, except azure-stack env
-func getDNSPublicZone(oc *exutil.CLI) string {
-	publicZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns", "cluster", "-n", "openshift-dns", "-o=jsonpath={.spec.publicZone}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return publicZone
-}
-
-// Get AzureCloud name. Returning "" means non-Azure env, "AzurePublicCloud" means public Azure env; "AzureStackCloud" means AzureStack env
-func getAzureCloudName(oc *exutil.CLI) string {
-	azureCloudName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	return azureCloudName
 }
 
 func isDeploymentReady(oc *exutil.CLI, namespace string, deploymentName string) bool {
@@ -530,8 +515,8 @@ func verifyCertificate(oc *exutil.CLI, certName string, namespace string) {
 		tlsCrtBytes, _ := base64.StdEncoding.DecodeString(tlsCrtData)
 		block, _ := pem.Decode(tlsCrtBytes)
 		parsedCert, _ := x509.ParseCertificate(block.Bytes)
-		if parsedCert.Subject.CommonName != commonName {
-			e2e.Failf("Incorrect subject CN: %v found in issued certificate", parsedCert.Subject.CommonName)
+		if parsedCert.Subject.CommonName != commonName && !slices.Contains(parsedCert.DNSNames, commonName) {
+			e2e.Failf("Incorrect subject CN: '%v' and '%v' found in issued certificate", parsedCert.Subject.CommonName, parsedCert.DNSNames)
 		}
 	} else {
 		e2e.Logf("Skip content verification because subject CN isn't specificed.")
@@ -547,51 +532,20 @@ func constructDNSName(base string) string {
 	return dnsName
 }
 
-// Skip case if HTTP and HTTPS route are unreachable.
-func skipIfRouteUnreachable(oc *exutil.CLI) {
-	e2e.Logf("Detect if using a private cluster.")
-	if os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
-		g.Skip("skip private clusters that are behind some proxy")
-	} else if getDNSPublicZone(oc) == "" || getAzureCloudName(oc) == "AzureStackCloud" {
-		g.Skip("skip private clusters that can't be directly accessed from external")
+// isDisconnected returns true if unable to access the public Internet from cluster
+func isDisconnected(oc *exutil.CLI) bool {
+	workNode, err := exutil.GetFirstWorkerNode(oc)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+
+	curlCMD := "curl -I letsencrypt.org --connect-timeout 5"
+	output, err := exutil.DebugNode(oc, workNode, "bash", "-c", curlCMD)
+	if !strings.Contains(output, "HTTP") || err != nil {
+		e2e.Logf("Unable to access the public Internet from the cluster")
+		return true
 	}
 
-	var (
-		httpReachable  bool
-		httpsReachable bool
-	)
-
-	e2e.Logf("Get route host from ingress canary.")
-	host, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("route", "canary", "-n", "openshift-ingress-canary", "--template", `{{range .status.ingress}}{{if eq .routerName "default"}}{{.host}}{{end}}{{end}}`).Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-
-	e2e.Logf("New the client to detect HTTP, HTTPS connection.")
-	httpClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		},
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-	httpResponse, httpErr := httpClient.Get("http://" + host)
-	if httpErr == nil && httpResponse.StatusCode == http.StatusFound { // 302 -> port 80 is opened
-		httpReachable = true
-		defer httpResponse.Body.Close()
-	}
-	httpsResponse, httpsErr := httpClient.Get("https://" + host)
-	if httpsErr == nil {
-		httpsReachable = true
-		defer httpsResponse.Body.Close()
-	}
-
-	if !httpReachable && !httpsReachable {
-		g.Skip("HTTP and HTTPS are both unreachable, skipped.")
-	} else if !httpReachable && httpsReachable {
-		e2e.Failf("HTTPS reachable but HTTP unreachable. Marking case failed to signal router or installer problem. HTTP response error: %s", httpErr)
-	}
+	e2e.Logf("Successfully connected to the public Internet from the cluster")
+	return false
 }
 
 // createFBC creates the dedicated file-based catalog for cert-manager operator to subscribe
@@ -1054,4 +1008,31 @@ func installGoogleCASIssuer(oc *exutil.CLI, ns string) {
 		return false, nil
 	})
 	exutil.AssertWaitPollNoErr(err, "timeout waiting for CAS Issuer controller pod to be up and running")
+}
+
+// setupPebbleServer setups a single pod in-cluster Pebble ACME server in the given namespace
+func setupPebbleServer(oc *exutil.CLI, ns string) string {
+	var (
+		deploymentName = "pebble"
+	)
+
+	// explicitly skip since image 'letsencrypt/pebble' doesn't support ppc64le and s390x arches
+	architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+
+	e2e.Logf("create a deployment and expose service for Pebble")
+	buildPruningBaseDir := exutil.FixturePath("testdata", "oap/certmanager")
+	issuerFile := filepath.Join(buildPruningBaseDir, "deploy-pebble-server.yaml")
+	err := oc.AsAdmin().WithoutNamespace().Run("apply").Args("-n", ns, "-f", issuerFile).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 120*time.Second, false, func(context.Context) (bool, error) {
+		if isDeploymentReady(oc, ns, deploymentName) {
+			return true, nil
+		}
+		return false, nil
+	})
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for Pebble server deployment to become ready")
+
+	endpoint := fmt.Sprintf("https://%s.%s.svc.cluster.local:14000/dir", deploymentName, ns)
+	e2e.Logf("Pebble server setup successfully! (endpoint %s)", endpoint)
+	return endpoint
 }

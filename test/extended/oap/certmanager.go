@@ -30,6 +30,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 	var (
 		oc                  = exutil.NewCLI("cert-manager-acme", exutil.KubeConfigPath())
 		buildPruningBaseDir = exutil.FixturePath("testdata", "oap/certmanager")
+		acmeServerEndpoint  = "https://acme-staging-v02.api.letsencrypt.org/directory"
 	)
 	g.BeforeEach(func() {
 		if !isDeploymentReady(oc, operatorNamespace, operatorDeploymentName) {
@@ -39,17 +40,22 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("Author:geliu-ROSA-OSD_CCS-ConnectedOnly-High-62494-dns01 solver should work well with AWS Route53 using explicit credentials", func() {
+	g.It("Author:geliu-ROSA-OSD_CCS-High-62494-dns01 solver should work well with AWS Route53 using explicit credentials", func() {
 		var (
 			issuerName = "clusterissuer-acme-dns01-route53"
 			certName   = "cert-from-" + issuerName
 		)
 
+		// applicable variants: AWS, non-STS, non-proxy
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		if exutil.IsSTSCluster(oc) {
 			g.Skip("Skip for STS cluster")
 		}
 		exutil.SkipOnProxyCluster(oc)
+		if isDisconnected(oc) {
+			e2e.Logf("setup a private ACME server for testing in disconnected environment")
+			acmeServerEndpoint = setupPebbleServer(oc, oc.Namespace())
+		}
 
 		e2e.Logf("Create secret that contains AWS accessKey for issuer to reference")
 		defer func() {
@@ -87,7 +93,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 			g.Skip("Skipping test case for retreiving Route53 hosted zone ID for current env returns none")
 		}
 		clusterIssuerTemplate := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-dns01-route53.yaml")
-		params := []string{"-f", clusterIssuerTemplate, "-p", "ISSUER_NAME=" + issuerName, "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
+		params := []string{"-f", clusterIssuerTemplate, "-p", "ISSUER_NAME=" + issuerName, "ACME_SERVER=" + acmeServerEndpoint, "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
 		exutil.ApplyClusterResourceFromTemplate(oc, params...)
 		err = waitForResourceReadiness(oc, "", "clusterissuer", issuerName, 10*time.Second, 120*time.Second)
 		if err != nil {
@@ -112,32 +118,35 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("Author:geliu-ROSA-ARO-OSD_CCS-ConnectedOnly-High-62063-http01 solver should work well with default Ingress", func() {
+	g.It("Author:geliu-ROSA-ARO-OSD_CCS-High-62063-http01 solver should work well with default Ingress", func() {
 		var (
 			issuerName = "letsencrypt-http01"
 			certName   = "cert-from-" + issuerName
 		)
 
-		exutil.SkipIfPlatformTypeNot(oc, "AWS")
+		// applicable variants: non-proxy
 		exutil.SkipOnProxyCluster(oc)
-		skipIfRouteUnreachable(oc)
+		if isDisconnected(oc) {
+			e2e.Logf("setup a private ACME server for testing in disconnected environment")
+			acmeServerEndpoint = setupPebbleServer(oc, oc.Namespace())
+		}
 
-		e2e.Logf("Create issuer in ns scope created in last step.")
+		e2e.Logf("create an ACME issuer with http01 solver")
 		issuerHTTP01File := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
-		err := oc.Run("create").Args("-f", issuerHTTP01File).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", issuerName, 10*time.Second, 120*time.Second)
+		params := []string{"-f", issuerHTTP01File, "-p", "ISSUER_NAME=" + issuerName, "ACME_SERVER=" + acmeServerEndpoint}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+		err := waitForResourceReadiness(oc, oc.Namespace(), "issuer", issuerName, 10*time.Second, 120*time.Second)
 		if err != nil {
 			dumpResource(oc, oc.Namespace(), "issuer", issuerName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
 
-		e2e.Logf("As the normal user, create certificate.")
+		exutil.By("create a certificate")
 		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		dnsName := constructDNSName(ingressDomain)
 		certHTTP01File := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
-		params := []string{"-f", certHTTP01File, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName, "DNS_NAME=" + dnsName, "COMMON_NAME=" + dnsName, "SECRET_NAME=" + certName}
+		params = []string{"-f", certHTTP01File, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName, "DNS_NAME=" + dnsName, "COMMON_NAME=" + dnsName, "SECRET_NAME=" + certName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
 		if err != nil {
@@ -150,68 +159,67 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("Author:geliu-ROSA-ARO-OSD_CCS-ConnectedOnly-High-63325-http01 solver should work well with default Ingress using trusted CA in HTTPS proxy env [Serial]", func() {
+	g.It("Author:geliu-ROSA-ARO-OSD_CCS-High-63325-http01 solver should work well with default Ingress using trusted CA in HTTPS proxy env [Serial]", func() {
 		var (
 			issuerName = "letsencrypt-http01"
 			certName   = "cert-from-" + issuerName
 		)
 
-		skipIfRouteUnreachable(oc)
-
+		// applicable variants: proxy
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
 		output0, err0 := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec.trustedCA.name}").Output()
 		if !strings.Contains(output, "httpsProxy") || err != nil || output0 == "" || err0 != nil {
-			g.Skip("Fail to check httpsProxy, ocp-63325 skipped.")
-		} else {
-			defer func() {
-				e2e.Logf("Delete configmap trusted-ca.")
-				err = oc.AsAdmin().Run("delete").Args("-n", operandNamespace, "cm", "trusted-ca").Execute()
-				o.Expect(err).NotTo(o.HaveOccurred())
-			}()
-			e2e.Logf("Create configmap trusted-ca.")
-			_, err := oc.AsAdmin().Run("create").Args("-n", operandNamespace, "configmap", "trusted-ca").Output()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			err = oc.AsAdmin().Run("label").Args("-n", operandNamespace, "cm", "trusted-ca", "config.openshift.io/inject-trusted-cabundle=true").Execute()
-			o.Expect(err).NotTo(o.HaveOccurred())
-			defer func() {
-				e2e.Logf("Patch subscription for recovery.")
-				patchPath1 := "{\"spec\":{\"config\":{\"env\":[]}}}"
-				err0 := oc.AsAdmin().Run("patch").Args("-n", operatorNamespace, "sub", subscriptionName, "--type=merge", "-p", patchPath1).Execute()
-				o.Expect(err0).NotTo(o.HaveOccurred())
-			}()
-			e2e.Logf("patch sub openshift-cert-manager-operator.")
-			patchPath := "{\"spec\":{\"config\":{\"env\":[{\"name\":\"TRUSTED_CA_CONFIGMAP_NAME\",\"value\":\"trusted-ca\"}]}}}"
-			err0 := oc.AsAdmin().Run("patch").Args("-n", operatorNamespace, "sub", subscriptionName, "--type=merge", "-p", patchPath).Execute()
-			o.Expect(err0).NotTo(o.HaveOccurred())
-			waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-				output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", controllerNamespace, "cert-manager", "-o=jsonpath={.spec.template.spec.containers[0].volumeMounts}").Output()
-				output1, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment", "-n", controllerNamespace, "cert-manager", "-o=jsonpath={.spec.template.spec.volumes}").Output()
-				if !strings.Contains(output, "trusted-ca") || err != nil || !strings.Contains(output1, "trusted-ca") || err1 != nil {
-					e2e.Logf("cert-manager deployment is not ready.")
-					return false, nil
-				}
-				e2e.Logf("cert-manager deployment is ready.")
-				return true, nil
-			})
-			exutil.AssertWaitPollNoErr(waitErr, "Waiting for deployment times out.")
+			g.Skip("Skip for non-proxy cluster")
+		}
+		if isDisconnected(oc) {
+			e2e.Logf("setup a private ACME server for testing in disconnected environment")
+			acmeServerEndpoint = setupPebbleServer(oc, oc.Namespace())
 		}
 
-		e2e.Logf("Create issuer in ns scope created in last step.")
-		issuerHTTP01File := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
-		err = oc.Run("create").Args("-f", issuerHTTP01File).Execute()
+		e2e.Logf("Create configmap trusted-ca.")
+		defer func() {
+			e2e.Logf("Delete configmap trusted-ca.")
+			err = oc.AsAdmin().Run("delete").Args("-n", operandNamespace, "cm", "trusted-ca").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		_, err = oc.AsAdmin().Run("create").Args("-n", operandNamespace, "configmap", "trusted-ca").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().Run("label").Args("-n", operandNamespace, "cm", "trusted-ca", "config.openshift.io/inject-trusted-cabundle=true").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("patch the subscription to inject TRUSTED_CA_CONFIGMAP_NAME env")
+		oldPodList, err := exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchPath := `{"spec":{"config":{"env":[{"name":"TRUSTED_CA_CONFIGMAP_NAME","value":"trusted-ca"}]}}}`
+		err = oc.AsAdmin().Run("patch").Args("sub", subscriptionName, "-n", operatorNamespace, "--type=merge", "-p", patchPath).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			e2e.Logf("[defer] Unset subscription env")
+			oldPodList, err = exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			patchPath = `{"spec":{"config":{"env":[]}}}`
+			err = oc.AsAdmin().Run("patch").Args("sub", subscriptionName, "-n", operatorNamespace, "--type=merge", "-p", patchPath).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
+		}()
+		waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
+
+		exutil.By("create an ACME issuer with http01 solver")
+		issuerHTTP01File := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
+		params := []string{"-f", issuerHTTP01File, "-p", "ISSUER_NAME=" + issuerName, "ACME_SERVER=" + acmeServerEndpoint}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 		err = waitForResourceReadiness(oc, oc.Namespace(), "issuer", issuerName, 10*time.Second, 120*time.Second)
 		if err != nil {
 			dumpResource(oc, oc.Namespace(), "issuer", issuerName, "-o=yaml")
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
 
-		e2e.Logf("As the normal user, create certificate.")
+		exutil.By("create a certificate")
 		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		dnsName := constructDNSName(ingressDomain)
 		certHTTP01File := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
-		params := []string{"-f", certHTTP01File, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName, "DNS_NAME=" + dnsName, "COMMON_NAME=" + dnsName, "SECRET_NAME=" + certName}
+		params = []string{"-f", certHTTP01File, "-p", "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName, "DNS_NAME=" + dnsName, "COMMON_NAME=" + dnsName, "SECRET_NAME=" + certName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
 		if err != nil {
@@ -230,6 +238,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 			certName   = "cert-from-" + issuerName
 		)
 
+		// applicable variants: AWS, non-STS, non-proxy, non-disconnected
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		if exutil.IsSTSCluster(oc) {
 			g.Skip("Skip for STS cluster")
@@ -266,8 +275,8 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		if len(hostedZoneID) == 0 {
 			g.Skip("Skipping test case for retreiving Route53 hosted zone ID for current env returns none")
 		}
-		clusterIssuerTemplate := filepath.Join(buildPruningBaseDir, "clusterissuer-overlapped-zone.yaml")
-		params := []string{"-f", clusterIssuerTemplate, "-p", "ISSUER_NAME=" + issuerName, "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
+		clusterIssuerTemplate := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-dns01-route53.yaml")
+		params := []string{"-f", clusterIssuerTemplate, "-p", "ISSUER_NAME=" + issuerName, "ACME_SERVER=" + acmeServerEndpoint, "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
 		exutil.ApplyClusterResourceFromTemplate(oc, params...)
 		defer func() {
 			e2e.Logf("delete the clusterissuer")
@@ -280,31 +289,14 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for clusterissuer to become Ready")
 
-		exutil.By("create certificate which references previous clusterissuer")
-		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		dnsName := constructDNSName(ingressDomain)
-		certTemplate := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
-		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName, "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName, "ISSUER_KIND=" + "ClusterIssuer", "COMMON_NAME=" + dnsName, "SECRET_NAME=" + certName}
-		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
-		statusErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
-			output, err := oc.Run("get").Args("challenge", "-o", "wide").Output()
-			if err != nil || !strings.Contains(output, "returned REFUSED") {
-				return false, nil
-			}
-			e2e.Logf("challenge output return 'REFUSED' as expected. %v ", output)
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(statusErr, "challenge/certificate is wrong.")
-
-		exutil.By("Apply dns args by patch.")
+		exutil.By("Patch controller args with DNS recursive nameservers for conducting self-check")
 		oldPodList, err := exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		patchPath := `{"spec":{"controllerConfig":{"overrideArgs":["--dns01-recursive-nameservers=1.1.1.1:53", "--dns01-recursive-nameservers-only"]}}}`
 		err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
-			e2e.Logf("[defer] Unpatch dns args")
+			e2e.Logf("[defer] Unset controller args")
 			oldPodList, err = exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			patchPath = `{"spec":{"controllerConfig":{"overrideArgs":null}}}`
@@ -314,7 +306,15 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		}()
 		waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
 
-		exutil.By("Check the certificate content AGAIN.")
+		exutil.By("Create a certificate")
+		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		dnsName := constructDNSName(ingressDomain)
+		certTemplate := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName, "CERT_NAME=" + certName, "ISSUER_NAME=" + issuerName, "ISSUER_KIND=" + "ClusterIssuer", "COMMON_NAME=" + dnsName, "SECRET_NAME=" + certName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+
+		exutil.By("Check certificate readiness")
 		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
 		if err != nil {
 			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
@@ -332,15 +332,15 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 			certName   = "cert-from-" + issuerName
 		)
 
+		// applicable variants: AWS, non-STS, proxy, non-disconnected
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		if exutil.IsSTSCluster(oc) {
 			g.Skip("Skip for STS cluster")
 		}
-		exutil.By("Check proxy env.")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(output, "httpsProxy") {
-			g.Skip("Fail to check httpsProxy, ocp-63555 skipped.")
+			g.Skip("Skip for non-proxy cluster")
 		}
 
 		e2e.Logf("Create secret that contains AWS accessKey for issuer to reference")
@@ -373,7 +373,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 			g.Skip("Skipping test case for retreiving Route53 hosted zone ID for current env returns none")
 		}
 		clusterIssuerTemplate := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-dns01-route53.yaml")
-		params := []string{"-f", clusterIssuerTemplate, "-p", "ISSUER_NAME=" + issuerName, "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
+		params := []string{"-f", clusterIssuerTemplate, "-p", "ISSUER_NAME=" + issuerName, "ACME_SERVER=" + acmeServerEndpoint, "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
 		exutil.ApplyClusterResourceFromTemplate(oc, params...)
 		defer func() {
 			e2e.Logf("delete the clusterissuer")
@@ -386,42 +386,14 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for clusterissuer to become Ready")
 
-		exutil.By("Create the certificate.")
-		dnsName := constructDNSName(dnsZone)
-		certTemplate := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
-		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName, "CERT_NAME=" + certName, "ISSUER_KIND=" + "ClusterIssuer", "ISSUER_NAME=" + issuerName, "COMMON_NAME=" + dnsName, "SECRET_NAME=" + certName}
-		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
-
-		exutil.By("Check the certificate and its challenge")
-		waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-			output, err := oc.Run("get").Args("challenge").Output()
-			if !strings.Contains(output, "pending") || err != nil {
-				e2e.Logf("challenge is not become pending.%v", output)
-				return false, nil
-			}
-			e2e.Logf("challenge is become pending status.")
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, "Fail to wait challenge become pending status.")
-		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 600*time.Second, false, func(ctx context.Context) (bool, error) {
-			challenge, err := oc.Run("get").Args("challenge", "-o", "wide").Output()
-			if !strings.Contains(challenge, "i/o timeout") || err != nil {
-				e2e.Logf("challenge has not output as expected.")
-				return false, nil
-			}
-			e2e.Logf("challenge have output as expected.")
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, "Failure: challenge has not output as expected.")
-
-		exutil.By("Apply dns args by patch.")
+		exutil.By("Patch controller args with DNS recursive nameservers for conducting self-check")
 		oldPodList, err := exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		patchPath := `{"spec":{"controllerConfig":{"overrideArgs":["--dns01-recursive-nameservers-only"]}}}`
 		err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
-			e2e.Logf("[defer] Unpatch dns args")
+			e2e.Logf("[defer] Unset controller args")
 			oldPodList, err = exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			patchPath = `{"spec":{"controllerConfig":{"overrideArgs":null}}}`
@@ -431,7 +403,13 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		}()
 		waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
 
-		exutil.By("Checke certificate again.")
+		exutil.By("Create a certificate")
+		dnsName := constructDNSName(dnsZone)
+		certTemplate := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
+		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName, "CERT_NAME=" + certName, "ISSUER_KIND=" + "ClusterIssuer", "ISSUER_NAME=" + issuerName, "COMMON_NAME=" + dnsName, "SECRET_NAME=" + certName}
+		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
+
+		exutil.By("Checke certificate readiness")
 		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
 		if err != nil {
 			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
@@ -451,15 +429,16 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		)
 
 		skipUnsupportedVersion(oc, minSupportedVersion)
+
+		// applicable variants: AWS, non-STS, proxy, non-disconnected
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		if exutil.IsSTSCluster(oc) {
 			g.Skip("Skip for STS cluster")
 		}
-		exutil.By("Check proxy env.")
 		output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o", "jsonpath={.spec}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !strings.Contains(output, "httpsProxy") {
-			g.Skip("Fail to check httpsProxy, ocp-69798 skipped.")
+			g.Skip("Skip for non-proxy cluster")
 		}
 
 		e2e.Logf("Create secret that contains AWS accessKey for issuer to reference")
@@ -492,7 +471,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 			g.Skip("Skipping test case for retreiving Route53 hosted zone ID for current env returns none")
 		}
 		clusterIssuerTemplate := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-dns01-route53.yaml")
-		params := []string{"-f", clusterIssuerTemplate, "-p", "ISSUER_NAME=" + issuerName, "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
+		params := []string{"-f", clusterIssuerTemplate, "-p", "ISSUER_NAME=" + issuerName, "ACME_SERVER=" + acmeServerEndpoint, "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "AWS_ACCESS_KEY_ID=" + accessKeyID, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
 		exutil.ApplyClusterResourceFromTemplate(oc, params...)
 		defer func() {
 			e2e.Logf("delete the clusterissuer")
@@ -505,37 +484,30 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for clusterissuer to become Ready")
 
-		exutil.By("Configure with an invalid server as negative test.")
-		patchPath := "{\"spec\":{\"controllerConfig\":{\"overrideArgs\":[\"--dns01-recursive-nameservers-only\", \"--dns01-recursive-nameservers=https://1.1.1.1/negative-test-dummy-dns-query\"]}}}"
+		exutil.By("Patch controller args with valid server for DNS01 self-check")
+		oldPodList, err := exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		patchPath := `{"spec":{"controllerConfig":{"overrideArgs":["--dns01-recursive-nameservers-only", "--dns01-recursive-nameservers=https://1.1.1.1/dns-query"]}}}`
 		err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.AssertAllPodsToBeReadyWithPollerParams(oc, operandNamespace, 10*time.Second, 120*time.Second)
+		defer func() {
+			e2e.Logf("[defer] Unset controller args")
+			oldPodList, err = exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			patchPath = `{"spec":{"controllerConfig":{"overrideArgs":null}}}`
+			err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
+		}()
+		waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
 
-		exutil.By("Create a new certificate.")
+		exutil.By("Create a certificate")
 		dnsName := constructDNSName(dnsZone)
 		certTemplate := filepath.Join(buildPruningBaseDir, "cert-generic.yaml")
 		params = []string{"-f", certTemplate, "-p", "DNS_NAME=" + dnsName, "CERT_NAME=" + certName, "COMMON_NAME=" + dnsName, "ISSUER_NAME=" + issuerName, "ISSUER_KIND=" + "ClusterIssuer", "SECRET_NAME=" + certName}
 		exutil.ApplyNsResourceFromTemplate(oc, oc.Namespace(), params...)
 
-		exutil.By("Check if challenge will be pending and show HTTP 403 error")
-		statusErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 90*time.Second, false, func(ctx context.Context) (bool, error) {
-			output, err = oc.Run("get").Args("challenge", "-o", "wide").Output()
-			if !strings.Contains(output, "403 Forbidden") || !strings.Contains(output, "pending") || err != nil {
-				e2e.Logf("challenge is still in processing, and status is not as expected: %s\n", output)
-				return false, nil
-			}
-			e2e.Logf("challenge's output is as expected: %s\n", output)
-			return true, nil
-		})
-		exutil.AssertWaitPollNoErr(statusErr, "timed out after 90s waiting challenge to be pending state and show HTTP 403 error")
-
-		exutil.By("Configure with a valid server.")
-		patchPath = "{\"spec\":{\"controllerConfig\":{\"overrideArgs\":[\"--dns01-recursive-nameservers-only\", \"--dns01-recursive-nameservers=https://1.1.1.1/dns-query\"]}}}"
-		err = oc.AsAdmin().Run("patch").Args("certmanager", "cluster", "--type=merge", "-p", patchPath).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.AssertAllPodsToBeReadyWithPollerParams(oc, operandNamespace, 10*time.Second, 120*time.Second)
-
-		exutil.By("Check if certificate will be True.")
+		exutil.By("Checke certificate readiness")
 		err = waitForResourceReadiness(oc, oc.Namespace(), "certificate", certName, 10*time.Second, 300*time.Second)
 		if err != nil {
 			dumpResource(oc, oc.Namespace(), "certificate", certName, "-o=yaml")
@@ -547,24 +519,28 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("Author:geliu-ROSA-ARO-OSD_CCS-ConnectedOnly-Low-63500-multiple solvers mixed with http01 and dns01 should work well", func() {
+	g.It("Author:geliu-ROSA-ARO-OSD_CCS-Low-63500-multiple solvers mixed with http01 and dns01 should work well", func() {
 		var (
 			issuerName = "acme-multiple-solvers"
 		)
 
+		// applicable variants: non-proxy
 		exutil.SkipOnProxyCluster(oc)
+		if isDisconnected(oc) {
+			e2e.Logf("setup a private ACME server for testing in disconnected environment")
+			acmeServerEndpoint = setupPebbleServer(oc, oc.Namespace())
+		}
 
-		exutil.By("Create a clusterissuer which has multiple solvers mixed with http01 and dns01.")
-		clusterIssuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-multiple-solvers.yaml")
+		exutil.By("Create a clusterissuer which has multiple solvers mixed with http01 and dns01")
+		clusterIssuerTemplate := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-multiple-solvers.yaml")
+		params := []string{"-f", clusterIssuerTemplate, "-p", "ISSUER_NAME=" + issuerName, "ACME_SERVER=" + acmeServerEndpoint}
+		exutil.ApplyClusterResourceFromTemplate(oc, params...)
 		defer func() {
 			e2e.Logf("delete the clusterissuer")
 			err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("clusterissuer", issuerName).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}()
-		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", clusterIssuerFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		err = waitForResourceReadiness(oc, "", "clusterissuer", issuerName, 10*time.Second, 120*time.Second)
+		err := waitForResourceReadiness(oc, "", "clusterissuer", issuerName, 10*time.Second, 120*time.Second)
 		if err != nil {
 			dumpResource(oc, "", "clusterissuer", issuerName, "-o=yaml")
 		}
@@ -575,20 +551,18 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		certFile1 := filepath.Join(buildPruningBaseDir, "cert-match-test-1.yaml")
 		err = oc.Run("create").Args("-f", certFile1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-			output, err := oc.Run("get").Args("challenge").Output()
-			if !strings.Contains(output, "pending") || err != nil {
-				e2e.Logf("challenge1 is not become pending.%v", output)
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			output, _ := oc.Run("get").Args("challenge").Output()
+			if !strings.Contains(output, "pending") {
 				return false, nil
 			}
-			e2e.Logf("challenge1 is become pending status.")
+			e2e.Logf("challenge1 has become pending as expected:\n%v", output)
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(waitErr, "Fail to wait challenge1 become pending status.")
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for challenge1 to become pending")
 		challenge1, err := oc.AsAdmin().Run("get").Args("challenge", "-o=jsonpath={.items[*].spec.solver.selector.matchLabels}").Output()
-		if !strings.Contains(challenge1, `"use-http01-solver":"true"`) || err != nil {
-			e2e.Failf("challenge1 has not output as expected.")
-		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(challenge1).To(o.ContainSubstring(`"use-http01-solver":"true"`))
 		err = oc.Run("delete").Args("cert/cert-match-test-1").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -596,45 +570,39 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		certFile2 := filepath.Join(buildPruningBaseDir, "cert-match-test-2.yaml")
 		err = oc.Run("create").Args("-f", certFile2).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-			output, err := oc.Run("get").Args("challenge").Output()
-			if !strings.Contains(output, "pending") || err != nil {
-				e2e.Logf("challenge2 is not become pending.%v", output)
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			output, _ := oc.Run("get").Args("challenge").Output()
+			if !strings.Contains(output, "pending") {
 				return false, nil
 			}
-			e2e.Logf("challenge2 is become pending status.")
+			e2e.Logf("challenge2 has become pending as expected:\n%v", output)
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(waitErr, "Fail to wait challenge2 become pending status.")
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for challenge2 to become pending")
 		challenge2, err := oc.Run("get").Args("challenge", "-o=jsonpath={.items[*].spec.solver.selector.dnsNames}").Output()
-		if !strings.Contains(challenge2, "xxia-test-2.test-example.com") || err != nil {
-			e2e.Failf("challenge2 has not output as expected.")
-		}
-		err = oc.Run("delete").Args("cert/cert-match-test-2").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(challenge2).To(o.ContainSubstring("xxia-test-2.test-example.com"))
 
 		e2e.Logf("Create cert, cert-match-test-3.")
 		certFile3 := filepath.Join(buildPruningBaseDir, "cert-match-test-3.yaml")
 		err = oc.Run("create").Args("-f", certFile3).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-			output, err := oc.Run("get").Args("challenge").Output()
-			if !strings.Contains(output, "pending") || err != nil {
-				e2e.Logf("challenge3 is not become pending.%v", output)
+		err = wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
+			output, _ := oc.Run("get").Args("challenge").Output()
+			if !strings.Contains(output, "pending") {
 				return false, nil
 			}
-			e2e.Logf("challenge3 is become pending status.")
+			e2e.Logf("challenge3 has become pending as expected:\n%v", output)
 			return true, nil
 		})
-		exutil.AssertWaitPollNoErr(waitErr, "Fail to wait challenge3 become pending status.")
+		exutil.AssertWaitPollNoErr(err, "timeout waiting for challenge3 to become pending")
 		challenge3, err := oc.Run("get").Args("challenge", "-o=jsonpath={.items[*].spec.solver.selector.dnsZones}").Output()
-		if !strings.Contains(challenge3, "test-example.com") || err != nil {
-			e2e.Failf("challenge3 has not output as expected.")
-		}
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(challenge3).To(o.ContainSubstring("test-example.com"))
 	})
 
 	// author: yuewu@redhat.com
-	g.It("Author:yuewu-ROSA-ConnectedOnly-High-62500-dns01 solver should work well with AWS Route53 in STS env using IRSA as ambient credentials [Serial]", func() {
+	g.It("Author:yuewu-ROSA-High-62500-dns01 solver should work well with AWS Route53 in STS env using IRSA as ambient credentials [Serial]", func() {
 		var (
 			randomSuffix = getRandomString(4)
 			roleName     = "test-private-62500-sts-" + randomSuffix
@@ -643,11 +611,16 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 			certName     = "cert-from-" + issuerName + "-webhook"
 		)
 
+		// applicable variants: AWS, STS, non-proxy
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		if !exutil.IsSTSCluster(oc) {
 			g.Skip("Skip for non-STS cluster")
 		}
 		exutil.SkipOnProxyCluster(oc)
+		if isDisconnected(oc) {
+			e2e.Logf("setup a private ACME server for testing in disconnected environment")
+			acmeServerEndpoint = setupPebbleServer(oc, oc.Namespace())
+		}
 
 		exutil.By("prepare the AWS config, STS and IAM client")
 		// AWS config
@@ -787,8 +760,8 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		if len(hostedZoneID) == 0 {
 			g.Skip("skipping as retreiving Route53 hosted zone ID for current env returns none")
 		}
-		issuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-route53-ambient-credential.yaml")
-		params := []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
+		issuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-dns01-route53-ambient.yaml")
+		params := []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "ACME_SERVER=" + acmeServerEndpoint, "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
 		exutil.ApplyClusterResourceFromTemplate(oc, params...)
 		defer func() {
 			e2e.Logf("delete the clusterissuer")
@@ -816,7 +789,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("Author:yuewu-ROSA-ConnectedOnly-Low-65132-dns01 solver should work well with AWS Route53 in STS env using patched secret as ambient credentials when pod-identity-webhook is not used [Serial]", func() {
+	g.It("Author:yuewu-ROSA-Low-65132-dns01 solver should work well with AWS Route53 in STS env using patched secret as ambient credentials when pod-identity-webhook is not used [Serial]", func() {
 		var (
 			randomSuffix  = getRandomString(4)
 			roleName      = "test-private-65132-sts-" + randomSuffix
@@ -826,11 +799,16 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 			stsSecretName = "aws-sts-creds"
 		)
 
+		// applicable variants: AWS, STS, non-proxy
 		exutil.SkipIfPlatformTypeNot(oc, "AWS")
 		if !exutil.IsSTSCluster(oc) {
 			g.Skip("Skip for non-STS cluster")
 		}
 		exutil.SkipOnProxyCluster(oc)
+		if isDisconnected(oc) {
+			e2e.Logf("setup a private ACME server for testing in disconnected environment")
+			acmeServerEndpoint = setupPebbleServer(oc, oc.Namespace())
+		}
 
 		exutil.By("prepare the AWS config, STS and IAM client")
 		// AWS config
@@ -958,7 +936,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		err = oc.AsAdmin().Run("patch").Args("sub", subscriptionName, "-n", operatorNamespace, "--type=merge", "-p", patchPath).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
-			e2e.Logf("un-patch the subscription")
+			e2e.Logf("[defer] Unset subscription env")
 			oldPodList, err = exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			patchPath = `{"spec":{"config":{"env":[]}}}`
@@ -976,8 +954,8 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		if len(hostedZoneID) == 0 {
 			g.Skip("skipping as retreiving Route53 hosted zone ID for current env returns none")
 		}
-		issuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-route53-ambient-credential.yaml")
-		params := []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
+		issuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-dns01-route53-ambient.yaml")
+		params := []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "ACME_SERVER=" + acmeServerEndpoint, "DNS_ZONE=" + dnsZone, "AWS_REGION=" + region, "ROUTE53_HOSTED_ZONE_ID=" + hostedZoneID}
 		exutil.ApplyClusterResourceFromTemplate(oc, params...)
 		defer func() {
 			e2e.Logf("delete the clusterissuer")
@@ -1007,7 +985,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("Author:yuewu-ConnectedOnly-High-62946-dns01 solver should work well with GCP CloudDNS in STS env using workload identity as ambient credentials [Serial]", func() {
+	g.It("Author:yuewu-High-62946-dns01 solver should work well with GCP CloudDNS in STS env using workload identity as ambient credentials [Serial]", func() {
 		var (
 			serviceAccountPrefix = "test-private-62946-dns01-"
 			issuerName           = "clusterissuer-acme-dns01-clouddns-ambient"
@@ -1015,11 +993,16 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 			stsSecretName        = "gcp-sts-creds"
 		)
 
+		// applicable variants: GCP, STS, non-proxy
 		exutil.SkipIfPlatformTypeNot(oc, "GCP")
 		if !exutil.IsSTSCluster(oc) {
 			g.Skip("Skip for non-STS cluster")
 		}
 		exutil.SkipOnProxyCluster(oc)
+		if isDisconnected(oc) {
+			e2e.Logf("setup a private ACME server for testing in disconnected environment")
+			acmeServerEndpoint = setupPebbleServer(oc, oc.Namespace())
+		}
 
 		exutil.By("create the GCP IAM and CloudResourceManager client")
 		// Note that in Prow CI, the credentials source is automatically pre-configured to by the step 'openshift-extended-test'
@@ -1119,7 +1102,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		err = oc.AsAdmin().Run("patch").Args("sub", subscriptionName, "-n", operatorNamespace, "--type=merge", "-p", patchPath).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer func() {
-			e2e.Logf("un-patch the subscription")
+			e2e.Logf("[defer] Unset subscription env")
 			oldPodList, err = exutil.GetAllPodsWithLabel(oc, controllerNamespace, controllerLabel)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			patchPath = `{"spec":{"config":{"env":[]}}}`
@@ -1130,8 +1113,8 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		waitForPodsToBeRedeployed(oc, controllerNamespace, controllerLabel, oldPodList, 10*time.Second, 120*time.Second)
 
 		exutil.By("create a clusterissuer with Google Clould DNS as dns01 solver")
-		issuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-clouddns-ambient-credential.yaml")
-		params := []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "PROJECT_ID=" + projectID}
+		issuerFile := filepath.Join(buildPruningBaseDir, "clusterissuer-acme-dns01-clouddns-ambient.yaml")
+		params := []string{"-f", issuerFile, "-p", "ISSUER_NAME=" + issuerName, "ACME_SERVER=" + acmeServerEndpoint, "PROJECT_ID=" + projectID}
 		exutil.ApplyClusterResourceFromTemplate(oc, params...)
 		defer func() {
 			e2e.Logf("delete the clusterissuer")
@@ -1827,13 +1810,11 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("Author:yuewu-NonPreRelease-PreChkUpgrade-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-65134-needs prepare test data before OCP upgrade", func() {
+	g.It("Author:yuewu-NonPreRelease-PreChkUpgrade-ROSA-ARO-OSD_CCS-Medium-65134-needs prepare test data before OCP upgrade", func() {
 		var (
 			acmeIssuerName  = "letsencrypt-http01"
 			sharedNamespace = "ocp-65134-shared-ns"
 		)
-
-		exutil.SkipOnProxyCluster(oc)
 
 		exutil.By("create a shared testing namespace")
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", sharedNamespace).Execute()
@@ -1843,10 +1824,13 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 		createIssuer(oc, sharedNamespace)
 		createCertificate(oc, sharedNamespace)
 
+		e2e.Logf("setup a private ACME server for testing")
+		acmeServerEndpoint := setupPebbleServer(oc, oc.Namespace())
+
 		exutil.By("create an ACME http01 issuer")
 		acmeIssuerFile := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", sharedNamespace, "-f", acmeIssuerFile).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		params := []string{"-f", acmeIssuerFile, "-p", "ISSUER_NAME=" + acmeIssuerName, "ACME_SERVER=" + acmeServerEndpoint}
+		exutil.ApplyNsResourceFromTemplate(oc, sharedNamespace, params...)
 
 		exutil.By("wait for the ACME http01 issuer to become Ready")
 		err = waitForResourceReadiness(oc, sharedNamespace, "issuer", acmeIssuerName, 10*time.Second, 120*time.Second)
@@ -1857,8 +1841,8 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 	})
 
 	// author: yuewu@redhat.com
-	g.It("Author:yuewu-NonPreRelease-PstChkUpgrade-ROSA-ARO-OSD_CCS-ConnectedOnly-Medium-65134-functions should work normally after OCP upgrade", func() {
-		const (
+	g.It("Author:yuewu-NonPreRelease-PstChkUpgrade-ROSA-ARO-OSD_CCS-Medium-65134-functions should work normally after OCP upgrade", func() {
+		var (
 			selfsignedIssuerName = "default-selfsigned"
 			selfsignedCertName   = "default-selfsigned-cert"
 			acmeIssuerName       = "letsencrypt-http01"
@@ -1895,9 +1879,6 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 			o.Expect(output).To(o.ContainSubstring("True"))
 		}
-
-		exutil.By("check if the http01 solver is applicable in current env")
-		skipIfRouteUnreachable(oc)
 
 		exutil.By("create a new certificate using the ACME http01 issuer")
 		ingressDomain, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ingress.config", "cluster", "-o=jsonpath={.spec.domain}").Output()

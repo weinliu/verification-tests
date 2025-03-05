@@ -1,14 +1,22 @@
-apiVersion: cert-manager.io/v1
-kind: Issuer
+apiVersion: template.openshift.io/v1
+kind: Template
 metadata:
-  name: letsencrypt-http01
-spec:
-  acme:
-    server: https://acme-staging-v02.api.letsencrypt.org/directory
-    privateKeySecretRef:
-      name: letsencrypt-http01-account-key
-    solvers:
-    - http01:
-        ingress:
-          # "ingressClassName" was added in v1.12.0. Poior to it, use "class" instead. (See OCPBUGS-31533)
-          ingressClassName: openshift-default
+  name: issuer-acme-http01-template
+objects:
+  - apiVersion: cert-manager.io/v1
+    kind: Issuer
+    metadata:
+      name: "${ISSUER_NAME}"
+    spec:
+      acme:
+        server: "${ACME_SERVER}"
+        skipTLSVerify: true
+        privateKeySecretRef:
+          name: acme-account-key
+        solvers:
+        - http01:
+            ingress:
+              ingressClassName: openshift-default
+parameters:
+  - name: ISSUER_NAME
+  - name: ACME_SERVER

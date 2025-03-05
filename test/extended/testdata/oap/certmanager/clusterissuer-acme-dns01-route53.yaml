@@ -1,7 +1,7 @@
 apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
-  name: letsencrypt-dns01-template
+  name: clusterissuer-acme-dns01-route53-template
 objects:
   - apiVersion: cert-manager.io/v1
     kind: ClusterIssuer
@@ -9,10 +9,10 @@ objects:
       name: "${ISSUER_NAME}"
     spec:
       acme:
-        preferredChain: ""
+        server: "${ACME_SERVER}"
+        skipTLSVerify: true
         privateKeySecretRef:
-          name: example-issuer-account-key
-        server: https://acme-staging-v02.api.letsencrypt.org/directory
+          name: acme-account-key
         solvers:
         - selector:
             dnsZones:
@@ -27,6 +27,7 @@ objects:
                 key: secret-access-key
 parameters:
   - name: ISSUER_NAME
+  - name: ACME_SERVER
   - name: DNS_ZONE
   - name: AWS_REGION
   - name: AWS_ACCESS_KEY_ID
