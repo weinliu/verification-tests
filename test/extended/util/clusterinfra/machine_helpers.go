@@ -252,6 +252,10 @@ func WaitForMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetName st
 					e2e.Logf("%v", output)
 					return false, fmt.Errorf("InsufficientInstanceCapacity")
 				}
+				if strings.Contains(output, "InsufficientResources") {
+					e2e.Logf("%v", output)
+					return false, fmt.Errorf("InsufficientResources")
+				}
 			}
 			e2e.Logf("Expected %v  machine are not Running yet and waiting up to 1 minutes ...", machineNumber)
 			return false, nil
@@ -262,6 +266,9 @@ func WaitForMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetName st
 	if pollErr != nil {
 		if pollErr.Error() == "InsufficientInstanceCapacity" {
 			g.Skip("InsufficientInstanceCapacity, skip this test")
+		}
+		if pollErr.Error() == "InsufficientResources" {
+			g.Skip("InsufficientResources, skip this test")
 		}
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=yaml").Output()
 		e2e.Logf("%v", output)
