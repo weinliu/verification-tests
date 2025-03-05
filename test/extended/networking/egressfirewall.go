@@ -382,7 +382,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-NonHyperShiftHOST-ConnectedOnly-High-59709-[FdpOvnOvs] No duplicate egressfirewall rules in the OVN Northbound database after restart OVN master pod. [Disruptive]", func() {
+	g.It("Author:huirwang-NonHyperShiftHOST-ConnectedOnly-High-59709-[FdpOvnOvs] [NETWORKCUSIM] No duplicate egressfirewall rules in the OVN Northbound database after restart OVN master pod. [Disruptive]", func() {
 		//This is from bug https://issues.redhat.com/browse/OCPBUGS-811
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
@@ -399,7 +399,11 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 			template:  egressFWTemplate1,
 		}
 		egressFW.createEgressFWObject1(oc)
-		defer egressFW.deleteEgressFWObject1(oc)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				egressFW.deleteEgressFWObject1(oc)
+			}
+		}()
 		efErr := waitEgressFirewallApplied(oc, egressFW.name, ns1)
 		o.Expect(efErr).NotTo(o.HaveOccurred())
 
@@ -583,8 +587,8 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		node1 := nodeList.Items[0].Name
 		node2 := nodeList.Items[1].Name
-		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, node1, "ef-dep")
-		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, node1, "ef-dep", "qe")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, node1, "ef-dep-60488-")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, node1, "ef-dep-60488", "qe")
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
@@ -1386,7 +1390,7 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("ConnectedOnly-Author:huirwang-High-65173-Misconfigured Egress Firewall can be corrected.", func() {
+	g.It("Author:huirwang-ConnectedOnly-High-65173-[NETWORKCUSIM] Misconfigured Egress Firewall can be corrected.", func() {
 		//This is from customer bug https://issues.redhat.com/browse/OCPBUGS-15182
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
@@ -1843,8 +1847,8 @@ spec:
 		}, "10s", "5s").Should(o.HaveOccurred())
 
 		exutil.By("Label the master node which would match the egressfirewall.")
-		defer exutil.DeleteLabelFromNode(oc, master1, "ef-dep")
-		exutil.AddLabelToNode(oc, master1, "ef-dep", "qe")
+		defer exutil.DeleteLabelFromNode(oc, master1, "ef-dep-74657-")
+		exutil.AddLabelToNode(oc, master1, "ef-dep-74657", "qe")
 
 		exutil.By("Verify the master node can be accessed from both pods")
 		_, err = e2eoutput.RunHostCmdWithRetries(pod1ns2.namespace, pod1ns2.name, "ping -c 2 "+master1IP2, 5*time.Second, 20*time.Second)
@@ -2335,4 +2339,5 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall-techpreview", func() {
 		o.Expect(strings.Contains(output, "dnsName: www.facebook.com")).NotTo(o.BeTrue())
 		o.Expect(strings.Contains(output, "dnsName: registry-1.docker.io")).To(o.BeTrue())
 	})
+
 })

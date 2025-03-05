@@ -3,6 +3,7 @@ package networking
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -63,7 +64,7 @@ var _ = g.Describe("[sig-networking] SDN multus", func() {
 	*/
 
 	// author: weliang@redhat.com
-	g.It("NonHyperShiftHOST-Author:weliang-High-57589-Whereabouts CNI timesout while iterating exclude range", func() {
+	g.It("Author:weliang-NonHyperShiftHOST-High-57589-[NETWORKCUSIM] Whereabouts CNI timesout while iterating exclude range", func() {
 		//https://issues.redhat.com/browse/OCPBUGS-2948 : Whereabouts CNI timesout while iterating exclude range
 
 		var (
@@ -82,7 +83,11 @@ var _ = g.Describe("[sig-networking] SDN multus", func() {
 		}
 
 		g.By("Create a custom resource network-attach-defintion in tested namespace")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", netAttachDefFile1, "-n", ns1).Execute()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", netAttachDefFile1, "-n", ns1).Execute()
+			}
+		}()
 		netAttachDefErr := oc.AsAdmin().Run("create").Args("-f", netAttachDefFile1, "-n", ns1).Execute()
 		o.Expect(netAttachDefErr).NotTo(o.HaveOccurred())
 		netAttachDefOutput, netAttachDefOutputErr := oc.Run("get").Args("net-attach-def", "-n", ns1).Output()
@@ -108,7 +113,7 @@ var _ = g.Describe("[sig-networking] SDN multus", func() {
 	})
 
 	// author: weliang@redhat.com
-	g.It("NonHyperShiftHOST-Author:weliang-High-59875-Configure ignored namespaces into multus-admission-controller", func() {
+	g.It("Author:weliang-NonHyperShiftHOST-High-59875-[NETWORKCUSIM] Configure ignored namespaces into multus-admission-controller", func() {
 		//https://issues.redhat.com/browse/OCPBUGS-6499:Configure ignored namespaces into multus-admission-controller
 
 		ns1 := "openshift-multus"
@@ -173,7 +178,7 @@ var _ = g.Describe("[sig-networking] SDN multus", func() {
 	})
 
 	// author: weliang@redhat.com
-	g.It("NonHyperShiftHOST-Author:weliang-Medium-64958-Unable to set default-route when istio sidecar is injected. [Serial]", func() {
+	g.It("Author:weliang-NonHyperShiftHOST-Medium-64958-[NETWORKCUSIM] Unable to set default-route when istio sidecar is injected. [Serial]", func() {
 		//https://issues.redhat.com/browse/OCPBUGS-7844
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
@@ -183,11 +188,19 @@ var _ = g.Describe("[sig-networking] SDN multus", func() {
 
 		exutil.By("Create a new namespace")
 		ns1 := "test-64958"
-		defer oc.DeleteSpecifiedNamespaceAsAdmin(ns1)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				oc.DeleteSpecifiedNamespaceAsAdmin(ns1)
+			}
+		}()
 		oc.CreateSpecifiedNamespaceAsAdmin(ns1)
 
 		exutil.By("Create a custom resource network-attach-defintion in the namespace")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", netAttachDefFile, "-n", ns1).Execute()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", netAttachDefFile, "-n", ns1).Execute()
+			}
+		}()
 		netAttachDefErr := oc.AsAdmin().Run("create").Args("-f", netAttachDefFile, "-n", ns1).Execute()
 		o.Expect(netAttachDefErr).NotTo(o.HaveOccurred())
 		netAttachDefOutput, netAttachDefOutputErr := oc.AsAdmin().Run("get").Args("net-attach-def", "-n", ns1).Output()
@@ -695,7 +708,7 @@ var _ = g.Describe("[sig-networking] SDN multus", func() {
 		o.Expect(strings.HasPrefix(pod3Net1IPv4, ipaddress1)).Should(o.BeTrue())
 	})
 
-	g.It("Author:weliang-NonPreRelease-Longduration-Medium-74933-whereabouts ips are not reconciled when the node is rebooted forcely. [Disruptive]", func() {
+	g.It("Author:weliang-NonPreRelease-Longduration-Medium-74933-[NETWORKCUSIM] whereabouts ips are not reconciled when the node is rebooted forcely. [Disruptive]", func() {
 		//https://issues.redhat.com/browse/OCPBUGS-35923: whereabouts ips are not reconciled when the node is rebooted forcely
 		var (
 			buildPruningBaseDir  = exutil.FixturePath("testdata", "networking")
@@ -714,7 +727,11 @@ var _ = g.Describe("[sig-networking] SDN multus", func() {
 
 		exutil.By("Getting the name of namespace")
 		ns := oc.Namespace()
-		defer exutil.RecoverNamespaceRestricted(oc, ns)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				exutil.RecoverNamespaceRestricted(oc, ns)
+			}
+		}()
 		exutil.SetNamespacePrivileged(oc, ns)
 
 		exutil.By("Deleting the network_names/ippools/overlapping created from this testing")
@@ -722,13 +739,33 @@ var _ = g.Describe("[sig-networking] SDN multus", func() {
 		ippool2 := "fd00-dead-beef-10---64"
 		overlapping1 := "192.168.20.1"
 		overlapping2 := "fd00-dead-beef-10--1"
-		defer removeResource(oc, true, true, "overlappingrangeipreservations.whereabouts.cni.cncf.io", overlapping1, "-n", "openshift-multus")
-		defer removeResource(oc, true, true, "overlappingrangeipreservations.whereabouts.cni.cncf.io", overlapping2, "-n", "openshift-multus")
-		defer removeResource(oc, true, true, "ippools.whereabouts.cni.cncf.io", ippool1, "-n", "openshift-multus")
-		defer removeResource(oc, true, true, "ippools.whereabouts.cni.cncf.io", ippool2, "-n", "openshift-multus")
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				removeResource(oc, true, true, "overlappingrangeipreservations.whereabouts.cni.cncf.io", overlapping1, "-n", "openshift-multus")
+			}
+		}()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				removeResource(oc, true, true, "overlappingrangeipreservations.whereabouts.cni.cncf.io", overlapping2, "-n", "openshift-multus")
+			}
+		}()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				removeResource(oc, true, true, "ippools.whereabouts.cni.cncf.io", ippool1, "-n", "openshift-multus")
+			}
+		}()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				removeResource(oc, true, true, "ippools.whereabouts.cni.cncf.io", ippool2, "-n", "openshift-multus")
+			}
+		}()
 
 		exutil.By("Creating a network-attach-defintion")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("net-attach-def", nad1Name, "-n", ns).Execute()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("net-attach-def", nad1Name, "-n", ns).Execute()
+			}
+		}()
 		nadns := dualstackNAD{
 			nadname:        nad1Name,
 			namespace:      ns,
@@ -764,7 +801,11 @@ var _ = g.Describe("[sig-networking] SDN multus", func() {
 			replicas:   replicasnum,
 			template:   multusPodTemplate,
 		}
-		defer removeResource(oc, true, true, "pod", nad1pod.name, "-n", ns)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				removeResource(oc, true, true, "pod", nad1pod.name, "-n", ns)
+			}
+		}()
 		nad1pod.createTestMultusPod(oc)
 		o.Expect(waitForPodWithLabelReady(oc, ns, "name="+nad1pod.podlabel)).NotTo(o.HaveOccurred())
 

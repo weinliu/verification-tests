@@ -21,7 +21,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 	})
 
 	// author: weliang@redhat.com
-	g.It("NonHyperShiftHOST-Author:weliang-High-55193-Dual stack cluster fails on installation when multi-path routing entries exist. [Disruptive]", func() {
+	g.It("Author:weliang-NonHyperShiftHOST-High-55193-[NETWORKCUSIM] Dual stack cluster fails on installation when multi-path routing entries exist. [Disruptive]", func() {
 		// Customer bug https://issues.redhat.com/browse/OCPBUGS-1318
 		ipStackType := checkIPStackType(oc)
 		g.By("Skip testing on ipv4 or ipv6 single stack cluster")

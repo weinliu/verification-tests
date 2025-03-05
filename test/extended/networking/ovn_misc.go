@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -53,7 +54,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 	})
 
 	// author: anusaxen@redhat.com
-	g.It("Author:anusaxen-NonHyperShiftHOST-NonPreRelease-High-55144-[FdpOvnOvs] Switching OVN gateway modes should not delete custom routes created on node logical routers.[Disruptive] ", func() {
+	g.It("Author:anusaxen-NonHyperShiftHOST-NonPreRelease-High-55144-[FdpOvnOvs] [NETWORKCUSIM] Switching OVN gateway modes should not delete custom routes created on node logical routers.[Disruptive] ", func() {
 		exutil.By("it's for bug 2042516")
 		var desiredMode string
 
@@ -82,8 +83,11 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		defer exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKNodePod, lrRouteListDelCmd)
 		_, lrlErr1 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKNodePod, lrRouteListAddCmd)
 		o.Expect(lrlErr1).NotTo(o.HaveOccurred())
-
-		defer switchOVNGatewayMode(oc, origMode)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				switchOVNGatewayMode(oc, origMode)
+			}
+		}()
 		switchOVNGatewayMode(oc, desiredMode)
 		exutil.By("List the logical route on a node after gateway mode switch")
 		lrRouteListCmd := "ovn-nbctl lr-route-list " + nodeLogicalRouterName
@@ -111,13 +115,12 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		o.Expect(lRlOutput).To(o.ContainSubstring("192.168.122.4"))
 
 		exutil.By("Delete the logical route on a node after gateway mode revert")
-		//lrRouteListDelCmd = "ovn-nbctl lr-route-del " + nodeLogicalRouterName + " 192.168.122.0/24 192.168.122.4"
 		_, lrlErr4 := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKNodePod, lrRouteListDelCmd)
 		o.Expect(lrlErr4).NotTo(o.HaveOccurred())
 	})
 
 	// author: jechen@redhat.com
-	g.It("NonHyperShiftHOST-Author:jechen-Medium-61312-Unsupported scenarios in expanding cluster networks should be denied. [Disruptive]", func() {
+	g.It("Author:jechen-NonHyperShiftHOST-Medium-61312-[NETWORKCUSIM] Unsupported scenarios in expanding cluster networks should be denied. [Disruptive]", func() {
 
 		ipStackType := checkIPStackType(oc)
 		if ipStackType != "ipv4single" {
@@ -136,6 +139,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 
 		// patch command will be executed even though invalid config is supplied, so still call patchResourceAsAdmin function
 		restorePatchValue := "{\"spec\":{\"clusterNetwork\":[{\"cidr\":\"" + origNetworkCIDR + "\", \"hostPrefix\":" + orighostPrefix + "}],\"networkType\":\"OVNKubernetes\"}}"
+
 		defer patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", restorePatchValue)
 		patchValue := "{\"spec\":{\"clusterNetwork\":[{\"cidr\":\"" + newCIDR + "\", \"hostPrefix\":" + orighostPrefix + "}],\"networkType\":\"OVNKubernetes\"}}"
 		patchResourceAsAdmin(oc, "Network.config.openshift.io/cluster", patchValue)
@@ -365,7 +369,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 	})
 	// author: asood@redhat.com
 	// https://issues.redhat.com/browse/OCPBUGS-4825
-	g.It("Author:asood-Medium-66047-[FdpOvnOvs] Verify allocated IP address of the pod on a specific node with completed status when delete is released in OVN DB", func() {
+	g.It("Author:asood-Medium-66047-[FdpOvnOvs] [NETWORKCUSIM] Verify allocated IP address of the pod on a specific node with completed status when delete is released in OVN DB", func() {
 		var (
 			buildPruningBaseDir      = exutil.FixturePath("testdata", "networking")
 			completedPodNodeTemplate = filepath.Join(buildPruningBaseDir, "completed-pod-specific-node-template.yaml")
@@ -1044,7 +1048,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		CurlPod2PodPass(oc, podOnNewNode.namespace, podOnNewNode.name, podOnOldNode.namespace, podOnOldNode.name)
 	})
 
-	g.It("Author:qiowang-Medium-68920-kubernetes service route is recoverable if it's cleared [Disruptive]", func() {
+	g.It("Author:qiowang-Medium-68920-[NETWORKCUSIM] kubernetes service route is recoverable if it's cleared [Disruptive]", func() {
 		e2e.Logf("It is for OCPBUGS-1715")
 		nodeName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/worker,kubernetes.io/os=linux", "-o", "jsonpath={.items[0].metadata.name}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1271,7 +1275,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-ConnectedOnly-High-74589-Pod-to-external TCP connectivity using port in range of snat port.", func() {
+	g.It("Author:jechen-ConnectedOnly-High-74589-[NETWORKCUSIM] Pod-to-external TCP connectivity using port in range of snat port.", func() {
 
 		// For customer bug https://issues.redhat.com/browse/OCPBUGS-32202
 
@@ -1322,7 +1326,11 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 		} else {
 			svc.ipFamilyPolicy = "SingleStack"
 		}
-		defer removeResource(oc, true, true, "service", svc.servicename, "-n", svc.namespace)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				removeResource(oc, true, true, "service", svc.servicename, "-n", svc.namespace)
+			}
+		}()
 		svc.createServiceFromParams(oc)
 		exutil.By("4. Get NodePort at which service listens.")
 		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
@@ -1360,7 +1368,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-High-75613-Should be able to access applications when client ephemeral port is 22623 or 22624", func() {
+	g.It("Author:huirwang-High-75613-[NETWORKCUSIM] Should be able to access applications when client ephemeral port is 22623 or 22624", func() {
 		// https://issues.redhat.com/browse/OCPBUGS-37541
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
@@ -1403,7 +1411,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("Author:huirwang-High-75758-Bad certificate should not cause ovn pods crash. [Disruptive]", func() {
+	g.It("Author:huirwang-High-75758-[NETWORKCUSIM] Bad certificate should not cause ovn pods crash. [Disruptive]", func() {
 		// https://issues.redhat.com/browse/OCPBUGS-36195
 
 		exutil.By("Get one worker node.")
@@ -1435,7 +1443,7 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 	})
 
 	// author: meinli@redhat.com
-	g.It("Author:meinli-Medium-45146-Pod should be healthy when gw IP is single stack on dual stack cluster", func() {
+	g.It("Author:meinli-Medium-45146-[NETWORKCUSIM] Pod should be healthy when gw IP is single stack on dual stack cluster", func() {
 		// https://bugzilla.redhat.com/show_bug.cgi?id=1986708
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
@@ -1454,7 +1462,11 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 			namespace: ns,
 			template:  pingPodTemplate,
 		}
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod.name, "-n", pod.namespace).Execute()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod.name, "-n", pod.namespace).Execute()
+			}
+		}()
 		pod.createPingPod(oc)
 		waitPodReady(oc, pod.namespace, pod.name)
 

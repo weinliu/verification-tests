@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
@@ -3575,7 +3576,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-Author:huirwang-Critical-64293-EgressIP should not break access from a pod with EgressIP to other host networked pods on different nodes. [Disruptive]", func() {
+	g.It("Author:huirwang-NonHyperShiftHOST-Critical-64293-[NETWORKCUSIM] EgressIP should not break access from a pod with EgressIP to other host networked pods on different nodes.[Disruptive]", func() {
 		//This is from customer bug: https://bugzilla.redhat.com/show_bug.cgi?id=2070929
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		egressIP1Template := filepath.Join(buildPruningBaseDir, "egressip-config2-template.yaml")
@@ -3594,7 +3595,11 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		exutil.By("Apply EgressLabel Key to one node. \n")
 		egessNode := nodeList.Items[0].Name
 		nonEgressNode := nodeList.Items[1].Name
-		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egessNode, egressNodeLabel)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, egessNode, egressNodeLabel)
+			}
+		}()
 		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, egessNode, egressNodeLabel, "true")
 
 		exutil.By("6. Create an egressip object\n")
@@ -3619,7 +3624,11 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 			podLabelValue: "pink",
 		}
 		egressip1.createEgressIPObject2(oc)
-		defer egressip1.deleteEgressIPObject1(oc)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				egressip1.deleteEgressIPObject1(oc)
+			}
+		}()
 		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
 
 		exutil.By("Create a test pod on non-egress node\n")
@@ -3633,10 +3642,18 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Basic", func() {
 		waitPodReady(oc, ns, pod1.name)
 
 		exutil.By("patch label to namespace and pod")
-		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org-").Execute()
+			}
+		}()
 		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "org=qe").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer exutil.LabelPod(oc, ns, pod1.name, "color-")
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				exutil.LabelPod(oc, ns, pod1.name, "color-")
+			}
+		}()
 		err = exutil.LabelPod(oc, ns, pod1.name, "color=pink")
 		o.Expect(err).NotTo(o.HaveOccurred())
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -791,7 +792,7 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 	})
 
 	// author: weliang@redhat.com
-	g.It("Author:weliang-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-55818-Rules are not removed after disabling multinetworkpolicy. [Disruptive]", func() {
+	g.It("Author:weliang-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-55818-[NETWORKCUSIM] Rules are not removed after disabling multinetworkpolicy. [Disruptive]", func() {
 		exutil.SkipBaselineCaps(oc, "None")
 		//https://issues.redhat.com/browse/OCPBUGS-977: Rules are not removed after disabling multinetworkpolicy
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking/multinetworkpolicy")
@@ -810,19 +811,28 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
 		o.Expect(contxtErr).NotTo(o.HaveOccurred())
 		defer func() {
-			useContxtErr := oc.Run("config").Args("use-context", origContxt).Execute()
-			o.Expect(useContxtErr).NotTo(o.HaveOccurred())
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				useContxtErr := oc.Run("config").Args("use-context", origContxt).Execute()
+				o.Expect(useContxtErr).NotTo(o.HaveOccurred())
+			}
 		}()
-
 		ns1 := "project41171a"
-		defer oc.AsAdmin().Run("delete").Args("project", ns1, "--ignore-not-found").Execute()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				oc.AsAdmin().Run("delete").Args("project", ns1, "--ignore-not-found").Execute()
+			}
+		}()
 		nserr1 := oc.AsAdmin().WithoutNamespace().Run("new-project").Args(ns1).Execute()
 		o.Expect(nserr1).NotTo(o.HaveOccurred())
 		_, proerr1 := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, "user="+ns1).Output()
 		o.Expect(proerr1).NotTo(o.HaveOccurred())
 
 		ns2 := "project41171b"
-		defer oc.AsAdmin().Run("delete").Args("project", ns2, "--ignore-not-found").Execute()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				oc.AsAdmin().Run("delete").Args("project", ns2, "--ignore-not-found").Execute()
+			}
+		}()
 		nserr2 := oc.AsAdmin().WithoutNamespace().Run("new-project").Args(ns2).Execute()
 		o.Expect(nserr2).NotTo(o.HaveOccurred())
 		_, proerr2 := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, "user="+ns2).Output()
@@ -830,9 +840,11 @@ var _ = g.Describe("[sig-networking] SDN multinetworkpolicy", func() {
 
 		exutil.By("1. Prepare multus multinetwork including 2 ns,5 pods and 2 NADs")
 		defer func() {
-			patchResourceAsAdmin(oc, patchSResource, patchInfoFalse)
-			exutil.By("NetworkOperatorStatus should back to normal after disable useMultiNetworkPolicy")
-			waitForNetworkOperatorState(oc, 20, 20, "True.*False.*False")
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				patchResourceAsAdmin(oc, patchSResource, patchInfoFalse)
+				exutil.By("NetworkOperatorStatus should back to normal after disable useMultiNetworkPolicy")
+				waitForNetworkOperatorState(oc, 20, 20, "True.*False.*False")
+			}
 		}()
 		prepareMultinetworkTest(oc, ns1, ns2, patchInfoTrue)
 

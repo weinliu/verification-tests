@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -1739,7 +1740,7 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 	})
 
 	//https://issues.redhat.com/browse/OCPBUGS-14769
-	g.It("Author:asood-High-64809-ovnkube-node sends netlink delete request deleting conntrack entries for API redirect iptables rule [Serial]", func() {
+	g.It("Author:asood-High-64809-[NETWORKCUSIM] ovnkube-node sends netlink delete request deleting conntrack entries for API redirect iptables rule [Serial]", func() {
 		var (
 			ns                   string
 			namespaces           []string
@@ -1804,7 +1805,11 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 			namespaceSelectorValue:    namespaceLabelValue[:],
 			template:                  ipAddresspoolTemplate,
 		}
-		defer removeResource(oc, true, true, "ipaddresspools", ipAddresspool.name, "-n", ipAddresspool.namespace)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				removeResource(oc, true, true, "ipaddresspools", ipAddresspool.name, "-n", ipAddresspool.namespace)
+			}
+		}()
 		result := createIPAddressPoolCR(oc, ipAddresspool, ipAddresspoolTemplate)
 		o.Expect(result).To(o.BeTrue())
 		ipaddresspools = append(ipaddresspools, ipAddresspool.name)
@@ -1819,7 +1824,11 @@ var _ = g.Describe("[sig-networking] SDN metallb l2", func() {
 			nodeSelectorValues: workers[:],
 			template:           l2AdvertisementTemplate,
 		}
-		defer removeResource(oc, true, true, "l2advertisements", l2advertisement.name, "-n", l2advertisement.namespace)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				removeResource(oc, true, true, "l2advertisements", l2advertisement.name, "-n", l2advertisement.namespace)
+			}
+		}()
 		result = createL2AdvertisementCR(oc, l2advertisement, l2AdvertisementTemplate)
 		o.Expect(result).To(o.BeTrue())
 		conntrackRulesCmd := fmt.Sprintf("conntrack -E -o timestamp | grep %s | grep DESTROY | grep -v CLOSE | grep 6443 | grep ESTABL", apiVIP)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -773,7 +774,7 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 		exutil.AssertWaitPollNoErr(metricIncOutput, fmt.Sprintf("Fail to get metric and the error is:%s", metricIncOutput))
 	})
 
-	g.It("Author:qiowang-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-64077-Verify metrics for ipsec enabled/disabled when configure it at runtime [Disruptive] [Slow]", func() {
+	g.It("Author:qiowang-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-64077-[NETWORKCUSIM] Verify metrics for ipsec enabled/disabled when configure it at runtime [Disruptive] [Slow]", func() {
 		var (
 			metricName = "ovnkube_controller_ipsec_enabled"
 		)
@@ -784,7 +785,11 @@ var _ = g.Describe("[sig-networking] SDN metrics", func() {
 		}
 
 		exutil.By("1. Enable IPsec at runtime")
-		defer configIPSecAtRuntime(oc, "disabled")
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				configIPSecAtRuntime(oc, "disabled")
+			}
+		}()
 		enableErr := configIPSecAtRuntime(oc, "full")
 		o.Expect(enableErr).NotTo(o.HaveOccurred())
 

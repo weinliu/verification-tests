@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
@@ -240,7 +241,7 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 	})
 
 	// author: weliang@redhat.com
-	g.It("Author:weliang-Medium-57344-Add support for service session affinity timeout", func() {
+	g.It("Author:weliang-Medium-57344-[NETWORKCUSIM] Add support for service session affinity timeout", func() {
 		//Bug: https://issues.redhat.com/browse/OCPBUGS-4502
 		var (
 			buildPruningBaseDir         = exutil.FixturePath("testdata", "networking")
@@ -255,8 +256,16 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		ns1 := oc.Namespace()
 
 		g.By("create two pods which will be the endpoints for sessionaffinity service in ns1")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", sessionAffinityPod1, "-n", ns1).Execute()
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", sessionAffinityPod2, "-n", ns1).Execute()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", sessionAffinityPod1, "-n", ns1).Execute()
+			}
+		}()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				oc.AsAdmin().WithoutNamespace().Run("delete").Args("-f", sessionAffinityPod2, "-n", ns1).Execute()
+			}
+		}()
 		createResourceFromFile(oc, ns1, sessionAffinityPod1)
 		waitPodReady(oc, ns1, "blue-pod-1")
 		createResourceFromFile(oc, ns1, sessionAffinityPod2)
@@ -268,7 +277,11 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 			namespace: ns1,
 			template:  pingPodTemplate,
 		}
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod1.name, "-n", pod1.namespace).Execute()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", pod1.name, "-n", pod1.namespace).Execute()
+			}
+		}()
 		pod1.createPingPod(oc)
 		waitPodReady(oc, ns1, pod1.name)
 
@@ -472,7 +485,7 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 
 	})
 	// author: asood@redhat.com
-	g.It("Longduration-NonPreRelease-Author:asood-High-63156-Verify the nodeport is not allocated to VIP based LoadBalancer service type. [Disruptive]", func() {
+	g.It("Author:asood-Longduration-NonPreRelease-High-63156-[NETWORKCUSIM] Verify the nodeport is not allocated to VIP based LoadBalancer service type. [Disruptive]", func() {
 		// LoadBalancer service implementation are different on cloud provider and bare metal platform
 		// https://issues.redhat.com/browse/OCPBUGS-10874 (aws and azure pending support)
 		var (
@@ -500,7 +513,11 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		namespaces = append(namespaces, ns)
 		var desiredMode string
 		origMode := getOVNGatewayMode(oc)
-		defer switchOVNGatewayMode(oc, origMode)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				switchOVNGatewayMode(oc, origMode)
+			}
+		}()
 		g.By("Validate services in original gateway mode " + origMode)
 		for j := 0; j < 2; j++ {
 			for i := 0; i < 2; i++ {
@@ -548,7 +565,7 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-Author:huirwang-Medium-65796-Recreated service should have correct load_balancer nb entries for same name load_balancer. [Serial]", func() {
+	g.It("Author:huirwang-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-65796-[NETWORKCUSIM] Recreated service should have correct load_balancer nb entries for same name load_balancer. [Serial]", func() {
 		// From customer bug https://issues.redhat.com/browse/OCPBUGS-11716
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
@@ -685,7 +702,7 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 	})
 
 	// author: asood@redhat.com
-	g.It("Author:asood-High-46015-[FdpOvnOvs] Verify traffic to outside the cluster redirected when OVN is used and NodePort service is configured.", func() {
+	g.It("Author:asood-High-46015-[FdpOvnOvs] [NETWORKCUSIM] Verify traffic to outside the cluster redirected when OVN is used and NodePort service is configured.", func() {
 		// Customer bug https://bugzilla.redhat.com/show_bug.cgi?id=1946696
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
@@ -733,7 +750,11 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		} else {
 			svc.ipFamilyPolicy = "SingleStack"
 		}
-		defer removeResource(oc, true, true, "service", svc.servicename, "-n", svc.namespace)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				removeResource(oc, true, true, "service", svc.servicename, "-n", svc.namespace)
+			}
+		}()
 		svc.createServiceFromParams(oc)
 		exutil.By("5. Get NodePort at which service listens.")
 		nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
@@ -748,7 +769,7 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		}
 	})
 	//asood@redhat.com
-	g.It("NonPreRelease-Longduration-Author:asood-Critical-63301-[FdpOvnOvs] Kube's API intermitent timeout via sdn or internal services from nodes or pods using hostnetwork. [Disruptive]", func() {
+	g.It("Author:asood-NonPreRelease-Longduration-Critical-63301-[FdpOvnOvs] [NETWORKCUSIM] Kube's API intermitent timeout via sdn or internal services from nodes or pods using hostnetwork. [Disruptive]", func() {
 		// From customer bug https://issues.redhat.com/browse/OCPBUGS-5828
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
@@ -777,7 +798,11 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		exutil.By("Switch the GW mode to Local")
 		origMode := getOVNGatewayMode(oc)
 		desiredMode := "local"
-		defer switchOVNGatewayMode(oc, origMode)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				switchOVNGatewayMode(oc, origMode)
+			}
+		}()
 		switchOVNGatewayMode(oc, desiredMode)
 
 		exutil.By("Get namespace ")
@@ -864,7 +889,7 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-High-71385-OVNK only choose LB endpoints from ready pods unless there are only terminating pods still in serving state left to choose.", func() {
+	g.It("Author:jechen-High-71385-[NETWORKCUSIM]OVNK only choose LB endpoints from ready pods unless there are only terminating pods still in serving state left to choose.", func() {
 
 		// For customer bug https://issues.redhat.com/browse/OCPBUGS-24363
 		// OVNK choose LB endpoints in the following sequence:
@@ -1078,7 +1103,7 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-High-37033-ExternalVM access cluster through externalIP. [Disruptive]", func() {
+	g.It("Author:jechen-High-37033-[NETWORKCUSIM] ExternalVM access cluster through externalIP. [Disruptive]", func() {
 
 		// This is for https://bugzilla.redhat.com/show_bug.cgi?id=1900118 and https://bugzilla.redhat.com/show_bug.cgi?id=1890270
 
@@ -1114,7 +1139,12 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 			namespace: ns,
 			template:  externalIPPodTemplate,
 		}
-		defer removeResource(oc, true, true, "pod", pod1.name, "-n", pod1.namespace)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				removeResource(oc, true, true, "pod", pod1.name, "-n", pod1.namespace)
+			}
+		}()
+
 		pod1.createExternalIPPod(oc)
 		waitPodReady(oc, pod1.namespace, pod1.name)
 
@@ -1136,8 +1166,16 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		o.Expect(len(freeIPs)).Should(o.Equal(1))
 
 		exutil.By("4.Patch update network.config with the host CIDR to enable externalIP \n")
-		defer patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{}}}}")
-		defer patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[]}}}}")
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{}}}}")
+			}
+		}()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[]}}}}")
+			}
+		}()
 		patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[\""+sub+"\"]}}}}")
 
 		exutil.By("5.Create an externalIP service with the unused IP address obtained above as externalIP\n")
@@ -1147,7 +1185,11 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 			externalIP: freeIPs[0],
 			template:   externalIPServiceTemplate,
 		}
-		defer removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+			}
+		}()
 		parameters := []string{"--ignore-unknown-parameters=true", "-f", svc.template, "-p", "NAME=" + svc.name, "EXTERNALIP=" + svc.externalIP}
 		exutil.ApplyNsResourceFromTemplate(oc, svc.namespace, parameters...)
 		svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.name).Output()
@@ -1172,7 +1214,7 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-NonHyperShiftHOST-High-43492-ExternalIP for node that has secondary IP. [Disruptive]", func() {
+	g.It("Author:jechen-NonHyperShiftHOST-High-43492-[NETWORKCUSIM] ExternalIP for node that has secondary IP. [Disruptive]", func() {
 
 		// This is for bug https://bugzilla.redhat.com/show_bug.cgi?id=1959798
 
@@ -1243,14 +1285,22 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		e2e.Logf("\n On host %s, prefix of the host ip address: %v\n", nonExternalIPNodes[0], prefix)
 
 		exutil.By(fmt.Sprintf("3. Add secondary IP %s to br-ex on the node %s", freeIPs[0]+"/"+prefix, nonExternalIPNodes[0]))
-		defer delIPFromInferface(oc, nonExternalIPNodes[0], freeIPs[0], intf)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				delIPFromInferface(oc, nonExternalIPNodes[0], freeIPs[0], intf)
+			}
+		}()
 		addIPtoInferface(oc, nonExternalIPNodes[0], freeIPs[0]+"/"+prefix, intf)
 
 		exutil.By("4.Patch update network.config with the host CIDR to enable externalIP \n")
 		original, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("network/cluster", "-ojsonpath={.spec.externalIP}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		patch := `[{"op": "replace", "path": "/spec/externalIP", "value": ` + original + `}]`
-		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("network/cluster", "-p", patch, "--type=json").Execute()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				oc.AsAdmin().WithoutNamespace().Run("patch").Args("network/cluster", "-p", patch, "--type=json").Execute()
+			}
+		}()
 		patchResourceAsAdmin(oc, "network/cluster", "{\"spec\":{\"externalIP\":{\"policy\":{\"allowedCIDRs\":[\""+sub+"\"]}}}}")
 
 		exutil.By("5.Create an externalIP service with the unused IP address obtained above as externalIP\n")
@@ -1260,7 +1310,11 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 			externalIP: freeIPs[0],
 			template:   externalIPServiceTemplate,
 		}
-		defer removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				removeResource(oc, true, true, "service", svc.name, "-n", svc.namespace)
+			}
+		}()
 		parameters := []string{"--ignore-unknown-parameters=true", "-f", svc.template, "-p", "NAME=" + svc.name, "EXTERNALIP=" + svc.externalIP}
 		exutil.ApplyNsResourceFromTemplate(oc, svc.namespace, parameters...)
 		svcOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns, svc.name).Output()
@@ -1630,7 +1684,7 @@ var _ = g.Describe("[sig-networking] SDN service", func() {
 		}
 		o.Expect(strings.Contains(string(output), "Hello OpenShift")).Should(o.BeTrue(), "The externalIP service is not reachable as expected")
 	})
-	g.It("Author:asood-Medium-75424-SessionAffinity does not work after scaling down the Pods", func() {
+	g.It("Author:asood-Medium-75424-[NETWORKCUSIM] SessionAffinity does not work after scaling down the Pods", func() {
 		//Bug: https://issues.redhat.com/browse/OCPBUGS-28604
 		var (
 			buildPruningBaseDir        = exutil.FixturePath("testdata", "networking")

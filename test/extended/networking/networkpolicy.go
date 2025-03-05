@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -1168,7 +1169,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 	})
 
 	// author: huirwang@redhat.com
-	g.It("NonHyperShiftHOST-Author:huirwang-High-62524-[FdpOvnOvs] OVN address_set referenced in acl should not miss when networkpolicy name includes dot.", func() {
+	g.It("Author:huirwang-NonHyperShiftHOST-High-62524-[FdpOvnOvs] [NETWORKCUSIM] OVN address_set referenced in acl should not miss when networkpolicy name includes dot.", func() {
 		// This is for customer bug https://issues.redhat.com/browse/OCPBUGS-4085
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
@@ -1180,7 +1181,11 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 
 		g.By("Get namespace")
 		ns := oc.Namespace()
-		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "team-").Execute()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "team-").Execute()
+			}
+		}()
 		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, "team=openshift-networking").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1246,7 +1251,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 	})
 
 	// author: asood@redhat.com
-	g.It("NonHyperShiftHOST-Author:asood-Critical-65901-[FdpOvnOvs] Duplicate transactions should not be executed for network policy for every pod update.", func() {
+	g.It("Author:asood-NonHyperShiftHOST-Critical-65901-[FdpOvnOvs] [NETWORKCUSIM] Duplicate transactions should not be executed for network policy for every pod update.", func() {
 		// Customer https://issues.redhat.com/browse/OCPBUGS-4659
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
@@ -1303,7 +1308,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		o.Expect(logLinesCount).To(o.Equal(newLogLinesCount))
 
 	})
-	g.It("Author:asood-High-66085-[FdpOvnOvs] Creating egress network policies for allowing to same namespace and openshift dns in namespace prevents the pod from reaching its own service", func() {
+	g.It("Author:asood-High-66085-[FdpOvnOvs] [NETWORKCUSIM] Creating egress network policies for allowing to same namespace and openshift dns in namespace prevents the pod from reaching its own service", func() {
 		// https://issues.redhat.com/browse/OCPBUGS-4909
 		var (
 			buildPruningBaseDir        = exutil.FixturePath("testdata", "networking")
@@ -1389,7 +1394,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 			o.Expect(err).NotTo(o.HaveOccurred())
 		}
 	})
-	g.It("Author:asood-Medium-64787-[FdpOvnOvs] Network policy with duplicate egress rules (same CIDR block) fails to be recreated [Disruptive]", func() {
+	g.It("Author:asood-Medium-64787-[FdpOvnOvs] [NETWORKCUSIM] Network policy with duplicate egress rules (same CIDR block) fails to be recreated [Disruptive]", func() {
 		// https://issues.redhat.com/browse/OCPBUGS-5835
 		var (
 			buildPruningBaseDir         = exutil.FixturePath("testdata", "networking")
@@ -1509,10 +1514,16 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		exutil.By("Create a namespace with a long name")
 		origContxt, contxtErr := oc.Run("config").Args("current-context").Output()
 		o.Expect(contxtErr).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().Run("delete").Args("project", testNs, "--ignore-not-found").Execute()
 		defer func() {
-			useContxtErr := oc.Run("config").Args("use-context", origContxt).Execute()
-			o.Expect(useContxtErr).NotTo(o.HaveOccurred())
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				oc.AsAdmin().Run("delete").Args("project", testNs, "--ignore-not-found").Execute()
+			}
+		}()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				useContxtErr := oc.Run("config").Args("use-context", origContxt).Execute()
+				o.Expect(useContxtErr).NotTo(o.HaveOccurred())
+			}
 		}()
 		nsCreateErr := oc.WithoutNamespace().Run("new-project").Args(testNs).Execute()
 		o.Expect(nsCreateErr).NotTo(o.HaveOccurred())
@@ -1570,7 +1581,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 	})
 
 	// author: asood@redhat.com
-	g.It("NonHyperShiftHOST-Author:asood-High-64788-[FdpOvnOvs] Same network policies across multiple namespaces fail to be recreated [Disruptive].", func() {
+	g.It("Author:asood-NonHyperShiftHOST-High-64788-[FdpOvnOvs] [NETWORKCUSIM] Same network policies across multiple namespaces fail to be recreated [Disruptive].", func() {
 		// This is for customer bug https://issues.redhat.com/browse/OCPBUGS-11447
 		var (
 			buildPruningBaseDir     = exutil.FixturePath("testdata", "networking")
@@ -1669,7 +1680,11 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		pgMap := nbContructToMap(listPGOutput)
 		o.Expect(len(pgMap)).NotTo(o.Equal(0))
 
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", policyName, "-n", ns).Execute()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", policyName, "-n", ns).Execute()
+			}
+		}()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.By("Create a duplicate ACL")
 		createAclCmd := fmt.Sprintf("ovn-nbctl --id=@copyacl create acl name=copyacl direction=%s action=%s -- add port_group %s acl @copyacl", aclMap["direction"], aclMap["action"], pgMap["_uuid"])
@@ -1677,14 +1692,20 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		o.Expect(listErr).NotTo(o.HaveOccurred())
 		o.Expect(idOutput).NotTo(o.BeEmpty())
 		e2e.Logf(idOutput)
-
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", policyName, "-n", ns).Execute()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", policyName, "-n", ns).Execute()
+			}
+		}()
 		exutil.By("Set properties of duplicate ACL")
 		setAclPropertiesCmd := fmt.Sprintf("ovn-nbctl set acl %s  match='%s' priority=%s meter=%s", idOutput, aclMap["match"], aclMap["priority"], aclMap["meter"])
 		_, listErr = exutil.RemoteShPodWithBashSpecifyContainer(oc, "openshift-ovn-kubernetes", ovnKNodePod, "ovnkube-controller", setAclPropertiesCmd)
 		o.Expect(listErr).NotTo(o.HaveOccurred())
-
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", policyName, "-n", ns).Execute()
+		defer func() {
+			if os.Getenv("DELETE_NAMESPACE") != "false" {
+				oc.AsAdmin().WithoutNamespace().Run("delete").Args("networkpolicy", policyName, "-n", ns).Execute()
+			}
+		}()
 		exutil.By("Set name of duplicate ACL")
 		dupAclName := fmt.Sprintf("'NP\\:%s\\:%s\\:Ingre0'", ns, policyName)
 		setAclNameCmd := fmt.Sprintf("ovn-nbctl set acl %s name=%s", idOutput, dupAclName)
@@ -1724,7 +1745,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 	})
 
 	// author: asood@redhat.com
-	g.It("Author:asood-Medium-68660-[FdpOvnOvs] Exposed route of the service should be accessible when allowing inbound traffic from any namespace network policy is created.", func() {
+	g.It("Author:asood-Medium-68660-[FdpOvnOvs] [NETWORKCUSIM] Exposed route of the service should be accessible when allowing inbound traffic from any namespace network policy is created.", func() {
 		// https://issues.redhat.com/browse/OCPBUGS-14632
 		var (
 			buildPruningBaseDir             = exutil.FixturePath("testdata", "networking")
@@ -1791,7 +1812,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 	})
 
 	// author: asood@redhat.com
-	g.It("NonPreRelease-PreChkUpgrade-Author:asood-Critical-69236-Network policy in namespace that has long name is created successfully post upgrade", func() {
+	g.It("Author:asood-NonPreRelease-PreChkUpgrade-Critical-69236-[NETWORKCUSIM] Network policy in namespace that has long name is created successfully post upgrade", func() {
 		var (
 			testNs                       = "test-the-networkpolicy-with-a-62chars-62chars-long-namespace62"
 			buildPruningBaseDir          = exutil.FixturePath("testdata", "networking")
@@ -1860,7 +1881,7 @@ var _ = g.Describe("[sig-networking] SDN networkpolicy", func() {
 		CurlPod2PodFail(oc, ns, "hello-pod", testNs, helloPodName)
 
 	})
-	g.It("Author:asood-Low-75540-Network Policy Validation", func() {
+	g.It("Author:asood-Low-75540-[NETWORKCUSIM] Network Policy Validation", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			networkPolicyFile   = filepath.Join(buildPruningBaseDir, "networkpolicy/netpol-30920-75540.yaml")
