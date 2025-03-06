@@ -7,13 +7,17 @@ objects:
   kind: CatalogSource
   metadata:
     name: "${CATALOG_NAME}"
-    namespace: openshift-marketplace
+    namespace: "${NAMESPACE}"
   spec:
     displayName: NetObserv Konflux
     image: "${IMAGE}"
     sourceType: grpc
+    grpcPodConfig:
+      securityContextConfig: legacy
 parameters:
 - name: CATALOG_NAME
   value: "netobserv-konflux-fbc"
 - name: IMAGE
-  value: "quay.io/redhat-user-workloads/ocp-network-observab-tenant/netobserv-operator/network-observability-operator-fbc:1.8"
+  value: "quay.io/redhat-user-workloads/ocp-network-observab-tenant/netobserv-operator/network-observability-operator-fbc:latest"
+- name: NAMESPACE
+  value: openshift-marketplace

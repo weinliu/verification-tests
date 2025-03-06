@@ -25,7 +25,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		// NetObserv Operator variables
 		netobservNS   = "openshift-netobserv-operator"
 		NOPackageName = "netobserv-operator"
-		NOcatSrc      = Resource{"catsrc", "netobserv-konflux-fbc", "openshift-marketplace"}
+		NOcatSrc      = Resource{"catsrc", "netobserv-konflux-fbc", netobservNS}
 		NOSource      = CatalogSourceObjects{"stable", NOcatSrc.Name, NOcatSrc.Namespace}
 
 		// Template directories
@@ -71,6 +71,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		if testImportance == "LEVEL0" {
 			g.By("Tests triggered as Level0; Use redhat-operators catSrc")
 			NOcatSrc.Name = "redhat-operators"
+			NOcatSrc.Namespace = "openshift-marketplace"
 			NOSource.SourceName = NOcatSrc.Name
 		} else {
 			if strings.Contains(os.Getenv("E2E_RUN_TAGS"), "disconnected") {
@@ -78,10 +79,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			}
 			g.By("Deploy konflux FBC and ImageDigestMirrorSet")
 			imageDigest := filePath.Join(subscriptionDir, "image-digest-mirror-set.yaml")
+			OperatorNS.DeployOperatorNamespace(oc)
 			catSrcTemplate := filePath.Join(subscriptionDir, "catalog-source.yaml")
-			catsrcErr := NOcatSrc.applyFromTemplate(oc, "-n", NOcatSrc.Namespace, "-f", catSrcTemplate)
+			catsrcErr := NOcatSrc.applyFromTemplate(oc, "-n", NOcatSrc.Namespace, "-f", catSrcTemplate, "-p", "NAMESPACE="+NOcatSrc.Namespace)
 			o.Expect(catsrcErr).NotTo(o.HaveOccurred())
-			WaitUntilCatSrcReady(oc, NOcatSrc.Name)
+			NOcatSrc.WaitUntilCatSrcReady(oc)
 			ApplyResourceFromFile(oc, netobservNS, imageDigest)
 		}
 
@@ -93,7 +95,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		// create operatorNS and deploy operator if not present
 		if !NOexisting {
-			OperatorNS.DeployOperatorNamespace(oc)
 			NO.SubscribeOperator(oc)
 			// check if NO operator is deployed
 			WaitForPodsReadyWithLabel(oc, NO.Namespace, "app="+NO.OperatorName)
@@ -681,7 +682,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		preUpgradePluginVersion = strings.Split(preUpgradePluginVersion, ":")[1]
 
 		g.By("Upgrade NetObserv to latest version")
-		oc.AsAdmin().WithoutNamespace().Run("patch").Args("subscription", "netobserv-operator", "-n", netobservNS, "-p", `[{"op": "replace", "path": "/spec/source", "value": "netobserv-konflux-fbc"}]`, "--type=json").Output()
+		oc.AsAdmin().WithoutNamespace().Run("patch").Args("subscription", "netobserv-operator", "-n", netobservNS, "-p", `[{"op": "replace", "path": "/spec/source", "value": `+NOcatSrc.Name+`}, {"op": "replace", "path": "/spec/sourceNamespace", "value": `+NOcatSrc.Namespace+`}]`, "--type=json").Output()
 
 		g.By("Wait for a min for operator upgrade")
 		time.Sleep(60 * time.Second)

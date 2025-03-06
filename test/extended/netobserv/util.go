@@ -611,9 +611,9 @@ func waitUntilVMReady(oc *exutil.CLI, vm, ns string) {
 }
 
 // wait until catalogSource is Ready
-func WaitUntilCatSrcReady(oc *exutil.CLI, catSrc string) {
+func (NOcatSrc Resource) WaitUntilCatSrcReady(oc *exutil.CLI) {
 	err := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 600*time.Second, false, func(context.Context) (done bool, err error) {
-		state, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", catSrc, "-n", "openshift-marketplace", "-o", "jsonpath='{.status.connectionState.lastObservedState}'").Output()
+		state, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("catalogsource", NOcatSrc.Name, "-n", NOcatSrc.Namespace, "-o", "jsonpath='{.status.connectionState.lastObservedState}'").Output()
 		if err != nil {
 			// loop until catalogSource is found or until timeout
 			if strings.Contains(err.Error(), "not found") {
@@ -627,7 +627,7 @@ func WaitUntilCatSrcReady(oc *exutil.CLI, catSrc string) {
 		}
 		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Catalog Source %s did not become Ready", catSrc))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Catalog Source %s did not become Ready", NOcatSrc.Name))
 }
 
 // check if cluster has baremetal workers

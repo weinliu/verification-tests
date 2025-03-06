@@ -30,7 +30,7 @@ export const Operator = {
             catalogSources.createCustomCatalog(catalogImg, catalogSource, catalogDisplayName)
         }
         else {
-            let catalogImg = "quay.io/redhat-user-workloads/ocp-network-observab-tenant/netobserv-operator/network-observability-operator-fbc:1.8"
+            let catalogImg = "quay.io/redhat-user-workloads/ocp-network-observab-tenant/netobserv-operator/network-observability-operator-fbc:latest"
             let catalogSource = "netobserv-konflux-fbc"
             catalogDisplayName = "NetObserv Konflux"
             catalogSources.createCustomCatalog(catalogImg, catalogSource, catalogDisplayName)

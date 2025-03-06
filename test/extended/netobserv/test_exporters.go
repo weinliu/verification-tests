@@ -24,7 +24,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		// NetObserv Operator variables
 		netobservNS   = "openshift-netobserv-operator"
 		NOPackageName = "netobserv-operator"
-		NOcatSrc      = Resource{"catsrc", "netobserv-konflux-fbc", "openshift-marketplace"}
+		NOcatSrc      = Resource{"catsrc", "netobserv-konflux-fbc", netobservNS}
 		NOSource      = CatalogSourceObjects{"stable", NOcatSrc.Name, NOcatSrc.Namespace}
 
 		// Template directories
@@ -68,11 +68,12 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			g.Skip("Skipping tests for disconnected profiles")
 		}
 		g.By("Deploy konflux FBC and ImageDigestMirrorSet")
+		OperatorNS.DeployOperatorNamespace(oc)
 		imageDigest := filePath.Join(subscriptionDir, "image-digest-mirror-set.yaml")
 		catSrcTemplate := filePath.Join(subscriptionDir, "catalog-source.yaml")
-		catsrcErr := NOcatSrc.applyFromTemplate(oc, "-n", NOcatSrc.Namespace, "-f", catSrcTemplate)
+		catsrcErr := NOcatSrc.applyFromTemplate(oc, "-n", NOcatSrc.Namespace, "-f", catSrcTemplate, "-p", "NAMESPACE="+NOcatSrc.Namespace)
 		o.Expect(catsrcErr).NotTo(o.HaveOccurred())
-		WaitUntilCatSrcReady(oc, NOcatSrc.Name)
+		NOcatSrc.WaitUntilCatSrcReady(oc)
 		ApplyResourceFromFile(oc, netobservNS, imageDigest)
 
 		g.By(fmt.Sprintf("Subscribe operators to %s channel", NOSource.Channel))
@@ -81,7 +82,6 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 		// create operatorNS and deploy operator if not present
 		if !NOexisting {
-			OperatorNS.DeployOperatorNamespace(oc)
 			NO.SubscribeOperator(oc)
 			// check if NO operator is deployed
 			WaitForPodsReadyWithLabel(oc, NO.Namespace, "app="+NO.OperatorName)

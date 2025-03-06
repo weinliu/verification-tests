@@ -9,6 +9,8 @@ objects:
     name: ${NAMESPACE_NAME}
     labels:
       openshift.io/cluster-monitoring: "true"
+      security.openshift.io/scc.podSecurityLabelSync: "false"
+      pod-security.kubernetes.io/enforce: baseline
 parameters:
 - name: NAMESPACE_NAME
   value: "openshift-netobserv-operator"

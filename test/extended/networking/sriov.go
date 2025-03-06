@@ -1139,7 +1139,7 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			podTempfile         = "sriov-testpod-netobserv-template.yaml"
 			netobservNS         = "openshift-netobserv-operator"
 			NOPackageName       = "netobserv-operator"
-			catsrc              = netobserv.Resource{Kind: "catsrc", Name: "netobserv-konflux-fbc", Namespace: "openshift-marketplace"}
+			catsrc              = netobserv.Resource{Kind: "catsrc", Name: "netobserv-konflux-fbc", Namespace: netobservNS}
 			subscriptionDir     = exutil.FixturePath("testdata", "netobserv", "subscription")
 			NOSource            = netobserv.CatalogSourceObjects{Channel: "stable", SourceName: catsrc.Name, SourceNamespace: catsrc.Namespace}
 			// Operator namespace object
@@ -1231,12 +1231,12 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 			if !checkDeviceIDExist(oc, sriovOpNs, deviceID) {
 				g.Skip("the cluster do not contain the sriov card. skip this testing!")
 			}
-
+			OperatorNS.DeployOperatorNamespace(oc)
 			g.By("Deploy konflux FBC and ImageDigestMirrorSet")
 			imageDigest := filePath.Join(subscriptionDir, "image-digest-mirror-set.yaml")
 			catSrcTemplate := filePath.Join(subscriptionDir, "catalog-source.yaml")
 			exutil.ApplyNsResourceFromTemplate(oc, catsrc.Namespace, "--ignore-unknown-parameters=true", "-f", catSrcTemplate, "-p", "NAMESPACE="+catsrc.Namespace)
-			netobserv.WaitUntilCatSrcReady(oc, catsrc.Name)
+			catsrc.WaitUntilCatSrcReady(oc)
 			netobserv.ApplyResourceFromFile(oc, netobservNS, imageDigest)
 
 			g.By(fmt.Sprintf("Subscribe operators to %s channel", NOSource.Channel))
@@ -1245,7 +1245,6 @@ var _ = g.Describe("[sig-networking] SDN sriov", func() {
 
 			// create operatorNS and deploy operator if not present
 			if !NOexisting {
-				OperatorNS.DeployOperatorNamespace(oc)
 				NO.SubscribeOperator(oc)
 				// check if NO operator is deployed
 				netobserv.WaitForPodsReadyWithLabel(oc, NO.Namespace, "app="+NO.OperatorName)
