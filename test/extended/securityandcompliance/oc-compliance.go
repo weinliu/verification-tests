@@ -429,6 +429,38 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance oc_compliance_plugin The O
 		g.By("The ocp-40714 fetches raw result of scan successfully... !!!!\n ")
 	})
 
+	// author: anayek@redhat.com
+	g.It("Author:anayek-NonHyperShiftHOST-ARO-High-66792-Verify API warning messages are not present in Compliance scan describe output [Serial]", func() {
+		var (
+			ssb = scanSettingBindingDescription{
+				name:            "moderate-ssb" + getRandomString(),
+				namespace:       subD.namespace,
+				profilekind1:    "Profile",
+				profilename1:    "ocp4-moderate",
+				scansettingname: "default",
+				template:        scansettingbindingTemplate,
+			}
+		)
+
+		g.By("Create scansettingbinding !!!\n")
+		defer cleanupObjects(oc, objectTableRef{"scansettingbinding", subD.namespace, ssb.name})
+		ssb.create(oc)
+
+		g.By("Verify scansettingbinding object created..!!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, ssb.name, ok, []string{"scansettingbinding", "-n", subD.namespace,
+			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
+
+		g.By("Check ComplianceSuite status and result.. !!!\n")
+		assertKeywordsExists(oc, 400, "DONE", "compliancesuite", ssb.name, "-o=jsonpath={.status.phase}", "-n", subD.namespace)
+		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT INCONSISTENT")
+
+		g.By("Check the warnings of NOT-APPLICABLE rules !!!\n")
+		newCheck("expect", asAdmin, withoutNamespace, contain, "could not fetch \"/api/v1/nodes/NODE_NAME/proxy/configz\"", nok, []string{"compliancescan", "ocp4-moderate", "-n", subD.namespace, "-o=jsonpath={.status.warnings}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "could not fetch \"/apis/flowcontrol.apiserver.k8s.io/v1alpha1/flowschemas/catch-all\"", nok, []string{"compliancescan", "ocp4-moderate", "-n", subD.namespace, "-o=jsonpath={.status.warnings}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "could not fetch \"/apis/logging.openshift.io/v1/namespaces/openshift-logging/clusterlogforwarders/instance\"", nok, []string{"compliancescan", "ocp4-moderate", "-n", subD.namespace, "-o=jsonpath={.status.warnings}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, contain, "could not fetch \"/apis/fileintegrity.openshift.io/v1alpha1/fileintegrities?limit=5\"", nok, []string{"compliancescan", "ocp4-moderate", "-n", subD.namespace, "-o=jsonpath={.status.warnings}"}).check(oc)
+	})
+
 	// author: pdhamdhe@redhat.com
 	g.It("NonHyperShiftHOST-Author:pdhamdhe-High-41195-The oc compliance plugin fetches the fixes or remediations from a rule profile or remediation objects [Serial][Slow]", func() {
 		var (
