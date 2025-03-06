@@ -47,9 +47,9 @@ describe('user preferences related features', () => {
   it('(OCP-49134,yanpzhan,UserInterface) Support dark theme for admin console',{tags:['@userinterface','@e2e','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
     cy.visit('/user-preferences');
     consoleTheme.setLightTheme();
-    cy.get('.pf-theme-dark').should('not.exist');
+    cy.get('[class*=theme-dark]').should('not.exist');
     consoleTheme.setDarkTheme();
-    cy.get('.pf-theme-dark').should('exist');
+    cy.get('[class*=theme-dark]').should('exist');
     consoleTheme.setSystemDefaultTheme();
   });
 

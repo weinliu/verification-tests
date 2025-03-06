@@ -43,7 +43,7 @@ export const consoleTheme = {
 
 export const userPreferences = {
   navToGeneralUserPreferences: () => {
-    cy.get('button[data-test="user-dropdown"]').click({force: true});
+    cy.get('button[data-test="user-dropdown-toggle"]').click({force: true});
     cy.get('span').contains('User Preferences').click({force: true});
     cy.get('.co-user-preference-page-content__tab-content', {timeout: 20000}).should('be.visible');
     cy.get('ul[role="tablist"] a[data-test="tab general"]').click();

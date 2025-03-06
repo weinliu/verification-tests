@@ -10,7 +10,7 @@ describe('external oidc test - ui.', () => {
     commandLineToolsPage.goTo();
     cy.contains('button', 'Copy login command').click();
     commandLineToolsPage.checkExternalOIDCCopyLoginCommand();
-    cy.byTestID('user-dropdown').click();
+    cy.byTestID('user-dropdown-toggle').click();
     cy.byTestID('copy-login-command').click();
     commandLineToolsPage.checkExternalOIDCCopyLoginCommand();
     cy.uiLogoutAzureExternalOIDC();
