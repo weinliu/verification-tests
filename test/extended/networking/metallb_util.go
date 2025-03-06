@@ -257,6 +257,7 @@ func operatorInstall(oc *exutil.CLI, sub subscriptionResource, ns namespaceResou
 }
 
 func createMetalLBCR(oc *exutil.CLI, metallbcr metalLBCRResource, metalLBCRTemplate string) (status bool) {
+	frrExtProviderNS := "openshift-frr-k8s"
 	g.By("Creating MetalLB CR from template")
 
 	err := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", metallbcr.template, "-p", "NAME="+metallbcr.name, "NAMESPACE="+metallbcr.namespace,
@@ -272,7 +273,7 @@ func createMetalLBCR(oc *exutil.CLI, metallbcr metalLBCRResource, metalLBCRTempl
 		e2e.Logf("Speaker Pods did not transition to ready state %v", err)
 		return false
 	}
-	err = waitForPodWithLabelReady(oc, metallbcr.namespace, "component=frr-k8s")
+	err = waitForPodWithLabelReady(oc, frrExtProviderNS, "component=frr-k8s")
 	exutil.AssertWaitPollNoErr(err, "The pods with label component=frr-k8s are not ready")
 	if err != nil {
 		e2e.Logf("FRR k8s Pods did not transition to ready state %v", err)
@@ -290,9 +291,6 @@ func createMetalLBCR(oc *exutil.CLI, metallbcr metalLBCRResource, metalLBCRTempl
 }
 
 func validateAllWorkerNodeMCR(oc *exutil.CLI, namespace string) bool {
-	var (
-		podList = []string{}
-	)
 	nodeList, err := exutil.GetClusterNodesBy(oc, "worker")
 	if err != nil {
 		e2e.Logf("Unable to get nodes to determine if node is worker node  %s", err)
@@ -308,19 +306,8 @@ func validateAllWorkerNodeMCR(oc *exutil.CLI, namespace string) bool {
 		e2e.Logf("Speaker pods not scheduled on all worker nodes")
 		return false
 	}
-	frrk8sPodList, errFrrk8s := exutil.GetAllPodsWithLabel(oc, namespace, "component=frr-k8s")
-	if errFrrk8s != nil {
-		e2e.Logf("Unable to get list of frr-k8s pods %s", err)
-		return false
-	}
-	if len(frrk8sPodList) != len(nodeList) {
-		e2e.Logf("K8s FRR pods not scheduled on all worker nodes")
-		return false
-	}
-	podList = append(podList, speakerPodList[:]...)
-	podList = append(podList, frrk8sPodList[:]...)
 	// Iterate over the speaker and frr-k8s pods to validate they are scheduled on node that is worker node
-	for _, pod := range podList {
+	for _, pod := range speakerPodList {
 		nodeName, _ := exutil.GetPodNodeName(oc, namespace, pod)
 		e2e.Logf("Pod %s, node name %s", pod, nodeName)
 		if isWorkerNode(oc, nodeName, nodeList) == false {

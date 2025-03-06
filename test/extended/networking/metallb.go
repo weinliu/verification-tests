@@ -378,14 +378,14 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 		o.Expect(result).To(o.BeTrue())
 
 		exutil.By("SUCCESS - MetalLB CR Created")
-		exutil.By("Validate speaker and  frr-k8s pods scheduled on worker nodes")
+		exutil.By("Validate speaker  pods scheduled on worker nodes")
 		result = validateAllWorkerNodeMCR(oc, opNamespace)
 		o.Expect(result).To(o.BeTrue())
 
 		exutil.By("50944-Verify the logging level of MetalLB can be changed for debugging")
 		exutil.By("Validate log level is info")
 		level := "info"
-		components := [3]string{"controller", "speaker", "frr-k8s"}
+		components := [3]string{"controller", "speaker"}
 		var err string
 		for _, component := range components {
 			result, err = checkLogLevelPod(oc, component, opNamespace, level)
@@ -402,12 +402,11 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 		dpStatus, dpStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", opNamespace, "deployment", "controller", "--timeout", "5m").Output()
 		o.Expect(dpStatusErr).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(dpStatus, "successfully rolled out")).To(o.BeTrue())
-		dsSets := [2]string{"speaker", "frr-k8s"}
-		for _, dsSet := range dsSets {
-			dsStatus, dsStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", opNamespace, "ds", dsSet, "--timeout", "5m").Output()
-			o.Expect(dsStatusErr).NotTo(o.HaveOccurred())
-			o.Expect(strings.Contains(dsStatus, "successfully rolled out")).To(o.BeTrue())
-		}
+
+		dsStatus, dsStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", opNamespace, "ds", "speaker", "--timeout", "5m").Output()
+		o.Expect(dsStatusErr).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(dsStatus, "successfully rolled out")).To(o.BeTrue())
+
 		level = "debug"
 		for _, component := range components {
 			result, err = checkLogLevelPod(oc, component, opNamespace, level)
@@ -462,7 +461,7 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 			podAffinityTemplate     = filepath.Join(testDataDir, "metallb-cr-pod-affinity-template.yaml")
 			podAntiAffinityTemplate = filepath.Join(testDataDir, "metallb-cr-pod-antiaffinity-template.yaml")
 			pingPodNodeTemplate     = filepath.Join(testDataBaseDir, "ping-for-pod-specific-node-template.yaml")
-			components              = []string{"controller", "speaker", "frr-k8s"}
+			components              = []string{"controller", "speaker"}
 		)
 
 		exutil.By("Obtain the worker nodes in cluster")
@@ -499,7 +498,7 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 				o.Expect(createMetalLBAffinityCR(oc, metallbCR)).To(o.BeTrue())
 			}
 
-			exutil.By(fmt.Sprintf("Get the pod names for controller and speaker & frr-k8s respectively scheduled on %s and %s", workersList.Items[0].Name, workersList.Items[1].Name))
+			exutil.By(fmt.Sprintf("Get the pod names for controller and speaker respectively scheduled on %s and %s", workersList.Items[0].Name, workersList.Items[1].Name))
 			expectedPodNodeList := []string{workersList.Items[0].Name, workersList.Items[1].Name, workersList.Items[1].Name}
 			for j, component := range components {
 				if j == 0 {
@@ -538,15 +537,13 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 			exutil.By(fmt.Sprintf("Create meatllb CR with pod %s", scenario))
 			metallbCR.template = metallbCRTemplateList[index]
 			o.Expect(createMetalLBAffinityCR(oc, metallbCR)).To(o.BeTrue())
-			exutil.By(fmt.Sprintf("Validate roll out status of speaker and frr-k8s for pod %s", scenario))
-			for i := 1; i < len(components); i++ {
-				o.Eventually(func() bool {
-					dsStatus, dsStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", opNamespace, "ds", components[i], "--timeout", "10s").Output()
-					o.Expect(dsStatusErr).To(o.HaveOccurred())
-					return strings.Contains(dsStatus, dsSearchStrList[index])
-				}, "60s", "10s").Should(o.BeTrue(), "Pods did not reach running status")
+			exutil.By(fmt.Sprintf("Validate roll out status of speaker daemonset for pod %s", scenario))
+			o.Eventually(func() bool {
+				dsStatus, dsStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", opNamespace, "ds", components[1], "--timeout", "10s").Output()
+				o.Expect(dsStatusErr).To(o.HaveOccurred())
+				return strings.Contains(dsStatus, dsSearchStrList[index])
+			}, "60s", "10s").Should(o.BeTrue(), "Pods did not reach running status")
 
-			}
 			if index == 0 {
 				exutil.By(fmt.Sprintf("Validate metallb pods are running only on %s", workersList.Items[0].Name))
 				for i := 0; i < len(components); i++ {
@@ -571,7 +568,7 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 		var (
 			metallbCRPriorityClassFile = filepath.Join(testDataDir, "metallb-cr-priority-class.yaml")
 			metallbPriorityClassFile   = filepath.Join(testDataDir, "metallb-priority-class.yaml")
-			components                 = []string{"controller", "speaker", "frr-k8s"}
+			components                 = []string{"controller", "speaker"}
 		)
 
 		exutil.By("Create meatllb CR with priority class")
@@ -579,13 +576,12 @@ var _ = g.Describe("[sig-networking] SDN metallb install", func() {
 		defer removeResource(oc, true, true, "metallb", "metallb", "-n", opNamespace)
 		exutil.By("Validate metallb CR not created as priority class is not yet created")
 		// just check the daemon sets as pods are not expected to be scheduled
-		for i := 1; i < len(components); i++ {
-			o.Eventually(func() bool {
-				dsStatus, dsStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", opNamespace, "ds", components[i], "--timeout", "10s").Output()
-				o.Expect(dsStatusErr).To(o.HaveOccurred())
-				return strings.Contains(dsStatus, "0 out of")
-			}, "60s", "10s").Should(o.BeTrue(), "Pods did not reach running status")
-		}
+		o.Eventually(func() bool {
+			dsStatus, dsStatusErr := oc.AsAdmin().WithoutNamespace().Run("rollout").Args("status", "-n", opNamespace, "ds", components[1], "--timeout", "10s").Output()
+			o.Expect(dsStatusErr).To(o.HaveOccurred())
+			return strings.Contains(dsStatus, "0 out of")
+		}, "60s", "10s").Should(o.BeTrue(), "Pods did not reach running status")
+
 		createResourceFromFile(oc, opNamespace, metallbPriorityClassFile)
 		defer removeResource(oc, true, true, "priorityclass", "metallb-high-priority")
 		exutil.By("Validate metallb CR is created after priority class is created")
@@ -2699,13 +2695,14 @@ var _ = g.Describe("[sig-networking] SDN metallb l3", func() {
 		o.Expect(strings.Contains(svcIP, expectedIPAddressList[2])).To(o.BeTrue())
 
 		exutil.By("10. OCPBUGS-3825 Check BGP password is not in clear text")
+		frrExternalProviderNS := "openshift-frr-k8s"
 		//https://issues.redhat.com/browse/OCPBUGS-3825
-		podList, podListErr := exutil.GetAllPodsWithLabel(oc, opNamespace, "component=frr-k8s")
+		podList, podListErr := exutil.GetAllPodsWithLabel(oc, frrExternalProviderNS, "component=frr-k8s")
 		o.Expect(podListErr).NotTo(o.HaveOccurred())
 		o.Expect(len(podList)).NotTo(o.Equal(0))
 		searchString := fmt.Sprintf("neighbor '%s' password <retracted>", peerIPAddress)
 		for _, pod := range podList {
-			output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", opNamespace, pod, "-c", "reloader").OutputToFile("podlog")
+			output, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args("-n", frrExternalProviderNS, pod, "-c", "reloader").OutputToFile("podlog")
 			o.Expect(err).NotTo(o.HaveOccurred())
 			grepOutput, err := exec.Command("bash", "-c", "cat "+output+" | grep -i '"+searchString+"' | wc -l").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
