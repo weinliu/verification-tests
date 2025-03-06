@@ -34,9 +34,9 @@ describe('logs related features', () => {
     cy.visit(`/k8s/ns/${testName}/pods/example/logs`);
     logsPage.selectContainer('container2');
     logsPage.setLogWrap('true');
-    cy.get('span.pf-v5-c-log-viewer__text', {timeout: 60000}).should('contain', 'Log   TEST');
+    cy.get('span[class$=c-log-viewer__text]', {timeout: 60000}).should('contain', 'Log   TEST');
     logsPage.setLogWrap('false');
-    cy.get('span.pf-v5-c-log-viewer__text', {timeout: 60000}).should('contain', 'Log   TEST');
+    cy.get('span[class$=c-log-viewer__text]', {timeout: 60000}).should('contain', 'Log   TEST');
   });
   it('(OCP-54875,yanpzhan,UserInterface) Configure default behavior for "Wrap lines" in log viewers by pod annotation',{tags:['@userinterface','@e2e','@osd-ccs','@rosa']}, () => {
     cy.exec(`oc create -f ./fixtures/pods/example-pod.yaml -n ${testName}`);
