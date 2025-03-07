@@ -1452,8 +1452,12 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 				g.Skip("This case should execute on cluster which have default storage class!")
 			}
 
+			// hypershift-hosted cluster do not have master node
 			exutil.By("get master node names with label")
-			NodeNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/master", "-ojsonpath={.items[*].metadata.name}").Output()
+			NodeNames, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", "-l", "node-role.kubernetes.io/master", "--ignore-not-found", "-ojsonpath={.items[*].metadata.name}").Output()
+			if NodeNames == "" {
+				g.Skip("This case should execute on cluster which have master node!")
+			}
 			o.Expect(err).NotTo(o.HaveOccurred())
 			nodeNameList := strings.Fields(NodeNames)
 
@@ -1532,7 +1536,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			for _, pod := range strings.Fields(PodNames) {
 				output, err = oc.AsAdmin().WithoutNamespace().Run("logs").Args("-c", "alertmanager", pod, "-n", "openshift-user-workload-monitoring").Output()
 				o.Expect(err).NotTo(o.HaveOccurred())
-				if !strings.Contains(output, "level=debug") {
+				if !strings.Contains(strings.ToLower(output), "level=debug") {
 					e2e.Failf("logLevel is wrong or not take effect")
 				}
 			}
