@@ -515,7 +515,7 @@ func extractManifest(oc *exutil.CLI) (tempDataDir string, err error) {
 		platform := exutil.CheckPlatform(oc)
 		if strings.Contains(platform, "baremetal") || strings.Contains(platform, "none") {
 			var mirror_registry string
-			mirror_registry, err = exutil.GetMirrorRegistry(oc)
+			mirror_registry, err = getMirrorRegistry(oc)
 			if mirror_registry != "" {
 				if err != nil {
 					err = fmt.Errorf("error out getting mirror registry: %v", err)
