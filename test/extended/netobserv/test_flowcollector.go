@@ -66,26 +66,17 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 	)
 
 	g.BeforeEach(func() {
-		// check if test triggered as level0
-		testImportance := os.Getenv("TEST_IMPORTANCE")
-		if testImportance == "LEVEL0" {
-			g.By("Tests triggered as Level0; Use redhat-operators catSrc")
-			NOcatSrc.Name = "redhat-operators"
-			NOcatSrc.Namespace = "openshift-marketplace"
-			NOSource.SourceName = NOcatSrc.Name
-		} else {
-			if strings.Contains(os.Getenv("E2E_RUN_TAGS"), "disconnected") {
-				g.Skip("Skipping tests for disconnected profiles")
-			}
-			g.By("Deploy konflux FBC and ImageDigestMirrorSet")
-			imageDigest := filePath.Join(subscriptionDir, "image-digest-mirror-set.yaml")
-			OperatorNS.DeployOperatorNamespace(oc)
-			catSrcTemplate := filePath.Join(subscriptionDir, "catalog-source.yaml")
-			catsrcErr := NOcatSrc.applyFromTemplate(oc, "-n", NOcatSrc.Namespace, "-f", catSrcTemplate, "-p", "NAMESPACE="+NOcatSrc.Namespace)
-			o.Expect(catsrcErr).NotTo(o.HaveOccurred())
-			NOcatSrc.WaitUntilCatSrcReady(oc)
-			ApplyResourceFromFile(oc, netobservNS, imageDigest)
+		if strings.Contains(os.Getenv("E2E_RUN_TAGS"), "disconnected") {
+			g.Skip("Skipping tests for disconnected profiles")
 		}
+		g.By("Deploy konflux FBC and ImageDigestMirrorSet")
+		imageDigest := filePath.Join(subscriptionDir, "image-digest-mirror-set.yaml")
+		OperatorNS.DeployOperatorNamespace(oc)
+		catSrcTemplate := filePath.Join(subscriptionDir, "catalog-source.yaml")
+		catsrcErr := NOcatSrc.applyFromTemplate(oc, "-n", NOcatSrc.Namespace, "-f", catSrcTemplate, "-p", "NAMESPACE="+NOcatSrc.Namespace)
+		o.Expect(catsrcErr).NotTo(o.HaveOccurred())
+		NOcatSrc.WaitUntilCatSrcReady(oc)
+		ApplyResourceFromFile(oc, netobservNS, imageDigest)
 
 		ipStackType := checkIPStackType(oc)
 
@@ -205,7 +196,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 
 	g.Context("FLP, eBPF and Console metrics:", func() {
 		g.When("processor.metrics.TLS == Disabled and agent.ebpf.metrics.TLS == Disabled", func() {
-			g.It("Author:aramesha-LEVEL0-Critical-50504-Critical-72959-Verify flowlogs-pipeline and eBPF metrics and health [Serial]", func() {
+			g.It("Author:aramesha-Critical-50504-Critical-72959-Verify flowlogs-pipeline and eBPF metrics and health [Serial]", func() {
 				var (
 					flpPromSM  = "flowlogs-pipeline-monitor"
 					namespace  = oc.Namespace()
@@ -271,7 +262,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		})
 
 		g.When("processor.metrics.TLS == Auto and ebpf.agent.metrics.TLS == Auto", func() {
-			g.It("Author:aramesha-LEVEL0-Critical-54043-Critical-66031-Critical-72959-Verify flowlogs-pipeline, eBPF and Console metrics [Serial]", func() {
+			g.It("Author:aramesha-Critical-54043-Critical-66031-Critical-72959-Verify flowlogs-pipeline, eBPF and Console metrics [Serial]", func() {
 				var (
 					flpPromSM  = "flowlogs-pipeline-monitor"
 					flpPromSA  = "flowlogs-pipeline-prom"
@@ -861,7 +852,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(nICMPFlows).Should(o.BeNumerically(">", 0), "expected number of ICMP flows of type 8 or 0 (echo request or reply) > 0")
 	})
 
-	g.It("Author:aramesha-NonPreRelease-LEVEL0-High-68125-Verify DSCP with NetObserv [Serial]", func() {
+	g.It("Author:aramesha-NonPreRelease-High-68125-Verify DSCP with NetObserv [Serial]", func() {
 		namespace := oc.Namespace()
 
 		g.By("Deploying test server and client pods")
