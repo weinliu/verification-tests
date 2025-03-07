@@ -56,7 +56,7 @@ var (
 	iaasPlatform                   string
 	trustedCACM                    = "trusted-ca"
 	noProxy                        = "test.no-proxy.com"
-	nutanix_proxy_host             = "10.0.77.69"
+	nutanix_proxy_host             = "10.0.76.175"
 	vsphere_bastion                = "10.0.76.163"
 	wincTestCM                     = "winc-test-config"
 	linuxNoTagsImage               = "quay.io/openshifttest/hello-openshift@sha256:2a3edeadd7aa12a6156e9a27de1daae73d0569cbb0a761a7885944738245f11e"
