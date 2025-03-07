@@ -22,10 +22,11 @@ import (
 )
 
 type BGPD struct {
-	FrrIP     string
-	NodesIP   []string
-	NodesIPv6 []string
-	Protocol  string
+	NodesIPv4   []string
+	NodesIPv6   []string
+	SsVRF       string
+	SsNodesIPv4 []string
+	SsNodesIPv6 []string
 }
 type routeAdvertisement struct {
 	name              string
@@ -161,52 +162,77 @@ func createFrrTemplateFile(frrConfTemplateFile string) error {
 	frrConfTemplate, err := os.Create(frrConfTemplateFile)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	_, err = frrConfTemplate.WriteString(`router bgp 64512
-{{- if .FrrIP }}
- bgp router-id {{ .FrrIP }}
-{{- end }}
  no bgp default ipv4-unicast
  no bgp default ipv6-unicast
  no bgp network import-check
  
-{{- range $r := .NodesIP }}
+{{- range $r := .NodesIPv4 }}
  neighbor {{ . }} remote-as 64512
- neighbor {{ . }} route-reflector-client
 {{- end }}
 
-{{- if .NodesIP }}
+{{- range $r := .NodesIPv6 }}
+ neighbor {{ . }} remote-as 64512
+{{- end }}
+
+{{- if .NodesIPv4 }}
  address-family ipv4 unicast
+{{- range $r := .NodesIPv4 }}
+  neighbor {{ . }} route-reflector-client
+  neighbor {{ . }} activate
+  neighbor {{ . }} next-hop-self 
+{{- end }}
   network 192.168.1.0/24
   network 192.169.1.1/32
  exit-address-family
 {{- end }}
 
-{{- if .NodesIP }}
- address-family ipv4 unicast
-{{- range $r := .NodesIP }}
-  neighbor {{ . }} activate
-  neighbor {{ . }} next-hop-self 
-{{- end }}
- exit-address-family
-{{- end }}
-
-{{- range $r := .NodesIPv6 }}
- neighbor {{ . }} remote-as 64512
- neighbor {{ . }} route-reflector-client
-{{- end }}
-
 {{- if .NodesIPv6 }}
  address-family ipv6 unicast
+{{- range $r := .NodesIPv6 }}
+  neighbor {{ . }} route-reflector-client
+  neighbor {{ . }} activate
+  neighbor {{ . }} next-hop-self
+{{- end }}
   network 2001:db8::/128
  exit-address-family
 {{- end }}
 
-{{- if .NodesIPv6 }}
+{{- if .SsVRF }}
+router bgp 64512 vrf {{ .SsVRF }}
+ no bgp default ipv4-unicast
+ no bgp default ipv6-unicast
+ no bgp network import-check
+ 
+{{- range $r := .SsNodesIPv4 }}
+ neighbor {{ . }} remote-as 64512
+{{- end }}
+
+{{- range $r := .SsNodesIPv6 }}
+ neighbor {{ . }} remote-as 64512
+{{- end }}
+
+{{- if .SsNodesIPv4 }}
+ address-family ipv4 unicast
+{{- range $r := .SsNodesIPv4 }}
+  neighbor {{ . }} route-reflector-client
+  neighbor {{ . }} activate
+  neighbor {{ . }} next-hop-self 
+{{- end }}
+  network 192.168.1.0/24
+  network 192.169.1.1/32
+ exit-address-family
+{{- end }}
+
+{{- if .SsNodesIPv6 }}
  address-family ipv6 unicast
-{{- range $r := .NodesIPv6 }}
+{{- range $r := .SsNodesIPv6 }}
+  neighbor {{ . }} route-reflector-client
   neighbor {{ . }} activate
   neighbor {{ . }} next-hop-self
 {{- end }}
+  network 2001:db8::/128
  exit-address-family
+{{- end }}
 {{- end }}
 
 `)
@@ -314,13 +340,14 @@ vrrpd_options="  -A 127.0.0.1"
 	return nil
 }
 
-func generateFrrConfigFile(frrIp string, nodesIP, nodesIPv6 []string, templateFile, configFile string) error {
+func generateFrrConfigFile(nodesIPv4, nodesIPv6, ssNodesIPv4, ssNodesIPv6 []string, ssVRF, templateFile, configFile string) error {
 	data := BGPD{
-		// FrrIP:     frrIp,
-		NodesIP:   nodesIP,
-		NodesIPv6: nodesIPv6,
+		NodesIPv4:   nodesIPv4,
+		NodesIPv6:   nodesIPv6,
+		SsVRF:       ssVRF,
+		SsNodesIPv4: ssNodesIPv4,
+		SsNodesIPv6: ssNodesIPv6,
 	}
-	e2e.Logf("\n frrIp passed in: %s\n", frrIp)
 
 	// Parse template file
 	t, err := template.New(templateFile).ParseFiles(templateFile)
@@ -342,7 +369,7 @@ func generateFrrConfigFile(frrIp string, nodesIP, nodesIPv6 []string, templateFi
 	return nil
 }
 
-func createExternalFrrRouter(host, externalFRRIP string, allNodesIP1, allNodesIP2 []string) string {
+func createExternalFrrRouter(host, ssVRF string, allNodesIP1, allNodesIP2, ssNodesIPv4, ssNodesIPv6 []string) string {
 
 	frrConfTemplateFile := "frr.conf.template"
 	frrDaemonsFile := "daemons"
@@ -352,7 +379,7 @@ func createExternalFrrRouter(host, externalFRRIP string, allNodesIP1, allNodesIP
 	fileErr := createFrrTemplateFile(frrConfTemplateFile)
 	o.Expect(fileErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to create frr template, getting error: %v", fileErr))
 
-	fileErr = generateFrrConfigFile(externalFRRIP, allNodesIP1, allNodesIP2, frrConfTemplateFile, frrConfFile)
+	fileErr = generateFrrConfigFile(allNodesIP1, allNodesIP2, ssNodesIPv4, ssNodesIPv6, ssVRF, frrConfTemplateFile, frrConfFile)
 	o.Expect(fileErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to generate frr.conf using frr template, nodeIPs and FRR IP, getting error: %v", fileErr))
 
 	exutil.By("Create frr daemon")
@@ -381,7 +408,7 @@ func createExternalFrrRouter(host, externalFRRIP string, allNodesIP1, allNodesIP
 
 	exutil.By("Create external frr container in iBGP mode, get its container id")
 	frrContainerName := "frr-" + exutil.GetRandomString()
-	externalFrrCreateCmd := fmt.Sprintf("sudo podman run -d --privileged --network host --rm --ulimit core=-1 --name %s --volume %s:/etc/frr quay.io/frrouting/frr:10.2.1", frrContainerName, tmpdir)
+	externalFrrCreateCmd := fmt.Sprintf("sudo podman run -d --privileged --network host --rm --ulimit core=-1 --name %s --volume %s:/etc/frr quay.io/frrouting/frr:9.1.2", frrContainerName, tmpdir)
 	err = sshRunCmd(host, "root", externalFrrCreateCmd)
 	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to run frr podmand command: %v, \n getting error: %v", externalFrrCreateCmd, err))
 
@@ -443,7 +470,7 @@ func checkRAStatus(oc *exutil.CLI, RAName string, expectedStatus string) error {
 	})
 }
 
-func verifyRouteAdvertisement(oc *exutil.CLI, host, externalFRRIP, frrContainerID string, allNodes []string, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map map[string]string) bool {
+func verifyRouteAdvertisement(oc *exutil.CLI, host, externalFRRIP2, externalFRRIP1, frrContainerID string, allNodes []string, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map map[string]string) bool {
 	exutil.By("Verify BGP neighbor is established between external frr container and cluster nodes")
 	for _, node := range allNodes {
 		result := verifyBGPNeighborOnExternalFrr(host, frrContainerID, nodesIP1Map[node], nodesIP2Map[node], true)
@@ -464,7 +491,7 @@ func verifyRouteAdvertisement(oc *exutil.CLI, host, externalFRRIP, frrContainerI
 	exutil.By("Verify external routes and other cluster nodes' default podnetwork are learned to each cluster node")
 	for _, node := range allNodes {
 		// Verify from BGP route table of each node
-		result := verifyBGPRoutesOnClusterNode(oc, node, externalFRRIP, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+		result := verifyBGPRoutesOnClusterNode(oc, node, externalFRRIP2, externalFRRIP1, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
 		if !result {
 			e2e.Logf("External routes are not found in bgp routing table of node %s", node)
 			return false
@@ -582,7 +609,7 @@ func execCommandInFRRPodOnNode(oc *exutil.CLI, nodeName, command string) (string
 }
 
 // Verify BGP routes learned to cluster node in BGP routing table
-func verifyBGPRoutesOnClusterNode(oc *exutil.CLI, thisNode, externalFRRIP string, allNodes []string, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map map[string]string, expected bool) bool {
+func verifyBGPRoutesOnClusterNode(oc *exutil.CLI, thisNode, externalFRRIP2, externalFRRIP1 string, allNodes []string, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map map[string]string, expected bool) bool {
 
 	// external networks are hardcoded in the test
 	externalNetworks := []string{"192.168.1.0/24", "192.169.1.1/32"}
@@ -610,7 +637,7 @@ func verifyBGPRoutesOnClusterNode(oc *exutil.CLI, thisNode, externalFRRIP string
 
 	// Verify external routes are being learned to cluster node
 	for _, network := range externalNetworks {
-		expectedBGPRoutePattern := fmt.Sprintf(`%s\s+%s`, regexp.QuoteMeta(network), regexp.QuoteMeta(externalFRRIP))
+		expectedBGPRoutePattern := fmt.Sprintf(`%s\s+%s`, regexp.QuoteMeta(network), regexp.QuoteMeta(externalFRRIP1))
 		matched, err := regexp.MatchString(expectedBGPRoutePattern, output1)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		if !matched {
@@ -636,25 +663,40 @@ func verifyBGPRoutesOnClusterNode(oc *exutil.CLI, thisNode, externalFRRIP string
 		}
 	}
 
-	// comment out the following check on dualstack due to https://issues.redhat.com/browse/OCPBUGS-48411
-	// // for dualstack, verify v6 routes for other cluster nodes are learned to this node
-	// if nodesIP2Map[allNodes[0]] != "" {
-	// 	for _, eachNode := range allNodes {
-	// 		if eachNode != thisNode {
-	// 			expectedBGPRoutePattern := fmt.Sprintf(`%s\s+%s`, regexp.QuoteMeta(podNetwork2Map[eachNode]), regexp.QuoteMeta(nodesIP2Map[eachNode]))
-	// 			matched, err := regexp.MatchString(expectedBGPRoutePattern, output2)
-	// 			o.Expect(err).NotTo(o.HaveOccurred())
-	// 			if !matched && expected {
-	// 				e2e.Logf("On dualstack, v6 route for another node %s is not learned to this node %s", eachNode, thisNode)
-	// 				return false
-	// 			}
-	// 			if matched && !expected {
-	// 				e2e.Logf("on dualstack cluster, v6 route for another node %s should not be learned to this node %s", eachNode, thisNode)
-	// 				return false
-	// 			}
-	// 		}
-	// 	}
-	// }
+	// for dualstack, verify v6 routes for other cluster nodes are learned to this node
+	if nodesIP2Map[allNodes[0]] != "" {
+
+		// Temporarily comment this check out due to error Jaime has in demo setup
+		// // v6 external networks are hardcoded in the test
+		// externalNetworksv6 := []string{"2001:db8::"}
+
+		// // Verify external v6 routes are being learned to cluster node
+		// for _, network := range externalNetworksv6 {
+		// 	expectedBGPRoutePattern := fmt.Sprintf(`%s\s+%s`, regexp.QuoteMeta(network), regexp.QuoteMeta(externalFRRIP2))
+		// 	matched, err := regexp.MatchString(expectedBGPRoutePattern, output1)
+		// 	o.Expect(err).NotTo(o.HaveOccurred())
+		// 	if !matched {
+		// 		e2e.Logf("external route %s is not found on node %s as expected", network, thisNode)
+		// 		return false
+		// 	}
+		// }
+
+		for _, eachNode := range allNodes {
+			if eachNode != thisNode {
+				expectedBGPRoutePattern := fmt.Sprintf(`%s\s+%s`, regexp.QuoteMeta(podNetwork2Map[eachNode]), regexp.QuoteMeta(nodesIP2Map[eachNode]))
+				matched, err := regexp.MatchString(expectedBGPRoutePattern, output2)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if !matched && expected {
+					e2e.Logf("On dualstack, v6 route for another node %s is not learned to this node %s", eachNode, thisNode)
+					return false
+				}
+				if matched && !expected {
+					e2e.Logf("on dualstack cluster, v6 route for another node %s should not be learned to this node %s", eachNode, thisNode)
+					return false
+				}
+			}
+		}
+	}
 	return true
 }
 
@@ -687,30 +729,30 @@ func verifyIPRoutesOnExternalFrr(host string, allNodes []string, podNetwork1Map,
 			return false
 		}
 	}
-	/*
-		if nodesIP2Map[allNodes[0]] != "" {
-			externalFrrCmd = "ip -6 route show | grep bgp"
-			output, err := sshRunCmdOutPut(host, "root", externalFrrCmd)
-			e2e.Logf("on Dualstack, ip -6 route show on external frr, output:\n%s ", output)
+
+	if nodesIP2Map[allNodes[0]] != "" {
+		externalFrrCmd = "ip -6 route show | grep bgp"
+		output, err := sshRunCmdOutPut(host, "root", externalFrrCmd)
+		e2e.Logf("on Dualstack, ip -6 route show on external frr, output:\n%s ", output)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		for _, eachNode := range allNodes {
+			o.Expect(regexp.QuoteMeta(podNetwork2Map[eachNode])).ShouldNot(o.BeEmpty())
+			o.Expect(regexp.QuoteMeta(nodesIP2Map[eachNode])).ShouldNot(o.BeEmpty())
+			expectedBGPRoutePattern := fmt.Sprintf(`%s .*via %s .*proto bgp`, podNetwork2Map[eachNode], nodesIP2Map[eachNode])
+			e2e.Logf("expected route is: %s", expectedBGPRoutePattern)
+			matched, err := regexp.MatchString(expectedBGPRoutePattern, output)
 			o.Expect(err).NotTo(o.HaveOccurred())
-			for _, eachNode := range allNodes {
-				o.Expect(regexp.QuoteMeta(podNetwork2Map[eachNode])).ShouldNot(o.BeEmpty())
-				o.Expect(regexp.QuoteMeta(nodesIP2Map[eachNode])).ShouldNot(o.BeEmpty())
-				expectedBGPRoutePattern := fmt.Sprintf(`%s .*via %s .*proto bgp`, podNetwork2Map[eachNode], nodesIP2Map[eachNode])
-				e2e.Logf("expected route is: %s", expectedBGPRoutePattern)
-				matched, err := regexp.MatchString(expectedBGPRoutePattern, output)
-				o.Expect(err).NotTo(o.HaveOccurred())
-				if !matched && expected {
-					e2e.Logf("IPv6 BGP route for node %s is not in ip -6 route table of external frr as expected", eachNode)
-					return false
-				}
-				if matched && !expected {
-					e2e.Logf("IPv6 BGP route for node %s shows up when it should not be in ip routing table of external frr", eachNode)
-					return false
-				}
+			if !matched && expected {
+				e2e.Logf("IPv6 BGP route for node %s is not in ip -6 route table of external frr as expected", eachNode)
+				return false
+			}
+			if matched && !expected {
+				e2e.Logf("IPv6 BGP route for node %s shows up when it should not be in ip routing table of external frr", eachNode)
+				return false
 			}
 		}
-	*/
+	}
+
 	return true
 }
 
@@ -753,27 +795,26 @@ func verifyIPRoutesOnClusterNode(oc *exutil.CLI, thisNode, externalFRRIP string,
 		}
 	}
 
-	// comment out the following check on dualstack due to https://issues.redhat.com/browse/OCPBUGS-48411
-	// // for dualstack, verify v6 routes for other cluster nodes are learned to this node
-	// if nodesIP2Map[allNodes[0]] != "" {
-	// 	for _, eachNode := range allNodes {
-	// 		if eachNode != thisNode {
-	// 			o.Expect(regexp.QuoteMeta(podNetwork2Map[eachNode])).ShouldNot(o.BeEmpty())
-	// 			o.Expect(regexp.QuoteMeta(nodesIP2Map[eachNode])).ShouldNot(o.BeEmpty())
-	// 			expectedBGPRoutePattern := fmt.Sprintf(`%s.* via %s .* proto bgp`, regexp.QuoteMeta(podNetwork2Map[eachNode]), regexp.QuoteMeta(nodesIP2Map[eachNode]))
-	// 			matched, err := regexp.MatchString(expectedBGPRoutePattern, routesOutput2)
-	// 			o.Expect(err).NotTo(o.HaveOccurred())
-	// 			if !matched && expected {
-	// 				e2e.Logf("On dualstack, v6 route for another node %s is not learned to ip -6 route table of this node %s", eachNode, thisNode)
-	// 				return false
-	// 			}
-	// 			if matched && !expected {
-	// 				e2e.Logf("on dualstack cluster, v6 route for another node %s should not be learned to ip route of this node %s", eachNode, thisNode)
-	// 				return false
-	// 			}
-	// 		}
-	// 	}
-	// }
+	// for dualstack, verify v6 routes for other cluster nodes are learned to this node
+	if nodesIP2Map[allNodes[0]] != "" {
+		for _, eachNode := range allNodes {
+			if eachNode != thisNode {
+				o.Expect(regexp.QuoteMeta(podNetwork2Map[eachNode])).ShouldNot(o.BeEmpty())
+				o.Expect(regexp.QuoteMeta(nodesIP2Map[eachNode])).ShouldNot(o.BeEmpty())
+				expectedBGPRoutePattern := fmt.Sprintf(`%s.* via %s .* proto bgp`, regexp.QuoteMeta(podNetwork2Map[eachNode]), regexp.QuoteMeta(nodesIP2Map[eachNode]))
+				matched, err := regexp.MatchString(expectedBGPRoutePattern, routesOutput2)
+				o.Expect(err).NotTo(o.HaveOccurred())
+				if !matched && expected {
+					e2e.Logf("On dualstack, v6 route for another node %s is not learned to ip -6 route table of this node %s", eachNode, thisNode)
+					return false
+				}
+				if matched && !expected {
+					e2e.Logf("on dualstack cluster, v6 route for another node %s should not be learned to ip route of this node %s", eachNode, thisNode)
+					return false
+				}
+			}
+		}
+	}
 	return true
 }
 
@@ -1155,4 +1196,43 @@ func CurlNode2PodPassUDN(oc *exutil.CLI, nodeName string, namespaceDst string, p
 	podURL := net.JoinHostPort(podIP1, "8080")
 	_, err := exutil.DebugNodeRetryWithOptionsAndChroot(oc, nodeName, []string{"--to-namespace=default"}, "bash", "-c", "curl --connect-timeout 5 -s "+podURL)
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Curlexternal2DWPod will check from external router access the pod ip on default network when default network is advertised
+func Curlexternal2PodPass(oc *exutil.CLI, host string, namespaceDst string, podNameDst string) {
+
+	podIP1, podIP2 := getPodIP(oc, namespaceDst, podNameDst)
+
+	if podIP2 != "" {
+		curl_command := "curl --connect-timeout 5 -s " + net.JoinHostPort(podIP1, "8080")
+		_, err := sshRunCmdOutPut(host, "root", curl_command)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		curl_command = "curl --connect-timeout 5 -s " + net.JoinHostPort(podIP2, "8080")
+		_, err = sshRunCmdOutPut(host, "root", curl_command)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	} else {
+		curl_command := "curl --connect-timeout 5 -s " + net.JoinHostPort(podIP1, "8080")
+		_, err := sshRunCmdOutPut(host, "root", curl_command)
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+	e2e.Logf("curl from external to UDN pod ip PASS")
+}
+
+func Curlexternal2PodFail(oc *exutil.CLI, host string, namespaceDst string, podNameDst string) {
+
+	podIP1, podIP2 := getPodIP(oc, namespaceDst, podNameDst)
+
+	if podIP2 != "" {
+		curl_command := "curl --connect-timeout 5 -s " + net.JoinHostPort(podIP1, "8080")
+		_, err := sshRunCmdOutPut(host, "root", curl_command)
+		o.Expect(err).To(o.HaveOccurred())
+		curl_command = "curl --connect-timeout 5 -s " + net.JoinHostPort(podIP2, "8080")
+		_, err = sshRunCmdOutPut(host, "root", curl_command)
+		o.Expect(err).To(o.HaveOccurred())
+	} else {
+		curl_command := "curl --connect-timeout 5 -s " + net.JoinHostPort(podIP1, "8080")
+		_, err := sshRunCmdOutPut(host, "root", curl_command)
+		o.Expect(err).To(o.HaveOccurred())
+	}
+	e2e.Logf("curl from external to UDN pod ip Failed")
 }
