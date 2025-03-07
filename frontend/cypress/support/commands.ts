@@ -34,7 +34,8 @@ declare global {
     }
 }
 
-const kubeconfig = Cypress.env('KUBECONFIG_PATH');
+const admin_kubeconfig = Cypress.env('KUBECONFIG_PATH');
+const normal_kubeconfig = '/tmp/normal_kubeconfig';
 const DEFAULT_RETRY_OPTIONS = { retries: 3, interval: 10000 };
 let $cmexisting = 0, cm_has_been_updated = false;
 var console_generation_before_update;
@@ -95,11 +96,11 @@ Cypress.Commands.add('uiLogout', () => {
 Cypress.Commands.add("cliLogin", (username?: string, password?: string) => {
   const loginUsername = username || Cypress.env('LOGIN_USERNAME');
   const loginPassword = password || Cypress.env('LOGIN_PASSWORD');
-  cy.exec(`oc whoami --show-server=true --kubeconfig ${kubeconfig}`)
+  cy.exec(`oc whoami --show-server=true --kubeconfig ${admin_kubeconfig}`)
     .then(result => {
       const hostapi = result.stdout.trim();
       cy.log(hostapi);
-      cy.exec(`oc login -u ${loginUsername} -p ${loginPassword} ${hostapi} --insecure-skip-tls-verify=true`, { failOnNonZeroExit: false })
+      cy.exec(`oc login -u ${loginUsername} -p ${loginPassword} ${hostapi} --insecure-skip-tls-verify=true --kubeconfig ${normal_kubeconfig}`, { failOnNonZeroExit: false })
         .then(loginresult => {
           cy.log(loginresult.stderr);
           cy.log(loginresult.stdout);
@@ -108,7 +109,7 @@ Cypress.Commands.add("cliLogin", (username?: string, password?: string) => {
 });
 
 Cypress.Commands.add("cliLogout", () => {
-  cy.exec(`oc logout`, { failOnNonZeroExit: false }).then(result => {
+  cy.exec(`oc logout --kubeconfig ${normal_kubeconfig}`, { failOnNonZeroExit: false }).then(result => {
     cy.log(result.stderr);
     cy.log(result.stdout);
   });
@@ -118,7 +119,7 @@ Cypress.Commands.add("configureClusterMonitoringConfig", (content, testConfigMap
   const content_key = content.split(':')[0]
   const serialized_content = content.replaceAll('\\n','\n');
   let json_outout, to_be_updated;
-  cy.exec(`oc get cm cluster-monitoring-config -n openshift-monitoring --kubeconfig ${kubeconfig} -o json`, { failOnNonZeroExit: false }).then((result) => {
+  cy.exec(`oc get cm cluster-monitoring-config -n openshift-monitoring --kubeconfig ${admin_kubeconfig} -o json`, { failOnNonZeroExit: false }).then((result) => {
     const $ret = result.code;
     if ($ret == 0) {
       cy.log(`cm/cluster-monitoring-config already exist, its content is ${result.stdout}`);
@@ -143,14 +144,14 @@ Cypress.Commands.add("configureClusterMonitoringConfig", (content, testConfigMap
         cy.exec('cat ./cm-with-user-required-data.json').then((file) => {
           cy.log(`cm-with-user-required-data.json is ${file.stdout}`);
         });
-        cy.exec(`oc replace -f ./cm-with-user-required-data.json --kubeconfig ${kubeconfig}`)
+        cy.exec(`oc replace -f ./cm-with-user-required-data.json --kubeconfig ${admin_kubeconfig}`)
           .its('stdout')
           .should('contain', 'replaced');
       }
     }
     if($ret == 1){
       cy.log('cm/cluster-monitoring-config NOT exist, creating');
-      cy.exec(`echo '${JSON.stringify(testConfigMap)}' | oc create -f - --kubeconfig ${kubeconfig}`);
+      cy.exec(`echo '${JSON.stringify(testConfigMap)}' | oc create -f - --kubeconfig ${admin_kubeconfig}`);
     }
   });
 });
@@ -256,7 +257,7 @@ Cypress.Commands.add("cliLoginAzureExternalOIDC", () => {
 
 Cypress.Commands.add("adminCLI", (command: string, options?: {}) => {
   cy.log(`Run admin command: ${command}`)
-  cy.exec(`${command} --kubeconfig ${kubeconfig}`, options)
+  cy.exec(`${command} --kubeconfig ${admin_kubeconfig}`, options)
 });
 
 Cypress.Commands.add('retryTask', (command, expectedOutput, options?) => {
@@ -288,7 +289,7 @@ Cypress.Commands.add("checkCommandResult", (command, expectedoutput, options?) =
 });
 
 const hasWindowsNode = () :boolean => {
-  cy.exec(`oc get node -l kubernetes.io/os=windows --kubeconfig ${kubeconfig}`).then((result) => {
+  cy.exec(`oc get node -l kubernetes.io/os=windows --kubeconfig ${admin_kubeconfig}`).then((result) => {
       if(!result.stdout){
         cy.log("Testing on cluster without windows node. Skip this windows scenario!");
         return false;
@@ -302,7 +303,7 @@ Cypress.Commands.add("hasWindowsNode", () => {
   return hasWindowsNode();
 });
 Cypress.Commands.add("isEdgeCluster", () => {
-  cy.exec(`oc get infrastructure cluster -o jsonpath={.spec.platformSpec.type} --kubeconfig ${kubeconfig}`, { failOnNonZeroExit: false }).then((result) => {
+  cy.exec(`oc get infrastructure cluster -o jsonpath={.spec.platformSpec.type} --kubeconfig ${admin_kubeconfig}`, { failOnNonZeroExit: false }).then((result) => {
       cy.log(result.stdout);
       if ( result.stdout == 'BareMetal' ){
          cy.log("Testing on Edge cluster.");
@@ -353,14 +354,14 @@ Cypress.Commands.add("checkClusterType", (commandName) => {
     return;
   }
 
-  return cy.exec(`oc get cloudcredential cluster --template={{.spec.credentialsMode}} --kubeconfig=${kubeconfig}`)
+  return cy.exec(`oc get cloudcredential cluster --template={{.spec.credentialsMode}} --kubeconfig=${admin_kubeconfig}`)
     .then(result => {
       const credentialMode = result.stdout.trim();
-      return cy.exec(`oc get infrastructure cluster --template={{.status.platform}} --kubeconfig=${kubeconfig}`)
+      return cy.exec(`oc get infrastructure cluster --template={{.status.platform}} --kubeconfig=${admin_kubeconfig}`)
         .then(result => ({ credentialMode, infraPlatform: result.stdout.trim() }));
     })
     .then(({ credentialMode, infraPlatform }) => {
-      return cy.exec(`oc get authentication cluster --template={{.spec.serviceAccountIssuer}} --kubeconfig=${kubeconfig}`)
+      return cy.exec(`oc get authentication cluster --template={{.spec.serviceAccountIssuer}} --kubeconfig=${admin_kubeconfig}`)
         .then(result => ({ credentialMode, infraPlatform, authIssuer: result.stdout.trim() }));
     })
     .then(({ credentialMode, infraPlatform, authIssuer }) => {
@@ -387,7 +388,7 @@ Cypress.Commands.add("isEFSDeployed", () => {
 });
 
 Cypress.Commands.add("isPlatformSuitableForNMState", () => {
-  cy.exec(`oc get infrastructure cluster -o jsonpath={.spec.platformSpec.type} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {
+  cy.exec(`oc get infrastructure cluster -o jsonpath={.spec.platformSpec.type} --kubeconfig ${admin_kubeconfig}`, { failOnNonZeroExit: false }).then((result) => {
     if( result.stdout == 'BareMetal' || result.stdout == 'None' || result.stdout == 'VSphere' || result.stdout == 'OpenStack'){
       cy.log("Testing on baremetal/vsphere/openstack.");
       return cy.wrap(true);
@@ -428,7 +429,7 @@ Cypress.Commands.add("isManagedCluster", () => {
 });
 
 Cypress.Commands.add("isIPICluster", () => {
-  cy.exec(`oc get machines.machine.openshift.io -n openshift-machine-api --kubeconfig ${Cypress.env('KUBECONFIG_PATH')}`, { failOnNonZeroExit: false }).then((result) => {
+  cy.exec(`oc get machines.machine.openshift.io -n openshift-machine-api --kubeconfig ${admin_kubeconfig}`, { failOnNonZeroExit: false }).then((result) => {
     if( result.stdout.includes('Running') ){
       cy.log("Testing on IPI cluster!");
       return cy.wrap(true);
@@ -440,7 +441,7 @@ Cypress.Commands.add("isIPICluster", () => {
 });
 
 Cypress.Commands.add("consoleBeforeUpdate", () => {
-  return cy.exec(`oc get deployment console -n openshift-console -o jsonpath='{.metadata.generation}' --kubeconfig ${kubeconfig}`).then((result) => {
+  return cy.exec(`oc get deployment console -n openshift-console -o jsonpath='{.metadata.generation}' --kubeconfig ${admin_kubeconfig}`).then((result) => {
     console_generation_before_update = result.stdout;
     cy.log(`generation before update is ${console_generation_before_update}`);
     return;
@@ -449,7 +450,7 @@ Cypress.Commands.add("consoleBeforeUpdate", () => {
 
 Cypress.Commands.add('retryQueryConsole', () => {
   const [ retries, retry_interval] = [6, 15000];
-  const command = `oc get deployment console -n openshift-console -o jsonpath='{.metadata.generation},{.spec.replicas},{.status.readyReplicas}' --kubeconfig ${kubeconfig}`;
+  const command = `oc get deployment console -n openshift-console -o jsonpath='{.metadata.generation},{.spec.replicas},{.status.readyReplicas}' --kubeconfig ${admin_kubeconfig}`;
   const retryTaskFn = (currentRetries) => {
     return cy.exec(command)
       .then(result => {
