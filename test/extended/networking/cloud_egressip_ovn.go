@@ -5544,7 +5544,17 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Multi-NIC", func() {
 		}
 		defer egressip1.deleteEgressIPObject1(oc)
 		egressip1.createEgressIPObject2(oc)
-		verifyExpectedEIPNumInEIPObject(oc, egressip1.name, 1)
+		var egressIPMaps1 []map[string]string
+		egressipErr := wait.PollUntilContextTimeout(context.Background(), 20*time.Second, 360*time.Second, false, func(cxt context.Context) (bool, error) {
+			egressIPMaps1 = getAssignedEIPInEIPObject(oc, egressip1.name)
+			if len(egressIPMaps1) != 1 || egressIPMaps1[0]["node"] != egressNode {
+				e2e.Logf("Wait for egressIP be assigned to egress node,try next round.")
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(egressipErr, fmt.Sprintf("Failed to assign egressIP to egress node:%v", egressipErr))
+		o.Expect(egressIPMaps1[0]["node"]).Should(o.ContainSubstring(egressNode))
 
 		exutil.By("4. Get the namespace, create a test pod in it, label namespace and test pod to match namespaceSelector and podSelector of egressIP object \n")
 		ns1 := oc.Namespace()
@@ -5568,7 +5578,7 @@ var _ = g.Describe("[sig-networking] SDN OVN EgressIP Multi-NIC", func() {
 
 		exutil.By("5. Start tcpdump on egress node \n")
 		exutil.SetNamespacePrivileged(oc, ns1)
-		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 4 -nni %s icmp", vrf.intfname)
+		tcpdumpCmd := fmt.Sprintf("timeout 60s tcpdump -c 2 -nni %s icmp", vrf.intfname)
 		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+egressNode, "--", "bash", "-c", tcpdumpCmd).Background()
 		defer cmdTcpdump.Process.Kill()
 		exutil.AssertWaitPollNoErr(err, "FAILED to start tcmpdump on the egress node\n")
