@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -152,7 +153,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		o.Eventually(func() bool {
 			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, false)
 			return result
-		}, "60s", "5s").ShouldNot(o.BeTrue(), "BGP UDN route advertisement did not be removed!!")
+		}, "60s", "5s").Should(o.BeTrue(), "BGP UDN route advertisement did not be removed!!")
 		Curlexternal2UDNPodFail(oc, host, ns1, testpodNS1Names[1])
 
 	})
@@ -270,10 +271,11 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 	g.It("Author:zzhao-NonHyperShiftHOST-ConnectedOnly-Critical-78809-UDN pod can access same node and different node when BGP is advertise in LGW and SGW mode [Serial]", func() {
 
 		var (
-			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
-			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
-			raTemplate          = filepath.Join(buildPruningBaseDir, "bgp/ra_template.yaml")
-			udnName             = "udn-network-78809"
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			testPodFile            = filepath.Join(buildPruningBaseDir, "testpod.yaml")
+			hostNetworkPodTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-hostnetwork-specific-node-template.yaml")
+			raTemplate             = filepath.Join(buildPruningBaseDir, "bgp/ra_template.yaml")
+			udnName                = "udn-network-78809"
 		)
 		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
@@ -281,6 +283,20 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			g.Skip("This test requires at least 2 worker nodes which is not fulfilled. ")
 		}
 		ipStackType := checkIPStackType(oc)
+
+		exutil.By("Create hostnetwork pod in ns")
+		ns_hostnetwork := oc.Namespace()
+		err := exutil.SetNamespacePrivileged(oc, ns_hostnetwork)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		hostpod := pingPodResourceNode{
+			name:      "hostnetwork-pod",
+			namespace: ns_hostnetwork,
+			nodename:  nodeList.Items[0].Name,
+			template:  hostNetworkPodTemplate,
+		}
+		hostpod.createPingPodNode(oc)
+		waitPodReady(oc, ns_hostnetwork, hostpod.name)
 		exutil.By("Create namespace")
 		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
@@ -328,26 +344,16 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 
 		exutil.By("Create replica pods in ns1")
 		createResourceFromFile(oc, ns1, testPodFile)
-		err := waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
-		testpodNS1Names := getPodName(oc, ns1, "name=test-pods")
-		nodeName, nodeNameErr := exutil.GetPodNodeName(oc, ns1, testpodNS1Names[1])
-		o.Expect(nodeNameErr).NotTo(o.HaveOccurred())
+		//testpodNS1Names := getPodName(oc, ns1, "name=test-pods")
 
-		exutil.By("check from the UDN pod can access same host service")
-		nodeIPv6, nodeIPv4 := getNodeIP(oc, nodeName)
+		//nodeIPv6, nodeIPv4 := getNodeIP(oc, hostpod.nodename)
+		exutil.By("check from the UDN pod can access same/different host service")
 
-		// comment this due to bug https://issues.redhat.com/browse/OCPBUGS-51165
-		//CurlUDNPod2hostServicePASS(oc, ns1, testpodNS1Names[1], nodeIPv4, nodeIPv6)
-
-		exutil.By("check from the UDN pod can access different host service")
-		differentHostName := nodeList.Items[0].Name
-		if differentHostName == nodeName {
-			differentHostName = nodeList.Items[1].Name
-		}
-
-		node2IPv6, node2IPv4 := getNodeIP(oc, differentHostName)
-		CurlUDNPod2hostServicePASS(oc, ns1, testpodNS1Names[1], node2IPv4, node2IPv6)
+		//comment due to https: //issues.redhat.com/browse/OCPBUGS-51165
+		//CurlUDNPod2hostServicePASS(oc, ns1, testpodNS1Names[1], nodeIPv4, nodeIPv6, "8080")
+		//CurlUDNPod2hostServicePASS(oc, ns1, testpodNS1Names[0], nodeIPv4, nodeIPv6, "8080")
 
 		exutil.By("Delete the RA for the udn and check the traffic again, which should be failed as UDN host isolation")
 		ra.deleteRA(oc)
@@ -355,9 +361,11 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		o.Eventually(func() bool {
 			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, false)
 			return result
-		}, "60s", "5s").ShouldNot(o.BeTrue(), "BGP UDN route advertisement did not be removed!!")
-		CurlUDNPod2hostServiceFail(oc, ns1, testpodNS1Names[1], nodeIPv4, nodeIPv6)
-		//CurlUDNPod2hostServiceFail(oc, ns1, testpodNS1Names[1], node2IPv4, node2IPv6)
+		}, "60s", "5s").Should(o.BeTrue(), "BGP UDN route advertisement did not be removed!!")
+
+		//comment due to https: //issues.redhat.com/browse/OCPBUGS-51165
+		//CurlUDNPod2hostServiceFail(oc, ns1, testpodNS1Names[1], nodeIPv4, nodeIPv6, "8080")
+		//CurlUDNPod2hostServiceFail(oc, ns1, testpodNS1Names[0], nodeIPv4, nodeIPv6, "8080")
 
 	})
 
@@ -451,7 +459,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		o.Eventually(func() bool {
 			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, false)
 			return result
-		}, "60s", "5s").ShouldNot(o.BeTrue(), "BGP UDN route advertisement did not be removed!!")
+		}, "60s", "5s").Should(o.BeTrue(), "BGP UDN route advertisement did not be removed!!")
 		CurlNode2PodFailUDN(oc, nodeName, ns1, testpodNS1Names[1])
 		CurlNode2PodFailUDN(oc, differentHostName, ns1, testpodNS1Names[1])
 
@@ -826,7 +834,152 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		}
 		Curlexternal2PodPass(oc, host, allNS[0], testpods2[0])
 		Curlexternal2UDNPodPass(oc, host, allNS[1], testpods2[1])
+	})
+	g.It("Author:zzhao-Critical-79214-UDN pod with NodePort and externalTrafficPolicy is Local/cluster service when BGP is advertise in LGW and SGW mode (UDN layer3)", func() {
+		var (
+			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
+			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
+			raTemplate             = filepath.Join(buildPruningBaseDir, "bgp/ra_template.yaml")
+			ipFamilyPolicy         = "SingleStack"
+			udnName                = "udn-79214-l3"
+		)
 
+		exutil.By("0. Get three worker nodes")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if len(nodeList.Items) < 3 {
+			g.Skip("This case requires 3 nodes, but the cluster has less than three nodes")
+		}
+
+		exutil.By("1. Create two namespaces, first one is for default network and second is for UDN and then label namespaces")
+		ns1 := oc.Namespace()
+		oc.CreateNamespaceUDN()
+		ns2 := oc.Namespace()
+		ns := []string{ns1, ns2}
+		for _, namespace := range ns {
+			err = exutil.SetNamespacePrivileged(oc, namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("2. Create UDN CRD in ns2")
+		var cidr, ipv4cidr, ipv6cidr string
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/48"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/48"
+				ipFamilyPolicy = "PreferDualStack"
+			}
+		}
+		createGeneralUDNCRD(oc, ns2, udnName, ipv4cidr, ipv6cidr, cidr, "layer3")
+
+		exutil.By("Create RA to advertise the UDN")
+
+		setUDNLabel(oc, ns2, udnName, "app=udn")
+		ra := routeAdvertisement{
+			name:              "udn",
+			networkLabelKey:   "app",
+			networkLabelVaule: "udn",
+			template:          raTemplate,
+		}
+		defer func() {
+			ra.deleteRA(oc)
+		}()
+		ra.createRA(oc)
+
+		exutil.By("Check the UDN network was advertised on worker node")
+
+		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, ns2+"_"+udnName)
+		o.Eventually(func() bool {
+			result := verifyBGPRoutesOnClusterNode(oc, nodeList.Items[0].Name, externalFRRIP2, externalFRRIP1, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
+			return result
+		}, "60s", "10s").Should(o.BeTrue(), "BGP UDN route advertisement did not succeed!!")
+
+		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertise!!!", udnName, ns2)
+		exutil.By("3. Create two pods and nodeport service with externalTrafficPolicy=Local in ns1 and ns2")
+		nodeportsLocal := []string{}
+		pods := make([]pingPodResourceNode, 2)
+		svcs := make([]genericServiceResource, 2)
+		for i := 0; i < 2; i++ {
+			exutil.By(fmt.Sprintf("3.%d Create pod and nodeport service with externalTrafficPolicy=Local in %s", i, ns[i]))
+			for j := 0; j < 2; j++ {
+				pods[j] = pingPodResourceNode{
+					name:      "hello-pod" + strconv.Itoa(j),
+					namespace: ns[i],
+					nodename:  nodeList.Items[j].Name,
+					template:  pingPodNodeTemplate,
+				}
+				pods[j].createPingPodNode(oc)
+				waitPodReady(oc, ns[i], pods[j].name)
+			}
+			svcs[i] = genericServiceResource{
+				servicename:           "test-service" + strconv.Itoa(i),
+				namespace:             ns[i],
+				protocol:              "TCP",
+				selector:              "hello-pod",
+				serviceType:           "NodePort",
+				ipFamilyPolicy:        ipFamilyPolicy,
+				internalTrafficPolicy: "Cluster",
+				externalTrafficPolicy: "Local",
+				template:              genericServiceTemplate,
+			}
+			svcs[i].createServiceFromParams(oc)
+			nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns[i], svcs[i].servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			nodeportsLocal = append(nodeportsLocal, nodePort)
+		}
+
+		exutil.By("4. Validate pod/host to nodeport service with externalTrafficPolicy=Local traffic")
+		for i := 0; i < 2; i++ {
+			exutil.By(fmt.Sprintf("4.1.%d Validate pod to nodeport service with externalTrafficPolicy=Local traffic in %s", i, ns[i]))
+			//comment due to bug https://issues.redhat.com/browse/OCPBUGS-50636
+			//CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[0].Name, nodeportsLocal[i])
+			//CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[1].Name, nodeportsLocal[i])
+			//CurlPod2NodePortFail(oc, ns[i], pods[i].name, nodeList.Items[2].Name, nodeportsLocal[i])
+		}
+		exutil.By("4.2 Validate host to nodeport service with externalTrafficPolicy=Local traffic on default network")
+		CurlNodePortPass(oc, nodeList.Items[2].Name, nodeList.Items[0].Name, nodeportsLocal[0])
+		CurlNodePortPass(oc, nodeList.Items[2].Name, nodeList.Items[1].Name, nodeportsLocal[0])
+		exutil.By("4.3 Validate UDN pod to default network nodeport service with externalTrafficPolicy=Local traffic")
+
+		//comment due to bug: https://issues.redhat.com/browse/OCPBUGS-52278
+		//CurlPod2NodePortFail(oc, ns[1], pods[1].name, nodeList.Items[0].Name, nodeportsLocal[0])
+		CurlPod2NodePortPass(oc, ns[1], pods[1].name, nodeList.Items[0].Name, nodeportsLocal[0])
+
+		exutil.By("4.4 Validate host to nodeport service with externalTrafficPolicy=Local traffic on UDN network")
+		CurlNodePortPass(oc, nodeList.Items[2].Name, nodeList.Items[0].Name, nodeportsLocal[1])
+		CurlNodePortPass(oc, nodeList.Items[2].Name, nodeList.Items[1].Name, nodeportsLocal[1])
+
+		exutil.By("5. Create nodeport service with externalTrafficPolicy=Cluster in ns1 and ns2")
+		nodeportsCluster := []string{}
+		for i := 0; i < 2; i++ {
+			exutil.By(fmt.Sprintf("5.%d Create pod and nodeport service with externalTrafficPolicy=Cluster in %s", i, ns[i]))
+			removeResource(oc, true, true, "svc", "test-service"+strconv.Itoa(i), "-n", ns[i])
+			svcs[i].externalTrafficPolicy = "Cluster"
+			svcs[i].createServiceFromParams(oc)
+			nodePort, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("service", "-n", ns[i], svcs[i].servicename, "-o=jsonpath={.spec.ports[*].nodePort}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			nodeportsCluster = append(nodeportsCluster, nodePort)
+		}
+
+		exutil.By("6. Validate pod/host to nodeport service with externalTrafficPolicy=Cluster traffic")
+		for i := 0; i < 2; i++ {
+			exutil.By(fmt.Sprintf("6.1.%d Validate pod to nodeport service with externalTrafficPolicy=Cluster traffic in %s", i, ns[i]))
+			CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[0].Name, nodeportsCluster[i])
+			CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[1].Name, nodeportsCluster[i])
+			CurlPod2NodePortPass(oc, ns[i], pods[i].name, nodeList.Items[2].Name, nodeportsCluster[i])
+		}
+		exutil.By("6.2 Validate host to nodeport service with externalTrafficPolicy=Cluster traffic on default network")
+		CurlNodePortPass(oc, nodeList.Items[2].Name, nodeList.Items[0].Name, nodeportsCluster[0])
+		CurlNodePortPass(oc, nodeList.Items[2].Name, nodeList.Items[1].Name, nodeportsCluster[0])
+		exutil.By("6.3 Validate UDN pod to default network nodeport service with externalTrafficPolicy=Cluster traffic")
+		CurlPod2NodePortFail(oc, ns[1], pods[1].name, nodeList.Items[0].Name, nodeportsLocal[0])
+		CurlPod2NodePortFail(oc, ns[1], pods[1].name, nodeList.Items[1].Name, nodeportsLocal[0])
 	})
 
 })

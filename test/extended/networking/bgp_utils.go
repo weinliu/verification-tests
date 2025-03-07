@@ -876,6 +876,7 @@ func (ra *routeAdvertisement) deleteRA(oc *exutil.CLI) {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 	raList, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("ra").Output()
+	e2e.Logf("ra list %v", raList)
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(raList).ShouldNot(o.ContainSubstring(ra.name))
 }
@@ -1149,10 +1150,10 @@ func addIPtablesRules(host, intf, ipAddr, externalFRRIP string) error {
 	return nil
 }
 
-func CurlUDNPod2hostServicePASS(oc *exutil.CLI, udn_ns string, pod_udn string, nodeIpv4 string, nodeIpv6 string) {
+func CurlUDNPod2hostServicePASS(oc *exutil.CLI, udn_ns string, pod_udn string, nodeIpv4 string, nodeIpv6 string, hostPort string) {
 	// Poll to check IPv4 connectivity
 	err := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 10*time.Second, false, func(ctx context.Context) (bool, error) {
-		_, err := e2eoutput.RunHostCmd(udn_ns, pod_udn, "curl  -I --connect-timeout 5 "+net.JoinHostPort(nodeIpv4, "9001"))
+		_, err := e2eoutput.RunHostCmd(udn_ns, pod_udn, "curl  -I --connect-timeout 5 "+net.JoinHostPort(nodeIpv4, hostPort))
 		if err != nil {
 			e2e.Logf("The curl should pass but fail, and try next round")
 			return false, nil
@@ -1163,7 +1164,7 @@ func CurlUDNPod2hostServicePASS(oc *exutil.CLI, udn_ns string, pod_udn string, n
 
 	if nodeIpv6 != "" {
 		err1 := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
-			_, err := e2eoutput.RunHostCmd(udn_ns, pod_udn, "curl  -I --connect-timeout 5 "+net.JoinHostPort(nodeIpv6, "9001"))
+			_, err := e2eoutput.RunHostCmd(udn_ns, pod_udn, "curl  -I --connect-timeout 5 "+net.JoinHostPort(nodeIpv6, hostPort))
 			if err != nil {
 				e2e.Logf("The curl should pass but fail, and try next round")
 				return false, nil
@@ -1174,12 +1175,12 @@ func CurlUDNPod2hostServicePASS(oc *exutil.CLI, udn_ns string, pod_udn string, n
 	}
 }
 
-func CurlUDNPod2hostServiceFail(oc *exutil.CLI, udn_ns string, pod_udn string, nodeIpv4 string, nodeIpv6 string) {
-	_, err := e2eoutput.RunHostCmd(udn_ns, pod_udn, "curl  -I --connect-timeout 5 "+net.JoinHostPort(nodeIpv4, "9001"))
+func CurlUDNPod2hostServiceFail(oc *exutil.CLI, udn_ns string, pod_udn string, nodeIpv4 string, nodeIpv6 string, hostPort string) {
+	_, err := e2eoutput.RunHostCmd(udn_ns, pod_udn, "curl  -I --connect-timeout 5 "+net.JoinHostPort(nodeIpv4, hostPort))
 	o.Expect(err).To(o.HaveOccurred())
 
 	if nodeIpv6 != "" {
-		_, err := e2eoutput.RunHostCmd(udn_ns, pod_udn, "curl  -I --connect-timeout 5 "+net.JoinHostPort(nodeIpv6, "9001"))
+		_, err := e2eoutput.RunHostCmd(udn_ns, pod_udn, "curl  -I --connect-timeout 5 "+net.JoinHostPort(nodeIpv6, hostPort))
 		o.Expect(err).To(o.HaveOccurred())
 
 	}
