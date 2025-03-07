@@ -532,19 +532,34 @@ func constructDNSName(base string) string {
 	return dnsName
 }
 
-// isDisconnected returns true if unable to access the public Internet from cluster
-func isDisconnected(oc *exutil.CLI) bool {
-	workNode, err := exutil.GetFirstWorkerNode(oc)
-	o.Expect(err).ShouldNot(o.HaveOccurred())
-
-	curlCMD := "curl -I letsencrypt.org --connect-timeout 5"
-	output, err := exutil.DebugNode(oc, workNode, "bash", "-c", curlCMD)
-	if !strings.Contains(output, "HTTP") || err != nil {
-		e2e.Logf("Unable to access the public Internet from the cluster")
+// isNetworkRestricted returns true if the cluster cannot be directly accessed from external, or is unable to access the public Internet from within the cluster
+func isNetworkRestricted(oc *exutil.CLI) bool {
+	if os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" || os.Getenv("http_proxy") != "" || os.Getenv("https_proxy") != "" {
+		e2e.Logf("Cluster cannot be directly accessed from external (Behind proxy)")
 		return true
 	}
 
-	e2e.Logf("Successfully connected to the public Internet from the cluster")
+	dnsPublicZone, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("dns", "cluster", "-n", "openshift-dns", "-o=jsonpath={.spec.publicZone}").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	if dnsPublicZone == "" {
+		e2e.Logf("Cluster cannot be directly accessed from external (No public DNS record)")
+		return true
+	}
+
+	azureCloudName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.azure.cloudName}").Output()
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	if azureCloudName == "AzureStackCloud" {
+		e2e.Logf("Cluster cannot be directly accessed from external (AzureStack env)")
+		return true
+	}
+
+	workNode, err := exutil.GetFirstWorkerNode(oc)
+	o.Expect(err).ShouldNot(o.HaveOccurred())
+	output, err := exutil.DebugNode(oc, workNode, "bash", "-c", "curl -I letsencrypt.org --connect-timeout 5")
+	if !strings.Contains(output, "HTTP") || err != nil {
+		e2e.Logf("Unable to access the public Internet from within the cluster")
+		return true
+	}
 	return false
 }
 

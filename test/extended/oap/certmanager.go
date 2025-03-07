@@ -52,7 +52,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 			g.Skip("Skip for STS cluster")
 		}
 		exutil.SkipOnProxyCluster(oc)
-		if isDisconnected(oc) {
+		if isNetworkRestricted(oc) {
 			e2e.Logf("setup a private ACME server for testing in disconnected environment")
 			acmeServerEndpoint = setupPebbleServer(oc, oc.Namespace())
 		}
@@ -126,7 +126,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 
 		// applicable variants: non-proxy
 		exutil.SkipOnProxyCluster(oc)
-		if isDisconnected(oc) {
+		if isNetworkRestricted(oc) {
 			e2e.Logf("setup a private ACME server for testing in disconnected environment")
 			acmeServerEndpoint = setupPebbleServer(oc, oc.Namespace())
 		}
@@ -171,7 +171,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 		if !strings.Contains(output, "httpsProxy") || err != nil || output0 == "" || err0 != nil {
 			g.Skip("Skip for non-proxy cluster")
 		}
-		if isDisconnected(oc) {
+		if isNetworkRestricted(oc) {
 			e2e.Logf("setup a private ACME server for testing in disconnected environment")
 			acmeServerEndpoint = setupPebbleServer(oc, oc.Namespace())
 		}
@@ -526,7 +526,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 
 		// applicable variants: non-proxy
 		exutil.SkipOnProxyCluster(oc)
-		if isDisconnected(oc) {
+		if isNetworkRestricted(oc) {
 			e2e.Logf("setup a private ACME server for testing in disconnected environment")
 			acmeServerEndpoint = setupPebbleServer(oc, oc.Namespace())
 		}
@@ -617,7 +617,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 			g.Skip("Skip for non-STS cluster")
 		}
 		exutil.SkipOnProxyCluster(oc)
-		if isDisconnected(oc) {
+		if isNetworkRestricted(oc) {
 			e2e.Logf("setup a private ACME server for testing in disconnected environment")
 			acmeServerEndpoint = setupPebbleServer(oc, oc.Namespace())
 		}
@@ -805,7 +805,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 			g.Skip("Skip for non-STS cluster")
 		}
 		exutil.SkipOnProxyCluster(oc)
-		if isDisconnected(oc) {
+		if isNetworkRestricted(oc) {
 			e2e.Logf("setup a private ACME server for testing in disconnected environment")
 			acmeServerEndpoint = setupPebbleServer(oc, oc.Namespace())
 		}
@@ -999,7 +999,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager ACME issuer", func() {
 			g.Skip("Skip for non-STS cluster")
 		}
 		exutil.SkipOnProxyCluster(oc)
-		if isDisconnected(oc) {
+		if isNetworkRestricted(oc) {
 			e2e.Logf("setup a private ACME server for testing in disconnected environment")
 			acmeServerEndpoint = setupPebbleServer(oc, oc.Namespace())
 		}
