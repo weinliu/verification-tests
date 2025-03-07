@@ -1836,7 +1836,7 @@ func getGCPProjectID(oc *exutil.CLI) (string, error) {
 	}
 	file, err := os.ReadFile(credentialFile)
 	if err != nil {
-		return "", fmt.Errorf("can't read google application credentials: %v", err)
+		g.Skip("Skip for the platform is not GCP and can't read google application credentials: " + err.Error())
 	}
 	var gac googleApplicationCredentials
 	err = json.Unmarshal(file, &gac)
