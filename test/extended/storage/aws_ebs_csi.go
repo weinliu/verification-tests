@@ -289,8 +289,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		testParameters map[string]string
 	}
 
+	// The ext2 support is removed from the AWS EBS CSI Driver v1.39.0(OCP 4.19)
+	// https://github.com/kubernetes-sigs/aws-ebs-csi-driver/pull/2247
 	awsEBSvolFsFormatBlocksizeTestSuit := []caseItem{
-		{"62149", map[string]string{"fsType": "ext2"}}, // OCP-62149 - [AWS-EBS-CSI] [Filesystem] [ext2] should support specifying block size for filesystem format
 		{"62192", map[string]string{"fsType": "ext3"}}, // OCP-62192 - [AWS-EBS-CSI] [Filesystem] [ext3] should support specifying block size for filesystem format
 		{"62193", map[string]string{"fsType": "ext4"}}, // OCP-62193 - [AWS-EBS-CSI] [Filesystem] [ext4] should support specifying block size for filesystem format
 	}
