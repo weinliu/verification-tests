@@ -2608,3 +2608,51 @@ func hasMaster(oc *exutil.CLI) bool {
 	}
 	return len(masterNodes.Items) > 0
 }
+
+func runLoggingMustGather(oc *exutil.CLI) ([]string, error) {
+	// create a temporary directory
+	baseDir := exutil.FixturePath("testdata", "logging")
+	mustGatherPath := filepath.Join(baseDir, "temp"+getRandomString())
+	defer exec.Command("rm", "-r", mustGatherPath).Output()
+	err := os.MkdirAll(mustGatherPath, 0755)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	image, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment.apps/cluster-logging-operator", `-ojsonpath={.spec.template.spec.containers[?(@.name == "cluster-logging-operator")].image}`, "-n", cloNS).Output()
+	if err != nil {
+		return []string{}, fmt.Errorf("can't get CLO image: %s", err)
+	}
+
+	err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("must-gather", "--image="+image, "--dest-dir="+mustGatherPath).Execute()
+	if err != nil {
+		return []string{}, fmt.Errorf("can't get logging must-gather: %v", err)
+	}
+
+	cloImgID, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", cloNS, "pods", "-l", "name=cluster-logging-operator", "-o", "jsonpath={.items[0].status.containerStatuses[0].imageID}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	replacer := strings.NewReplacer(".", "-", "/", "-", ":", "-", "@", "-")
+	cloImgDir := replacer.Replace(cloImgID)
+	return listFilesAndDirectories(mustGatherPath + "/" + cloImgDir)
+}
+
+func listFilesAndDirectories(dirPath string) ([]string, error) {
+	var files []string
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return files, err
+	}
+
+	for _, entry := range entries {
+		path := filepath.Join(dirPath, entry.Name())
+		if entry.IsDir() {
+			pathes, err := listFilesAndDirectories(path)
+			if err != nil {
+				return files, err
+			}
+			files = append(files, pathes...)
+		}
+		//fmt.Printf("\n%s\n", path)
+		files = append(files, path)
+	}
+
+	return files, nil
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -891,5 +892,171 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease rapidast scan"
 		policyFile := filepath.Join(loggingBaseDir, "rapidast/customscan.policy")
 		_, err := rapidastScan(oc, proj, configFile, policyFile, "loki.grafana.com_v1")
 		o.Expect(err).NotTo(o.HaveOccurred())
+	})
+})
+
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease must-gather", func() {
+	defer g.GinkgoRecover()
+
+	var (
+		oc                    = exutil.NewCLI("logging-must-gather", exutil.KubeConfigPath())
+		loggingBaseDir, s, sc string
+	)
+
+	g.BeforeEach(func() {
+		s = getStorageType(oc)
+		if len(s) == 0 {
+			g.Skip("Current cluster doesn't have a proper object storage for this test!")
+		}
+		sc, _ = getStorageClassName(oc)
+		if len(sc) == 0 {
+			g.Skip("The cluster doesn't have a storage class for this test!")
+		}
+		loggingBaseDir = exutil.FixturePath("testdata", "logging")
+		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
+		CLO := SubscriptionObjects{
+			OperatorName:  "cluster-logging-operator",
+			Namespace:     cloNS,
+			PackageName:   "cluster-logging",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		LO := SubscriptionObjects{
+			OperatorName:  "loki-operator-controller-manager",
+			Namespace:     loNS,
+			PackageName:   "loki-operator",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+		}
+		COO := SubscriptionObjects{
+			OperatorName:  "cluster-observability-operator",
+			Namespace:     "openshift-cluster-observability-operator",
+			PackageName:   "cluster-observability-operator",
+			Subscription:  subTemplate,
+			OperatorGroup: filepath.Join(loggingBaseDir, "subscription", "allnamespace-og.yaml"),
+			CatalogSource: CatalogSourceObjects{
+				SourceName:      "redhat-operators",
+				SourceNamespace: "openshift-marketplace",
+				Channel:         "stable",
+			},
+			OperatorPodLabel: "app.kubernetes.io/name=observability-operator",
+		}
+		exutil.By("deploy CLO, LO and COO")
+		CLO.SubscribeOperator(oc)
+		LO.SubscribeOperator(oc)
+		COO.SubscribeOperator(oc)
+	})
+
+	// author qitang@redhat.com
+	g.It("Author:qitang-CPaasrunOnly-High-75632-oc adm must-gather can collect logging data[Serial]", func() {
+
+		oc.SetupProject()
+		clfNS := oc.Namespace()
+
+		exutil.By("Create external Elasticsearch")
+		esProj := oc.Namespace()
+		ees := externalES{
+			namespace:  esProj,
+			version:    "7",
+			serverName: "elasticsearch-server",
+			httpSSL:    true,
+			userAuth:   true,
+			username:   "user1",
+			password:   getRandomString(),
+			secretName: "ees-75632",
+			loggingNS:  clfNS,
+		}
+		defer ees.remove(oc)
+		ees.deploy(oc)
+
+		exutil.By("Create CLF to forward to ES")
+		clfES := clusterlogforwarder{
+			name:                      "clf-75632-es",
+			namespace:                 clfNS,
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "elasticsearch-userauth-https.yaml"),
+			secretName:                ees.secretName,
+			waitForPodReady:           false,
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			serviceAccountName:        "test-clf-" + getRandomString(),
+		}
+		defer clfES.delete(oc)
+		clfES.create(oc, "ES_URL=https://"+ees.serverName+"."+esProj+".svc:9200", "ES_VERSION="+ees.version)
+
+		exutil.By("deploy lokistack")
+		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
+		ls := lokiStack{
+			name:          "loki-75632",
+			namespace:     loggingNS,
+			tSize:         "1x.demo",
+			storageType:   s,
+			storageSecret: "storage-secret-75632",
+			storageClass:  sc,
+			bucketName:    "logging-loki-75632-" + getInfrastructureName(oc),
+			template:      lokiStackTemplate,
+		}
+		defer ls.removeObjectStorage(oc)
+		err := ls.prepareResourcesForLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer ls.removeLokiStack(oc)
+		err = ls.deployLokiStack(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		//ls.waitForLokiStackToBeReady(oc)
+
+		exutil.By("deploy logfilesmetricexporter")
+		lfme := logFileMetricExporter{
+			name:          "instance",
+			namespace:     loggingNS,
+			template:      filepath.Join(loggingBaseDir, "logfilemetricexporter", "lfme.yaml"),
+			waitPodsReady: false,
+		}
+		defer lfme.delete(oc)
+		lfme.create(oc)
+
+		exutil.By("create a CLF to test forward to lokistack")
+		clf := clusterlogforwarder{
+			name:                      "clf-75632-lokistack",
+			namespace:                 loggingNS,
+			serviceAccountName:        "logcollector-75632",
+			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
+			secretName:                "lokistack-secret-75632",
+			collectApplicationLogs:    true,
+			collectAuditLogs:          true,
+			collectInfrastructureLogs: true,
+			waitForPodReady:           false,
+		}
+		clf.createServiceAccount(oc)
+		defer removeClusterRoleFromServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		err = addClusterRoleToServiceAccount(oc, clf.namespace, clf.serviceAccountName, "logging-collector-logs-writer")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer resource{"secret", clf.secretName, clf.namespace}.clear(oc)
+		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
+		defer clf.delete(oc)
+		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace)
+
+		exutil.By("create UIPlugin")
+		uiPluginTemplate := filepath.Join(loggingBaseDir, "UIPlugin", "UIPlugin.yaml")
+		file, err := processTemplate(oc, "-f", uiPluginTemplate, "-p", "LOKISTACK_NAME="+ls.name)
+		defer os.Remove(file)
+		exutil.AssertWaitPollNoErr(err, "Can not process uiPluginTemplate")
+		err = oc.AsAdmin().WithoutNamespace().Run("apply").Args("-f", file).Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("UIPlugin", "logging").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		files, err := runLoggingMustGather(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(files) > 0).Should(o.BeTrue())
+		for _, expectFile := range []string{
+			"cluster-scoped-resources/observability.openshift.io/uiplugins/logging.yaml",
+			"cluster-logging/namespaces/" + clfES.namespace + "/" + "configmap_" + clfES.name + "-config_vector.toml",
+			"cluster-logging/namespaces/" + clf.namespace + "/" + "configmap_" + clf.name + "-config_vector.toml",
+			"namespaces/openshift-logging/logging.openshift.io/logfilemetricexporters/instance.yaml",
+			"namespaces/" + ls.namespace + "/loki.grafana.com/lokistacks/" + ls.name + ".yaml",
+			"namespaces/" + clf.namespace + "/observability.openshift.io/clusterlogforwarders/" + clf.name + ".yaml",
+			"namespaces/" + clfES.namespace + "/observability.openshift.io/clusterlogforwarders/" + clfES.name + ".yaml",
+		} {
+			o.Expect(containSubstring(files, expectFile)).Should(o.BeTrue(), "can't find file "+expectFile)
+		}
 	})
 })
