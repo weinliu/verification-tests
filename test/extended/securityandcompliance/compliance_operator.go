@@ -6172,6 +6172,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkMachineConfigPoolStatus(oc, "worker")
 			checkNodeStatus(oc)
 			cleanupObjects(oc, objectTableRef{"mc", subD.namespace, "-l compliance.openshift.io/suite=" + ssbStig})
+			patch := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/projectRequestTemplate\"}]")
+			patchResource(oc, asAdmin, withoutNamespace, "project.config.openshift.io", "cluster", "--type", "json", "-p", patch)
 		}()
 
 		defer func() {
