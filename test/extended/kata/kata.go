@@ -1520,7 +1520,7 @@ var _ = g.Describe("[sig-kata] Kata", func() {
 
 		if kataconfig.enablePeerPods {
 			testControlPod("deployment", "peer-pods-webhook", "-o=jsonpath={.spec.replicas}", "-o=jsonpath={.status.readyReplicas}", "app=peer-pods-webhook")
-			testControlPod("daemonset", caaDaemonName, "-o=jsonpath{.status.desiredNumberScheduled}", "-o=jsonpath={.status.numberReady}", "name="+caaDaemonName)
+			testControlPod("daemonset", caaDaemonName, "-o=jsonpath={.status.desiredNumberScheduled}", "-o=jsonpath={.status.numberReady}", "name="+caaDaemonName)
 			// Check for the peer pod RuntimeClass
 			msg, err := checkResourceExists(oc, "RuntimeClass", ppRuntimeClass, subscription.namespace, duration, interval)
 			if err != nil || msg == "" {
