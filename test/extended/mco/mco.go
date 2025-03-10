@@ -4991,12 +4991,11 @@ desiredState:
 
 		exutil.By("Move one node from the custom pool to the canary custom pool")
 		startTime := canaryNode.GetDateOrFail()
+
+		// We need to add and remove the label at the same time to avoid the node belonging to 2 custom nodes at the same time, which is forbidden
 		o.Expect(
-			canaryNode.AddLabel("node-role.kubernetes.io/"+canaryMCPName, ""),
+			MoveNodeToAnotherCustomPool(&canaryNode, customMCPName, canaryMCPName),
 		).To(o.Succeed(), "Error labeling node %s", canaryNode)
-		o.Expect(
-			canaryNode.RemoveLabel("node-role.kubernetes.io/"+customMCPName),
-		).To(o.Succeed(), "Error removing label from node %s", canaryNode)
 
 		o.Eventually(canaryMcp.getMachineCount, "5m", "20s").Should(o.Equal(1),
 			"A machine should be added to the canary MCP, but no machine was added: %s", canaryMcp.PrettyString())

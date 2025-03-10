@@ -1682,3 +1682,9 @@ func DebugDegradedStatus(mcp *MachineConfigPool) {
 	logger.Infof("Last %d lines of MCC:\n%s", maxMCCLines, GetLastNLines(mccLogs, maxMCCLines))
 	logger.Infof("END DEBUG")
 }
+
+// MoveNodeToAnotherCustomPool modify the role labels in the node so that it is moved from one custom pool to another custom pool in a way that he never belongs to both custom pools at the same time, which is forbidden
+func MoveNodeToAnotherCustomPool(node *Node, origMCP, destMCP string) error {
+	return node.Patch("json",
+		fmt.Sprintf(`[{"op":"remove", "path": "/metadata/labels/node-role.kubernetes.io~1%s"},{"op": "add", "path":"/metadata/labels/node-role.kubernetes.io~1%s", "value": ""}]`, origMCP, destMCP))
+}
