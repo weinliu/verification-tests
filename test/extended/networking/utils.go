@@ -4284,9 +4284,13 @@ func collectMustGather(oc *exutil.CLI, dstDir string, imageStream string, parame
 		}
 	}
 	output, err := oc.AsAdmin().WithoutNamespace().Run("adm").Args(args...).Output()
-	if err != nil {
-		e2e.Logf("collect must-gather failed, err: %v", err)
-		return "", err
+	if err != nil && strings.Contains(output, "ImagePullBackOff") {
+		e2e.Logf("unable to pull image, try again...")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("adm").Args(args...).Output()
+		if err != nil {
+			e2e.Logf("collect must-gather failed, err: %v", err)
+			return "", err
+		}
 	}
 	return output, nil
 }
