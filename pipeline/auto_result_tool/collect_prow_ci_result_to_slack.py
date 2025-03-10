@@ -85,7 +85,7 @@ class SummaryClient:
         self.session.mount('https://', adapter)
         self.session.mount('http://', adapter)
 
-        self.base_url = "https://reportportal-openshift.apps.ocp-c1.prod.psi.redhat.com"
+        self.base_url = "https://reportportal-openshift.apps.dno.ocp-hub.prod.psi.redhat.com"
         self.launch_url = self.base_url +"/api/v1/prow/launch"
         self.item_url = self.base_url + "/api/v1/prow/item"
         self.ui_url = self.base_url + "/ui/#prow/launches/all/"
