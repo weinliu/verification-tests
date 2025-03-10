@@ -2345,16 +2345,13 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		//hypershift-hosted cluster do not have master node
 		checkPodDisruptionBudgetIfNotSNO(oc)
 
-		exutil.By("check monitoring-plugin pods are ready")
-		getReadyPodsWithLabels(oc, "openshift-monitoring", "app.kubernetes.io/component=monitoring-plugin")
-
-		exutil.By("get monitoring-plugin pod name")
-		monitoringPluginPodNames, err := getAllRunningPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/component=monitoring-plugin")
-		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("wait for monitoring-plugin pod to be ready")
 		getDeploymentReplicas(oc, "openshift-monitoring", "monitoring-plugin")
 		waitForPodsToMatchReplicas(oc, "openshift-monitoring", "monitoring-plugin", "app.kubernetes.io/component=monitoring-plugin")
 
 		exutil.By("check monitoring-plugin pod config")
+		monitoringPluginPodNames, err := getAllRunningPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/component=monitoring-plugin")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		e2e.Logf("monitoringPluginPodNames: %v", monitoringPluginPodNames)
 		for _, pod := range monitoringPluginPodNames {
 			exutil.AssertPodToBeReady(oc, pod, "openshift-monitoring")
