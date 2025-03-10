@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -617,4 +618,46 @@ func (pvc *persistentVolumeClaim) checkVolumeAttributesClassAsExpected(oc *exuti
 func (pvc *persistentVolumeClaim) modifyWithVolumeAttributesClass(oc *exutil.CLI, vacName string) {
 	_, err := applyVolumeAttributesClassPatch(oc, pvc.name, pvc.namespace, vacName)
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+type pvcTopInfo struct {
+	Namespace string
+	Name      string
+	Usage     string
+}
+
+// function to get all PersistentVolumeClaim Top info
+func getPersistentVolumeClaimTopInfo(oc *exutil.CLI) []pvcTopInfo {
+	var pvcData []pvcTopInfo
+	var pvcOutput string
+
+	o.Eventually(func() string {
+		pvcOutput, _ = oc.WithoutNamespace().Run("adm").Args("-n", oc.Namespace(), "top", "pvc", "--insecure-skip-tls-verify=true").Output()
+		return pvcOutput
+	}, 180*time.Second, 10*time.Second).Should(o.ContainSubstring("USAGE"))
+	pvcOutputLines := strings.Split(pvcOutput, "\n")
+	space := regexp.MustCompile(`\s+`)
+	for index, pvcOutputLine := range pvcOutputLines {
+		if index == 0 {
+			continue
+		}
+		fields := space.Split(pvcOutputLine, -1)
+		if len(fields) >= 3 {
+			pvc := pvcTopInfo{
+				Namespace: fields[0],
+				Name:      fields[1],
+				Usage:     fields[2],
+			}
+			pvcData = append(pvcData, pvc)
+		}
+	}
+	return pvcData
+}
+
+// function to wait till no pvc left
+func checkZeroPersistentVolumeClaimTopInfo(oc *exutil.CLI) {
+	o.Eventually(func() string {
+		pvcOutput, _ := oc.WithoutNamespace().Run("adm").Args("-n", oc.Namespace(), "top", "pvc", "--insecure-skip-tls-verify=true").Output()
+		return pvcOutput
+	}, 180*time.Second, 10*time.Second).Should(o.ContainSubstring("no persistentvolumeclaims found in use"))
 }

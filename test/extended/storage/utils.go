@@ -1231,3 +1231,18 @@ func waitForAllCOHealthy(oc *exutil.CLI) error {
 	}
 	return nil
 }
+
+// function to create cluster role
+func createClusterRole(oc *exutil.CLI, roleName string, verb string, resource string) {
+	output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterrole", roleName).Output()
+	if strings.Contains(output, "not found") {
+		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("clusterrole", roleName, "--verb="+verb, "--resource="+resource).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+	}
+}
+
+// function to add cluster role to current user
+func addClusterRoleToUser(oc *exutil.CLI, clusterRoleName string, user string) {
+	err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", clusterRoleName, user).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+}

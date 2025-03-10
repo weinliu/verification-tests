@@ -3,6 +3,7 @@ package storage
 import (
 	"fmt"
 	"io/ioutil"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -6190,6 +6191,85 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 		exutil.By("#. Check VAC resource is removed successfully")
 		checkResourcesNotExist(oc.AsAdmin(), "vac", vac.name, "")
+	})
+
+	// author: ropatil@redhat.com
+	// OCP-79557-[CSI-Driver] [Dynamic PV] [Filesystem default] CLI option to display filesystem usage of PVC
+	g.It("Author:ropatil-ROSA-OSD_CCS-ARO-Medium-79557-[CSI-Driver] [Dynamic PV] [Filesystem default] CLI option to display filesystem usage of PVC", func() {
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir  = exutil.FixturePath("testdata", "storage")
+			pvcTemplate         = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			podTemplate         = filepath.Join(storageTeamBaseDir, "pod-template.yaml")
+			supportProvisioners = sliceIntersect(scenarioSupportProvisioners, cloudProviderSupportProvisioners)
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		output, err := exec.Command("oc", "version").Output()
+		if err != nil {
+			e2e.Logf("err %v\n", err)
+		}
+		e2e.Logf("here oc version is %v\n", string(output))
+		//g.Skip("Skipping the case")
+
+		// Use the framework created project as default, if use your own, exec the follow code setupProject
+		exutil.By("#. Create new project for the scenario")
+		oc.SetupProject() //create new project
+		for _, provisioner = range supportProvisioners {
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase start" + "******")
+
+			// Get the present scName and check it is installed or no
+			scName := getPresetStorageClassNameByProvisioner(oc, cloudProvider, provisioner)
+			checkStorageclassExists(oc, scName)
+
+			// Set the resource definition for the scenario
+			pvc := newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimCapacity("1Gi"))
+			pod := newPod(setPodTemplate(podTemplate), setPodPersistentVolumeClaim(pvc.name))
+
+			exutil.By("#. Create a pvc with the preset csi storageclass")
+			pvc.scname = scName
+			e2e.Logf("%s", pvc.scname)
+			pvc.create(oc)
+			defer pvc.deleteAsAdmin(oc)
+
+			exutil.By("#. Create pod with the created pvc and wait for the pod ready")
+			pod.create(oc)
+			defer pod.deleteAsAdmin(oc)
+			pod.waitReady(oc)
+
+			exutil.By("#. Create and add cluster role to user")
+			createClusterRole(oc, "routes-view", "get,list", "routes")
+			addClusterRoleToUser(oc, "routes-view", oc.Username())
+			addClusterRoleToUser(oc, "cluster-monitoring-view", oc.Username())
+
+			exutil.By("#. Get the volume usage before writting")
+			o.Eventually(func() bool {
+				pvcTopData := getPersistentVolumeClaimTopInfo(oc)
+				e2e.Logf("The volume usage before writting data is %v", pvcTopData[0].Usage)
+				return strings.Contains(pvcTopData[0].Usage, "0.00%")
+			}, 300*time.Second, 30*time.Second).Should(o.BeTrue())
+
+			exutil.By("#. Write down the data inside volume")
+			msg, _ := execCommandInSpecificPod(oc, pvc.namespace, pod.name, "/bin/dd if=/dev/zero of="+pod.mountPath+"/testfile1.txt bs=1G count=2")
+			o.Expect(msg).To(o.ContainSubstring("No space left on device"))
+
+			exutil.By("#. Get the volume usage after writting")
+			o.Eventually(func() string {
+				pvcTopData := getPersistentVolumeClaimTopInfo(oc)
+				e2e.Logf("The volume usage after writting data is %v", pvcTopData[0].Usage)
+				return pvcTopData[0].Usage
+			}, 300*time.Second, 30*time.Second).ShouldNot(o.ContainSubstring("0.00%"))
+
+			exutil.By("#. Delete the pod and check top pvc which should not have any persistentvolume claims")
+			deleteSpecifiedResource(oc, "pod", pod.name, pod.namespace)
+			checkZeroPersistentVolumeClaimTopInfo(oc)
+
+			exutil.By("******" + cloudProvider + " csi driver: \"" + provisioner + "\" test phase finished" + "******")
+		}
 	})
 })
 
