@@ -433,7 +433,7 @@ class GetDataFromRP:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("passrate.py")
     parser.add_argument("-a","--action", default="get", choices=["get", "pillar", "curve", "xls"], required=True)
-    parser.add_argument("-e","--endpoint", default="https://reportportal-openshift.apps.ocp-c1.prod.psi.redhat.com/api")
+    parser.add_argument("-e","--endpoint", default="https://reportportal-openshift.apps.dno.ocp-hub.prod.psi.redhat.com/api")
     parser.add_argument("-t","--token", default="")
     parser.add_argument("-p","--project", default="prow")
 

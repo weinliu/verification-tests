@@ -31,7 +31,7 @@ class ReportPortalClient:
         adapter = HTTPAdapter(max_retries=retry)
         self.session.mount('https://', adapter)
         self.session.mount('http://', adapter)
-        # os.environ['no_proxy'] = "reportportal-openshift.apps.ocp-c1.prod.psi.redhat.com"
+        # os.environ['no_proxy'] = "reportportal-openshift.apps.dno.ocp-hub.prod.psi.redhat.com"
         self.session.trust_env = False
 
         self.launch_url = args.endpoint + "/v1/" + args.project + "/launch"
@@ -981,7 +981,7 @@ class ReportPortalClient:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("reportportal.py")
     parser.add_argument("-a","--action", default="import", choices={"import", "merge", "get", "delete", "attr", "getprofile", "getfcd", "putprofile"}, required=True)
-    parser.add_argument("-e","--endpoint", default="https://reportportal-openshift.apps.ocp-c1.prod.psi.redhat.com/api")
+    parser.add_argument("-e","--endpoint", default="https://reportportal-openshift.apps.dno.ocp-hub.prod.psi.redhat.com/api")
     parser.add_argument("-t","--token", default="")
     parser.add_argument("-ta","--tatoken", default="")
     parser.add_argument("-p","--project", default="ocp")

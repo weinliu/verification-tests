@@ -19,8 +19,8 @@ class ReportPortalClient:
         self.session.mount('https://', adapter)
         self.session.mount('http://', adapter)
 
-        self.launch_url = "https://reportportal-openshift.apps.ocp-c1.prod.psi.redhat.com/api/v1/ocp/launch"
-        self.item_url = "https://reportportal-openshift.apps.ocp-c1.prod.psi.redhat.com/api/v1/ocp/item"
+        self.launch_url = "https://reportportal-openshift.apps.dno.ocp-hub.prod.psi.redhat.com/api/v1/ocp/launch"
+        self.item_url = "https://reportportal-openshift.apps.dno.ocp-hub.prod.psi.redhat.com/api/v1/ocp/item"
         self.args = args
         # print (self.session.headers)
 

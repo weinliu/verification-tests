@@ -238,7 +238,7 @@ class UpdateResultonRP:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("updateresultrp.py")
     parser.add_argument("-a","--action", default="cls", choices={"cls"}, required=True)
-    parser.add_argument("-e","--endpoint", default="https://reportportal-openshift.apps.ocp-c1.prod.psi.redhat.com/api")
+    parser.add_argument("-e","--endpoint", default="https://reportportal-openshift.apps.dno.ocp-hub.prod.psi.redhat.com/api")
     parser.add_argument("-t","--token", default="")
     parser.add_argument("-p","--project", default="ocp")
 
