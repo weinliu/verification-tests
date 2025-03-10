@@ -80,6 +80,46 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		pollReadPodData(oc, "openshift-ingress", routername, "/usr/bin/env", `ROUTER_USE_PROXY_PROTOCOL=true`)
 	})
 
+	// author: hongli@redhat.com
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-High-16870-No health check when there is only one endpoint for a route", func() {
+		// skip the test if featureSet is set there
+		if exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("Skip for not supporting DynamicConfigurationManager")
+		}
+
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			deploymentName      = "web-server-deploy"
+			unSecSvcName        = "service-unsecure"
+		)
+
+		exutil.By("1.0: Deploy a project with single pod and the service")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, testPodSvc)
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
+		output, err := oc.Run("get").Args("service").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring(unSecSvcName))
+
+		exutil.By("2.0: Create an unsecure route")
+		createRoute(oc, project1, "http", unSecSvcName, unSecSvcName, []string{})
+		waitForOutput(oc, project1, "route/"+unSecSvcName, "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("3.0: Check the haproxy.config that the health check should not exist in the backend server slots")
+		epIP := getByJsonPath(oc, project1, "ep/"+unSecSvcName, "{.subsets[0].addresses[0].ip}")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
+		backendConfig := getBlockConfig(oc, routerpod, "be_http:"+project1+":"+unSecSvcName)
+		o.Expect(backendConfig).To(o.ContainSubstring(epIP))
+		o.Expect(backendConfig).NotTo(o.ContainSubstring("check inter"))
+
+		exutil.By("4.0: Scale up the deployment with replicas 2, then check the haproxy.config that the health check should exist in the backend server slots")
+		scaleDeploy(oc, project1, deploymentName, 2)
+		backendConfig = getBlockConfig(oc, routerpod, "be_http:"+project1+":"+unSecSvcName)
+		o.Expect(backendConfig).To(o.MatchRegexp(epIP + ".+check inter"))
+		o.Expect(strings.Count(backendConfig, "check inter") == 2).To(o.BeTrue())
+	})
+
 	// author: shudili@redhat.com
 	g.It("Author:shudili-ROSA-OSD_CCS-ARO-High-27628-router support HTTP2 for passthrough route and reencrypt route with custom certs", func() {
 		var (
