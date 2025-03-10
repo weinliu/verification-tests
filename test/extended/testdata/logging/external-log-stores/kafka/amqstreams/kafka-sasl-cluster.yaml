@@ -73,4 +73,4 @@ parameters:
 - name: NAME
   value: "my-cluster"
 - name: VERSION
-  value: "3.7.0"
+  value: "3.9.0"
