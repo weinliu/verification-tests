@@ -6172,8 +6172,6 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			checkMachineConfigPoolStatus(oc, "worker")
 			checkNodeStatus(oc)
 			cleanupObjects(oc, objectTableRef{"mc", subD.namespace, "-l compliance.openshift.io/suite=" + ssbStig})
-			patch := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/projectRequestTemplate\"}]")
-			patchResource(oc, asAdmin, withoutNamespace, "project.config.openshift.io", "cluster", "--type", "json", "-p", patch)
 		}()
 
 		defer func() {
@@ -6191,6 +6189,13 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			patchUnpaused := fmt.Sprintf("{\"spec\":{\"paused\":false}}")
 			patchResource(oc, asAdmin, withoutNamespace, "mcp", ss.roles1, "-n", subD.namespace, "--type", "merge", "-p", patchUnpaused)
 			checkMachineConfigPoolStatus(oc, ss.roles1)
+			patch := fmt.Sprintf("[{\"op\": \"remove\", \"path\": \"/spec/projectRequestTemplate\"}]")
+			patchResource(oc, asAdmin, withoutNamespace, "project.config.openshift.io", "cluster", "--type", "json", "-p", patch)
+			expectedStatus := map[string]string{"Progressing": "True"}
+			if err := waitCoBecomes(oc, "openshift-apiserver", 60, expectedStatus); err != nil {
+				exutil.AssertWaitPollNoErr(err, `openshift-apiserver status has not yet changed to {"Progressing": "True"} in 60 seconds`)
+			}
+			clusterOperatorHealthcheck(oc, 1500)
 		}()
 
 		g.By("Create wrscan machineconfigpool.. !!!\n")
