@@ -1350,6 +1350,13 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 	// author: xiuwangredhat.com
 	g.It("Author:xiuwang-ROSA-OSD_CCS-ARO-Critical-48744-High-18995-Pull through for images that have dots in their namespace", func() {
 
+		g.By("Skip when allowedRegistriesForImport is set")
+		importImage, importErr := IsAllowedRegistriesForImportSet(oc)
+		o.Expect(importErr).NotTo(o.HaveOccurred())
+		if importImage {
+			g.Skip("Skip test when allowedRegistriesForImport setting due to the following custom registry not added in the white list.")
+		}
+
 		g.By("Setup a private registry")
 		oc.SetupProject()
 		var regUser, regPass = "testuser", getRandomString()
@@ -1878,6 +1885,13 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: xiuwang@redhat.com
 	g.It("ROSA-OSD_CCS-ARO-Author:xiuwang-Low-51055-Image pullthrough does pass 429 errors back to capable clients", func() {
+		g.By("Skip when allowedRegistriesForImport is set")
+		importImage, importErr := IsAllowedRegistriesForImportSet(oc)
+		o.Expect(importErr).NotTo(o.HaveOccurred())
+		if importImage {
+			g.Skip("Skip test when allowedRegistriesForImport setting due to the following custom registry not added in the white list.")
+		}
+
 		SkipDnsFailure(oc)
 		g.By("Create a registry could limit quota")
 		oc.SetupProject()
@@ -2923,6 +2937,12 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 
 	// author: xiuwang@redhat.com
 	g.It("Author:xiuwang-ROSA-OSD_CCS-ARO-Medium-10788-Medium-12059-Could import image and pull from private registry", func() {
+		g.By("Skip when allowedRegistriesForImport is set")
+		importImage, importErr := IsAllowedRegistriesForImportSet(oc)
+		o.Expect(importErr).NotTo(o.HaveOccurred())
+		if importImage {
+			g.Skip("Skip test when allowedRegistriesForImport setting due to the following custom registry not added in the white list.")
+		}
 		g.By("Setup a private registry")
 		var regUser, regPass = "testuser", getRandomString()
 		authFile := filepath.Join("/tmp/", fmt.Sprintf("ir-auth-%s", getRandomString()))

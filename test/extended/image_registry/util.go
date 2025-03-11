@@ -1647,3 +1647,11 @@ func IsMultiArch(oc *exutil.CLI) bool {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	return strings.ToLower(architecture) == "multi"
 }
+
+func IsAllowedRegistriesForImportSet(oc *exutil.CLI) (bool, error) {
+	importImage, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("image.config/cluster", "-o=jsonpath={.spec.allowedRegistriesForImport}").Output()
+	if err != nil {
+		return false, fmt.Errorf("failed to get image.config/cluster: %w", err)
+	}
+	return importImage != "", nil
+}
