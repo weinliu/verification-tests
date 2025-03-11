@@ -19,16 +19,16 @@ describe('Operator Hub tests', () => {
       .its('stdout')
       .should('contain', 'created');
     cy.checkCommandResult(`oc get catalogsource custom-catalogsource -n openshift-marketplace -o jsonpath='{.status.connectionState.lastObservedState}'`, 'READY');
-    cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+    cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
   });
 
   after(() => {
     cy.adminCLI(`oc delete CatalogSource custom-catalogsource -n openshift-marketplace`);
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
-    cy.adminCLI('oc delete sub kiali -n openshift-operators');
-    cy.adminCLI(`oc delete csv kiali-operator.v1.83.0 -n openshift-operators`);
     cy.adminCLI(`oc delete project test-42671`,{ failOnNonZeroExit: false });
     cy.adminCLI(`oc delete project ${testParams.suggestedNamespace}`,{ failOnNonZeroExit: false });
+    cy.adminCLI('oc delete sub kiali -n openshift-operators');
+    cy.adminCLI(`oc delete csv kiali-operator.v1.83.0 -n openshift-operators`);
   });
 
   it('(OCP-45874,yapei,UserInterface) Check source labels on the operator hub page tiles',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
@@ -155,28 +155,24 @@ describe('Operator Hub tests', () => {
   });
 
   it('(OCP-42671,xiyuzhao,UserInterface) OperatorHub shows correct operator installation states',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa']},  () => {
-    const params ={
+    let params ={
       ns: 'test-42671',
       operatorName: 'infinispan-operator',
       csvName: 'Infinispan Operator'
     }
-    cy.cliLogin();
-    cy.createProjectWithCLI(params.ns);
+    cy.adminCLI(`oc new-project ${params.ns}`);
     operatorHubPage.installOperator(params.operatorName, testParams.catalogName,params.ns);
     Pages.gotoInstalledOperatorPage(params.ns)
     operatorHubPage.checkOperatorStatus(params.csvName, 'Succeeded')
     Pages.gotoOperatorHubPage(params.ns)
+    operatorHubPage.checkSourceCheckBox("custom-auto-source");
     operatorHubPage.checkInstallStateCheckBox('installed')
-    operatorHubPage.filter('infinispan');
-    cy.get('[class*="card__footer"] span').should('contain.text', "Installed");
-    cy.get(`[data-test*="infinispan"]`)
-      .should('have.attr','href')
-      .then((href) => {
-        cy.visit(href);
-        cy.byLegacyTestID('operator-uninstall-btn').should('exist');
-      });
+    operatorHubPage.filter(params.operatorName);
+    cy.get('[class*="card__footer"] span').should('contain.text', "Installed")
+    cy.get(`button[id*="infinispan-operator"`).click({force: true});
+    cy.byLegacyTestID('operator-uninstall-btn').should('exist');
     cy.get('[data-test-id="operator-modal-box"]').contains('has been installed');
-    cy.get('[data-test-id="operator-modal-box"] p a')
+    cy.get('[data-test-id="operator-modal-box"] a')
       .contains('View it here')
       .should('have.attr','href')
       .then((href) => {
@@ -232,14 +228,13 @@ describe('Operator Hub tests', () => {
     cy.exec(`oc get nodes -o yaml -o jsonpath={.items[*].status.nodeInfo.operatingSystem} \
                 --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} | \
              xargs -n 1 | \
-             uniq`, { failOnNonZeroExit: false })
+             uniq`)
       .then((result) => {
-        return nodeOS = result.stdout;
         cy.log(result.stdout);
-        cy.log(result.stderr);
+        return nodeOS = result.stdout;
     });
     /* Aqua operator has label operatorframework.io/os.windows: supported
-        which means it will only shown on OperatorHub page when node os has windows type */
+    which means it will only shown on OperatorHub page when node os has windows type */
     Pages.gotoOperatorHubPage();
     operatorHubPage.checkSourceCheckBox("custom-auto-source");
     cy.wrap(nodeOS).then(()=> {

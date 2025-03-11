@@ -26,7 +26,7 @@ export const installedOperators = {
 
 export const operatorHubPage = {
   getAllTileLabels: () => {
-    return cy.get('.pf-v5-c-badge')
+    return cy.get('.pf-v6-c-badge')
   },
   checkCustomCatalog: (name: string) => {
     sourceActions(name, 'view');
@@ -54,7 +54,7 @@ export const operatorHubPage = {
       })
   },
   clickOperatorTile: (operator_name) => {
-    cy.get(`label[for*="${operator_name}"]`).first().click();
+    cy.get(`button[id*="${operator_name}"]`).first().click();
   },
   clickOperatorInstall: () => {
     cy.get('[data-test="install-operator"]').click();
@@ -194,14 +194,16 @@ export const operatorHubModal = {
     cy.get('h5').contains('Channel').parent('div').within(() => {
       // click on button instead of div
       cy.get('button[data-test="operator-channel-select-toggle"]').click({force: true});
-      cy.get(`button[id="${channel}"]`).click({force: true});
-    })
+    });
+    cy.get(`li[data-test="channel-option-${channel}"]`).should('be.visible');
+    cy.get(`button[id="${channel}"]`).click({force: true});
   },
   selectVersion: (version) => {
     cy.get('h5').contains('Version').parent('div').within(() => {
       cy.get('button[data-test="operator-version-select-toggle"]').click({force: true});
-      cy.get(`button[id="${version}"]`).click({force: true});
-    })
+    });
+    cy.get(`li[data-test*="${version}"]`).should('be.visible');
+    cy.get(`button[id="${version}"]`).click({force: true});
   },
 };
 
@@ -245,7 +247,7 @@ export const Operand = {
     // this will expand 'Advanced configuration' where we set all affinities
     cy.get('#root_spec_nodeConfigAdvanced_accordion-content')
       .within(() => {
-        cy.get('button.pf-v5-c-expandable-section__toggle')
+        cy.get('button[id*="expandable-section-toggle-"]')
           .first()
           .click()
       })
