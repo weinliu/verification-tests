@@ -216,6 +216,64 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 
 	})
 
+	// Test case creater: hongli@redhat.com
+	g.It("Author:mjoseph-High-12506-reencrypt route with no cert if a router is configured with a default wildcard cert", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+		caCert := filepath.Join(buildPruningBaseDir, "ca-bundle.pem")
+
+		exutil.By("1. Create a server pod and its service")
+		project1 := oc.Namespace()
+		defaultContPod := getOneNewRouterPodFromRollingUpdate(oc, "default")
+		createResourceFromWebServer(oc, project1, testPodSvc, "web-server-deploy")
+
+		exutil.By("2. Create a reen route")
+		createRoute(oc, project1, "reencrypt", "12506-no-cert", "service-secure", []string{"--dest-ca-cert=" + caCert})
+		getRoutes(oc, oc.Namespace())
+
+		exutil.By("3. Confirm whether the destination certificate is present")
+		waitForOutput(oc, oc.Namespace(), "route/12506-no-cert", "{.spec.tls}", "destinationCACertificate")
+
+		exutil.By("4. Check the router pod and ensure the routes are loaded in haproxy.config of default controller")
+		searchOutput := readRouterPodData(oc, defaultContPod, "cat haproxy.config", "12506-no-cert")
+		o.Expect(searchOutput).To(o.ContainSubstring("backend be_secure:" + project1 + ":12506-no-cert"))
+
+		exutil.By("5. Check the reachability of the host in the default controller")
+		reenHost := "12506-no-cert-" + project1 + ".apps." + getBaseDomain(oc)
+		waitForOutsideCurlContains("https://"+reenHost, "-k", `Hello-OpenShift web-server-deploy`)
+	})
+
+	// Test case creater: hongli@redhat.com
+	g.It("Author:mjoseph-Critical-12564-The path specified in route can work well for reencrypt terminated", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
+		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+		caCert := filepath.Join(buildPruningBaseDir, "ca-bundle.pem")
+
+		exutil.By("1. Create a server pod and its service")
+		project1 := oc.Namespace()
+		defaultContPod := getOneNewRouterPodFromRollingUpdate(oc, "default")
+		createResourceFromWebServer(oc, project1, testPodSvc, "web-server-deploy")
+
+		exutil.By("2. Create a reen route")
+		createRoute(oc, project1, "reencrypt", "12564-reencrypt", "service-secure", []string{"--dest-ca-cert=" + caCert, "--path=/test"})
+		getRoutes(oc, oc.Namespace())
+
+		exutil.By("3. Confirm whether the destination certificate is present")
+		waitForOutput(oc, oc.Namespace(), "route/12564-reencrypt", "{.spec.tls}", "destinationCACertificate")
+
+		exutil.By("4. Check the router pod and ensure the routes are loaded in haproxy.config of default controller")
+		searchOutput := readRouterPodData(oc, defaultContPod, "cat haproxy.config", "12564-reencrypt")
+		o.Expect(searchOutput).To(o.ContainSubstring("backend be_secure:" + project1 + ":12564-reencrypt"))
+
+		exutil.By("5. Check the reachability of the  in the specified path")
+		reenHostWithPath := "12564-reencrypt-" + project1 + ".apps." + getBaseDomain(oc) + "/test/"
+		waitForOutsideCurlContains("https://"+reenHostWithPath, "-k", `Hello-OpenShift-Path-Test web-server-deploy`)
+
+		exutil.By("6. Check the reachability of the host in the default controller")
+		reenHostWithOutPath := "12564-reencrypt-" + project1 + ".apps." + getBaseDomain(oc)
+		waitForOutsideCurlContains("https://"+reenHostWithOutPath, "-kI", "503 Service Unavailable")
+	})
+
 	// author: iamin@redhat.com
 	g.It("Author:iamin-ROSA-OSD_CCS-ARO-NonHyperShiftHOST-Critical-13753-NetworkEdge Check the cookie if using secure mode when insecureEdgeTerminationPolicy to Redirect for edge/reencrypt route", func() {
 		var (
