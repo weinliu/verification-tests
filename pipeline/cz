@@ -1,8 +1,10 @@
 #!/bin/bash
 set -e
 
+WORKDIRBASE=$1
 AZUREAUTHDIR="${HOME}/azureauth"
 AZUREAUTHFILE="azure_auth.json"
+DEFAULT_AZUREAUTH_LOCATION="$WORKDIRBASE/internal/config/credentials/azure.json"
 
 # CLUSTERSERVER=`cat ${KUBECONFIG} | grep -E "server: "`
 # if [ "X${CLUSTERSERVER}X" == "XX" ]; then
@@ -14,7 +16,7 @@ AZUREAUTHFILE="azure_auth.json"
 # if [[ "${CLUSTERSERVER}" == *".azure.devcluster"* ]]; then
 #     echo "It is Azure platform and try to get azure auth file ${AZUREAUTHURL}"
 
-if ! [ -e "/root/azure.key" ]; then
+if ! [ -e "$DEFAULT_AZUREAUTH_LOCATION" ]; then
     echo "the azure authentication file does not exit"
     exit 1
 fi
@@ -24,7 +26,7 @@ time_str=`echo ${current} | awk -F " " '{print $2}'`
 config_name="terraform.azure.auto.tfvars-${date_str}-${time_str}.json"
 echo "the new azure auth file file is ${config_name}"
 cd ${AZUREAUTHDIR}
-cp -fr /root/azure.key ${config_name}
+cp -fr "$DEFAULT_AZUREAUTH_LOCATION" ${config_name}
 if [ $? -ne 0 ];then
     echo "the new azure auth file file is not copied, please check the reason."
     exit 1

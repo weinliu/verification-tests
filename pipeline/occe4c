@@ -4,6 +4,8 @@
 WORKDIRBASE=$1
 BUILD_NUM_FOR_CONF=$2
 CONTENT_FOR_CONF=$3
+DEFAULT_GCPAUTH_LOCATION="$WORKDIRBASE/internal/config/credentials/gce_v4.json"
+
 if [ "${BUILD_NUM_FOR_CONF}" == "null" ]; then
   BUILD_NUM_FOR_CONF=""
 else
@@ -142,7 +144,7 @@ else
   fi
 
 fi
-if ! [ -e "/root/gce.key" ]; then
+if ! [ -e "$DEFAULT_GCPAUTH_LOCATION" ]; then
     echo "the gce authentication file does not exit"
     exit 1
 fi
@@ -151,7 +153,7 @@ date_str=`echo ${current} | awk -F " " '{print $1}'`
 time_str=`echo ${current} | awk -F " " '{print $2}'`
 config_name="gce-${date_str}-${time_str}.json"
 echo "the gce file is ${config_name}"
-cp -fr /root/gce.key ${config_name}
+cp -fr "$DEFAULT_GCPAUTH_LOCATION" ${config_name}
 eval export GOOGLE_APPLICATION_CREDENTIALS="${config_name}"
 eval export SSH_CLOUD_PRIV_KEY="${WORKDIRBASE}/internal/config/keys/openshift-qe.pem"
 export SSH_CLOUD_PRIV_GCP_USER="${QE_BASTION_SSH_USER:-core}"
