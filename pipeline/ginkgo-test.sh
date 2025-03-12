@@ -3,14 +3,6 @@ set -e
 env|grep -v -E "GLOKIPWD"
 
 function run {
-  if [ "${SCENARIO}" == "" ] ; then
-    echo "please input value for SCENARIO"
-    exit 1
-  fi
-  if ! echo ${JENKINS_AGENT} | grep -E '^goc([0-9]{2,3})$'; then
-    echo "wrong agent node ${JENKINS_AGENT}"
-    exit 1
-  fi
   PIPELINESCRIPT_DIR=${WORKSPACE}"/private/pipeline" && export PATH=${PIPELINESCRIPT_DIR}:$PATH
   if [ ${REPO_OWNER} == "openshift" ]; then
     WORKBUILDDIR=${WORKSPACE}"/private"
