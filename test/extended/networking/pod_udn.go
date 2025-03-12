@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -3693,5 +3694,164 @@ var _ = g.Describe("[sig-networking] SDN udn pods", func() {
 		CurlMultusPod2PodPass(oc, ns, podNames[0], pod3IPv6, "net1", podenvname)
 		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv4, "net1", podenvname)
 		CurlMultusPod2PodPass(oc, ns, podNames[1], pod3IPv6, "net1", podenvname)
+	})
+	g.It("Author:yingwang-High-78152-Check udn pods to kapi/dns traffic should pass.", func() {
+		var (
+			testDataDir     = exutil.FixturePath("testdata", "networking")
+			testPodTemplate = filepath.Join(testDataDir, "ping-for-pod-template.yaml")
+			serviceTemplate = filepath.Join(testDataDir, "service-generic-template.yaml")
+			ns              string
+			ipStackType     = checkIPStackType(oc)
+		)
+		exutil.By("1. create udn namespace")
+		oc.CreateNamespaceUDN()
+		ns = oc.Namespace()
+
+		exutil.By("2. Create CRD for UDN")
+		var cidr, ipv4cidr, ipv6cidr string
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/48"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/48"
+			}
+		}
+
+		createGeneralUDNCRD(oc, ns, "udn-78152", ipv4cidr, ipv6cidr, cidr, "layer3")
+
+		exutil.By("3. Create test pods and service")
+		testPod := networkingRes{
+			name:      "testpod",
+			namespace: ns,
+			kind:      "pod",
+			tempfile:  testPodTemplate,
+		}
+		defer removeResource(oc, true, true, testPod.kind, testPod.name, "-n", testPod.namespace)
+		testPod.create(oc, "NAME="+testPod.name, "NAMESPACE="+testPod.namespace)
+
+		err := waitForPodWithLabelReady(oc, ns, "name=hello-pod")
+		exutil.AssertWaitPollNoErr(err, "pod with label name="+testPod.name+" not ready")
+
+		testSvc := genericServiceResource{
+			servicename:           "test-service",
+			namespace:             ns,
+			protocol:              "TCP",
+			selector:              "hello-pod",
+			serviceType:           "ClusterIP",
+			ipFamilyPolicy:        "PreferDualStack",
+			internalTrafficPolicy: "Cluster",
+			externalTrafficPolicy: "", //This no value parameter will be ignored
+			template:              serviceTemplate,
+		}
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", testSvc.servicename, "-n", testSvc.namespace).Execute()
+		testSvc.createServiceFromParams(oc)
+
+		exutil.By("4. check kapi traffic from testpod")
+		cmd := "curl -k https://kubernetes.default:443/healthz"
+		outPut, err := e2eoutput.RunHostCmd(ns, testPod.name, cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(outPut).Should(o.ContainSubstring("ok"))
+
+		exutil.By("5. check dns traffic from testpod")
+		svcIP1, svcIP2 := getSvcIP(oc, ns, testSvc.servicename)
+		cmdDns := "nslookup " + testSvc.servicename
+		outPut, err = e2eoutput.RunHostCmd(ns, testPod.name, cmdDns)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		re1 := regexp.MustCompile(`Address:\s+` + svcIP1)
+		res1 := re1.MatchString(outPut)
+		o.Expect(res1).To(o.BeTrue())
+		if svcIP2 != "" {
+			re2 := regexp.MustCompile(`Address:\s+` + svcIP2)
+			res2 := re2.MatchString(outPut)
+			o.Expect(res2).To(o.BeTrue())
+		}
+
+	})
+
+	g.It("Author:yingwang-High-78381-Check cudn pods to kapi/dns traffic(layer 2)", func() {
+		var (
+			testDataDir     = exutil.FixturePath("testdata", "networking")
+			testPodTemplate = filepath.Join(testDataDir, "ping-for-pod-template.yaml")
+			serviceTemplate = filepath.Join(testDataDir, "service-generic-template.yaml")
+			ns              string
+			ipStackType     = checkIPStackType(oc)
+			values          = []string{"value-78381-1", "value-78381-2"}
+			key             = "test.cudn.layer2"
+		)
+		exutil.By("1. create udn namespace")
+		oc.CreateNamespaceUDN()
+		ns = oc.Namespace()
+
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, fmt.Sprintf("%s-", key)).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, fmt.Sprintf("%s=%s", key, values[0])).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("2. Create CRD for CUDN")
+		var cidr, ipv4cidr, ipv6cidr string
+		if ipStackType == "ipv4single" {
+			cidr = "10.150.0.0/16"
+		} else {
+			if ipStackType == "ipv6single" {
+				cidr = "2010:100:200::0/48"
+			} else {
+				ipv4cidr = "10.150.0.0/16"
+				ipv6cidr = "2010:100:200::0/48"
+			}
+		}
+
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", "udn-78381")
+		_, err = createCUDNCRD(oc, key, "udn-78381", ipv4cidr, ipv6cidr, cidr, "layer2", values)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("3. Create test pods and service")
+		testPod := networkingRes{
+			name:      "testpod",
+			namespace: ns,
+			kind:      "pod",
+			tempfile:  testPodTemplate,
+		}
+		defer removeResource(oc, true, true, testPod.kind, testPod.name, "-n", testPod.namespace)
+		testPod.create(oc, "NAME="+testPod.name, "NAMESPACE="+testPod.namespace)
+
+		err = waitForPodWithLabelReady(oc, ns, "name=hello-pod")
+		exutil.AssertWaitPollNoErr(err, "pod with label name="+testPod.name+" not ready")
+
+		testSvc := genericServiceResource{
+			servicename:           "test-service",
+			namespace:             ns,
+			protocol:              "TCP",
+			selector:              "hello-pod",
+			serviceType:           "ClusterIP",
+			ipFamilyPolicy:        "PreferDualStack",
+			internalTrafficPolicy: "Cluster",
+			externalTrafficPolicy: "", //This no value parameter will be ignored
+			template:              serviceTemplate,
+		}
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("svc", testSvc.servicename, "-n", testSvc.namespace).Execute()
+		testSvc.createServiceFromParams(oc)
+
+		exutil.By("4. check kapi traffic from testpod")
+		cmd := "curl -k https://kubernetes.default:443/healthz"
+		outPut, err := e2eoutput.RunHostCmd(ns, testPod.name, cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(outPut).Should(o.ContainSubstring("ok"))
+
+		exutil.By("5. check dns traffic from testpod")
+		svcIP1, svcIP2 := getSvcIP(oc, ns, testSvc.servicename)
+		cmdDns := "nslookup " + testSvc.servicename
+		outPut, err = e2eoutput.RunHostCmd(ns, testPod.name, cmdDns)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		re1 := regexp.MustCompile(`Address:\s+` + svcIP1)
+		res1 := re1.MatchString(outPut)
+		o.Expect(res1).To(o.BeTrue())
+		if svcIP2 != "" {
+			re2 := regexp.MustCompile(`Address:\s+` + svcIP2)
+			res2 := re2.MatchString(outPut)
+			o.Expect(res2).To(o.BeTrue())
+		}
+
 	})
 })
