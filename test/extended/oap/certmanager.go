@@ -1825,7 +1825,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 		createCertificate(oc, sharedNamespace)
 
 		e2e.Logf("setup a private ACME server for testing")
-		acmeServerEndpoint := setupPebbleServer(oc, oc.Namespace())
+		acmeServerEndpoint := setupPebbleServer(oc, sharedNamespace)
 
 		exutil.By("create an ACME http01 issuer")
 		acmeIssuerFile := filepath.Join(buildPruningBaseDir, "issuer-acme-http01.yaml")
