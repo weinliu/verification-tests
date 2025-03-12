@@ -860,6 +860,20 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		logger.Infof("OK!\n")
 
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-Critical-80438-Unexpected Permissions in cluster-reader ClusterRole", func() {
+		var (
+			clusterReaderCR = NewResource(oc.AsAdmin(), "ClusterRole", "cluster-reader")
+		)
+
+		o.Eventually(clusterReaderCR.Get, "2m", "10s").WithArguments(`{.rules[*].verbs}`).ShouldNot(
+			o.Or(
+				o.ContainSubstring(`patch`),
+				o.ContainSubstring(`delete`),
+				o.ContainSubstring(`update`),
+			), `%s Should not contain "patch", "delete", or "update" verbs`, clusterReaderCR,
+		)
+	})
 })
 
 // EventuallyFileExistsInNode fails the test if the certificate file does not exist in the node after the time specified as parameters
