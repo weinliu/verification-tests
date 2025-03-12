@@ -1968,8 +1968,12 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 			exutil.By("Create a user-monitoring-shared namespace and deploy PrometheusRule")
 			oc.SetupProject()
 			ns := oc.Namespace()
+			err := oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", ns, "pod-security.kubernetes.io/enforce=restricted", "--overwrite=true").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
 			defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", "ns-monitoring-75384", "--ignore-not-found").Execute()
-			err := oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", "ns-monitoring-75384").Execute()
+			err = oc.AsAdmin().WithoutNamespace().Run("create").Args("namespace", "ns-monitoring-75384").Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			err = oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", "ns-monitoring-75384", "pod-security.kubernetes.io/enforce=restricted", "--overwrite=true").Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
 			createResourceFromYaml(oc, "ns-monitoring-75384", example_cross_ns_alert)
 
