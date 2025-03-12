@@ -4446,3 +4446,17 @@ func isEnabledCapability(oc *exutil.CLI, component string) bool {
 	e2e.Logf("Cluster enabled capability parameters: %v\n", enabledCapabilities)
 	return strings.Contains(enabledCapabilities, component)
 }
+
+// ping pod to external connectivity check
+func pingPod2ExternalPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string) {
+	ipStack := checkIPStackType(oc)
+	if (ipStack == "ipv4single") || (ipStack == "dualstack") {
+		output, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "ping -c10 www.google.com")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "0% packet loss")).To(o.BeTrue())
+	} else {
+		output, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "ping -6 -c10 www.google.com")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(output, "0% packet loss")).To(o.BeTrue())
+	}
+}

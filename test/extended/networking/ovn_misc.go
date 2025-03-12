@@ -1648,4 +1648,85 @@ var _ = g.Describe("[sig-networking] SDN misc", func() {
 			o.Expect(strings.Contains(ifaceConf, nodeIP1)).Should(o.BeTrue())
 		}
 	})
+
+	g.It("Author:anusaxen-Critical-80439-[FdpOvnOvs] [NETWORKCUSIM] pod to external traffic doesn't require OVN to create mac-binding entry for Join subnet gateway IP [Disruptive]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		)
+		var macUUIDCmdOutput, uuid, joinSubGWIP string
+
+		ipStackType := checkIPStackType(oc)
+		if ipStackType == "ipv6single" {
+			joinSubGWIP = "fd98::1"
+		} else {
+			joinSubGWIP = "100.64.0.1"
+		}
+		workerNode, err := exutil.GetFirstWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		exutil.By("Create pod on one worker node")
+		ns := oc.Namespace()
+		pod := pingPodResourceNode{
+			name:      "hello-pod",
+			namespace: ns,
+			nodename:  workerNode,
+			template:  pingPodNodeTemplate,
+		}
+		defer pod.deletePingPodNode(oc)
+		pod.createPingPodNode(oc)
+		waitPodReady(oc, pod.namespace, pod.name)
+
+		//check pod to external tarffic to make sure before proceeding
+		pingPod2ExternalPass(oc, ns, "hello-pod")
+
+		//gatewayRouterID, err := getRouterID(oc, workerNode)
+		//o.Expect(err).NotTo(o.HaveOccurred())
+
+		ovnKubeNodePod := ovnkubeNodePod(oc, workerNode)
+		//note: under "ovn-nbctl find Logical_Router name=GR_xx", dynamic_neigh_routers="false" is default setting
+		setLogicalRouterFlagCmd := fmt.Sprintf("ovn-nbctl set logical_router GR_%s options:dynamic_neigh_routers=true", workerNode)
+		_, err = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKubeNodePod, setLogicalRouterFlagCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		defer func() {
+			setLogicalRouterFlagCmd = fmt.Sprintf("ovn-nbctl set logical_router GR_%s options:dynamic_neigh_routers=false", workerNode)
+			_, err = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKubeNodePod, setLogicalRouterFlagCmd)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		//this pod's external traffic should generate an RTOJ entry that corresponds to the gateway IP of 100.64.0.1/fd98::1 in the SBDB, provided that the dynamic_neigh_router option is enabled.
+		pingPod2ExternalPass(oc, ns, "hello-pod")
+
+		macBindingCmd := fmt.Sprintf("ovn-sbctl find mac_binding")
+		macBindCmdOutput, err := exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKubeNodePod, macBindingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(macBindCmdOutput, joinSubGWIP)).Should(o.BeTrue())
+
+		//change dynamic_neigh_router flag to false
+		setLogicalRouterFlagCmd = fmt.Sprintf("ovn-nbctl set logical_router GR_%s options:dynamic_neigh_routers=false", workerNode)
+		_, err = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKubeNodePod, setLogicalRouterFlagCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//delete rtoj entry corresponding to Join subnet gateway IP
+		findMacBindingUUIDCmd := fmt.Sprintf("ovn-sbctl --format=table --no-heading --columns=_UUID find mac_binding ip=%s", joinSubGWIP)
+		macUUIDCmdOutput, err = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKubeNodePod, findMacBindingUUIDCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//ignoring the Defaulted container stdouts from bash
+		macUUIDCmdOutputline := strings.Split(macUUIDCmdOutput, "\n")
+		if len(macUUIDCmdOutputline) >= 2 {
+			uuid = macUUIDCmdOutputline[1]
+			o.Expect(uuid).NotTo(o.BeEmpty())
+			e2e.Logf("mac-binding entry UUID is %s", uuid)
+		}
+
+		destroyMacBindingCmd := fmt.Sprintf("ovn-sbctl --no-leader-only destroy mac_binding %s", uuid)
+		_, err = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKubeNodePod, destroyMacBindingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		//ensure external ping traffic continues to function, while also preventing the recreation of the entry.
+		//additionally, it is important to ensure that OVN consistently recognizes the MAC address of the cluster router port without requiring MAC binding entries.
+		pingPod2ExternalPass(oc, ns, "hello-pod")
+		macBindCmdOutput, err = exutil.RemoteShPodWithBash(oc, "openshift-ovn-kubernetes", ovnKubeNodePod, macBindingCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(strings.Contains(macBindCmdOutput, joinSubGWIP)).ShouldNot(o.BeTrue())
+	})
 })
