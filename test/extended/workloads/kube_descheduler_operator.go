@@ -84,7 +84,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		g.By("Create the descheduler namespace")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
+		defer deleteNamespace(oc, kubeNamespace)
 
 		patch := `[{"op":"add", "path":"/metadata/labels/openshift.io~1cluster-monitoring", "value":"true"}]`
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ns", kubeNamespace, "--type=json", "-p", patch).Execute()
@@ -443,7 +443,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		g.By("Create the descheduler namespace")
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
+		defer deleteNamespace(oc, kubeNamespace)
 
 		patch := `[{"op":"add", "path":"/metadata/labels/openshift.io~1cluster-monitoring", "value":"true"}]`
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ns", kubeNamespace, "--type=json", "-p", patch).Execute()
@@ -1187,7 +1187,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		g.By("Create the descheduler namespace")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
+		defer deleteNamespace(oc, kubeNamespace)
 		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1408,7 +1408,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		g.By("Create the descheduler namespace")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
+		defer deleteNamespace(oc, kubeNamespace)
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1576,10 +1576,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		g.By("Create the descheduler namespace")
-		defer func() {
-			deleteNSErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
-			o.Expect(deleteNSErr).NotTo(o.HaveOccurred())
-		}()
+		defer deleteNamespace(oc, kubeNamespace)
 		createNSErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
 		o.Expect(createNSErr).NotTo(o.HaveOccurred())
 
@@ -1761,10 +1758,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		g.By("Create the descheduler namespace")
-		defer func() {
-			deleteNSErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
-			o.Expect(deleteNSErr).NotTo(o.HaveOccurred())
-		}()
+		defer deleteNamespace(oc, kubeNamespace)
 		createNSErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
 		o.Expect(createNSErr).NotTo(o.HaveOccurred())
 
@@ -2013,10 +2007,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		priorityclassh.createPriorityClass(oc)
 
 		g.By("Create the descheduler namespace")
-		defer func() {
-			deleteNSErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
-			o.Expect(deleteNSErr).NotTo(o.HaveOccurred())
-		}()
+		defer deleteNamespace(oc, kubeNamespace)
 		createNSErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
 		o.Expect(createNSErr).NotTo(o.HaveOccurred())
 
@@ -2176,7 +2167,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		g.By("Create the descheduler namespace")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
+		defer deleteNamespace(oc, kubeNamespace)
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -2252,10 +2243,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		g.By("Create the descheduler namespace")
-		defer func() {
-			deleteNSErr := oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
-			o.Expect(deleteNSErr).NotTo(o.HaveOccurred())
-		}()
+		defer deleteNamespace(oc, kubeNamespace)
 		createNSErr := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
 		o.Expect(createNSErr).NotTo(o.HaveOccurred())
 
@@ -2425,7 +2413,7 @@ var _ = g.Describe("[sig-scheduling] Workloads The Descheduler Operator automate
 		}
 
 		g.By("Create the descheduler namespace")
-		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("ns", kubeNamespace).Execute()
+		defer deleteNamespace(oc, kubeNamespace)
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", kubeNamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
