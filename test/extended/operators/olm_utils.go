@@ -208,6 +208,19 @@ func (sub *subscriptionDescription) createWithoutCheck(oc *exutil.CLI, itName st
 	o.Expect(err).NotTo(o.HaveOccurred())
 	dr.getIr(itName).add(newResource(oc, "sub", sub.subName, requireNS, sub.namespace))
 }
+func (sub *subscriptionDescription) createWithoutCheckNoPrint(oc *exutil.CLI, itName string, dr describerResrouce) {
+	e2e.Logf("create sub %s", sub.subName)
+	applyFn := applyResourceFromTemplate
+	if strings.Compare(sub.clusterType, "microshift") == 0 {
+		applyFn = applyResourceFromTemplateOnMicroshift
+	}
+	err := applyFn(oc, "--ignore-unknown-parameters=true", "-f", sub.template, "-p", "SUBNAME="+sub.subName, "SUBNAMESPACE="+sub.namespace, "CHANNEL="+sub.channel,
+		"APPROVAL="+sub.ipApproval, "OPERATORNAME="+sub.operatorPackage, "SOURCENAME="+sub.catalogSourceName, "SOURCENAMESPACE="+sub.catalogSourceNamespace,
+		"STARTINGCSV="+sub.startingCSV, "CONFIGMAPREF="+sub.configMapRef, "SECRETREF="+sub.secretRef)
+
+	o.Expect(err).NotTo(o.HaveOccurred())
+	dr.getIr(itName).add(newResource(oc, "sub", sub.subName, requireNS, sub.namespace))
+}
 
 // the method is to check if the sub's state is AtLatestKnown.
 // if it is AtLatestKnown, get installed csv from sub and save it to dr.
@@ -1025,13 +1038,20 @@ func (ck checkDescription) check(oc *exutil.CLI) {
 	case "expect":
 		err := expectedResource(oc, ck.executor, ck.inlineNamespace, ck.expectAction, ck.expectContent, ck.expect, ck.resource...)
 		if err != nil {
+			ns := oc.Namespace()
+			for i, v := range ck.resource {
+				if v == "-n" && i+1 < len(ck.resource) {
+					ns = ck.resource[i+1]
+					break
+				}
+			}
 			getResource(oc, asAdmin, withoutNamespace, "pod", "-n", "openshift-marketplace")
-			getResource(oc, asAdmin, withoutNamespace, "og", "-n", oc.Namespace(), "-o", "yaml")
-			getResource(oc, asAdmin, withoutNamespace, "catalogsource", "-n", oc.Namespace(), "-o", "yaml")
-			getResource(oc, asAdmin, withoutNamespace, "subscription", "-n", oc.Namespace(), "-o", "yaml")
-			getResource(oc, asAdmin, withoutNamespace, "ip", "-n", oc.Namespace())
-			getResource(oc, asAdmin, withoutNamespace, "csv", "-n", oc.Namespace())
-			getResource(oc, asAdmin, withoutNamespace, "pods", "-n", oc.Namespace())
+			getResource(oc, asAdmin, withoutNamespace, "og", "-n", ns, "-o", "yaml")
+			getResource(oc, asAdmin, withoutNamespace, "catalogsource", "-n", ns, "-o", "yaml")
+			getResource(oc, asAdmin, withoutNamespace, "subscription", "-n", ns, "-o", "yaml")
+			getResource(oc, asAdmin, withoutNamespace, "ip", "-n", ns)
+			getResource(oc, asAdmin, withoutNamespace, "csv", "-n", ns)
+			getResource(oc, asAdmin, withoutNamespace, "pods", "-n", ns)
 		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("expected content %s not found by %v", ck.expectContent, ck.resource))
 	default:
