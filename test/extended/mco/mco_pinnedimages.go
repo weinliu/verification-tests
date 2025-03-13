@@ -126,61 +126,10 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 
 	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-High-73623-[P2][OnCLayer] Pin images [Disruptive]", func() {
 		var (
-			waitForPinned      = time.Minute * 15
-			pinnedImageSetName = "tc-73623-pin-images"
-			node               = mcp.GetNodesOrFail()[0]
-			firstPinnedImage   = NewRemoteImage(node, BusyBoxImage)
-			secondPinnedImage  = NewRemoteImage(node, AlpineImage)
+			pinnedImageSetName = fmt.Sprintf("tc-%s-pinned-image", GetCurrentTestPolarionIDNumber())
 		)
+		basicPinnedImageTest(mcp, pinnedImageSetName)
 
-		exutil.By("Remove images")
-		_ = firstPinnedImage.Rmi()
-		_ = secondPinnedImage.Rmi()
-		logger.Infof("OK!\n")
-
-		exutil.By("Pin images")
-		pis, err := CreateGenericPinnedImageSet(oc.AsAdmin(), pinnedImageSetName, mcp.GetName(), []string{firstPinnedImage.ImageName, secondPinnedImage.ImageName})
-		o.Expect(err).NotTo(o.HaveOccurred(), "Error creating pinnedimageset %s", pis)
-		defer pis.DeleteAndWait(waitForPinned)
-		logger.Infof("OK!\n")
-
-		exutil.By("Wait for all images to be pinned")
-		o.Expect(mcp.waitForPinComplete(waitForPinned)).To(o.Succeed(), "Pinned image operation is not completed in %s", mcp)
-		logger.Infof("OK!\n")
-
-		exutil.By("Check that the images are pinned")
-		o.Expect(firstPinnedImage.IsPinned()).To(o.BeTrue(), "%s is not pinned, but it should", firstPinnedImage)
-		o.Expect(secondPinnedImage.IsPinned()).To(o.BeTrue(), "%s is not pinned, but it should", secondPinnedImage)
-		logger.Infof("OK!\n")
-
-		exutil.By("Patch the pinnedimageset and remove one image")
-		o.Expect(
-			pis.Patch("json", fmt.Sprintf(`[{"op": "replace", "path": "/spec/pinnedImages", "value": [{"name": "%s"}]}]`, firstPinnedImage.ImageName)),
-		).To(o.Succeed(),
-			"Error patching %s to remove one image")
-		logger.Infof("OK!\n")
-
-		exutil.By("Wait for the pinnedimageset changes to be applied")
-		o.Expect(mcp.waitForPinComplete(waitForPinned)).To(o.Succeed(), "Pinned image operation is not completed in %s", mcp)
-		logger.Infof("OK!\n")
-
-		exutil.By("Check that only the image reamaining in the pinnedimageset is pinned")
-		o.Expect(firstPinnedImage.IsPinned()).To(o.BeTrue(), "%s is not pinned, but it should", firstPinnedImage)
-		o.Expect(secondPinnedImage.IsPinned()).To(o.BeFalse(), "%s is pinned, but it should NOT", secondPinnedImage)
-		logger.Infof("OK!\n")
-
-		exutil.By("Remove the pinnedimageset")
-		o.Expect(pis.Delete()).To(o.Succeed(), "Error removing %s", pis)
-		logger.Infof("OK!\n")
-
-		exutil.By("Wait for the pinnedimageset removal to be applied")
-		o.Expect(mcp.waitForPinComplete(waitForPinned)).To(o.Succeed(), "Pinned image operation is not completed in %s", mcp)
-		logger.Infof("OK!\n")
-
-		exutil.By("Check that only the image reamaining in the pinnedimageset is pinned")
-		o.Expect(firstPinnedImage.IsPinned()).To(o.BeFalse(), "%s is pinned, but it should NOT", firstPinnedImage)
-		o.Expect(secondPinnedImage.IsPinned()).To(o.BeFalse(), "%s is pinned, but it should NOT", secondPinnedImage)
-		logger.Infof("OK!\n")
 	})
 
 	// Disconnected clusters use an imagecontentsourcepolicy to mirror the images in openshittest. In this test cases we create an ImageDigestMirrorSet to mirror the same images and it is not supported
@@ -551,6 +500,21 @@ var _ = g.Describe("[sig-mco] MCO Pinnedimages", func() {
 		}
 		logger.Infof("OK!\n")
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-80334-[P1][OnCLayer] Pin images in custom MCP [Disruptive]", func() {
+		var (
+			customPoolName     = fmt.Sprintf("infra-mcp-%s", GetCurrentTestPolarionIDNumber())
+			pinnedImageSetName = fmt.Sprintf("tc-%s-pinned-image", GetCurrentTestPolarionIDNumber())
+		)
+		defer DeleteCustomMCP(oc.AsAdmin(), customPoolName)
+		infraMcp, err := CreateCustomMCP(oc.AsAdmin(), customPoolName, 1)
+		o.Expect(err).NotTo(o.HaveOccurred(), "Could not create a new custom MCP")
+		node := infraMcp.GetNodesOrFail()[0]
+		logger.Infof("%s", node)
+
+		basicPinnedImageTest(infraMcp, pinnedImageSetName)
+
+	})
 })
 
 // getReleaseInfoPullspecOrFail returns a list of strings containing the names of the pullspec images
@@ -668,5 +632,66 @@ func DigestMirrorTest(oc *exutil.CLI, mcp *MachineConfigPool, idmsName, idmsMirr
 		o.Expect(ri.IsPinned()).To(o.BeTrue(),
 			"%s is not pinned, but it should. %s")
 	}
+	logger.Infof("OK!\n")
+}
+
+// basic function to add pinnedimageset for TC-73623 and TC-80334
+func basicPinnedImageTest(mcp *MachineConfigPool, pinnedImageSetName string) {
+
+	var (
+		waitForPinned     = time.Minute * 15
+		node              = mcp.GetNodesOrFail()[0]
+		firstPinnedImage  = NewRemoteImage(node, BusyBoxImage)
+		secondPinnedImage = NewRemoteImage(node, AlpineImage)
+		oc                = mcp.GetOC()
+	)
+
+	exutil.By("Remove images")
+	_ = firstPinnedImage.Rmi()
+	_ = secondPinnedImage.Rmi()
+	logger.Infof("OK!\n")
+
+	exutil.By("Pin images")
+	pis, err := CreateGenericPinnedImageSet(oc.AsAdmin(), pinnedImageSetName, mcp.GetName(), []string{firstPinnedImage.ImageName, secondPinnedImage.ImageName})
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error creating pinnedimageset %s", pis)
+	defer pis.DeleteAndWait(waitForPinned)
+	logger.Infof("OK!\n")
+
+	exutil.By("Wait for all images to be pinned")
+	o.Expect(mcp.waitForPinComplete(waitForPinned)).To(o.Succeed(), "Pinned image operation is not completed in %s", mcp)
+	logger.Infof("OK!\n")
+
+	exutil.By("Check that the images are pinned")
+	o.Expect(firstPinnedImage.IsPinned()).To(o.BeTrue(), "%s is not pinned, but it should", firstPinnedImage)
+	o.Expect(secondPinnedImage.IsPinned()).To(o.BeTrue(), "%s is not pinned, but it should", secondPinnedImage)
+	logger.Infof("OK!\n")
+
+	exutil.By("Patch the pinnedimageset and remove one image")
+	o.Expect(
+		pis.Patch("json", fmt.Sprintf(`[{"op": "replace", "path": "/spec/pinnedImages", "value": [{"name": "%s"}]}]`, firstPinnedImage.ImageName)),
+	).To(o.Succeed(),
+		"Error patching %s to remove one image")
+	logger.Infof("OK!\n")
+
+	exutil.By("Wait for the pinnedimageset changes to be applied")
+	o.Expect(mcp.waitForPinComplete(waitForPinned)).To(o.Succeed(), "Pinned image operation is not completed in %s", mcp)
+	logger.Infof("OK!\n")
+
+	exutil.By("Check that only the image reamaining in the pinnedimageset is pinned")
+	o.Expect(firstPinnedImage.IsPinned()).To(o.BeTrue(), "%s is not pinned, but it should", firstPinnedImage)
+	o.Expect(secondPinnedImage.IsPinned()).To(o.BeFalse(), "%s is pinned, but it should NOT", secondPinnedImage)
+	logger.Infof("OK!\n")
+
+	exutil.By("Remove the pinnedimageset")
+	o.Expect(pis.Delete()).To(o.Succeed(), "Error removing %s", pis)
+	logger.Infof("OK!\n")
+
+	exutil.By("Wait for the pinnedimageset removal to be applied")
+	o.Expect(mcp.waitForPinComplete(waitForPinned)).To(o.Succeed(), "Pinned image operation is not completed in %s", mcp)
+	logger.Infof("OK!\n")
+
+	exutil.By("Check that only the image reamaining in the pinnedimageset is pinned")
+	o.Expect(firstPinnedImage.IsPinned()).To(o.BeFalse(), "%s is pinned, but it should NOT", firstPinnedImage)
+	o.Expect(secondPinnedImage.IsPinned()).To(o.BeFalse(), "%s is pinned, but it should NOT", secondPinnedImage)
 	logger.Infof("OK!\n")
 }
