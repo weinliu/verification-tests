@@ -13,9 +13,6 @@ RUN set -x && \
     pushd opmbuild && make build/opm && cp -fr bin/opm /usr/bin/ && popd && rm -fr opmbuild && \
     git clone --depth=1 https://github.com/operator-framework/operator-sdk.git osdk --branch master && \
     pushd osdk && make build && mv build/* /usr/bin/ && popd && rm -fr osdk && \
-    oc image extract quay.io/openshifttest/hypershift-client:latest --file=/hypershift && mv hypershift /usr/bin/  && chmod 755 /usr/bin/hypershift && \
-    oc image extract quay.io/openshifttest/oc-compliance:latest --file /tmp/oc-compliance && mv oc-compliance /usr/bin/ && chmod 755 /usr/bin/oc-compliance && \
-    oc image extract quay.io/openshifttest/openshift4-tools:v2 --file=/tmp/OpenShift4-tools.tar && tar -C /opt -xf OpenShift4-tools.tar && rm -fr OpenShift4-tools.tar && \
     MIRRORURL=https://mirror2.openshift.com/pub/openshift-v4 && CLIENTURL="" && \
     curl -s -k -L ${MIRRORURL}/x86_64/clients/ocp/ -o ocp.html && curl -s -k -L ${MIRRORURL}/x86_64/clients/ocp-dev-preview/ -o pre.html && \
     ecver=$(grep -E "<a href=\"candidate-4\.19" pre.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${ecver}V" && \
