@@ -3,6 +3,7 @@ package networking
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -21,7 +22,7 @@ var _ = g.Describe("[sig-networking] SDN bgp egressIP", func() {
 
 	var (
 		oc             = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
-		host           = "openshift-qe-028.lab.eng.rdu2.redhat.com"
+		host           = ""
 		externalFRRIP1 string
 		externalFRRIP2 string
 		allNodes       []string
@@ -39,18 +40,18 @@ var _ = g.Describe("[sig-networking] SDN bgp egressIP", func() {
 			nodeErr error
 		)
 
+		host = os.Getenv("QE_HYPERVISOR_PUBLIC_ADDRESS")
+		if host == "" {
+			g.Skip("hypervisorHost is nil, please set env QE_HYPERVISOR_PUBLIC_ADDRESS first!!!")
+		}
 		SkipIfNoFeatureGate(oc, "RouteAdvertisements")
 		if !IsFrrRouteAdvertisementEnabled(oc) || !areFRRPodsReady(oc, frrNamespace) {
 			g.Skip("FRR routeAdvertisement is still not enabled on the cluster, or FRR pods are not ready, skip the test!!!")
 		}
 
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
-		if err != nil || !(strings.Contains(msg, "sriov.openshift-qe.sdn.com") || strings.Contains(msg, "offload.openshift-qe.sdn.com")) {
-			g.Skip("This case will only run on rdu1 or rdu2 cluster, skip for other test envrionment!!!")
-		}
-
-		if strings.Contains(msg, "offload.openshift-qe.sdn.com") {
-			host = "openshift-qe-026.lab.eng.rdu2.redhat.com"
+		raErr := checkRAStatus(oc, "default", "Accepted")
+		if raErr != nil {
+			g.Skip(("default ra is not accepted. pleaes check the default ra is ready before run the automation"))
 		}
 
 		exutil.By("Get IPs of all cluster nodes, and IP map of all nodes")

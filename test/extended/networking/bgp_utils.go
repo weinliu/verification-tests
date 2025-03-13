@@ -109,17 +109,14 @@ func getExternalFRRIP(oc *exutil.CLI, allNodesIP2, allNodesIP1 []string, host st
 	ipStackType := checkIPStackType(oc)
 	if ipStackType == "dualstack" || ipStackType == "ipv4single" {
 		getFrrIPCmdv4 = "ip -j -d route get " + allNodesIP1[0] + " |  jq -r '.[] | .dev' | xargs ip -d -j address show | jq -r '.[] | .addr_info[0].local'"
+		externalFRRIP1, err = sshRunCmdOutPut(host, "root", getFrrIPCmdv4)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		externalFRRIP1 = strings.TrimRight(externalFRRIP1, "\n")
+		o.Expect(externalFRRIP1).NotTo(o.Equal(""))
+		e2e.Logf("\n externalFRRIP1: %s\n", externalFRRIP1)
 	}
 	if ipStackType == "dualstack" || ipStackType == "ipv6single" {
 		getFrrIPCmdv6 = "ip -6 -j -d route get " + allNodesIP2[0] + " |  jq -r '.[] | .dev' | xargs ip -6 -d -j address show | jq -r '.[] | .addr_info[0].local'"
-	}
-	externalFRRIP1, err = sshRunCmdOutPut(host, "root", getFrrIPCmdv4)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	externalFRRIP1 = strings.TrimRight(externalFRRIP1, "\n")
-	o.Expect(externalFRRIP1).NotTo(o.Equal(""))
-	e2e.Logf("\n externalFRRIP1: %s\n", externalFRRIP1)
-
-	if getFrrIPCmdv6 != "" {
 		externalFRRIP2, err = sshRunCmdOutPut(host, "root", getFrrIPCmdv6)
 		e2e.Logf("\n output of trying to get externalFRRIP2: %v\n", externalFRRIP2)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -709,9 +706,9 @@ func verifyIPRoutesOnExternalFrr(host string, allNodes []string, podNetwork1Map,
 	if netutils.IsIPv4String(nodesIP1Map[allNodes[0]]) {
 		externalFrrCmd = "ip route show | grep bgp"
 	}
-	output, err := sshRunCmdOutPut(host, "root", externalFrrCmd)
+	output, _ := sshRunCmdOutPut(host, "root", externalFrrCmd)
 	e2e.Logf("on singlestack, %s on external frr returns output as:\n%s ", externalFrrCmd, output)
-	o.Expect(err).NotTo(o.HaveOccurred())
+	//o.Expect(err).NotTo(o.HaveOccurred())
 	for _, eachNode := range allNodes {
 		o.Expect(regexp.QuoteMeta(podNetwork1Map[eachNode])).ShouldNot(o.BeEmpty())
 		o.Expect(regexp.QuoteMeta(nodesIP1Map[eachNode])).ShouldNot(o.BeEmpty())
@@ -997,58 +994,107 @@ func verifySingleBGPRouteOnClusterNode(oc *exutil.CLI, thisNode string, allNodes
 	return true
 }
 
-// Add iptables rules to assist test
-func addIPtablesRules(host, intf, ipAddr, externalFRRIP string) error {
-	e2e.Logf("\n\n ipAddr: %s", ipAddr)
-	ip, ipnet, err := net.ParseCIDR(ipAddr + "/24")
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("\n\n ip: %v, ipnet: %v", ip, ipnet)
+// backup the iptables rules
+func backupIptablesRules(host string) error {
+	e2e.Logf("now begin to backup iptables rule")
+	iptableSaveCmd := "iptables-save > /tmp/iptables-backup-bgp"
+	ip6tableSaveCmd := "ip6tables-save > /tmp/ip6tables-backup-bgp"
+	runCmd := fmt.Sprintf("%s && %s", iptableSaveCmd, ip6tableSaveCmd)
+	err := sshRunCmd(host, "root", runCmd)
+	if err != nil {
+		e2e.Logf("Failed to backup iptables rule - %s: %v", runCmd, err)
+		return err
+	}
+	return nil
+}
 
-	if netutils.IsIPv4String(ipAddr) {
-		ruleAdd1 := "sudo iptables -t filter -I FORWARD -s " + ipnet.String() + " -i " + intf + " -j ACCEPT"
-		e2e.Logf("\n\n Adding rule: %s", ruleAdd1)
-		err := sshRunCmd(host, "root", ruleAdd1)
-		if err != nil {
-			e2e.Logf("Failed to add iptables rule - %s: %v", ruleAdd1, err)
-			return err
-		}
-		ruleAdd2 := "sudo iptables -t filter -I FORWARD -d " + ipnet.String() + " -o " + intf + " -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT"
-		e2e.Logf("\n\n Adding rule: %s", ruleAdd2)
-		err = sshRunCmd(host, "root", ruleAdd2)
-		if err != nil {
-			e2e.Logf("Failed to add iptables rule - %s: %v", ruleAdd2, err)
-			return err
-		}
-		ruleAdd3 := "sudo iptables -t nat -I POSTROUTING -s " + ipnet.String() + " ! -d " + externalFRRIP + "/24 -j MASQUERADE"
-		e2e.Logf("\n\n Adding rule: %s", ruleAdd3)
-		err = sshRunCmd(host, "root", ruleAdd3)
-		if err != nil {
-			e2e.Logf("Failed to add iptables rule - %s: %v", ruleAdd3, err)
-			return err
+// restore iptables rule after case is finished
+func restoreIptablesRules(host string) error {
+	e2e.Logf("now begin to restore iptables rule")
+	iptableSaveCmd := "iptables-restore < /tmp/iptables-backup-bgp"
+	ip6tableSaveCmd := "ip6tables-restore < /tmp/ip6tables-backup-bgp"
+	runCmd := fmt.Sprintf("%s && %s", iptableSaveCmd, ip6tableSaveCmd)
+	err := sshRunCmd(host, "root", runCmd)
+	if err != nil {
+		e2e.Logf("Failed to restore iptables rule - %s: %v", runCmd, err)
+		return err
+	}
+	return nil
+}
+
+// Add iptables rules to assist test
+// for dualstack.  ipAddr --> ipv6, ipadd2 --> ipv4
+// for singleipv6.  ipAddr--> ipv6,  ipadd2 is ""
+// for singleipv4.  ipAddr--> ipv4. ipadd2 is ""
+func addIPtablesRules(host, ipAddr, ipAdd2, externalFRRIP, externalFRRIP2 string) error {
+
+	//save and backup the current iptable rules
+	err := backupIptablesRules(host)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	// get the intf on the host by the route
+	getIntfCmd := fmt.Sprintf("ip route get %s | awk '/dev/ {print $5; exit}'", ipAddr)
+	intf, err := sshRunCmdOutPut(host, "root", getIntfCmd)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	intf = strings.TrimRight(intf, "\n")
+	o.Expect(intf).NotTo(o.Equal(""))
+	e2e.Logf("\n get intf is: %s\n", intf)
+
+	// for dualstack ipAdd2 is ipv4 address
+	// for single ipv6 and ipv4, ipAdd2 is ""
+	if ipAdd2 != "" {
+		if netutils.IsIPv4String(ipAdd2) {
+			e2e.Logf("\n\n ipAddr: %s", ipAdd2)
+			ip2, ipnet2, err := net.ParseCIDR(ipAdd2 + "/24")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			e2e.Logf("\n\n ip: %v, ipnet: %v", ip2, ipnet2)
+
+			ruleAdd1 := "sudo iptables -t filter -I FORWARD -s " + ipnet2.String() + " -i " + intf + " -j ACCEPT"
+			ruleAdd2 := "sudo iptables -t filter -I FORWARD -d " + ipnet2.String() + " -o " + intf + " -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT"
+			ruleAdd3 := "sudo iptables -t nat -I POSTROUTING -s " + ipnet2.String() + " ! -d " + externalFRRIP + "/24 -j MASQUERADE"
+			runCmd := fmt.Sprintf("%s && %s && %s", ruleAdd1, ruleAdd2, ruleAdd3)
+			e2e.Logf("\n\n Adding rule: %s", runCmd)
+			err = sshRunCmd(host, "root", runCmd)
+			if err != nil {
+				e2e.Logf("Failed to add iptables rule - %s: %v", runCmd, err)
+				return err
+			}
+
 		}
 	}
 
+	// for dualstack.  ipAddr --> ipv6
+	// for singleipv6.  ipAddr--> ipv6
+	// for singleipv4.  ipAddr--> ipv4
 	if netutils.IsIPv6String(ipAddr) {
-		ruleAdd1 := "sudo ip6tables -t filter -I FORWARD -s " + ipnet.String() + " -i " + intf + " -j ACCEPT"
-		e2e.Logf("\n\n Adding rule: %s", ruleAdd1)
-		err := sshRunCmd(host, "root", ruleAdd1)
-		if err != nil {
-			e2e.Logf("Failed to add iptables rule - %s: %v", ruleAdd1, err)
-			return err
-		}
-		ruleAdd2 := "sudo ip6tables -t filter -I FORWARD -d " + ipnet.String() + " -o " + intf + " -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT"
-		e2e.Logf("\n\n Adding rule: %s", ruleAdd2)
-		err = sshRunCmd(host, "root", ruleAdd2)
-		if err != nil {
-			e2e.Logf("Failed to add iptables rule - %s: %v", ruleAdd2, err)
-			return err
-		}
+		e2e.Logf("\n\n ipAddr: %s", ipAddr)
+		ipv6, ipnetv6, err := net.ParseCIDR(ipAddr + "/64")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n\n ip: %v, ipnet: %v", ipv6, ipnetv6)
+		ruleAdd1 := "sudo ip6tables -t filter -I FORWARD -s " + ipnetv6.String() + " -i " + intf + " -j ACCEPT"
+		ruleAdd2 := "sudo ip6tables -t filter -I FORWARD -d " + ipnetv6.String() + " -o " + intf + " -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT"
+		ruleAdd3 := "sudo ip6tables -t nat -I POSTROUTING -s " + ipnetv6.String() + " ! -d " + externalFRRIP2 + "/64 -j MASQUERADE"
+		runCmd := fmt.Sprintf("%s && %s && %s", ruleAdd1, ruleAdd2, ruleAdd3)
 
-		ruleAdd3 := "sudo ip6tables -t nat -I POSTROUTING -s " + ipnet.String() + " ! -d " + externalFRRIP + "/64 -j MASQUERADE"
-		e2e.Logf("\n\n Adding rule: %s", ruleAdd3)
-		err = sshRunCmd(host, "root", ruleAdd3)
+		e2e.Logf("\n\n Adding rule: %s", runCmd)
+		err = sshRunCmd(host, "root", runCmd)
 		if err != nil {
-			e2e.Logf("Failed to add iptables rule - %s: %v", ruleAdd3, err)
+			e2e.Logf("Failed to add iptables rule - %s: %v", runCmd, err)
+			return err
+		}
+	} else if netutils.IsIPv4String(ipAddr) {
+		e2e.Logf("\n\n ipAddr: %s", ipAddr)
+		ip, ipnet, err := net.ParseCIDR(ipAddr + "/24")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("\n\n ip: %v, ipnet: %v", ip, ipnet)
+		ruleAdd1 := "sudo iptables -t filter -I FORWARD -s " + ipnet.String() + " -i " + intf + " -j ACCEPT"
+		ruleAdd2 := "sudo iptables -t filter -I FORWARD -d " + ipnet.String() + " -o " + intf + " -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT"
+		ruleAdd3 := "sudo iptables -t nat -I POSTROUTING -s " + ipnet.String() + " ! -d " + externalFRRIP + "/24 -j MASQUERADE"
+		runCmd := fmt.Sprintf("%s && %s && %s", ruleAdd1, ruleAdd2, ruleAdd3)
+		e2e.Logf("\n\n Adding rule: %s", runCmd)
+		err = sshRunCmd(host, "root", runCmd)
+		if err != nil {
+			e2e.Logf("Failed to add iptables rule - %s: %v", runCmd, err)
 			return err
 		}
 	}

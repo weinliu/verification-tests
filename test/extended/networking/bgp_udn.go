@@ -3,6 +3,7 @@ package networking
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 	e2enode "k8s.io/kubernetes/test/e2e/framework/node"
+	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
 var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
@@ -20,7 +22,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 
 	var (
 		oc             = exutil.NewCLI("networking-"+getRandomString(), exutil.KubeConfigPath())
-		host           = "openshift-qe-028.lab.eng.rdu2.redhat.com"
+		host           = ""
 		externalFRRIP1 string
 		externalFRRIP2 string
 		allNodes       []string
@@ -37,19 +39,18 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		var (
 			nodeErr error
 		)
-
+		host = os.Getenv("QE_HYPERVISOR_PUBLIC_ADDRESS")
+		if host == "" {
+			g.Skip("hypervisorHost is nil, please set env QE_HYPERVISOR_PUBLIC_ADDRESS first!!!")
+		}
 		SkipIfNoFeatureGate(oc, "RouteAdvertisements")
 		if !IsFrrRouteAdvertisementEnabled(oc) || !areFRRPodsReady(oc, frrNamespace) {
 			g.Skip("FRR routeAdvertisement is still not enabled on the cluster, or FRR pods are not ready, skip the test!!!")
 		}
 
-		msg, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("routes", "console", "-n", "openshift-console").Output()
-		if err != nil || !(strings.Contains(msg, "sriov.openshift-qe.sdn.com") || strings.Contains(msg, "offload.openshift-qe.sdn.com")) {
-			g.Skip("This case will only run on rdu1 or rdu2 cluster, skip for other test envrionment!!!")
-		}
-
-		if strings.Contains(msg, "offload.openshift-qe.sdn.com") {
-			host = "openshift-qe-026.lab.eng.rdu2.redhat.com"
+		raErr := checkRAStatus(oc, "default", "Accepted")
+		if raErr != nil {
+			g.Skip(("default ra is not accepted. pleaes check the default ra is ready before run the automation"))
 		}
 
 		exutil.By("Get IPs of all cluster nodes, and IP map of all nodes")
@@ -62,7 +63,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		o.Expect(len(allNodesIP2)).NotTo(o.BeEquivalentTo(0))
 		o.Expect(len(allNodesIP1)).NotTo(o.BeEquivalentTo(0))
 
-		exutil.By("Get external FRR IP, create external FRR container on the host with external FRR IP and cluster nodes' IPs")
+		exutil.By("Get external FRR IP")
 		externalFRRIP2, externalFRRIP1 = getExternalFRRIP(oc, allNodesIP2, allNodesIP1, host)
 		o.Expect(externalFRRIP1).NotTo(o.BeEmpty())
 		ipStackType := checkIPStackType(oc)
@@ -147,6 +148,22 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		testpodNS1Names := getPodName(oc, ns1, "name=test-pods")
 		Curlexternal2UDNPodPass(oc, host, ns1, testpodNS1Names[1])
 
+		//first add iptables in external router to farwarding the traffic
+		udnIp1, udnIp2 := getPodIPUDN(oc, ns1, testpodNS1Names[0], "ovn-udn1")
+
+		exutil.By("from UDN pod egress outside before adding iptables, should be failed")
+		_, err = e2eoutput.RunHostCmd(ns1, testpodNS1Names[0], "curl www.google.com --connect-timeout 5 -I")
+		o.Expect(err).To(o.HaveOccurred())
+
+		exutil.By("from UDN pod egress outside after adding iptables, should be pass")
+
+		defer restoreIptablesRules(host)
+		err = addIPtablesRules(host, udnIp1, udnIp2, externalFRRIP1, externalFRRIP2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		_, err = e2eoutput.RunHostCmd(ns1, testpodNS1Names[0], "curl www.google.com --connect-timeout 5 -I")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
 		exutil.By("Delete the RA for the udn and check the traffic again")
 		ra.deleteRA(oc)
 
@@ -155,6 +172,8 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			return result
 		}, "60s", "5s").Should(o.BeTrue(), "BGP UDN route advertisement did not be removed!!")
 		Curlexternal2UDNPodFail(oc, host, ns1, testpodNS1Names[1])
+		_, err = e2eoutput.RunHostCmd(ns1, testpodNS1Names[0], "curl www.google.com --connect-timeout 5 -I")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 	})
 
