@@ -587,6 +587,31 @@ func getHAProxyRPMVersion(oc *exutil.CLI) string {
 	return haproxyOutput
 }
 
+// this functin is used to check whether a route pod has the specified certification of a route
+// ns: the route's namespace; routeName: the route's name
+// certType: certs or cacerts
+// option: --hasCert(means should have the certification) or --noCert(means shouldn't has the certification)
+func checkRouteCertificationInRouterPod(oc *exutil.CLI, ns, routeName, routerpod, certType, option string) {
+	certName := fmt.Sprintf("%s:%s.pem", ns, routeName)
+	cmd := "ls /var/lib/haproxy/router/certs/"
+	if certType == "cacerts" {
+		cmd = "ls /var/lib/haproxy/router/cacerts/"
+	}
+	waitErr := wait.Poll(3*time.Second, 12*time.Second, func() (bool, error) {
+		flag := false
+		certCfg, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if option == "--hasCert" && strings.Contains(certCfg, certName) {
+			flag = true
+		}
+		if option == "--noCert" && !strings.Contains(certCfg, certName) {
+			flag = true
+		}
+		return flag, nil
+	})
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("reached max time allowed but the certification with seaching option %s not matched", option))
+}
+
 func getImagePullSpecFromPayload(oc *exutil.CLI, image string) string {
 	var pullspec string
 	baseDir := exutil.FixturePath("testdata", "router")

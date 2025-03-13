@@ -120,6 +120,97 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		o.Expect(strings.Count(backendConfig, "check inter") == 2).To(o.BeTrue())
 	})
 
+	// author: hongli@redhat.com
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-High-12563-The certs for the edge/reencrypt termination routes should be removed when the routes removed", func() {
+		// skip the test if featureSet is set there
+		if exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("Skip for the haproxy was't the realtime for the backend configuration after enabled DynamicConfigurationManager")
+		}
+
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			unSecSvcName        = "service-unsecure"
+			secSvcName          = "service-secure"
+			dirname             = "/tmp/OCP-12563"
+			caSubj              = "/CN=NE-Test-Root-CA"
+			caCrt               = dirname + "/12563-ca.crt"
+			caKey               = dirname + "/12563-ca.key"
+			edgeRouteSubj       = "/CN=example-edge.com"
+			edgeRouteCrt        = dirname + "/12563-edgeroute.crt"
+			edgeRouteKey        = dirname + "/12563-edgeroute.key"
+			edgeRouteCsr        = dirname + "/12563-edgeroute.csr"
+			reenRouteSubj       = "/CN=example-reen.com"
+			reenRouteCrt        = dirname + "/12563-reenroute.crt"
+			reenRouteKey        = dirname + "/12563-reenroute.key"
+			reenRouteCsr        = dirname + "/12563-reenroute.csr"
+			reenRouteDstSubj    = "/CN=example-reen-dst.com"
+			reenRouteDstCrt     = dirname + "/12563-reenroutedst.crt"
+			reenRouteDstKey     = dirname + "/12563-reenroutedst.key"
+		)
+
+		exutil.By("1.0 Create a file folder and prepair for testing")
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		baseDomain := getBaseDomain(oc)
+		edgeRoute := "edge12563.apps." + baseDomain
+		reenRoute := "reen12563.apps." + baseDomain
+
+		exutil.By("2.0: Use openssl to create ca certification and key")
+		opensslNewCa(caKey, caCrt, caSubj)
+
+		exutil.By("3.0: Create a user CSR and the user key for the edge route")
+		opensslNewCsr(edgeRouteKey, edgeRouteCsr, edgeRouteSubj)
+
+		exutil.By("3.1: Sign the user CSR and generate the certificate for the edge route")
+		san := "subjectAltName = DNS:" + edgeRoute
+		opensslSignCsr(san, edgeRouteCsr, caCrt, caKey, edgeRouteCrt)
+
+		exutil.By("4.0: Create a user CSR and the user key for the reen route")
+		opensslNewCsr(reenRouteKey, reenRouteCsr, reenRouteSubj)
+
+		exutil.By("4.1: Sign the user CSR and generate the certificate for the reen route")
+		san = "subjectAltName = DNS:" + reenRoute
+		opensslSignCsr(san, reenRouteCsr, caCrt, caKey, reenRouteCrt)
+
+		exutil.By("5.0: Use openssl to create certification and key for the destination certification of the reen route")
+		opensslNewCa(reenRouteDstKey, reenRouteDstCrt, reenRouteDstSubj)
+
+		exutil.By("6.0 Deploy a project with a deployment")
+		project1 := oc.Namespace()
+		exutil.SetNamespacePrivileged(oc, project1)
+		createResourceFromFile(oc, project1, testPodSvc)
+		ensurePodWithLabelReady(oc, project1, "name=web-server-deploy")
+
+		exutil.By("7.0: Create the edge route and the reen route")
+		createRoute(oc, project1, "edge", "route-edge", unSecSvcName, []string{"--hostname=" + edgeRoute, "--ca-cert=" + caCrt, "--cert=" + edgeRouteCrt, "--key=" + edgeRouteKey})
+		createRoute(oc, project1, "reencrypt", "route-reen", secSvcName, []string{"--hostname=" + reenRoute, "--ca-cert=" + caCrt, "--cert=" + reenRouteCrt, "--key=" + reenRouteKey, "--dest-ca-cert=" + reenRouteDstCrt})
+		waitForOutput(oc, project1, "route/route-edge", "{.status.ingress[0].conditions[0].status}", "True")
+		waitForOutput(oc, project1, "route/route-reen", "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("8.0: Check the certs for the edge/reencrypt termination routes")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
+		checkRouteCertificationInRouterPod(oc, project1, "route-edge", routerpod, "certs", "--hasCert")
+		checkRouteCertificationInRouterPod(oc, project1, "route-reen", routerpod, "certs", "--hasCert")
+
+		exutil.By("9.0: Check the cacert for the reencrypt termination route")
+		checkRouteCertificationInRouterPod(oc, project1, "route-reen", routerpod, "cacerts", "--hasCert")
+
+		exutil.By("10.0: Delete the two routes")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", project1, "route", "route-edge").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", project1, "route", "route-reen").Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("11.0: Check the certs for the edge/reencrypt termination routes again after deleted the routes")
+		checkRouteCertificationInRouterPod(oc, project1, "route-edge", routerpod, "certs", "--noCert")
+		checkRouteCertificationInRouterPod(oc, project1, "route-reen", routerpod, "certs", "--noCert")
+
+		exutil.By("12.0: Check the cacert for the reencrypt termination route again after deleted the route")
+		checkRouteCertificationInRouterPod(oc, project1, "route-reen", routerpod, "cacerts", "--noCert")
+	})
+
 	// author: shudili@redhat.com
 	g.It("Author:shudili-ROSA-OSD_CCS-ARO-High-27628-router support HTTP2 for passthrough route and reencrypt route with custom certs", func() {
 		var (
