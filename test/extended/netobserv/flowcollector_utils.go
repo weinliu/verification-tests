@@ -302,7 +302,7 @@ func verifyFlowCorrectness(objectSize string, flowRecords []FlowRecord) {
 func verifyPacketTranslationFlows(nginxPodIP, nginxPodName, clientPodIP string, flowRecords []FlowRecord) {
 	for _, r := range flowRecords {
 		o.Expect(r.Flowlog.XlatDstAddr).To(o.Equal(nginxPodIP))
-		o.Expect(r.Flowlog.XlatDstK8S_Name).To(o.Equal(nginxPodName[0]))
+		o.Expect(r.Flowlog.XlatDstK8S_Name).To(o.Equal(nginxPodName))
 		o.Expect(r.Flowlog.XlatDstK8S_Type).To(o.Equal("Pod"))
 		o.Expect(r.Flowlog.DstPort).Should(o.BeNumerically("==", 80))
 		o.Expect(r.Flowlog.XlatDstPort).Should(o.BeNumerically("==", 8080))
