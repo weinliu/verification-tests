@@ -402,6 +402,8 @@ func duplicateMachinesetSecret(oc *exutil.CLI, secretName, newName, newIgnitionV
 	}
 
 	logger.Debugf("New userData info:\n%s", userData)
+	oc.NotShowInfo()
+	defer oc.SetShowInfo()
 
 	_, err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", newName, "-n", MachineAPINamespace,
 		"--from-literal", fmt.Sprintf("userData=%s", userData),

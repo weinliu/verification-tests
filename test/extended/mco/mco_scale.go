@@ -641,7 +641,7 @@ func getCurrentRegionOrFail(oc *exutil.CLI) string {
 }
 
 // SimpleScaleUPTest is a generic function that tests scaling up and down worker nodes using the base image corresponding to the given version
-func SimpleScaleUPTest(oc *exutil.CLI, mcp *MachineConfigPool, imageVersion, ignitionVergsion string, numNewNodes int) {
+func SimpleScaleUPTest(oc *exutil.CLI, mcp *MachineConfigPool, imageVersion, ignitionVersion string, numNewNodes int) {
 
 	var (
 		newMsName         = fmt.Sprintf("mco-tc-%s-cloned", GetCurrentTestPolarionIDNumber())
@@ -670,7 +670,7 @@ func SimpleScaleUPTest(oc *exutil.CLI, mcp *MachineConfigPool, imageVersion, ign
 	allMs, err := NewMachineSetList(oc, MachineAPINamespace).GetAll()
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting a list of MachineSet resources")
 	ms := allMs[0]
-	newMs := cloneMachineSet(oc.AsAdmin(), ms, newMsName, imageVersion, ignitionVergsion)
+	newMs := cloneMachineSet(oc.AsAdmin(), ms, newMsName, imageVersion, ignitionVersion)
 
 	exutil.By("Scale MachineSet up")
 	logger.Infof("Scaling up machineset %s", newMs.GetName())

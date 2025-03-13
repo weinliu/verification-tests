@@ -815,10 +815,14 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
 
 		var (
-			mcsCaSecret        = NewSecret(oc.AsAdmin(), "openshift-machine-config-operator", "machine-config-server-ca")
-			mcsTLSSecret       = NewSecret(oc.AsAdmin(), "openshift-machine-config-operator", "machine-config-server-tls")
-			notAfterAnnotaion  = "auth.openshift.io/certificate-not-after"
-			notBeforeAnnotaion = "auth.openshift.io/certificate-not-before"
+			mcsCaSecret                 = NewSecret(oc.AsAdmin(), "openshift-machine-config-operator", "machine-config-server-ca")
+			mcsTLSSecret                = NewSecret(oc.AsAdmin(), "openshift-machine-config-operator", "machine-config-server-tls")
+			notAfterAnnotaion           = "auth.openshift.io/certificate-not-after"
+			notBeforeAnnotaion          = "auth.openshift.io/certificate-not-before"
+			workerUserDataSecret        = NewSecret(oc.AsAdmin(), MachineAPINamespace, "worker-user-data")
+			masterUserDataSecret        = NewSecret(oc.AsAdmin(), MachineAPINamespace, "master-user-data")
+			workerUserDataManagedSecret = NewSecret(oc.AsAdmin(), MachineAPINamespace, "worker-user-data-managed")
+			masterUserDataManagedSecret = NewSecret(oc.AsAdmin(), MachineAPINamespace, "worker-user-data-managed")
 		)
 
 		exutil.By("To verify the MCS-CA and MCS-TLS secret present with required annotation")
@@ -838,7 +842,7 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		logger.Infof("OK!\n")
 
 		exutil.By("Edit the MCS-CA Secret and check config map update with new one")
-		verifyMcsCASecretRotateOrFail(mcsCaSecret)
+		verifyMcsCASecretRotateOrFail(mcsCaSecret, workerUserDataManagedSecret, masterUserDataManagedSecret, workerUserDataSecret, masterUserDataSecret)
 		logger.Infof("OK!\n")
 
 		exutil.By("Verify if able to add new worker node.")
@@ -873,6 +877,39 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 				o.ContainSubstring(`update`),
 			), `%s Should not contain "patch", "delete", or "update" verbs`, clusterReaderCR,
 		)
+	})
+
+	g.It("Author:ptalgulk-NonHyperShiftHOST-NonPreRelease-Medium-80403-Validate MCS Certificate Rotation with 2.2.0 User-Data Secret [Disruptive]", func() {
+		skipTestIfWorkersCannotBeScaled(oc.AsAdmin())
+		skipTestIfSupportedPlatformNotMatched(oc, AWSPlatform)
+		var (
+			mcsCaSecret       = NewSecret(oc.AsAdmin(), "openshift-machine-config-operator", "machine-config-server-ca")
+			newMsName         = fmt.Sprintf("mco-machinesets-%s-clone", GetCurrentTestPolarionIDNumber())
+			imageVersion      = "4.5"
+			ignitionVersion   = getUserDataIgnitionVersionFromOCPVersion(imageVersion)
+			initialNumWorkers = len(wMcp.GetNodesOrFail())
+		)
+
+		exutil.By("Create the clone of existing Machinesets")
+		allMs, err := NewMachineSetList(oc, MachineAPINamespace).GetAll()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting a list of MachineSet resources")
+		ms := allMs[0]
+		newMs := cloneMachineSet(oc.AsAdmin(), ms, newMsName, imageVersion, ignitionVersion)
+		defer removeClonedMachineSet(newMs, wMcp, initialNumWorkers)
+		logger.Infof("OK!\n")
+
+		newUserDataSecretName, err := newMs.GetUserDataSecret()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		newUserDataSecret := NewSecret(oc.AsAdmin(), MachineAPINamespace, newUserDataSecretName)
+
+		verifyMcsCASecretRotateOrFail(mcsCaSecret, newUserDataSecret)
+
+		exutil.By("Scale MachineSet up")
+		o.Expect(newMs.AddToScale(1)).NotTo(o.HaveOccurred())
+		logger.Infof("OK!\n")
+		exutil.By("Verify the MachineSet is Ready")
+		o.Eventually(newMs.GetIsReady, "20m", "2m").Should(o.BeTrue(), "MachineSet %s is not ready.", newMs.GetName())
+		logger.Infof("OK!\n")
 	})
 })
 
