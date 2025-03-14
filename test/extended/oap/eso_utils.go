@@ -2,10 +2,16 @@ package oap
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -145,4 +151,100 @@ func createExternalSecretsOperator(oc *exutil.CLI) {
 	}
 	exutil.AssertWaitPollNoErr(err, "timeout waiting for cluster-external-secrets-webhook pod phase to become Running")
 
+}
+
+// GetAWSSecret retrieves a secret from AWS Secrets Manager
+func GetSecretAWS(accessKeyID, secureKey, region, secretName string) (string, error) {
+
+	awsConfig, err := config.LoadDefaultConfig(
+		context.TODO(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secureKey, "")),
+		config.WithRegion(region),
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to load AWS config: %v", err)
+	}
+
+	svc := secretsmanager.NewFromConfig(awsConfig)
+	result, err := svc.GetSecretValue(context.TODO(), &secretsmanager.GetSecretValueInput{
+		SecretId: aws.String(secretName),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to get secret: %v", err)
+	}
+
+	if result.SecretString == nil {
+		return "", fmt.Errorf("secret value is nil")
+	}
+
+	return *result.SecretString, nil
+}
+
+// UpdateSecret updates the value of a secret in AWS Secrets Manager
+func UpdateSecretAWS(accessKeyID, secureKey, region, secretName, newSecretValue string) error {
+
+	awsConfig, err := config.LoadDefaultConfig(
+		context.TODO(),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secureKey, "")),
+		config.WithRegion(region),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to load AWS config: %v", err)
+	}
+
+	svc := secretsmanager.NewFromConfig(awsConfig)
+	_, err = svc.UpdateSecret(context.TODO(), &secretsmanager.UpdateSecretInput{
+		SecretId:     aws.String(secretName),
+		SecretString: aws.String(newSecretValue),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update secret: %v", err)
+	}
+	e2e.Logf("Secret updated successfully!")
+	return nil
+}
+
+// GetSecretValueByKeyAWS retrieve a specific secret value from AWS Secrets Manager
+func GetSecretValueByKeyAWS(accessKeyID, secureKey, region, secretName, key string) (string, error) {
+
+	secretValue, err := GetSecretAWS(accessKeyID, secureKey, region, secretName)
+	if err != nil {
+		return "", err
+	}
+	e2e.Logf("Secret Value: %v", secretValue)
+
+	var secretData map[string]string
+	if err := json.Unmarshal([]byte(secretValue), &secretData); err != nil {
+		return "", fmt.Errorf("failed to parse secret JSON: %v", err)
+	}
+
+	// Extract the value of the specified Key
+	value, exists := secretData[key]
+	if !exists {
+		return "", fmt.Errorf("key %v not found in secret", key)
+	}
+
+	return value, nil
+}
+
+// UpdateSecretValueByKeyAWS update specific fields in AWS Secrets Manager
+func UpdateSecretValueByKeyAWS(accessKeyID, secureKey, region, secretName, key, newValue string) error {
+
+	secretValue, err := GetSecretAWS(accessKeyID, secureKey, region, secretName)
+	if err != nil {
+		return fmt.Errorf("failed to get secret: %v", err)
+	}
+
+	var secretData map[string]string
+	if err := json.Unmarshal([]byte(secretValue), &secretData); err != nil {
+		return fmt.Errorf("failed to parse secret JSON: %v", err)
+	}
+
+	secretData[key] = newValue
+	updatedSecretValue, err := json.Marshal(secretData)
+	if err != nil {
+		return fmt.Errorf("failed to encode updated secret JSON: %v", err)
+	}
+
+	return UpdateSecretAWS(accessKeyID, secureKey, region, secretName, string(updatedSecretValue))
 }
