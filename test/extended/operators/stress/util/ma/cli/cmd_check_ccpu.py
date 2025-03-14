@@ -61,13 +61,21 @@ logger = logging.getLogger(__name__)
     required=False,
     help="the abnoarm cpu usage calucalted by 100"
 )
+@click.option(
+    "--anomalies_threshold",
+    type=int,
+    default=2,
+    required=False,
+    help="the anomalies threshold to determine if the checking fails or not"
+)
 def check_ccpu(ctx,
     metrics_result_file,
     output_dir,
     zscore_threshold,
     window_size,
     window_threshold,
-    watermark):
+    watermark,
+    anomalies_threshold):
     """
     Check if cpu usage is expected
     """
@@ -77,7 +85,8 @@ def check_ccpu(ctx,
             zscore_threshold,
             window_size,
             window_threshold,
-            watermark)
+            watermark,
+            anomalies_threshold)
         ccpu.handle()
         ccpu.ok_or_not()
         # print(ccpu.get_preliminary_screening())

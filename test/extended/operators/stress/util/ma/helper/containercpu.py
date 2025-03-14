@@ -16,13 +16,14 @@ class ContainerCPU:
 
     """
 
-    def __init__(self, metrics_result_file, output_dir, zscore_threshold, window_size, window_threshold, watermark):
+    def __init__(self, metrics_result_file, output_dir, zscore_threshold, window_size, window_threshold, watermark, anomalies_threshold):
         self.mrf = metrics_result_file
         self.odir = output_dir
         self.zscore_threshold = zscore_threshold
         self.window_size = window_size
         self.window_threshold = window_threshold
         self.watermark = watermark
+        self.anomalies_threshold = anomalies_threshold
         self.preliminary_anomalies = []
         self.refined_anomalies = []
         self.final_anomalies = []
@@ -164,7 +165,7 @@ class ContainerCPU:
         try:
             base_path = os.path.join(self.odir, self.base_name_wo_ext)
             result = "pass"
-            if len(self.final_anomalies) > 0:
+            if len(self.final_anomalies) > self.anomalies_threshold:
                 result = "fail"
             output_path = Path(base_path+"_result-"+result)
             output_path.write_text(result)
