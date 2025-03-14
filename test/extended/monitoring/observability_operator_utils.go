@@ -298,6 +298,9 @@ func deleteMonitoringStack(oc *exutil.CLI, msD monitoringStackDescription, secD 
 	}
 }
 func deleteOperator(oc *exutil.CLI) {
+	csvName, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("subscription", subName, "-n", namespace, "-o=jsonpath={.status.installedCSV}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
 	exutil.By("Removing servicemoitor")
 	errSm := oc.AsAdmin().WithoutNamespace().Run("delete").Args("servicemonitors.monitoring.coreos.com", "observability-operator", "-n", namespace).Execute()
 	exutil.By("Removing ClusterServiceVersion " + csvName)
