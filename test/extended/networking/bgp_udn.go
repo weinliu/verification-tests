@@ -1136,21 +1136,44 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
 		testPodNameNS3 := getPodName(oc, ns3, "name=test-pods")
 
-		exutil.By("13. Not be able to access udn service from default network.")
+		exutil.By("13. validate external network to pod and pod to external network traffic on BGP")
+		// verify external network to pod
+		Curlexternal2PodPass(oc, host, ns3, testPodNameNS3[0])
+
+		// verify pod to external network
+		podNS3IP1, podNS3IP2 := getPodIP(oc, ns3, testPodNameNS3[0])
+		nodeNameNS3, getNodeErr := exutil.GetPodNodeName(oc, ns3, testPodNameNS3[0])
+		o.Expect(getNodeErr).NotTo(o.HaveOccurred())
+		primaryInf, infErr := getSnifPhyInf(oc, nodeNameNS3)
+		o.Expect(infErr).NotTo(o.HaveOccurred())
+		externalPublicHost := "www.google.com"
+		var tcpdumpCmd, cmdOnPod string
+		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
+			tcpdumpCmd = fmt.Sprintf("timeout 60s tcpdump -c 2 -nni %s host %s", primaryInf, externalPublicHost)
+			cmdOnPod = "curl -I -k " + externalPublicHost
+		}
+		if ipStackType == "ipv6single" {
+			tcpdumpCmd = fmt.Sprintf("timeout 60s tcpdump -c 2 -nni %s ip6 host %s", primaryInf, externalPublicHost)
+			cmdOnPod = "curl -I -6 -k " + externalPublicHost
+		}
+		tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, nodeNameNS3, tcpdumpCmd, ns3, testPodNameNS3[0], cmdOnPod)
+		o.Expect(strings.Contains(tcpdumOutput, podNS3IP1) || strings.Contains(tcpdumOutput, podNS3IP2)).To(o.BeTrue())
+
+		exutil.By("14. Not be able to access udn service from default network.")
 		CurlPod2SvcFail(oc, ns3, udnNS[0], testPodNameNS3[0], svc.servicename)
-		//exutil.By("14. Not be able to access default network service from udn network.")
+		//exutil.By("15. Not be able to access default network service from udn network.")
 		//https://issues.redhat.com/browse/OCPBUGS-52278
 		//CurlPod2SvcFail(oc, udnNS[0], ns3, pods[0].name, "test-service")
-		exutil.By("15. Validate that the UDN pod is isolated from the default network pod.")
+		exutil.By("16. Validate that the UDN pod is isolated from the default network pod.")
 		CurlPod2PodFail(oc, udnNS[0], pods[0].name, ns3, testPodNameNS3[0])
 
-		exutil.By("16. Update internalTrafficPolicy as Local for udn service in ns1.")
+		exutil.By("17. Update internalTrafficPolicy as Local for udn service in ns1.")
 		patch := `[{"op": "replace", "path": "/spec/internalTrafficPolicy", "value": "Local"}]`
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("service", svc.servicename, "-n", udnNS[0], "-p", patch, "--type=json").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		exutil.By("16.1. Verify ClusterIP service can be accessed from pods[0] which is deployed on same node as service back-end pod.")
+		exutil.By("17.1. Verify ClusterIP service can be accessed from pods[0] which is deployed on same node as service back-end pod.")
 		CurlPod2SvcPass(oc, udnNS[0], udnNS[0], pods[0].name, svc.servicename)
-		exutil.By("16.2. Verify ClusterIP service can NOT be accessed from pods[1] which is deployed on different node as service back-end pod.")
+		exutil.By("17.2. Verify ClusterIP service can NOT be accessed from pods[1] which is deployed on different node as service back-end pod.")
 		CurlPod2SvcFail(oc, udnNS[0], udnNS[0], pods[1].name, svc.servicename)
 	})
 
