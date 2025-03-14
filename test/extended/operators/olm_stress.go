@@ -19,7 +19,7 @@ var _ = g.Describe("[sig-operators] OLM for stress", func() {
 	defer g.GinkgoRecover()
 
 	var (
-		oc = exutil.NewCLIWithoutNamespace("default")
+		oc = exutil.NewCLI("olm-stress"+getRandomString(), exutil.KubeConfigPath())
 		dr = make(describerResrouce)
 	)
 
