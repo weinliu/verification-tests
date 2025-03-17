@@ -12,13 +12,13 @@ function run {
   fi
   cd ${WORKBUILDDIR}
 
-  put_fake_launch_for_each_profile
+  #put_fake_launch_for_each_profile
   config_env
   id
   date
-  select_fail_case_for_official_rerun
+  #select_fail_case_for_official_rerun
   execute
-  result_report
+  #result_report
 }
 
 function config_env {
