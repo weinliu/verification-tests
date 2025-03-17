@@ -1,3 +1,4 @@
+import { guidedTour } from 'views/tour';
 import { DetailsPageSelector } from '../../upstream/views/details-page';
 import { listPage, ListPageSelector } from '../../upstream/views/list-page';
 import { userPreferences } from '../../views/user-preferences';
@@ -7,6 +8,7 @@ describe('Administration pages pesudo translation', () => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     cy.switchPerspective('Administrator');
+    guidedTour.close();
   });
 
   after(() => {
@@ -46,7 +48,7 @@ describe('Administration pages pesudo translation', () => {
     listPage.filter.byName('openshift-');
     cy.wait(5000);
     cy.byLegacyTestID('kebab-button').first().click();
-    cy.get('[class*="menu-item"]').isPseudoLocalized();
+    cy.get('button[data-test-action]').isPseudoLocalized();
 
     //details page
     cy.get('a.co-resource-item__resource-name').first().click();
@@ -54,7 +56,7 @@ describe('Administration pages pesudo translation', () => {
     cy.get(DetailsPageSelector.itemLabels).isPseudoLocalized();
     cy.get(DetailsPageSelector.sectionHeadings).isPseudoLocalized();
     cy.byLegacyTestID('actions-menu-button').click();
-    cy.get('[class*="menu-item"]').isPseudoLocalized();
+    cy.get('button[data-test-action]').isPseudoLocalized();
 
     // RoleBindings tab
     cy.visit(`/k8s/cluster/namespaces/${test_ns}/roles?pseudolocalization=true&lng=en`);
@@ -75,7 +77,7 @@ describe('Administration pages pesudo translation', () => {
     cy.get(DetailsPageSelector.sectionHeadings).isPseudoLocalized();
     cy.get('.co-m-table-grid__head').isPseudoLocalized();
     cy.byLegacyTestID('actions-menu-button').click();
-    cy.get('[class*="menu-item"]').isPseudoLocalized();
+    cy.get('button[data-test-action]').isPseudoLocalized();
     // Instances page
     cy.visit(`/k8s/cluster/customresourcedefinitions/${CRD_kind_group}/instances?pseudolocalization=true&lng=en`);
     listPage.rows.shouldBeLoaded();

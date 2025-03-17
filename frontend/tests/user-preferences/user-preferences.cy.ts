@@ -7,9 +7,8 @@ import { listPage } from '../../upstream/views/list-page';
 describe('user preferences related features', () => {
   const projectName = 'testproject-64002';
   before(() => {
-    cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+    cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     guidedTour.close();
-    cy.switchPerspective('Administrator');
   });
 
   after(() => {
@@ -54,8 +53,8 @@ describe('user preferences related features', () => {
   });
 
   it('(OCP-64002,yapei,UserInterface) Implement strict search in console',{tags:['@userinterface','@e2e','admin','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
-    cy.cliLogin();
-    cy.exec(`oc new-project ${projectName}`);
+    cy.adminCLI(`oc new-project ${projectName}`);
+    cy.adminCLI(`oc adm policy add-role-to-user admin ${Cypress.env('LOGIN_USERNAME')} -n ${projectName}`);
     const checkAllItemsExactMatch = (word: string) => {
       cy.get('a.co-resource-item__resource-name').each(($el) => {
         const text = $el.text();

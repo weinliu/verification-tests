@@ -46,7 +46,7 @@ describe('Dynamic plugins features', () => {
   it('(OCP-77719,yanpzhan,UserInterface)Supply custom Consoleplugin details page',{tags:['@userinterface','@e2e','admin','@osd-ccs','@hypershift-hosted']}, () => {
     cy.visit('/k8s/cluster/console.openshift.io~v1~ConsolePlugin/console-demo-plugin');
     Pages.checkDynamicConsolePluginDetails('OpenShift Console Demo Plugin','-','-','-','Disabled','-','console-demo-plugin','thanos-querier');
-    cy.contains('Plugin manifest').click();
+    cy.get('a[data-test-id="horizontal-link-Plugin manifest"]').click();
     cy.contains('No Plugin manifest found').should('exist');
     cy.adminCLI(`oc patch console.operator cluster --type='json' -p='[{"op": "add", "path": "/spec/plugins/-", "value":"console-demo-plugin"}]'`)
       .then(result => expect(result.stdout).contains('patched'));
@@ -90,8 +90,6 @@ describe('Dynamic plugins features', () => {
       },
       {}
     ).as('getConsoleDemoPluginLocales');
-    cy.switchPerspective('Developer');
-    guidedTour.close();
     // enable console-demo-plugin
     cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
       if (!result.stdout.includes('console-demo-plugin')){
@@ -112,7 +110,7 @@ describe('Dynamic plugins features', () => {
     });
 
     cy.log('Lazy - locale files are only loaded when visit plugin pages')
-    cy.switchPerspective('Developer');
+    cy.switchPerspective('Administrator');
     cy.clickNavLink(['Demo Plugin', 'Test Consumer']);
     cy.wait('@getConsoleDemoPluginLocales', {timeout: 30000})
       .then((intercept)=>{
@@ -125,7 +123,7 @@ describe('Dynamic plugins features', () => {
     cy.switchPerspective('Administrator');
     // Demo Plugin nav is rendered after Workloads, before Networking
     cy.contains('button', 'Demo Plugin').should('have.attr', 'data-test', 'nav-demo-plugin');
-    cy.get('button.pf-v5-c-nav__link')
+    cy.get('button[class*="c-nav__link"]')
       .then(($els) => {
         const original_array = Cypress._.map(Cypress.$.makeArray($els), 'innerText');
         const filtered_array = original_array.filter((word) => word ==='Workloads' || word === 'Demo Plugin' || word === 'Networking')
@@ -155,7 +153,7 @@ describe('Dynamic plugins features', () => {
     cy.switchPerspective('Administrator');
     Overview.goToDashboard();
     statusCard.toggleItemPopover("Dynamic Plugins");
-    cy.get(".pf-v5-c-popover").within(($div) => {
+    cy.get(".pf-v6-c-popover").within(($div) => {
       cy.get('a:contains(View all)').should('have.attr', 'href', '/k8s/cluster/operator.openshift.io~v1~Console/cluster/console-plugins')
     })
   });
@@ -190,15 +188,6 @@ describe('Dynamic plugins features', () => {
   });
 
   it('(OCP-45629,yapei,UserInterface) dynamic plugins proxy to services on the cluster',{tags:['@userinterface','@e2e','admin','@osd-ccs','@hypershift-hosted']},() => {
-    cy.switchPerspective('Developer');
-    nav.sidenav.clickNavLink(['Demo Plugin']);
-    // demo plugin in Dev perspective
-    cy.get('a[data-test="nav"]').should('include.text', 'Dynamic Nav 1');
-    cy.get('a[data-test="nav"]').should('include.text', 'Dynamic Nav 2');
-    // demo plugin in Demo Plugin perspective
-    nav.sidenav.switcher.changePerspectiveTo('Demo');
-    cy.get('a[data-test="nav"]').should('include.text', 'Dynamic Nav 1');
-    cy.get('a[data-test="nav"]').should('include.text', 'Dynamic Nav 2');
     // demo plugin in Administrator perspective
     cy.switchPerspective('Administrator');
     nav.sidenav.clickNavLink(['Demo Plugin']);
@@ -207,6 +196,10 @@ describe('Dynamic plugins features', () => {
     cy.visit('/test-proxy-service');
     cy.wait(10000);
     cy.contains('success').should('be.visible');
+    // demo plugin in Demo Plugin perspective
+    cy.switchPerspective('Demo');
+    cy.get('a[data-test="nav"]').should('include.text', 'Dynamic Nav 1');
+    cy.get('a[data-test="nav"]').should('include.text', 'Dynamic Nav 2');
   });
 
   it('(OCP-53123,yapei,UserInterface) Exposed components in dynamic-plugin-sdk',{tags:['@userinterface','@e2e','admin','@osd-ccs','@hypershift-hosted']}, () => {
@@ -242,8 +235,6 @@ describe('Dynamic plugins features', () => {
     });
     cy.switchPerspective('Administrator');
     cy.get('@console.log').should('be.calledWith', "Demo Plugin received telemetry event: ", "page");
-    cy.get('@console.log').should('be.calledWith', "Demo Plugin received telemetry event: ", "Perspective Changed");
-    cy.get('@console.log').should('be.calledWith', "Demo Plugin received telemetry event: ", "identify");
   });
 
   it('(OCP-54170,yapei,UserInterface) Promote ConsolePlugins API version to v1',{tags:['@userinterface','@e2e', 'admin','@osd-ccs','@hypershift-hosted']}, () => {

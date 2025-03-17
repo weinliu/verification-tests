@@ -40,8 +40,8 @@ export const namespacePage = {
         cy.get('input[data-test="input-name"]').type(ns_name);
         cy.get('[class*="modal-box__close"]').parent('[role="dialog"]').within(($div) => {
             cy.get('button[class*=menu-toggle]').click();
-            cy.get('span').contains(network_policy).click();
         });
+        cy.get('#dropdown-selectbox span').contains(network_policy).click();
         cy.get('button[id="confirm-action"]').click();
     }
 }
