@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -344,6 +345,185 @@ var _ = g.Describe("[sig-networking] SDN IPSEC", func() {
 		o.Expect(strings.Contains(cmdOutput.String(), "icmp")).ShouldNot(o.BeTrue())
 
 	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-Medium-37591-Make sure IPsec SA's are establishing in a transport mode", func() {
+		exutil.By("Verify IPsec SA's are establishing in a transport mode ")
+		exutil.By("Get one worker node.")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(nodeList.Items) > 0).Should(o.BeTrue())
+
+		exutil.By("Check ipsec xfrm state")
+		cmd := `ip x s  | grep -i "mode transport"`
+		out, err := exutil.DebugNodeWithChroot(oc, nodeList.Items[0].Name, "bash", "-c", cmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf(out)
+		o.Expect(strings.Contains(out, "mode transport")).Should(o.BeTrue())
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-High-39216-Pod created on IPsec cluster should have appropriate MTU size to accomdate IPsec Header.", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
+			pingPodNodeTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
+		)
+
+		exutil.By("Get one worker node.")
+		nodeList, err := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(nodeList.Items) > 0).Should(o.BeTrue())
+
+		exutil.By("Get MTU from  one worker node.")
+		nodeMTU := getNodeMTU(oc, nodeList.Items[0].Name)
+
+		g.By("Get a namespace")
+		ns1 := oc.Namespace()
+		g.By("Create one hello pod in the namespace")
+		pod1 := pingPodResourceNode{
+			name:      "hello-pod1",
+			namespace: ns1,
+			nodename:  nodeList.Items[0].Name,
+			template:  pingPodNodeTemplate,
+		}
+		pod1.createPingPodNode(oc)
+		waitPodReady(oc, ns1, pod1.name)
+
+		exutil.By("Get MTU from from the pod ")
+		mtuCmd := `cat /sys/class/net/eth0/mtu`
+		output, err := e2eoutput.RunHostCmd(ns1, pod1.name, mtuCmd)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		podMTU, err := strconv.Atoi(strings.TrimSpace(output))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The MTU in the pod is %v", podMTU)
+
+		// OVN needs 100 byte header and IPsec needs another 46 bytes due to ESP etc so the pod's mtu must be 146 bytes less than cluster mtu
+		exutil.By("Verify pod's mtu is less 146 bytes than nodes mtu")
+		o.Expect((podMTU + 146) == nodeMTU).Should(o.BeTrue())
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-High-37392-pod to pod traffic on different nodes should be IPSec encrypted", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		helloDaemonset := filepath.Join(buildPruningBaseDir, "hello-pod-daemonset.yaml")
+		ns := oc.Namespace()
+
+		exutil.By("Verify IPSec loaded")
+		nodes, err := exutil.GetAllNodes(oc)
+		e2e.Logf("The cluster has %v nodes", len(nodes))
+		o.Expect(err).NotTo(o.HaveOccurred())
+		verifyIPSecLoaded(oc, nodes[0], len(nodes))
+
+		exutil.By("Verify ipsec pods running well.")
+		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovn-ipsec")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create hello-pod-daemonset in namespace.")
+		createResourceFromFile(oc, ns, helloDaemonset)
+		err = waitForPodWithLabelReady(oc, ns, "name=hello-pod")
+		exutil.AssertWaitPollNoErr(err, "hello pods are not ready!")
+
+		exutil.By("Verify the pod2pod traffic got encrypted.")
+		pods := getPodName(oc, ns, "name=hello-pod")
+		pod1 := pods[0]
+		pod2 := pods[1]
+		pod2Node, err := exutil.GetPodNodeName(oc, ns, pod2)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		e2e.Logf("The source pod is  %s, the target pod is %s, the targe pod is on node %s", pod1, pod2, pod2Node)
+
+		exutil.By("Check cluster is NAT-T enabled or not.")
+		nattEnabled := checkIPSecNATTEanbled(oc)
+		exutil.SetNamespacePrivileged(oc, ns)
+		var tcpdumpCmd string
+		if nattEnabled {
+			tcpdumpCmd = "timeout 60s tcpdump -c 4 -nni br-ex udp port 4500 and greater 1300 "
+		} else {
+			tcpdumpCmd = "timeout 60s tcpdump -c 4 -nni br-ex esp and greater 1300 "
+		}
+		e2e.Logf("The tcpdump command is %s", tcpdumpCmd)
+
+		cmdTcpdump, cmdOutput, _, err := oc.AsAdmin().Run("debug").Args("node/"+pod2Node, "--", "bash", "-c", tcpdumpCmd).Background()
+		defer cmdTcpdump.Process.Kill()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		// As above tcpdump command will be executed in background, add sleep time to let the ping action happen later after that.
+		time.Sleep(5 * time.Second)
+
+		e2e.Logf("From pod %s ping pod %s", pod1, pod2)
+		pod2IP1, pod2IP2 := getPodIP(oc, ns, pod2)
+		if pod2IP2 != "" {
+			_, err := e2eoutput.RunHostCmd(ns, pod1, "ping -s 1500 -c4 "+pod2IP1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			_, err = e2eoutput.RunHostCmd(ns, pod1, "ping -s 1500 -c4 "+pod2IP2)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		} else {
+			_, err := e2eoutput.RunHostCmd(ns, pod1, "ping -s 1500 -c4 "+pod2IP1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}
+
+		exutil.By("Verify the pod2pod traffic got encrypted,no clear icmp text in the output")
+		cmdTcpdump.Wait()
+		e2e.Logf("tcpdump for ping is \n%s", cmdOutput.String())
+		if nattEnabled {
+			o.Expect(strings.Contains(cmdOutput.String(), "UDP-encap")).Should(o.BeTrue())
+		} else {
+			o.Expect(strings.Contains(cmdOutput.String(), "ESP")).Should(o.BeTrue())
+		}
+		o.Expect(strings.Contains(cmdOutput.String(), "icmp")).ShouldNot(o.BeTrue())
+	})
+
+	// author: huirwang@redhat.com
+	g.It("Author:huirwang-Medium-80232-After node rebooting, IPSec pod2pod connection should work as well. [Disruptive]", func() {
+		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
+		helloDaemonset := filepath.Join(buildPruningBaseDir, "hello-pod-daemonset.yaml")
+		ns := oc.Namespace()
+
+		exutil.By("Verify IPSec loaded")
+		nodes, err := exutil.GetAllNodes(oc)
+		e2e.Logf("The cluster has %v nodes", len(nodes))
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Get one worker node which will be used for rebooting")
+		workerNode, err := exutil.GetFirstWorkerNode(oc)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		verifyIPSecLoaded(oc, workerNode, len(nodes))
+
+		exutil.By("Verify ipsec pods running well before node rebooting.")
+		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovn-ipsec")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Create hello-pod-daemonset in namespace.")
+		createResourceFromFile(oc, ns, helloDaemonset)
+		err = waitForPodWithLabelReady(oc, ns, "name=hello-pod")
+		exutil.AssertWaitPollNoErr(err, "hello pods are not ready before upgrade!")
+
+		exutil.By("Checking pods connection cross nodes before rebooting node")
+		if !verifyPodConnCrossNodesSpecNS(oc, ns, "name=hello-pod") {
+			g.Fail("Pods connection checking cross nodes failed!!")
+		}
+
+		exutil.By("Reboot the worker node.")
+		defer checkNodeStatus(oc, workerNode, "Ready")
+		rebootNode(oc, workerNode)
+		checkNodeStatus(oc, workerNode, "NotReady")
+		checkNodeStatus(oc, workerNode, "Ready")
+
+		exutil.By("Wait for all the test pods in running status  ")
+		err = waitForPodWithLabelReady(oc, ns, "name=hello-pod")
+		exutil.AssertWaitPollNoErr(err, "hello pods are not ready before upgrade!")
+
+		exutil.By("Verify IPSec loaded after node rebooting.")
+		verifyIPSecLoaded(oc, workerNode, len(nodes))
+
+		exutil.By("Verify ipsec pods running well after node rebooting.")
+		err = waitForPodWithLabelReady(oc, "openshift-ovn-kubernetes", "app=ovn-ipsec")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("Checking pods connection cross nodes")
+		if !verifyPodConnCrossNodesSpecNS(oc, ns, "name=hello-pod") {
+			g.Fail("Pods connection checking cross nodes failed!!")
+		}
+	})
+
 })
 
 var _ = g.Describe("[sig-networking] SDN IPSEC NS", func() {

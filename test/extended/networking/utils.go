@@ -4389,10 +4389,16 @@ func checkIPSecNATTEanbled(oc *exutil.CLI) bool {
 func verifyIPSecLoaded(oc *exutil.CLI, nodeName string, num int) {
 	expectedNum := (num - 1) * 2
 	cmd := `ipsec status | grep "Total IPsec connections"`
-	out, err := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", cmd)
-	o.Expect(err).NotTo(o.HaveOccurred())
-	e2e.Logf("Total  IPsec connection is : \n%s", out)
-	o.Expect(strings.Contains(out, fmt.Sprintf("loaded %v, active %v", expectedNum, expectedNum))).Should(o.BeTrue())
+	// After node reboot, need to wait the IPSec connections loaded
+	checkErr := wait.PollUntilContextTimeout(context.Background(), 10*time.Second, 120*time.Second, false, func(cxt context.Context) (bool, error) {
+		out, err := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", cmd)
+		e2e.Logf("Total  IPsec connection is : \n%s", out)
+		if err != nil || !strings.Contains(out, fmt.Sprintf("loaded %v, active %v", expectedNum, expectedNum)) {
+			return false, nil
+		}
+		return true, nil
+	})
+	exutil.AssertWaitPollNoErr(checkErr, "IPsec connections were not loaded completely!")
 }
 
 func PingNode2PodPass(oc *exutil.CLI, nodeName string, namespaceDst string, podNameDst string) {
@@ -4459,4 +4465,24 @@ func pingPod2ExternalPass(oc *exutil.CLI, namespaceSrc string, podNameSrc string
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(output, "0% packet loss")).To(o.BeTrue())
 	}
+}
+
+// Get MTU value of br-ex on the node
+func getNodeMTU(oc *exutil.CLI, nodeName string) int {
+	cmdMTU := `ip a show br-ex |grep mtu`
+	out, err := exutil.DebugNodeWithChroot(oc, nodeName, "bash", "-c", cmdMTU)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf(out)
+	// Define regex to  capute mtu value
+	re := regexp.MustCompile(`mtu (\d+)`)
+	match := re.FindStringSubmatch(out)
+	o.Expect(len(match) > 1).Should(o.BeTrue())
+	e2e.Logf("MTU on node %s is : %s", nodeName, match[1])
+	mtu, err := strconv.Atoi(match[1])
+	if err == nil {
+		return mtu
+	} else {
+		return 0
+	}
+
 }
