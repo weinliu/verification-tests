@@ -48,7 +48,10 @@ func (clustercatalog *ClusterCatalogDescription) Create(oc *exutil.CLI) {
 }
 
 func (clustercatalog *ClusterCatalogDescription) CreateWithoutCheck(oc *exutil.CLI) error {
-	paremeters := []string{"-n", "default", "--ignore-unknown-parameters=true", "-f", clustercatalog.Template, "-p"}
+	paremeters := []string{"--ignore-unknown-parameters=true", "-f", clustercatalog.Template, "-p"}
+	if len(oc.Namespace()) == 0 {
+		paremeters = []string{"-n", "default", "--ignore-unknown-parameters=true", "-f", clustercatalog.Template, "-p"}
+	}
 	if len(clustercatalog.Name) > 0 {
 		paremeters = append(paremeters, "NAME="+clustercatalog.Name)
 	}
