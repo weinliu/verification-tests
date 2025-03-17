@@ -388,8 +388,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		o.Expect(searchOutput2).NotTo(o.ContainSubstring("NotMatch"))
 	})
 
+	// incorporate OCP-57370and OCP-14059 into one
+	// Test case creater: mjoseph@redhat.com - OCP-57370: Hostname of componentRoutes should be RFC compliant
 	// bugzilla: 2039256
 	// Due to bug https://issues.redhat.com/browse/OCPBUGS-43431, this case may not run on HCP cluster.
+	// Test case creater: zzhao@redhat.com - OCP-14059: Use the default destination CA of router if the route does not specify one for reencrypt route
 	g.It("Author:mjoseph-NonHyperShiftHOST-High-57370-hostname of componentRoutes should be RFC compliant", func() {
 		// Check whether the console operator is present or not
 		output, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("route", "console", "-n", "openshift-console").Output()
@@ -400,21 +403,31 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 			resourceName = "ingress.config/cluster"
 		)
 
-		exutil.By("Create route and get the details")
+		exutil.By("1. Create route and get the details")
 		removeRoute := fmt.Sprintf("[{\"op\":\"remove\", \"path\":\"/spec/componentRoutes\", \"value\":[{\"hostname\": \"1digit9.apps.%s\", \"name\": \"downloads\", \"namespace\": \"openshift-console\"}]}]}]", getBaseDomain(oc))
 		addRoute := fmt.Sprintf("[{\"op\":\"add\", \"path\":\"/spec/componentRoutes\", \"value\":[{\"hostname\": \"1digit9.apps.%s\", \"name\": \"downloads\", \"namespace\": \"openshift-console\"}]}]}]", getBaseDomain(oc))
 		defer patchGlobalResourceAsAdmin(oc, resourceName, removeRoute)
 		patchGlobalResourceAsAdmin(oc, resourceName, addRoute)
 		waitForOutput(oc, "openshift-console", "route", "{.items..metadata.name}", "downloads-custom")
 
-		exutil.By("Check the router pod and ensure the routes are loaded in haproxy.config")
+		exutil.By("2. Check the router pod and ensure the routes are loaded in haproxy.config")
 		podname := getOneRouterPodNameByIC(oc, "default")
 		backendConfig := pollReadPodData(oc, "openshift-ingress", podname, "cat haproxy.config", "downloads-custom")
 		o.Expect(backendConfig).To(o.ContainSubstring("backend be_edge_http:openshift-console:downloads-custom"))
 
-		exutil.By("Confirm from the component Route, the RFC complaint hostname")
+		exutil.By("3. Confirm from the component Route, the RFC complaint hostname")
 		cmd := fmt.Sprintf(`1digit9.apps.%s`, getBaseDomain(oc))
 		waitForOutput(oc, oc.Namespace(), "ingress.config.openshift.io/cluster", "{.spec.componentRoutes[0].hostname}", cmd)
+
+		// OCP-14059: Use the default destination CA of router if the route does not specify one for reencrypt route
+		// since console route is using the reencrypt route without destination CA we are using it to check
+		exutil.By("4. Confirm from the console service the 'serving-cert-secret-name'")
+		findAnnotation := getAnnotation(oc, "openshift-console", "svc", "console")
+		o.Expect(findAnnotation).To(o.Or(o.ContainSubstring(`service.alpha.openshift.io/serving-cert-secret-name":"console-serving-cert`), o.ContainSubstring(`service.beta.openshift.io/serving-cert-secret-name":"console-serving-cert`)))
+
+		exutil.By("5. Confirm from the 'service-ca.crt' is present in haproxy.config for console route")
+		backendConfig1 := pollReadPodData(oc, "openshift-ingress", podname, "cat haproxy.config", "console.openshift-console.svc")
+		o.Expect(backendConfig1).To(o.ContainSubstring("required ca-file /var/run/configmaps/service-ca/service-ca.crt"))
 	})
 
 	g.It("ROSA-OSD_CCS-ARO-Author:mjoseph-Critical-73619-Checking whether the ingress operator is enabled as optional component", func() {
