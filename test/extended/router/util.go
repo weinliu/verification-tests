@@ -1834,6 +1834,40 @@ func addExtraParametersToYamlFile(originalFile, flagPara, AddedContent string) s
 	return newFile
 }
 
+// based on the orignal file, this function is used to add some content into the file behind the desired specified parameter, the return is the new file name
+// if there are quite few file lines include the specified parameter, use the seq parameter to choose the desired one
+func addContenToFileWithMatchedOrder(originalFile, flagPara, AddedContent string, seq int) string {
+	filePath, _ := filepath.Split(originalFile)
+	newFile := filePath + getRandomString()
+	originalFileContent, err := os.ReadFile(originalFile)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	newFileContent := ""
+	matchedTime := 0
+	for _, line := range strings.Split(string(originalFileContent), "\n") {
+		newFileContent = newFileContent + line + "\n"
+		if strings.Contains(line, flagPara) {
+			matchedTime++
+			if matchedTime == seq {
+				newFileContent = newFileContent + AddedContent
+			}
+		}
+	}
+	os.WriteFile(newFile, []byte(newFileContent), 0644)
+	return newFile
+}
+
+// this function is to check whether the ingress canary route could be accessible from outside
+func isCanaryRouteAvailable(oc *exutil.CLI) bool {
+	routehost := getByJsonPath(oc, "openshift-ingress-canary", "route/canary", "{.status.ingress[0].host}")
+	curlCmd := fmt.Sprintf(`curl https://%s -skI --connect-timeout 10`, routehost)
+	_, matchedTimes := repeatCmdOnClient(oc, curlCmd, "200", 60, 1)
+	if matchedTimes[0] == 1 {
+		return true
+	} else {
+		return false
+	}
+}
+
 func updateFilebySedCmd(file, toBeReplaced, newContent string) {
 	sedCmd := fmt.Sprintf(`sed -i'' -e 's|%s|%s|g' %s`, toBeReplaced, newContent, file)
 	_, err := exec.Command("bash", "-c", sedCmd).Output()

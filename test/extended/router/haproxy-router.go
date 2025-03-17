@@ -213,6 +213,75 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		checkRouteCertificationInRouterPod(oc, project1, "route-reen", routerpod, "cacerts", "--noCert")
 	})
 
+	// author: hongli@redhat.com
+	g.It("Author:shudili-ROSA-OSD_CCS-ARO-High-37714-Ingresscontroller routes traffic only to ready pods/backends", func() {
+		// skip the test if featureSet is set there
+		if exutil.IsTechPreviewNoUpgrade(oc) {
+			g.Skip("Skip for DCM enabled, the haproxy has the dynamic server slot configration for the only one endpoint, not the static")
+		}
+
+		// if the ingress canary route isn't accessable from outside, skip it
+		flag := isCanaryRouteAvailable(oc)
+		if !flag {
+			g.Skip("Skip for the ingress canary route could not be available to the outside")
+		}
+
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-signed-deploy.yaml")
+			unSecSvcName        = "service-unsecure"
+		)
+
+		exutil.By("1.0: updated the deployment file with readinessProbe")
+		extraParas := fmt.Sprintf(`
+          readinessProbe:
+            exec:
+              command:
+              - cat
+              - /data/ready
+            initialDelaySeconds: 5
+            periodSeconds: 5
+`)
+		updatedDeployFile := addContenToFileWithMatchedOrder(testPodSvc, "        - name: nginx", extraParas, 1)
+		defer os.Remove(updatedDeployFile)
+
+		exutil.By("2.0 Deploy a project with a deployment and a client pod")
+		project1 := oc.Namespace()
+		createResourceFromFile(oc, project1, updatedDeployFile)
+		serverPod := getPodListByLabel(oc, project1, "name=web-server-deploy")[0]
+		waitForOutput(oc, project1, "pod/"+serverPod, "{.status.phase}", "Running")
+		waitForOutput(oc, project1, "pod/"+serverPod, "{.status.conditions[?(@.type==\"Ready\")].status}", "False")
+
+		exutil.By("3.0 Create a http route")
+		routehost := "unsecure37714" + ".apps." + getBaseDomain(oc)
+		createRoute(oc, project1, "http", unSecSvcName, unSecSvcName, []string{"--hostname=" + routehost})
+		waitForOutput(oc, project1, "route/"+unSecSvcName, "{.status.ingress[0].conditions[0].status}", "True")
+
+		exutil.By("4.0 Check haproxy.config which should not have the server slot")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
+		serverSlot := "pod:" + serverPod + ":" + unSecSvcName + ":http"
+		readHaproxyConfig(oc, routerpod, "be_http:"+project1+":"+unSecSvcName, "-A20", unSecSvcName)
+		backendConfig := getBlockConfig(oc, routerpod, "be_http:"+project1+":"+unSecSvcName)
+		o.Expect(backendConfig).NotTo(o.ContainSubstring(serverSlot))
+
+		exutil.By("5.0 Curl the http route, expect to get 503 for the server pod is not ready")
+		curlCmd := fmt.Sprintf(`curl http://%s -sI --connect-timeout 10`, routehost)
+		repeatCmdOnClient(oc, curlCmd, "503", 60, 1)
+
+		exutil.By("6.0 Create the /data/ready under the server pod")
+		_, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", project1, serverPod, "--", "touch", "/data/ready").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		waitForOutput(oc, project1, "pod/"+serverPod, "{.status.conditions[?(@.type==\"Ready\")].status}", "True")
+
+		exutil.By("7.0 Check haproxy.config which should have the server slot")
+		readHaproxyConfig(oc, routerpod, "be_http:"+project1+":"+unSecSvcName, "-A20", serverPod)
+		backendConfig = getBlockConfig(oc, routerpod, "be_http:"+project1+":"+unSecSvcName)
+		o.Expect(backendConfig).To(o.ContainSubstring(serverSlot))
+
+		exutil.By("8.0 Curl the http route again, expect to get 200 ok for the server pod is ready")
+		repeatCmdOnClient(oc, curlCmd, "200 OK", 60, 1)
+	})
+
 	// author: shudili@redhat.com
 	g.It("Author:shudili-ROSA-OSD_CCS-ARO-High-27628-router support HTTP2 for passthrough route and reencrypt route with custom certs", func() {
 		var (
