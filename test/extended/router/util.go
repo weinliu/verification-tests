@@ -1379,12 +1379,14 @@ func opensslSignCsr(extfile, serverCsr, caCrt, caKey, serverCrt string) {
 
 // wait until curling route returns expected output (check error as well)
 // curl is executed on client outside the cluster
-func waitForOutsideCurlContains(url string, curlOptions string, expected string) {
+func waitForOutsideCurlContains(url string, curlOptions string, expected string) string {
+	var output []byte
 	cmd := fmt.Sprintf(`curl --connect-timeout 10 -s %s %s 2>&1`, curlOptions, url)
 	e2e.Logf("the command is: %s", cmd)
 	waitErr := wait.Poll(5*time.Second, 30*time.Second, func() (bool, error) {
 		result, err := exec.Command("bash", "-c", cmd).Output()
 		e2e.Logf("the result is: %s", result)
+		output = result
 		if err != nil {
 			e2e.Logf("the error is: %v", err.Error())
 			if strings.Contains(err.Error(), expected) {
@@ -1414,6 +1416,7 @@ func waitForOutsideCurlContains(url string, curlOptions string, expected string)
 		e2e.Logf("debug: the result of curl is %s and err is %v", result, err)
 	}
 	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but not get expected string"))
+	return string(output)
 }
 
 // curl command with poll

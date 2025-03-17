@@ -216,7 +216,11 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 
 	})
 
-	// Test case creater: hongli@redhat.com
+	// incorporate OCP-12506 OCP-15073 OCP-15115 OCP-16368 into one
+	// Test case creater: hongli@redhat.com - OCP-12506: Hostname of componentRoutes should be RFC compliant
+	// Test case creater: zzhao@redhat.com - OCP-15073: The router can do a case-insensitive match of a hostname for reencrypt route
+	// Test case creater: zzhao@redhat.com - OCP-15115: Harden haproxy to prevent the PROXY header from being passed for reencrypt route
+	// Test case creater: zzhao@redhat.com - OCP-16368: The reencrypt route should support HSTS
 	g.It("Author:mjoseph-High-12506-reencrypt route with no cert if a router is configured with a default wildcard cert", func() {
 		buildPruningBaseDir := exutil.FixturePath("testdata", "router")
 		testPodSvc := filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
@@ -241,6 +245,26 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		exutil.By("5. Check the reachability of the host in the default controller")
 		reenHost := "12506-no-cert-" + project1 + ".apps." + getBaseDomain(oc)
 		waitForOutsideCurlContains("https://"+reenHost, "-k", `Hello-OpenShift web-server-deploy`)
+
+		// OCP-15073: The router can do a case-insensitive match of a hostname for reencrypt route
+		exutil.By("6. Check the reachability of case-insensitive match of the hostname for the reencrypt route")
+		reenHostCapital := "12506-NO-CERT-" + project1 + ".apps." + getBaseDomain(oc)
+		waitForOutsideCurlContains("https://"+reenHostCapital, "-k", `Hello-OpenShift web-server-deploy`)
+
+		// OCP-15115: Harden haproxy to prevent the PROXY header from being passed for reencrypt route
+		exutil.By("7. Access the route with 'proxy' header and confirm the proxy is carried with it")
+		result := waitForOutsideCurlContains("--head -H proxy:10.10.10.10 https://"+reenHost, "-k", `200 OK`)
+		o.Expect(result).NotTo(o.ContainSubstring(`proxy:10.10.10.10`))
+
+		// OCP-16368: The reencrypt route should support HSTS
+		exutil.By("8. Set the Strict-Transport-Security header as annotation")
+		setAnnotation(oc, project1, "route/12506-no-cert", "haproxy.router.openshift.io/hsts_header=max-age=100;includeSubDomains;preload")
+		findAnnotation := getAnnotation(oc, project1, "route", "12506-no-cert")
+		o.Expect(findAnnotation).To(o.ContainSubstring(`haproxy.router.openshift.io/hsts_header":"max-age=100;includeSubDomains;preload`))
+
+		exutil.By("9. Check the reachability of the host using the HSTS header")
+		result = waitForOutsideCurlContains("--head https://"+reenHost, "-k", `200 OK`)
+		o.Expect(result).To(o.ContainSubstring(`strict-transport-security: max-age=100;includeSubDomains;preload`))
 	})
 
 	// Test case creater: hongli@redhat.com
