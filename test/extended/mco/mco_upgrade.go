@@ -342,8 +342,8 @@ var _ = g.Describe("[sig-mco] MCO Upgrade", func() {
 
 				o.Eventually(ms.GetCoreOsBootImage, "5m", "20s").Should(o.ContainSubstring(currentCoreOsBootImage),
 					"%s was NOT updated to use the right boot image", ms)
-				o.Eventually(ms.GetUserDataSecret, "1m", "20s").Should(o.Equal("worker-user-data-managed"),
-					"%s was NOT updated to use the right boot image", ms)
+				o.Eventually(ms.GetUserDataSecret, "1m", "20s").ShouldNot(o.Equal("worker-user-data-managed"),
+					"%s should NOT be using the worker-user-data-managed secret after updating the image", ms)
 			} else {
 				// We check that the machineset has the same boot image that we stored before the upgrade started
 				logger.Infof("Machineset %s should NOT be updated", ms.GetName())

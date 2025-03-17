@@ -149,8 +149,8 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 			} else {
 				o.Eventually(ms.GetCoreOsBootImage, "5m", "20s").Should(o.ContainSubstring(currentCoreOsBootImage),
 					"%s was NOT updated to use the right boot image", ms)
-				o.Eventually(ms.GetUserDataSecret, "1m", "20s").Should(o.ContainSubstring("worker-user-data-managed"),
-					"%s was NOT updated to use the right user-data secret", ms)
+				o.Eventually(ms.GetUserDataSecret, "1m", "20s").ShouldNot(o.ContainSubstring("worker-user-data-managed"),
+					"%s should NOT be using the worker-user-data-managed secret after updating the image", ms)
 			}
 		}
 		logger.Infof("OK!\n")
@@ -236,8 +236,8 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 
 		o.Eventually(clonedMSLabel.GetCoreOsBootImage, "5m", "20s").Should(o.ContainSubstring(currentCoreOsBootImage),
 			"%s was NOT updated to use the right boot image", clonedMSLabel)
-		o.Eventually(clonedMSLabel.GetUserDataSecret, "1m", "20s").Should(o.ContainSubstring("worker-user-data-managed"),
-			"%s was NOT updated to use the right user-data secret", clonedMSLabel)
+		o.Eventually(clonedMSLabel.GetUserDataSecret, "1m", "20s").ShouldNot(o.ContainSubstring("worker-user-data-managed"),
+			"%s should NOT be using the worker-user-data-managed secret after updating the image", clonedMSLabel)
 		logger.Infof("OK!\n")
 
 		exutil.By("The labeled machineset with owner should NOT be updated")
