@@ -4717,7 +4717,6 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 				e2e.Failf("the configMap(%s) doesn't managed by OLM", configMap)
 			}
 		}
-
 		exutil.By("1) check version of the OLM related resource")
 		olmRelatedResource := []string{"operator-lifecycle-manager", "operator-lifecycle-manager-catalog", "operator-lifecycle-manager-packageserver"}
 		clusterversion := getResource(oc, asAdmin, withoutNamespace, "clusterversion", "version", "-o=jsonpath={.status.desired.version}")
@@ -4726,7 +4725,30 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			o.Expect(version).NotTo(o.BeEmpty())
 			o.Expect(clusterversion).To(o.Equal(version))
 		}
-		exutil.By("2) subscribe to an operator: learn-operator, the multi-arch one")
+		// This step cover a upgrade bug: https://bugzilla.redhat.com/show_bug.cgi?id=2015950
+		exutil.By("2) Create 300 secret in openshift-operator-lifecycle-manager project")
+		for i := 1; i <= 300; i++ {
+			logs, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", fmt.Sprintf("test%d", i), "-n", "openshift-operator-lifecycle-manager").Output()
+			if err != nil && !strings.Contains(logs, "already exists") {
+				e2e.Failf("Fail to create secret: %s, error:%v", fmt.Sprintf("test%d", i), err)
+			}
+		}
+		exutil.By("3) check status of OLM cluster operators")
+		for _, resource := range olmRelatedResource {
+			newCheck("expect", asAdmin, withoutNamespace, compare, "TrueFalseFalse", ok, []string{"clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"}).check(oc)
+			upgradeableStatus := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Upgradeable\")].status}")
+			if strings.Compare(upgradeableStatus, "True") != 0 {
+				getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath-as-json={.status.conditions}")
+				o.Expect(upgradeableStatus).To(o.Equal("True"))
+			}
+		}
+
+		exutil.By("4) check status of OLMv0 pods")
+		newCheck("expect", asAdmin, withoutNamespace, false, "running", ok, []string{"-n", "openshift-operator-lifecycle-manager", "pods", "-l", "app=catalog-operator", "-o=jsonpath={..status.containerStatuses..state}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, false, "running", ok, []string{"-n", "openshift-operator-lifecycle-manager", "pods", "-l", "app=olm-operator", "-o=jsonpath={..status.containerStatuses..state}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, false, "running", ok, []string{"-n", "openshift-marketplace", "pods", "-l", "name=marketplace-operator", "-o=jsonpath={..status.containerStatuses..state}"}).check(oc)
+
+		exutil.By("5) subscribe to an operator: learn-operator, the multi-arch one")
 		dr := make(describerResrouce)
 		itName := g.CurrentSpecReport().FullText()
 		dr.addIr(itName)
@@ -4746,7 +4768,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		}
 		og.createwithCheck(oc, itName, dr)
 
-		exutil.By("2-1) subscribe to the learn-operator v0.0.3 with Automatic approval")
+		exutil.By("5-1) subscribe to the learn-operator v0.0.3 with Automatic approval")
 		subTemplate := filepath.Join(buildPruningBaseDir, "olm-subscription.yaml")
 		sub := subscriptionDescription{
 			subName:                "sub-22615",
@@ -4777,29 +4799,9 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			logDebugInfo(oc, sub.namespace, "pod", "ip", "csv", "events")
 		}
 		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("sub %s stat is not AtLatestKnown", sub.subName))
-
 		// keep the resource so that checking it after upgrading
 		// defer sub.deleteCSV(itName, dr)
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", "olm-upgrade-22615", "-o=jsonpath={.status.phase}"}).check(oc)
-
-		// This step cover a upgrade bug: https://bugzilla.redhat.com/show_bug.cgi?id=2015950
-		exutil.By("3) Create 300 secret in openshift-operator-lifecycle-manager project")
-		for i := 1; i <= 300; i++ {
-			logs, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", fmt.Sprintf("test%d", i), "-n", "openshift-operator-lifecycle-manager").Output()
-			if err != nil && !strings.Contains(logs, "already exists") {
-				e2e.Failf("Fail to create secret: %s, error:%v", fmt.Sprintf("test%d", i), err)
-			}
-		}
-		exutil.By("4) check status of OLM cluster operators")
-		for _, resource := range olmRelatedResource {
-			newCheck("expect", asAdmin, withoutNamespace, compare, "TrueFalseFalse", ok, []string{"clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Available\")].status}{.status.conditions[?(@.type==\"Progressing\")].status}{.status.conditions[?(@.type==\"Degraded\")].status}"}).check(oc)
-			upgradeableStatus := getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath={.status.conditions[?(@.type==\"Upgradeable\")].status}")
-			if strings.Compare(upgradeableStatus, "True") != 0 {
-				getResource(oc, asAdmin, withoutNamespace, "clusteroperator", resource, "-o=jsonpath-as-json={.status.conditions}")
-				o.Expect(upgradeableStatus).To(o.Equal("True"))
-			}
-		}
-
 	})
 	// author: jiazha@redhat.com
 	g.It("NonPreRelease-PstChkUpgrade-Author:xzha-High-22615-Post check the OLM status", func() {
@@ -4811,7 +4813,12 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			o.Expect(version).NotTo(o.BeEmpty())
 			o.Expect(clusterversion).To(o.Equal(version))
 		}
-		exutil.By("2) check status of OLM cluster operators")
+		exutil.By("2) check status of OLMv0 pods")
+		newCheck("expect", asAdmin, withoutNamespace, false, "running", ok, []string{"-n", "openshift-operator-lifecycle-manager", "pods", "-l", "app=catalog-operator", "-o=jsonpath={..status.containerStatuses..state}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, false, "running", ok, []string{"-n", "openshift-operator-lifecycle-manager", "pods", "-l", "app=olm-operator", "-o=jsonpath={..status.containerStatuses..state}"}).check(oc)
+		newCheck("expect", asAdmin, withoutNamespace, false, "running", ok, []string{"-n", "openshift-marketplace", "pods", "-l", "name=marketplace-operator", "-o=jsonpath={..status.containerStatuses..state}"}).check(oc)
+
+		exutil.By("3) check status of OLM cluster operators")
 		e2e.Logf("check csv maxOpenShiftVersion")
 		upgradeableExpect := "True"
 		clusterversionSemver, err := semver.Make(clusterversion)
@@ -4856,7 +4863,7 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			}
 		}
 
-		exutil.By("3) Check the installed operator status")
+		exutil.By("4) Check the installed operator status")
 		newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded", ok, []string{"csv", "learn-operator.v0.0.3", "-n", "olm-upgrade-22615", "-o=jsonpath={.status.phase}"}).check(oc)
 		_, err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("project", "olm-upgrade-22615").Output()
 		if err != nil {
