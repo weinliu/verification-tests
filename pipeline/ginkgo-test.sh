@@ -1,6 +1,5 @@
 #!/bin/bash
 set -e
-env|grep -v -E "GLOKIPWD"
 
 function run {
   PIPELINESCRIPT_DIR=${WORKSPACE}"/private/pipeline" && export PATH=${PIPELINESCRIPT_DIR}:$PATH
@@ -31,7 +30,6 @@ function config_env {
   fi
   go version
   go env
-  env|grep -v -E "GLOKIPWD|GITHUB_TOKEN|GITHUB_API_CURL_OPTS"
   oc version -o yaml || echo "can not get oc version"
 }
 
