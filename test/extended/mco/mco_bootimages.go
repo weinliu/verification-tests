@@ -14,6 +14,9 @@ import (
 	"github.com/tidwall/sjson"
 )
 
+const mapiBaseErrorMessageTemplate = `1 Degraded MAPI MachineSets | 0 Degraded CAPI MachineSets | 0 CAPI MachineDeployments | Error(s):` +
+	` error syncing MAPI MachineSet %s: failed to reconcile machineset %s, err:`
+
 var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 	defer g.GinkgoRecover()
 
@@ -149,8 +152,8 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 			} else {
 				o.Eventually(ms.GetCoreOsBootImage, "5m", "20s").Should(o.ContainSubstring(currentCoreOsBootImage),
 					"%s was NOT updated to use the right boot image", ms)
-				o.Eventually(ms.GetUserDataSecret, "1m", "20s").ShouldNot(o.ContainSubstring("worker-user-data-managed"),
-					"%s should NOT be using the worker-user-data-managed secret after updating the image", ms)
+				o.Eventually(ms.GetUserDataSecretName, "1m", "20s").Should(o.ContainSubstring("worker-user-data-managed"),
+					"%s was NOT updated to use the right user-data secret", ms)
 			}
 		}
 		logger.Infof("OK!\n")
@@ -236,8 +239,8 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 
 		o.Eventually(clonedMSLabel.GetCoreOsBootImage, "5m", "20s").Should(o.ContainSubstring(currentCoreOsBootImage),
 			"%s was NOT updated to use the right boot image", clonedMSLabel)
-		o.Eventually(clonedMSLabel.GetUserDataSecret, "1m", "20s").ShouldNot(o.ContainSubstring("worker-user-data-managed"),
-			"%s should NOT be using the worker-user-data-managed secret after updating the image", clonedMSLabel)
+		o.Eventually(clonedMSLabel.GetUserDataSecretName, "1m", "20s").Should(o.ContainSubstring("worker-user-data-managed"),
+			"%s was NOT updated to use the right user-data secret", clonedMSLabel)
 		logger.Infof("OK!\n")
 
 		exutil.By("The labeled machineset with owner should NOT be updated")
@@ -422,6 +425,78 @@ var _ = g.Describe("[sig-mco] MCO Bootimages", func() {
 		logger.Infof("OK!\n")
 
 	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-80543-Bootimage secret is empty when upgrading stub ignition to spec 3 [Disruptive]", func() {
+		var (
+			clonedMSName     = fmt.Sprintf("cloned-tc-%s-copy", GetCurrentTestPolarionIDNumber())
+			clonedSecretName = ""
+			// We make the the regexp end in a "$" to make sure that no more versions than the expected ones are present
+			expectedFailedMessageRegexp = regexp.QuoteMeta(fmt.Sprintf(mapiBaseErrorMessageTemplate+
+				` error grabbing user data secret referenced in machineset: resource name may not be empty`, clonedMSName, clonedMSName)) + "$"
+		)
+
+		testUserDataUpdateFailure(oc, clonedMSName, clonedSecretName, expectedFailedMessageRegexp, nil)
+
+	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-80436-Bootimage secret doesn't exist error upgrading stub ignition to spec 3 [Disruptive]", func() {
+		var (
+			clonedMSName     = fmt.Sprintf("cloned-tc-%s-copy", GetCurrentTestPolarionIDNumber())
+			clonedSecretName = fmt.Sprintf("cloned-user-data-%s-copy", GetCurrentTestPolarionIDNumber())
+			// We make the the regexp end in a "$" to make sure that no more versions than the expected ones are present
+			expectedFailedMessageRegexp = regexp.QuoteMeta(fmt.Sprintf(mapiBaseErrorMessageTemplate+
+				` error grabbing user data secret referenced in machineset: secrets "%s" not found`, clonedMSName, clonedMSName, clonedSecretName)) + "$"
+		)
+
+		testUserDataUpdateFailure(oc, clonedMSName, clonedSecretName, expectedFailedMessageRegexp, nil)
+
+	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-80435-[OnCLayer] Bootimage no json data error upgrading stub ignition to spec 3 [Disruptive]", func() {
+		var (
+			clonedMSName     = fmt.Sprintf("cloned-tc-%s-copy", GetCurrentTestPolarionIDNumber())
+			clonedSecretName = fmt.Sprintf("cloned-user-data-%s-copy", GetCurrentTestPolarionIDNumber())
+			// We make the the regexp end in a "$" to make sure that no more versions than the expected ones are present
+			expectedFailedMessageRegexp = regexp.QuoteMeta(fmt.Sprintf(mapiBaseErrorMessageTemplate+
+				" failed to unmarshal decoded user-data to json (secret %s): invalid character 'h' in literal true (expecting 'r')t", clonedMSName, clonedMSName, clonedSecretName)) + "$"
+		)
+
+		setNotJSONUserData := func(_ string) (string, error) {
+			logger.Infof("Setting a wrong not-json ignition data in the user-data secret")
+			return "this is not json {data}", nil
+		}
+
+		testUserDataUpdateFailure(oc, clonedMSName, clonedSecretName, expectedFailedMessageRegexp, setNotJSONUserData)
+	})
+
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Medium-80434-[OnCLayer] Bootimage wrong version error upgrading stub ignition to spec 3 [Disruptive]", func() {
+		var (
+			wrongIgnitionVersion = "1.2.0"
+			clonedMSName         = fmt.Sprintf("cloned-tc-%s-copy", GetCurrentTestPolarionIDNumber())
+			clonedSecretName     = fmt.Sprintf("cloned-user-data-%s-copy", GetCurrentTestPolarionIDNumber())
+			// We make the the regexp end in a "$" to make sure that no more versions than the expected ones are present
+			expectedFailedMessageRegexp = regexp.QuoteMeta(fmt.Sprintf(mapiBaseErrorMessageTemplate+
+				" converting ignition stub failed: failed to parse Ignition config: parsing Ignition config failed:"+
+				" unknown version. Supported spec versions: 2.2, 3.0, 3.1, 3.2, 3.3, 3.4", clonedMSName, clonedMSName)) + "$"
+		)
+
+		setWrongIgnitionVersion := func(userData string) (string, error) {
+			logger.Infof("Setting a wrong ignition version in the user-data secret")
+			userDataV2, err := ConvertUserDataIgnition3ToIgnition2(userData)
+			if err != nil {
+				logger.Errorf("Error converting the userData info to ignition V2")
+				return "", err
+			}
+			userDataV2, err = sjson.Set(userDataV2, "ignition.version", wrongIgnitionVersion)
+			if err != nil {
+				logger.Errorf("Error setting the new ignition version")
+				return "", err
+			}
+			return userDataV2, nil
+		}
+
+		testUserDataUpdateFailure(oc, clonedMSName, clonedSecretName, expectedFailedMessageRegexp, setWrongIgnitionVersion)
+	})
 })
 
 func DuplicateMachineSetWithCustomBootImage(ms MachineSet, newBootImage, newName string) (*MachineSet, error) {
@@ -516,4 +591,89 @@ func getCoreOsBootImageFromConfigMapOrFail(platform, region string, arch archite
 	image, err := getCoreOsBootImageFromConfigMap(platform, region, arch, coreosBootimagesCM)
 	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting the boot image from %s for platform %s and arch %s", coreosBootimagesCM, platform, arch)
 	return image
+}
+
+// testUserDataUpdateFailure function that executes the common parts of the update spec v3 negative test cases
+func testUserDataUpdateFailure(oc *exutil.CLI, clonedMSName, clonedSecretName, expectedFailedMessageRegexp string, userDataModifyFunc func(userData string) (string, error)) {
+
+	var (
+		machineConfiguration     = GetMachineConfiguration(oc.AsAdmin())
+		machineSet               = NewMachineSetList(oc.AsAdmin(), MachineAPINamespace).GetAllOrFail()[0]
+		labelName                = "test"
+		labelValue               = "update"
+		machineClusterOperator   = NewResource(oc.AsAdmin(), "ClusterOperator", "machine-config")
+		initialMachineConfigSpec = machineConfiguration.GetSpecOrFail()
+		clonedSecret             *Secret
+	)
+
+	exutil.By("Opt-in boot images update")
+	defer machineConfiguration.SetSpec(initialMachineConfigSpec)
+	o.Expect(
+		machineConfiguration.SetPartialManagedBootImagesConfig(labelName, labelValue),
+	).To(o.Succeed(), "Error configuring Partial managedBootImages in the 'cluster' MachineConfiguration resource")
+	logger.Infof("OK!\n")
+
+	exutil.By("Clone the first machineset")
+	clonedMS, err := machineSet.Duplicate(clonedMSName)
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error duplicating %s", machineSet)
+	defer clonedMS.Delete()
+	logger.Infof("OK!\n")
+
+	exutil.By("Set a wrong user-data secret in the cloned machineset")
+	if userDataModifyFunc != nil {
+		logger.Infof("Duplicating the user-data secret")
+		userDataSecret, err := clonedMS.GetUserDataSecret()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting user-data secret from %s", clonedMS)
+
+		clonedSecret, err = duplicateMachinesetSecret(oc.AsAdmin(), userDataSecret.GetName(), clonedSecretName, userDataModifyFunc, nil)
+		defer clonedSecret.Delete()
+		o.Expect(err).NotTo(o.HaveOccurred(), "Error duplicating %s with a wrong ignition V2 version", userDataSecret)
+
+	} else {
+		logger.Infof("The %s user-data secret will not be created. Testing with a non-existing user-data secret", clonedSecretName)
+	}
+
+	logger.Infof("Configuring the cloned machineset to use the new user-data secret")
+	o.Expect(clonedMS.SetUserDataSecret(clonedSecretName)).To(o.Succeed(),
+		"Error patching MachineSet %s to use the new secret %s", clonedMS.GetName(), clonedSecretName)
+	logger.Infof("OK!\n")
+	exutil.By("Set a wrong boot image in the cloned image")
+	o.Expect(clonedMS.SetCoreOsBootImage("fake-image")).To(o.Succeed(), "Error setting a fake boot image in %s", clonedMS)
+	logger.Infof("OK!\n")
+
+	exutil.By("Label the cloned machineset so that its boot image is updated by MCO")
+	o.Expect(clonedMS.AddLabel(labelName, labelValue)).To(o.Succeed(),
+		"Error labeling %s", clonedMS)
+	logger.Infof("OK!\n")
+
+	exutil.By("Check that an error is reported in the machineconfiguration resource")
+	o.Eventually(machineConfiguration, "5m", "20s").Should(HaveConditionField("BootImageUpdateDegraded", "status", "True"),
+		"Expected %s to be BootImageUpdateDegraded.\n%s", machineConfiguration.PrettyString())
+
+	o.Eventually(machineConfiguration, "5m", "20s").Should(HaveConditionField("BootImageUpdateDegraded", "message", o.MatchRegexp(expectedFailedMessageRegexp)),
+		"Expected %s to be BootImageUpdateDegraded.\n%s", machineConfiguration.PrettyString())
+
+	logger.Infof("OK!\n")
+
+	exutil.By("Check that the machine-config CO is degraded reporting the right message")
+	o.Eventually(machineClusterOperator, "5m", "10s").Should(BeDegraded(),
+		"%s is not degraded when the user-data uses a wrong ignition version", machineClusterOperator)
+	o.Eventually(machineClusterOperator, "5m", "10s").Should(HaveDegradedMessage(o.MatchRegexp(expectedFailedMessageRegexp)),
+		"%s is not degraded when the user-data uses a wrong ignition version", machineClusterOperator)
+
+	logger.Infof("OK!\n")
+
+	exutil.By("Remove the machineset from the updated list")
+	o.Expect(machineConfiguration.SetSpec(initialMachineConfigSpec)).To(o.Succeed(),
+		"Error restoring the original MachineConfiguration spec")
+	logger.Infof("OK!\n")
+
+	exutil.By("Check that the status is restored")
+	o.Eventually(machineConfiguration, "5m", "20s").Should(HaveConditionField("BootImageUpdateDegraded", "status", "False"),
+		"Expected %s NOT to be BootImageUpdateDegraded.\n%s", machineConfiguration.PrettyString())
+	o.Eventually(machineClusterOperator, "5m", "10s").ShouldNot(BeDegraded(),
+		"%s is still degraded after removing the machineset is not updated anymore", machineClusterOperator)
+	logger.Infof("OK!\n")
+
+	checkMCCPanic(oc)
 }

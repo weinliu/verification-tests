@@ -294,9 +294,23 @@ func (ms MachineSet) SetArchitecture(arch string) error {
 			arch))
 }
 
-// GetUserDataSecret returns the secret used for user-data
-func (ms MachineSet) GetUserDataSecret() (string, error) {
+// GetUserDataSecretName returns the name of the secret used for user-data
+func (ms MachineSet) GetUserDataSecretName() (string, error) {
 	return ms.Get(`{.spec.template.spec.providerSpec.value.userDataSecret.name}`)
+}
+
+// GetUserDataSecret returns the secret used for user-data
+func (ms MachineSet) GetUserDataSecret() (*Secret, error) {
+	secretName, err := ms.GetUserDataSecretName()
+	if err != nil {
+		return nil, err
+	}
+	return NewSecret(ms.GetOC(), MachineAPINamespace, secretName), nil
+}
+
+// SetUserDataSecret configures the machineset to use the provided user-data secret in the machine-config-api namespace
+func (ms MachineSet) SetUserDataSecret(userDataSecretName string) error {
+	return ms.Patch("json", `[{ "op": "replace", "path": "/spec/template/spec/providerSpec/value/userDataSecret/name", "value": "`+userDataSecretName+`" }]`)
 }
 
 // GetCoreOsBootImage returns the configured coreOsBootImage in this machineset
@@ -346,8 +360,9 @@ func (msl *MachineSetList) GetAllOrFail() []MachineSet {
 	return allMs
 }
 
-// duplicateMachinesetSecret duplicates a userData secret and prepares the new duplicated secret to use the given ignition version
-func duplicateMachinesetSecret(oc *exutil.CLI, secretName, newName, newIgnitionVersion string) (*Secret, error) {
+// duplicateMachinesetSecret duplicates a userData secret and uses the provided functions to modify the userData and the disableTemplating data if they are not nil
+func duplicateMachinesetSecret(oc *exutil.CLI, secretName, newName string,
+	modifyUserData func(userData string) (string, error), modifyDisableTemplating func(disableTemplating string) (string, error)) (*Secret, error) {
 	var (
 		currentSecret = NewSecret(oc, MachineAPINamespace, secretName)
 		err           error
@@ -364,41 +379,20 @@ func duplicateMachinesetSecret(oc *exutil.CLI, secretName, newName, newIgnitionV
 		return nil, dtErr
 	}
 
-	currentIgnitionVersionResult := gjson.Get(userData, "ignition.version")
-	if !currentIgnitionVersionResult.Exists() || currentIgnitionVersionResult.String() == "" {
-		logger.Debugf("Could not get ignition version from ignition userData: %s", userData)
-		return nil, fmt.Errorf("Could not get ignition version from ignition userData. Enable debug GINKGO_TEST_ENABLE_DEBUG_LOG to get more info")
-	}
-	currentIgnitionVersion := currentIgnitionVersionResult.String()
-
-	if CompareVersions(currentIgnitionVersion, "==", newIgnitionVersion) {
-		logger.Infof("Current ignition version %s is the same as the new ignition version %s. No need to manipulate the userData info",
-			currentIgnitionVersion, newIgnitionVersion)
-	} else {
-		if CompareVersions(newIgnitionVersion, "<", "3.0.0") {
-			logger.Infof("New ignition version is %s, we need to adapt the userData ignition config to 2.0 config", newIgnitionVersion)
-			logger.Infof("Replace the 'merge' action with the 'append' action")
-			merge := gjson.Get(userData, "ignition.config.merge")
-			if !merge.Exists() {
-				logger.Debugf("Could not find the 'merge' information in the userData ignition config: %s", userData)
-				return nil, fmt.Errorf("Could not find the 'merge' information in the userData ignition config. Enable debug GINKGO_TEST_ENABLE_DEBUG_LOG to get more info")
-			}
-			userData, err = sjson.SetRaw(userData, "ignition.config.append", merge.String())
-			if err != nil {
-				return nil, err
-			}
-
-			userData, err = sjson.Delete(userData, "ignition.config.merge")
-			if err != nil {
-				return nil, err
-			}
-		}
-		logger.Infof("Replace ignition version '%s' with  version '%s'", currentIgnitionVersion, newIgnitionVersion)
-		userData, err = sjson.Set(userData, "ignition.version", newIgnitionVersion)
+	if modifyUserData != nil {
+		userData, err = modifyUserData(userData)
 		if err != nil {
+			logger.Errorf("Error modifying the userData content with the provided modification function")
 			return nil, err
 		}
+	}
 
+	if modifyDisableTemplating != nil {
+		disableTemplating, err = modifyDisableTemplating(disableTemplating)
+		if err != nil {
+			logger.Errorf("Error modifying the disableTemplating content with the provided modification function")
+			return nil, err
+		}
 	}
 
 	logger.Debugf("New userData info:\n%s", userData)
@@ -410,6 +404,62 @@ func duplicateMachinesetSecret(oc *exutil.CLI, secretName, newName, newIgnitionV
 		"--from-literal", fmt.Sprintf("disableTemplating=%s", disableTemplating)).Output()
 
 	return NewSecret(oc.AsAdmin(), MachineAPINamespace, newName), err
+}
+
+// convertUserDataIntoNewVersion converts the provided userData iginition config into the provided version format
+func convertUserDataToNewVersion(userData, newIgnitionVersion string) (string, error) {
+	var err error
+
+	currentIgnitionVersionResult := gjson.Get(userData, "ignition.version")
+	if !currentIgnitionVersionResult.Exists() || currentIgnitionVersionResult.String() == "" {
+		logger.Debugf("Could not get ignition version from ignition userData: %s", userData)
+		return "", fmt.Errorf("Could not get ignition version from ignition userData. Enable debug GINKGO_TEST_ENABLE_DEBUG_LOG to get more info")
+	}
+	currentIgnitionVersion := currentIgnitionVersionResult.String()
+
+	if CompareVersions(currentIgnitionVersion, "==", newIgnitionVersion) {
+		logger.Infof("Current ignition version %s is the same as the new ignition version %s. No need to manipulate the userData info",
+			currentIgnitionVersion, newIgnitionVersion)
+	} else {
+		if CompareVersions(newIgnitionVersion, "<", "3.0.0") {
+			logger.Infof("New ignition version is %s, we need to adapt the userData ignition config to 2.0 config", newIgnitionVersion)
+			userData, err = ConvertUserDataIgnition3ToIgnition2(userData)
+			if err != nil {
+				return "", err
+			}
+		}
+		logger.Infof("Replace ignition version '%s' with  version '%s'", currentIgnitionVersion, newIgnitionVersion)
+		userData, err = sjson.Set(userData, "ignition.version", newIgnitionVersion)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return userData, nil
+}
+
+// ConvertUserDataIgnition3ToIgnition2 transforms an ignitionV3 userdata configuration into an ignitionV2 userdata configuration
+func ConvertUserDataIgnition3ToIgnition2(ignition3 string) (string, error) {
+	var (
+		ignition2 = ignition3
+		err       error
+	)
+	logger.Infof("Replace the 'merge' action with the 'append' action")
+	merge := gjson.Get(ignition3, "ignition.config.merge")
+	if !merge.Exists() {
+		logger.Debugf("Could not find the 'merge' information in the ignition3 ignition config: %s", ignition3)
+		return "", fmt.Errorf("Could not find the 'merge' information in the ignition3 ignition config. Enable debug GINKGO_TEST_ENABLE_DEBUG_LOG to get more info")
+	}
+	ignition2, err = sjson.SetRaw(ignition2, "ignition.config.append", merge.String())
+	if err != nil {
+		return "", err
+	}
+
+	ignition2, err = sjson.Delete(ignition2, "ignition.config.merge")
+	if err != nil {
+		return "", err
+	}
+	return ignition2, nil
 }
 
 // getUserDataIgnitionVersionFromOCPVersion returns that right ignition version for a given base image version

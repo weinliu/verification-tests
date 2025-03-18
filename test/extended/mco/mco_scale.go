@@ -505,7 +505,9 @@ func cloneMachineSet(oc *exutil.CLI, ms MachineSet, newMsName, imageVersion, ign
 	exutil.By(fmt.Sprintf("Create a new secret with %s ignition version", ignitionVersion))
 	currentSecret := ms.GetOrFail(`{.spec.template.spec.providerSpec.value.userDataSecret.name}`)
 	logger.Infof("Duplicating secret %s with new name %s", currentSecret, newSecretName)
-	clonedSecret, sErr := duplicateMachinesetSecret(oc, currentSecret, newSecretName, ignitionVersion)
+
+	modifyUserData := func(userData string) (string, error) { return convertUserDataToNewVersion(userData, ignitionVersion) }
+	clonedSecret, sErr := duplicateMachinesetSecret(oc, currentSecret, newSecretName, modifyUserData, nil)
 	o.Expect(sErr).NotTo(o.HaveOccurred(), "Error duplicating machine-api secret")
 	o.Expect(clonedSecret).To(Exist(), "The secret was not duplicated for machineset %s", newMs)
 	logger.Infof("OK!\n")
@@ -542,8 +544,8 @@ func cloneMachineSet(oc *exutil.CLI, ms MachineSet, newMsName, imageVersion, ign
 
 	// Use new secret
 	exutil.By("Configure the duplicated MachineSet to use the new secret")
-	err = newMs.Patch("json", `[{ "op": "replace", "path": "/spec/template/spec/providerSpec/value/userDataSecret/name", "value": "`+newSecretName+`" }]`)
-	o.Expect(err).NotTo(o.HaveOccurred(), "Error patching MachineSet %s to use the new secret %s", newMs.GetName(), newSecretName)
+	o.Expect(newMs.SetUserDataSecret(newSecretName)).To(o.Succeed(),
+		"Error patching MachineSet %s to use the new secret %s", newMs.GetName(), newSecretName)
 	logger.Infof("OK!\n")
 
 	return newMs

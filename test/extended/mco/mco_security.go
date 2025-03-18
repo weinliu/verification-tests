@@ -898,9 +898,8 @@ var _ = g.Describe("[sig-mco] MCO security", func() {
 		defer removeClonedMachineSet(newMs, wMcp, initialNumWorkers)
 		logger.Infof("OK!\n")
 
-		newUserDataSecretName, err := newMs.GetUserDataSecret()
+		newUserDataSecret, err := newMs.GetUserDataSecret()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		newUserDataSecret := NewSecret(oc.AsAdmin(), MachineAPINamespace, newUserDataSecretName)
 
 		verifyMcsCASecretRotateOrFail(mcsCaSecret, newUserDataSecret)
 

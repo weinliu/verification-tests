@@ -237,3 +237,22 @@ func (mcc Controller) GetPreviousLogs() (string, error) {
 	}
 	return prevLogs, nil
 }
+
+// checkMCCPanic fails the test case if a panic happened in the MCC
+func checkMCCPanic(oc *exutil.CLI) {
+	var (
+		mcc = NewController(oc.AsAdmin())
+	)
+
+	exutil.By("Check MCC Logs for Panic is not produced")
+	mccPrevLogs, err := mcc.GetPreviousLogs()
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting previous MCC logs")
+
+	o.Expect(mccPrevLogs).NotTo(o.Or(o.ContainSubstring("panic"), o.ContainSubstring("Panic")), "Panic is seen in MCC previous logs after deleting OCB resources:\n%s", mccPrevLogs)
+	mccLogs, err := mcc.GetLogs()
+
+	o.Expect(err).NotTo(o.HaveOccurred(), "Error getting MCC logs")
+	o.Expect(mccLogs).NotTo(o.Or(o.ContainSubstring("panic"), o.ContainSubstring("Panic")), "Panic is seen in MCC logs after deleting OCB resources:\n%s", mccLogs)
+
+	logger.Infof("OK!\n")
+}

@@ -135,7 +135,6 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		var (
 			infraMcpName = "infra"
 			moscName     = "tc-74645"
-			mcc          = NewController(oc.AsAdmin())
 		)
 		exutil.By("Create New Custom MCP")
 		defer DeleteCustomMCP(oc.AsAdmin(), infraMcpName)
@@ -179,16 +178,8 @@ var _ = g.Describe("[sig-mco] MCO ocb", func() {
 		o.Expect(mosc).NotTo(Exist(), "MOSC is not deleted")
 		logger.Infof("OK!\n")
 
-		exutil.By("Check MCC Logs for Panic is not produced")
 		exutil.AssertAllPodsToBeReady(oc.AsAdmin(), MachineConfigNamespace)
-
-		mccPrevLogs, err := mcc.GetPreviousLogs()
-		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting previous MCC logs")
-		o.Expect(mccPrevLogs).NotTo(o.Or(o.ContainSubstring("panic"), o.ContainSubstring("Panic")), "Panic is seen in MCC previous logs after deleting OCB resources:\n%s", mccPrevLogs)
-		mccLogs, err := mcc.GetLogs()
-		o.Expect(err).NotTo(o.HaveOccurred(), "Error getting MCC logs")
-		o.Expect(mccLogs).NotTo(o.Or(o.ContainSubstring("panic"), o.ContainSubstring("Panic")), "Panic is seen in MCC logs after deleting OCB resources:\n%s", mccLogs)
-		logger.Infof("OK!\n")
+		checkMCCPanic(oc)
 	})
 
 	g.It("Author:sregidor-ConnectedOnly-Longduration-NonPreRelease-Critical-73496-[P1] OCB use custom Containerfile. New 4.16 OCB API[Disruptive]", func() {
