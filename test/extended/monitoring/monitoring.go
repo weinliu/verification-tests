@@ -2930,9 +2930,6 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		defer deleteConfig(oc, "user-workload-monitoring-config", "openshift-user-workload-monitoring")
 		defer deleteConfig(oc, monitoringCM.name, monitoringCM.namespace)
 
-		exutil.By("check metrics-server pods are ready")
-		getReadyPodsWithLabels(oc, "openshift-monitoring", "app.kubernetes.io/component=metrics-server")
-
 		exutil.By("label master node with metrics-server label")
 		nodeList, err := getNodesWithLabel(oc, "node-role.kubernetes.io/master")
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -2954,7 +2951,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		exutil.AssertWaitPollNoErr(podCheck, "metrics-server pods did not restarting!")
 
 		exutil.By("confirm metrics-server pods scheduled to master nodes, this step may take few mins")
-		getReadyPodsWithLabels(oc, "openshift-monitoring", "app.kubernetes.io/component=metrics-server")
+		waitForPodsToMatchReplicas(oc, "openshift-monitoring", "metrics-server", "app.kubernetes.io/component=metrics-server")
 		podNames, err := getAllRunningPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/component=metrics-server")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, pod := range podNames {
@@ -3033,7 +3030,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability parallel monitoring",
 		checkYamlconfig(oc, "openshift-monitoring", "deploy", "metrics-server", cmd, `"--audit-policy-file=/etc/audit/request-profile.yaml"`, true)
 
 		exutil.By("check the policy reflect into pod")
-		getReadyPodsWithLabels(oc, "openshift-monitoring", "app.kubernetes.io/component=metrics-server")
+		waitForPodsToMatchReplicas(oc, "openshift-monitoring", "metrics-server", "app.kubernetes.io/component=metrics-server")
 		podNames, err = getAllRunningPodsWithLabel(oc, "openshift-monitoring", "app.kubernetes.io/component=metrics-server")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		for _, pod := range podNames {

@@ -484,6 +484,7 @@ func getAllRunningPodsWithLabel(oc *exutil.CLI, namespace string, label string) 
 	if len(pods) == 0 {
 		return []string{}, err
 	}
+	e2e.Logf("pods: \n%v", pods)
 	return strings.Split(pods, " "), err
 }
 
