@@ -111,18 +111,25 @@ if echo $INSTALL_TOOLS | grep -i 'operatorSDK' > /dev/null; then
             git fetch downstream pull/${PR}/head:downstreamPR
             git checkout downstreamPR
             git status
-            BUILD_CMD="make -f ci/prow.Makefile patch build"
+            BUILD_CMD="make build"
         fi
     else
         #if [ "${JENKINS_AGENT}" == 'goc417' ]; then
         #    git clone --depth=1 git@github.com:operator-framework/operator-sdk.git ${WORKSPACE}/osdk --branch master
         #else
-        BRANCH="release-${NIGHTLYFLAG:0:1}.${NIGHTLYFLAG:1}"
-        BUILD_CMD="make -f ci/prow.Makefile patch build"
-        git clone --depth=1 git@github.com:openshift/ocp-release-operator-sdk.git ${WORKSPACE}/osdk --branch ${BRANCH}
+        #BRANCH="release-${NIGHTLYFLAG:0:1}.${NIGHTLYFLAG:1}"
+        #BUILD_CMD="make -f ci/prow.Makefile patch build"
+        #git clone --depth=1 git@github.com:openshift/ocp-release-operator-sdk.git ${WORKSPACE}/osdk --branch ${BRANCH}
         #fi
+        #get operatorsdk from upstream and upstreamversion is 1.39.1 for ocp4.19
+        curl -s -k -L https://codeload.github.com/operator-framework/operator-sdk/tar.gz/refs/tags/v1.39.1 -o osdk.tar.gz
+        mv osdk.tar.gz ${WORKSPACE}/osdk/
+        cd ${WORKSPACE}/osdk/
+        tar -xzvf ${WORKSPACE}/osdk/osdk.tar.gz
+        echo "get osdk.tar.gz successfully"
+        rm -f ${WORKSPACE}/osdk/osdk.tar.gz
     fi
-    cd ${WORKSPACE}/osdk
+    cd ${WORKSPACE}/osdk/operator-sdk-1.39.1
     echo "buid command is [${BUILD_CMD}]"
     eval "${BUILD_CMD}"
     ls -lrt build/
