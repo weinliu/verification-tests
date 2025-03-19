@@ -3978,7 +3978,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease - LokiStack wi
 		exutil.By("Check that logs are forwarded to LokiStack")
 		route := "https://" + getRouteAddress(oc, ls.namespace, ls.name)
 		lc := newLokiClient(route).withToken(userToken).retry(5)
-		lc.waitForLogsAppearByKey("audit", "log_type ", "audit")
+		lc.waitForLogsAppearByKey("audit", "openshift_log_type ", "audit")
 		lc.waitForLogsAppearByKey("infrastructure", "kubernetes_namespace_name", "openshift-monitoring")
 		lc.waitForLogsAppearByKey("application", "log_type", "application")
 
@@ -4002,6 +4002,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease - LokiStack wi
 		o.Expect(err).NotTo(o.HaveOccurred())
 		extractedLogs = extractLogEntities(logs)
 		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+		logs, err = lc.searchByKey("application", "k8s_namespace_name", appProj) // Otel semantic convention
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
 		// Query with key 'kubernetes_pod_name' - should yield an empty response
 		podList, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -4009,8 +4013,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease - LokiStack wi
 		o.Expect(err).NotTo(o.HaveOccurred())
 		extractedLogs = extractLogEntities(logs)
 		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+		logs, err = lc.searchByKey("application", "k8s_pod_name", podList.Items[0].Name) // Otel semantic convention
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
 		// Query with key 'kubernetes_container_name' - should yield a NON empty response
 		logs, err = lc.searchByKey("application", "kubernetes_container_name", "logging-centos-logtest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+		logs, err = lc.searchByKey("application", "k8s_container_name", "logging-centos-logtest") // Otel semantic convention
 		o.Expect(err).NotTo(o.HaveOccurred())
 		extractedLogs = extractLogEntities(logs)
 		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
@@ -4025,9 +4037,17 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease - LokiStack wi
 		o.Expect(err).NotTo(o.HaveOccurred())
 		extractedLogs = extractLogEntities(logs)
 		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+		logs, err = lc.searchByKey("infrastructure", "openshift_log_type", "infrastructure") // Otel semantic convention
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
 		// Query with key 'kubernetes_pod_name' - should yield an empty response
 		for _, pod := range infraLogPodNames {
 			logs, err = lc.searchByKey("infrastructure", "kubernetes_pod_name", pod)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			extractedLogs = extractLogEntities(logs)
+			o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+			logs, err = lc.searchByKey("infrastructure", "k8s_pod_name", pod) // Otel semantic convention
 			o.Expect(err).NotTo(o.HaveOccurred())
 			extractedLogs = extractLogEntities(logs)
 			o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
@@ -4035,6 +4055,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease - LokiStack wi
 		// Query with key 'kubernetes_container_name' - should yield a empty response
 		for _, container := range infraLogContainerNames {
 			logs, err := lc.searchByKey("infrastructure", "kubernetes_container_name", container)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			extractedLogs = extractLogEntities(logs)
+			o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+			logs, err = lc.searchByKey("infrastructure", "k8s_container_name", container) // Otel semantic convention
 			o.Expect(err).NotTo(o.HaveOccurred())
 			extractedLogs = extractLogEntities(logs)
 			o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
@@ -4143,6 +4167,10 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease - LokiStack wi
 		o.Expect(err).NotTo(o.HaveOccurred())
 		extractedLogs = extractLogEntities(logs)
 		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+		logs, err = lc.searchByKey("application", "k8s_namespace_name", appProj) // Otel semantic convention
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
 		// Query with key 'kubernetes_pod_name' - should yield a NON empty response
 		podList, err := oc.AdminKubeClient().CoreV1().Pods(appProj).List(context.Background(), metav1.ListOptions{LabelSelector: "run=centos-logtest"})
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -4150,8 +4178,16 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease - LokiStack wi
 		o.Expect(err).NotTo(o.HaveOccurred())
 		extractedLogs = extractLogEntities(logs)
 		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+		logs, err = lc.searchByKey("application", "k8s_pod_name", podList.Items[0].Name) // Otel semantic convention
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
 		// Query with key 'kubernetes_container_name' - should yield a NON empty response
 		logs, err = lc.searchByKey("application", "kubernetes_container_name", "logging-centos-logtest")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+		logs, err = lc.searchByKey("application", "k8s_container_name", "logging-centos-logtest") // Otel semantic convention
 		o.Expect(err).NotTo(o.HaveOccurred())
 		extractedLogs = extractLogEntities(logs)
 		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
@@ -4177,10 +4213,18 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease - LokiStack wi
 			o.Expect(err).NotTo(o.HaveOccurred())
 			extractedLogs = extractLogEntities(logs)
 			o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+			logs, err = lc.searchByKey("infrastructure", "k8s_pod_name", pod) // Otel semantic convention
+			o.Expect(err).NotTo(o.HaveOccurred())
+			extractedLogs = extractLogEntities(logs)
+			o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
 		}
 		// Query with key 'kubernetes_container_name' - should yield a empty response
 		for _, container := range infraLogContainerNames {
 			logs, err := lc.searchByKey("infrastructure", "kubernetes_container_name", container)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			extractedLogs = extractLogEntities(logs)
+			o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+			logs, err = lc.searchByKey("infrastructure", "k8s_container_name", container) // Otel semantic convention
 			o.Expect(err).NotTo(o.HaveOccurred())
 			extractedLogs = extractLogEntities(logs)
 			o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
@@ -4345,42 +4389,7 @@ resource_attributes:
         - openshift.cluster.uid
         - openshift.log.source
         - openshift.log.type
-        - service.name
-    - action: structured_metadata
-      attributes:
-        - k8s.node.uid
-        - k8s.pod.uid
-        - k8s.replicaset.name
-        - process.command_line
-        - process.executable.name
-        - process.executable.path
-        - process.pid
-    - action: structured_metadata
-      regex: k8s\.pod\.labels\..+
-    - action: structured_metadata
-      regex: openshift\.labels\..+
-log_attributes:
-  - action: structured_metadata
-    attributes:
-      - k8s.event.level
-      - k8s.event.object_ref.api.group
-      - k8s.event.object_ref.api.version
-      - k8s.event.object_ref.name
-      - k8s.event.object_ref.resource
-      - k8s.event.request.uri
-      - k8s.event.response.code
-      - k8s.event.stage
-      - k8s.event.user_agent
-      - k8s.user.groups
-      - k8s.user.username
-      - level
-      - log.iostream
-  - action: structured_metadata
-    regex: k8s\.event\.annotations\..+
-  - action: structured_metadata
-    regex: systemd\.t\..+
-  - action: structured_metadata
-    regex: systemd\.u\..+`
+        - service.name`
 
 		var staticOtlpConfig OtlpConfig
 		err = yaml.Unmarshal([]byte(defaultOTLPConfig), &staticOtlpConfig)
@@ -4400,14 +4409,17 @@ log_attributes:
 			lc.waitForLogsAppearByKey(logType, "openshift_log_type", logType)
 		}
 		lc.waitForLogsAppearByKey("application", "k8s_namespace_name", appProj)
-		lc.waitForLogsAppearByKey("infrastructure", "k8s_namespace_name", "openshift-monitoring")
 		lc.waitForLogsAppearByKey("application", "k8s_container_name", "logging-centos-logtest")
+		logs, err := lc.searchLogsInLoki("infrastructure", `{k8s_namespace_name=~".+"}`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs := extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
 
 		exutil.By("Validate log streams are pushed to external storage bucket/container")
 		ls.validateExternalObjectStorageForLogs(oc, []string{"application", "audit", "infrastructure"})
 	})
 
-	g.It("Author:kbharti-CPaasrunOnly-High-77345-Verify that LokiStack provides a custom set of otlp configuration with global and per tenant[Serial]", func() {
+	g.It("Author:kbharti-CPaasrunOnly-Critical-80162-Verify that LokiStack provides a custom set of otlp configuration on global and per tenant with dropping of attributes[Serial]", func() {
 
 		var (
 			loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -4423,35 +4435,35 @@ log_attributes:
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Create a group and role bindings to access loki logs")
-		defer oc.AsAdmin().Run("delete").Args("group", "admin-group-77345").Execute()
-		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "new", "admin-group-77345").Execute()
+		defer oc.AsAdmin().Run("delete").Args("group", "admin-group-80162").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "new", "admin-group-80162").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "add-users", "admin-group-77345", user1).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("groups", "add-users", "admin-group-80162", user1).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		defer deleteLokiClusterRolesForReadAccess(oc)
 		createLokiClusterRolesForReadAccess(oc)
 
-		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-infrastructure-view", "admin-group-77345").Execute()
-		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-infrastructure-view", "admin-group-77345").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-infrastructure-view", "admin-group-80162").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-infrastructure-view", "admin-group-80162").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-audit-view", "admin-group-77345").Execute()
-		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-audit-view", "admin-group-77345").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-audit-view", "admin-group-80162").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-audit-view", "admin-group-80162").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-application-view", "admin-group-77345").Execute()
-		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-application-view", "admin-group-77345").Execute()
+		defer oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-group", "cluster-logging-application-view", "admin-group-80162").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-group", "cluster-logging-application-view", "admin-group-80162").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Deploying LokiStack with adminGroup")
+		exutil.By("Deploy LokiStack")
 		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 		ls := lokiStack{
-			name:          "lokistack-77345",
+			name:          "lokistack-80162",
 			namespace:     loggingNS,
 			tSize:         "1x.demo",
 			storageType:   s,
-			storageSecret: "storage-secret-77345",
+			storageSecret: "storage-secret-80162",
 			storageClass:  sc,
-			bucketName:    "logging-loki-77345-" + getInfrastructureName(oc),
+			bucketName:    "logging-loki-80162-" + getInfrastructureName(oc),
 			template:      lokiStackTemplate,
 		}
 
@@ -4459,7 +4471,7 @@ log_attributes:
 		err = ls.prepareResourcesForLokiStack(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		defer ls.removeLokiStack(oc)
-		err = ls.deployLokiStack(oc, "ADMIN_GROUPS=[\"admin-group-77345\"]")
+		err = ls.deployLokiStack(oc, "ADMIN_GROUPS=[\"admin-group-80162\"]")
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ls.waitForLokiStackToBeReady(oc)
 
@@ -4468,6 +4480,15 @@ log_attributes:
 		customOTLPconfig := `{
 			"spec": {
 			  "limits": {
+				"global": {
+				  "otlp": {
+					"drop": {
+					  "resourceAttributes": [
+						{ "name": "k8s.pod.uid" }
+					  ]
+					}
+				  }
+				},
 				"tenants": {
 				  "application": {
 					"otlp": {
@@ -4476,9 +4497,27 @@ log_attributes:
 						  { "name": "k8s.pod.name" }
 						]
 					  },
-					  "structuredMetadata": {
+					  "drop": {
 						"logAttributes": [
 						  { "name": "k8s.pod.uid" }
+						],
+						"resourceAttributes": [
+						  {
+							"name": "k8s\\.pod\\.label\\..+",
+							"regex": true
+						  }
+						]
+					  }
+					}
+				  },
+				  "audit": {
+					"otlp": {
+					  "drop": {
+						"resourceAttributes": [
+						  {
+							"name": "openshift\\.label\\..+",
+							"regex": true
+						  }
 						]
 					  }
 					}
@@ -4490,7 +4529,7 @@ log_attributes:
 						  { "name": "k8s.container.name" }
 						]
 					  },
-					  "structuredMetadata": {
+					  "drop": {
 						"logAttributes": [
 						  { "name": "log.iostream" }
 						]
@@ -4516,11 +4555,11 @@ log_attributes:
 
 		exutil.By("create a CLF to test forward to Lokistack")
 		clf := clusterlogforwarder{
-			name:                      "instance-76990",
+			name:                      "instance-80162",
 			namespace:                 loggingNS,
-			serviceAccountName:        "logcollector-76990",
+			serviceAccountName:        "logcollector-80162",
 			templateFile:              filepath.Join(loggingBaseDir, "observability.openshift.io_clusterlogforwarder", "lokistack.yaml"),
-			secretName:                "lokistack-secret-76990",
+			secretName:                "lokistack-secret-80162",
 			collectApplicationLogs:    true,
 			collectAuditLogs:          true,
 			collectInfrastructureLogs: true,
@@ -4534,6 +4573,11 @@ log_attributes:
 		ls.createSecretFromGateway(oc, clf.secretName, clf.namespace, "")
 		defer clf.delete(oc)
 		clf.create(oc, "LOKISTACK_NAME="+ls.name, "LOKISTACK_NAMESPACE="+ls.namespace, "DATAMODEL=Otel", `TUNING={"compression": "none"}`)
+
+		// patch to apply custom labels on log records
+		patch := `[{"op": "add", "path": "/spec/filters", "value": [{"name": "openshift-labels", "type": "openshiftLabels", "openshiftLabels": {"isOtelDataModel": "true"}}]}, {"op": "add", "path": "/spec/pipelines/0/filterRefs", "value": ["openshift-labels"]}]`
+		clf.update(oc, "", patch, "--type=json")
+		clf.waitForCollectorPodsReady(oc)
 
 		exutil.By("Extracting Loki config ...")
 		dirname := "/tmp/" + oc.Namespace() + "-lokistack-otlp-support"
@@ -4554,6 +4598,9 @@ log_attributes:
 		defaultOTLPConfig := `
 resource_attributes:
   attributes_config:
+    - action: drop
+      attributes:
+        - k8s.pod.uid
     - action: index_label
       attributes:
         - k8s.namespace.name
@@ -4562,13 +4609,14 @@ resource_attributes:
         - log_type
         - openshift.cluster.uid
         - openshift.log.source
-        - openshift.log.type`
+        - openshift.log.type
+`
 
-		var staticOtlpConfig OtlpConfig
-		err = yaml.Unmarshal([]byte(defaultOTLPConfig), &staticOtlpConfig)
+		var staticDefaultOtlpConfig OtlpConfig
+		err = yaml.Unmarshal([]byte(defaultOTLPConfig), &staticDefaultOtlpConfig)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		if reflect.DeepEqual(lokiLimitsConfig.LimitsConfig.OtlpConfig, staticOtlpConfig) {
+		if reflect.DeepEqual(lokiLimitsConfig.LimitsConfig.OtlpConfig, staticDefaultOtlpConfig) {
 			e2e.Logf("Validated expected default OTLP configuration under lokistack config")
 		} else {
 			e2e.Failf("Incorrect default OTLP configuration found. Failing case..")
@@ -4582,6 +4630,11 @@ resource_attributes:
 		customOtlpconfigForApp := `
 resource_attributes:
   attributes_config:
+    - action: drop
+      attributes:
+        - k8s.pod.uid
+    - action: drop
+      regex: k8s\.pod\.label\..+
     - action: index_label
       attributes:
         - k8s.namespace.name
@@ -4593,18 +4646,24 @@ resource_attributes:
         - openshift.log.source
         - openshift.log.type
 log_attributes:
-  - action: structured_metadata
+  - action: drop
     attributes:
       - k8s.pod.uid`
 
-		err = yaml.Unmarshal([]byte(customOtlpconfigForApp), &staticOtlpConfig)
+		var staticAppOtlpConfig OtlpConfig
+		err = yaml.Unmarshal([]byte(customOtlpconfigForApp), &staticAppOtlpConfig)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		runtimeConfig := RuntimeConfig{}
 		err = yaml.Unmarshal(lokiStackConf, &runtimeConfig)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		if reflect.DeepEqual(runtimeConfig.Overrides.Application.OtlpConfig, staticOtlpConfig) {
+		fmt.Println("real config")
+		fmt.Print(runtimeConfig.Overrides.Application.OtlpConfig)
+		fmt.Println("static config")
+		fmt.Print(customOtlpconfigForApp)
+
+		if reflect.DeepEqual(runtimeConfig.Overrides.Application.OtlpConfig, staticAppOtlpConfig) {
 			fmt.Println("Validated expected custom OTLP configuration for tenant: application")
 		} else {
 			e2e.Failf("Incorrect custom OTLP configuration found for tenant: application. Failing case..")
@@ -4614,6 +4673,9 @@ log_attributes:
 		customOtlpconfigForInfra := `
 resource_attributes:
   attributes_config:
+    - action: drop
+      attributes:
+        - k8s.pod.uid
     - action: index_label
       attributes:
         - k8s.container.name
@@ -4625,17 +4687,47 @@ resource_attributes:
         - openshift.log.source
         - openshift.log.type
 log_attributes:
-  - action: structured_metadata
+  - action: drop
     attributes:
       - log.iostream`
 
-		err = yaml.Unmarshal([]byte(customOtlpconfigForInfra), &staticOtlpConfig)
+		var staticInfraOtlpConfig OtlpConfig
+		err = yaml.Unmarshal([]byte(customOtlpconfigForInfra), &staticInfraOtlpConfig)
 		o.Expect(err).NotTo(o.HaveOccurred())
 
-		if reflect.DeepEqual(runtimeConfig.Overrides.Infrastructure.OtlpConfig, staticOtlpConfig) {
+		if reflect.DeepEqual(runtimeConfig.Overrides.Infrastructure.OtlpConfig, staticInfraOtlpConfig) {
 			fmt.Println("Validated expected custom OTLP configuration for tenant: infrastructure")
 		} else {
 			e2e.Failf("Incorrect custom OTLP configuration found for tenant: infrastructure. Failing case..")
+		}
+
+		// Audit tenant
+		customOtlpconfigForAudit := `
+resource_attributes:
+  attributes_config:
+    - action: drop
+      attributes:
+        - k8s.pod.uid
+    - action: drop
+      regex: openshift\.label\..+
+    - action: index_label
+      attributes:
+        - k8s.namespace.name
+        - kubernetes.namespace_name
+        - log_source
+        - log_type
+        - openshift.cluster.uid
+        - openshift.log.source
+        - openshift.log.type`
+
+		var staticAuditOtlpConfig OtlpConfig
+		err = yaml.Unmarshal([]byte(customOtlpconfigForAudit), &staticAuditOtlpConfig)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		if reflect.DeepEqual(runtimeConfig.Overrides.Audit.OtlpConfig, staticAuditOtlpConfig) {
+			fmt.Println("Validated expected custom OTLP configuration for tenant: audit")
+		} else {
+			e2e.Failf("Incorrect custom OTLP configuration found for tenant: audit. Failing case..")
 		}
 
 		exutil.By("Check logs are received with OTLP semantic convention attributes in loki")
@@ -4645,14 +4737,56 @@ log_attributes:
 			lc.waitForLogsAppearByKey(logType, "openshift_log_type", logType)
 		}
 
+		// for Application tenant
+		exutil.By("Validate dropped attributes for tenant: application")
 		lc.waitForLogsAppearByKey("application", "k8s_namespace_name", appProj)
-		lc.waitForLogsAppearByKey("infrastructure", "k8s_namespace_name", "openshift-monitoring")
-
-		// No logs found for app tenant with k8s_container_name streamLabel/labelKey since it is not included under custom overrides config
-		logs, err := lc.searchByKey("application", "k8s_container_name", "logging-centos-logtest")
+		// Below should return no response/logs since the querying attributes 'k8s.pod.uid' and 'k8s.pod.labels.*' are dropped
+		logs, err := lc.searchLogsInLoki("application", `{ openshift_log_type="application"} | json | k8s_pod_uid=~".+"`)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		extractedLogs := extractLogEntities(logs)
 		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+		logs, err = lc.searchLogsInLoki("application", `{ openshift_log_type="application"} | json | k8s_pod_label_test="centos-logtest"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+		// the openshiftLabels filter is NOT dropped under application tenant, so below should return log records
+		logs, err = lc.searchLogsInLoki("application", `{ openshift_log_type="application"} | json | openshift_label_isOtelDataModel="true"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+		e2e.Logf("Dropped attributes validation sucess for tenant: application")
+
+		// for Infrastructure tenant
+		exutil.By("Validate dropped attributes for tenant: infrastructure")
+		//lc.waitForLogsAppearByKey("infrastructure", "k8s_namespace_name", "")
+		logs, err = lc.searchLogsInLoki("infrastructure", `{k8s_namespace_name=~".+"}`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+		// Below should return no response/logs since the querying attributes 'k8s.pod.uid' and 'log.iostream' are dropped
+		logs, err = lc.searchLogsInLoki("infrastructure", `{ openshift_log_type="infrastructure", log_source="container"} | json | k8s_pod_uid=~".+"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+		logs, err = lc.searchLogsInLoki("infrastructure", `{ openshift_log_type="infrastructure"} | json | log_iostream=~".+"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+		// the openshiftLabels filter is NOT dropped under infrastructure tenant, so below should return log records
+		logs, err = lc.searchLogsInLoki("infrastructure", `{ openshift_log_type="infrastructure"} | json | openshift_label_isOtelDataModel="true"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) != 0).Should(o.BeTrue())
+		e2e.Logf("Dropped attributes validation sucess for tenant: infrastructure")
+
+		// for Audit tenant
+		exutil.By("Validate dropped attributes for tenant: audit")
+		// the openshiftLabels filter is dropped under audit tenant, so below should NOT return log records
+		logs, err = lc.searchLogsInLoki("audit", `{ openshift_log_type="audit"} | json | openshift_label_isOtelDataModel="true"`)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		extractedLogs = extractLogEntities(logs)
+		o.Expect(len(extractedLogs) == 0).Should(o.BeTrue())
+		e2e.Logf("Dropped attributes validation sucess for tenant: audit")
 
 		exutil.By("Validate log streams are pushed to external storage bucket/container")
 		ls.validateExternalObjectStorageForLogs(oc, []string{"application", "audit", "infrastructure"})

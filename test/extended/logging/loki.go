@@ -402,10 +402,10 @@ spec:
 
 			minAvailable, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("PodDisruptionBudget", ls.name+"-ingester", "-n", cloNS, "-o=jsonpath={.spec.minAvailable}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(minAvailable == "1").Should(o.BeTrue())
+			o.Expect(minAvailable == "2").Should(o.BeTrue())
 			disruptionsAllowed, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("PodDisruptionBudget", ls.name+"-ingester", "-n", cloNS, "-o=jsonpath={.status.disruptionsAllowed}").Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			o.Expect(disruptionsAllowed == "2").Should(o.BeTrue())
+			o.Expect(disruptionsAllowed == "1").Should(o.BeTrue())
 
 		})
 
