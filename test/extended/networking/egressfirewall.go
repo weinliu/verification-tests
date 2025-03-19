@@ -587,8 +587,8 @@ var _ = g.Describe("[sig-networking] SDN egressfirewall", func() {
 
 		node1 := nodeList.Items[0].Name
 		node2 := nodeList.Items[1].Name
-		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, node1, "ef-dep-60488-")
-		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, node1, "ef-dep-60488", "qe")
+		defer e2enode.RemoveLabelOffNode(oc.KubeFramework().ClientSet, node1, "ef-dep")
+		e2enode.AddOrUpdateLabelOnNode(oc.KubeFramework().ClientSet, node1, "ef-dep", "qe")
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "networking")
 		pingPodTemplate := filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
@@ -1847,8 +1847,8 @@ spec:
 		}, "10s", "5s").Should(o.HaveOccurred())
 
 		exutil.By("Label the master node which would match the egressfirewall.")
-		defer exutil.DeleteLabelFromNode(oc, master1, "ef-dep-74657-")
-		exutil.AddLabelToNode(oc, master1, "ef-dep-74657", "qe")
+		defer exutil.DeleteLabelFromNode(oc, master1, "ef-dep")
+		exutil.AddLabelToNode(oc, master1, "ef-dep", "qe")
 
 		exutil.By("Verify the master node can be accessed from both pods")
 		_, err = e2eoutput.RunHostCmdWithRetries(pod1ns2.namespace, pod1ns2.name, "ping -c 2 "+master1IP2, 5*time.Second, 20*time.Second)
