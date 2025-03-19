@@ -13,22 +13,8 @@ RUN set -x && \
     pushd opmbuild && make build/opm && cp -fr bin/opm /usr/bin/ && popd && rm -fr opmbuild && \
     git clone --depth=1 https://github.com/operator-framework/operator-sdk.git osdk --branch master && \
     pushd osdk && make build && mv build/* /usr/bin/ && popd && rm -fr osdk && \
-    MIRRORURL=https://mirror2.openshift.com/pub/openshift-v4 && CLIENTURL="" && \
-    curl -s -k -L ${MIRRORURL}/x86_64/clients/ocp/ -o ocp.html && curl -s -k -L ${MIRRORURL}/x86_64/clients/ocp-dev-preview/ -o pre.html && \
-    ecver=$(grep -E "<a href=\"candidate-4\.19" pre.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${ecver}V" && \
-    if [ "V${ecver}V" != "VV"  ]; then CLIENTURL=${MIRRORURL}/x86_64/clients/ocp-dev-preview/${ecver}; fi && \
-    rcgaver=$(grep -E "<a href=\"4\.19" ocp.html |cut -d"\"" -f2|cut -d"/" -f1|sort -V|tail -1) && echo "V${rcgaver}V" && \
-    if [ "V${rcgaver}V" != "VV"  ]; then CLIENTURL=${MIRRORURL}/x86_64/clients/ocp/${rcgaver}; fi && \
-    if [ "V${CLIENTURL}V" != "VV"  ]; then \
-        curl -s -k -L ${CLIENTURL}/oc-mirror.tar.gz -o oc-mirror.tar.gz && \
-        tar -C /usr/bin/ -xzvf oc-mirror.tar.gz && chmod +x /usr/bin/oc-mirror && rm -f oc-mirror.tar.gz; \
-    fi && \
-    if [ "V${CLIENTURL}V" == "VV"  ]; then \
-        build_num=$(curl -s -k https://amd64.ocp.releases.ci.openshift.org/api/v1/releasestream/4.19.0-0.nightly/latest | jq ".pullSpec") && \
-        om_build=$(oc adm release info -a /root/regci.key ${build_num:1:-1} --image-for=oc-mirror) && \
-        oc image extract  -a /root/regci.key ${om_build} --file=/usr/bin/oc-mirror.rhel8 --confirm; mv oc-mirror.rhel8 /usr/bin/oc-mirror; chmod +x /usr/bin/oc-mirror; \
-    fi && \
-    rm -fr /root/regci.key && \
+    MIRRORURL="https://mirror2.openshift.com/pub/openshift-v4/x86_64/clients/ocp-dev-preview/latest/oc-mirror.tar.gz" && \
+    curl -s -k -L ${MIRRORURL} -o oc-mirror.tar.gz && tar -C /usr/bin/ -xzvf oc-mirror.tar.gz && chmod +x /usr/bin/oc-mirror && rm -f oc-mirror.tar.gz && \
     pushd /openshift-tests-private && make all && popd && \
     rm -fr /openshift-tests-private /goproject/pkg/mod/* /goproject/src/* && \
     chmod -R g=u $GOPATH $GOCACHE && chmod -R g+rw $GOPATH $GOCACHE && \
