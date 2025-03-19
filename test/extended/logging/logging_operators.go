@@ -1003,6 +1003,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease must-gather", 
 		err = ls.deployLokiStack(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		//ls.waitForLokiStackToBeReady(oc)
+		resource{"configmap", ls.name + "-gateway-ca-bundle", ls.namespace}.WaitForResourceToAppear(oc)
 
 		exutil.By("deploy logfilesmetricexporter")
 		lfme := logFileMetricExporter{
