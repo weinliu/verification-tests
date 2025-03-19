@@ -3,6 +3,8 @@ package router
 import (
 	"fmt"
 	"math/rand"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -958,5 +960,148 @@ fi
 				o.Expect(haCfg).To(o.ContainSubstring(routerEntry[4]))
 			}
 		}
+	})
+
+	// author: shudili@redhat.com
+	g.It("Author:shudili-MicroShiftOnly-High-80508-supporting customerized default certification for Ingress Controller [Disruptive]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
+			unSecSvcName        = "service-unsecure"
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
+			e2eTestNamespace    = "e2e-ne-80508-" + getRandomString()
+			baseDomain          = "apps.example.com"
+			dirname             = "/tmp/OCP-80508"
+			validity            = 30
+			defaultCaSubj       = "/CN=MS-default-CA"
+			defaultCaCrt        = dirname + "/80508-ca.crt"
+			defaultCaKey        = dirname + "/80508-ca.key"
+			defaultCaCsr        = dirname + "/80508-usr.csr"
+			defaultUserSubj     = "/CN=example-ne.com"
+			defaultUsrCrt       = dirname + "/80508-usr.crt"
+			defaultUsrKey       = dirname + "/80508-usr.key"
+			defaultUsrCsr       = dirname + "/80508-usr.csr"
+			defaultCnf          = dirname + "openssl.cnf"
+			edgeRoute           = "route-edge80508." + baseDomain
+		)
+
+		exutil.By("1.0: Use openssl to create a certification for the ingress default certification")
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("1.1: Create a key for the ingress default certification")
+		opensslCmd := fmt.Sprintf(`openssl genrsa -out %s 2048`, defaultCaKey)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("1.2: Create a csr for the ingress default certification")
+		opensslCmd = fmt.Sprintf(`openssl req -new -key %s -subj %s  -out %s`, defaultCaKey, defaultCaSubj, defaultCaCsr)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("1.3: Create the extension file, then create the customerized certification for the ingress default certification")
+		sanCfg := fmt.Sprintf(`
+[ v3_req ]
+subjectAltName = @alt_names
+
+[ alt_names ]
+DNS.1 = *.%s
+`, baseDomain)
+
+		cmd := fmt.Sprintf(`echo "%s" > %s`, sanCfg, defaultCnf)
+		_, err = exec.Command("bash", "-c", cmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		opensslCmd = fmt.Sprintf(`openssl x509 -extfile %s -extensions v3_req  -req -in %s -signkey  %s -days %d -sha256 -out %s`, defaultCnf, defaultCaCsr, defaultCaKey, validity, defaultCaCrt)
+		_, err = exec.Command("bash", "-c", opensslCmd).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		exutil.By("1.4: Create a user CSR and the user key for a route")
+		opensslNewCsr(defaultUsrKey, defaultUsrCsr, defaultUserSubj)
+
+		exutil.By("1.5: Sign the user CSR and generate the user certificate for a route")
+		san := "subjectAltName = DNS.1:*." + baseDomain + ",DNS.2:" + edgeRoute
+		opensslSignCsr(san, defaultUsrCsr, defaultCaCrt, defaultCaKey, defaultUsrCrt)
+
+		exutil.By("2.0: Create the secret in the cluster for the customerized default certification")
+		defer oc.AsAdmin().WithoutNamespace().Run("delete").Args("-n", "openshift-ingress", "secret", "custom-cert80508").Output()
+		output, err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", "openshift-ingress", "secret", "tls", "custom-cert80508", "--cert="+defaultCaCrt, "--key="+defaultCaKey).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("created"))
+
+		exutil.By("3.0: Prepare a namespace for the following testing")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
+
+		exutil.By("4.0: Debug node and configure the config.yaml file to configure the default certification")
+		nodeName := getByJsonPath(oc, "default", "nodes", "{.items[0].metadata.name}")
+		customConfig := fmt.Sprintf(`
+if test -f /etc/microshift/config.yaml ; then
+    cp /etc/microshift/config.yaml /etc/microshift/config.yaml.backup80508
+else
+    touch /etc/microshift/config.yaml.no80508
+fi
+cat >> /etc/microshift/config.yaml << EOF
+ingress:
+    certificateSecret: "custom-cert80508"
+EOF`)
+
+		recoverCmd := fmt.Sprintf(`
+if test -f /etc/microshift/config.yaml.no80508; then
+    rm -f /etc/microshift/config.yaml
+    rm -f /etc/microshift/config.yaml.no80508
+elif test -f /etc/microshift/config.yaml.backup80508 ; then
+    rm -f /etc/microshift/config.yaml
+    cp /etc/microshift/config.yaml.backup80508 /etc/microshift/config.yaml
+    rm -f /etc/microshift/config.yaml.backup80508
+fi
+`)
+
+		defer func() {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", recoverCmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+		}()
+
+		_, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", customConfig).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+
+		exutil.By("5.0: Create a client pod, a deployment and the services")
+		createResourceFromFile(oc, e2eTestNamespace, clientPod)
+		ensurePodWithLabelReady(oc, e2eTestNamespace, clientPodLabel)
+		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", e2eTestNamespace, dirname, e2eTestNamespace+"/"+clientPodName+":"+dirname).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
+		ensurePodWithLabelReady(oc, e2eTestNamespace, "name="+srvrcInfo)
+
+		exutil.By("6.0: Create an edge route for the testing")
+		jsonPath := "{.status.ingress[0].conditions[?(@.type==\"Admitted\")].status}"
+		createRoute(oc, e2eTestNamespace, "edge", "route-edge", unSecSvcName, []string{"--hostname=" + edgeRoute})
+		waitForOutput(oc, e2eTestNamespace, "route/route-edge", jsonPath, "True")
+
+		exutil.By("7.0: Check the router-default deployment that the volume of default certificate is updated to the custom")
+		output = getByJsonPath(oc, "openshift-ingress", "deployment/router-default", "{..volumes[?(@.name==\"default-certificate\")].secret.secretName}")
+		o.Expect(output).To(o.ContainSubstring("custom-cert80508"))
+
+		exutil.By("8.0: check the customed default certification in a router pod")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
+		output, err = oc.AsAdmin().WithoutNamespace().Run("exec").Args("-n", "openshift-ingress", routerpod, "--", "bash", "-c", "openssl x509 -noout -in /etc/pki/tls/private/tls.crt -text").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(output).To(o.ContainSubstring("Issuer: CN = MS-default-CA"))
+
+		exutil.By("9.0: Curl the edge route with the user certification, issued by MS-default-CA")
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst := edgeRoute + ":443:" + podIP
+		curlCmd := []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "https://" + edgeRoute, "-sI", "--cacert", defaultCaCrt, "--cert", defaultUsrCrt, "--key", defaultUsrKey, "--resolve", toDst, "--connect-timeout", "10"}
+		repeatCmdOnClient(oc, curlCmd, "200 OK", 60, 1)
+
+		exutil.By("10.0: Curl the edge route again without any certification")
+		curlCmd = []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "https://" + edgeRoute, "-skI", "--resolve", toDst, "--connect-timeout", "10"}
+		repeatCmdOnClient(oc, curlCmd, "200 OK", 60, 1)
 	})
 })
