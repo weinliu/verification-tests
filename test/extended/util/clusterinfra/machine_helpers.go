@@ -278,6 +278,11 @@ func WaitForMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetName st
 	e2e.Logf("Check nodes haven't uninitialized taints...")
 	for _, nodeName := range GetNodeNamesFromMachineSet(oc, machineSetName) {
 		taints, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("node", nodeName, "-o=jsonpath={.spec.taints}").Output()
+		// If node NotFound，skip check this node
+		if strings.Contains(taints, "NotFound") {
+			e2e.Logf("Node %s does not exist, skipping...", nodeName)
+			continue
+		}
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(taints).ShouldNot(o.ContainSubstring("uninitialized"))
 	}
