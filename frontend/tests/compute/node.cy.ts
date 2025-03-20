@@ -1,5 +1,7 @@
 import { nodesPage } from "views/nodes";
 import { detailsPage } from "upstream/views/details-page";
+import { nav } from 'upstream/views/nav';
+
 describe('nodes page', () => {
   before(() => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
@@ -7,8 +9,7 @@ describe('nodes page', () => {
   });
 
   beforeEach(() => {
-    nodesPage.goToNodesPage();
-    nodesPage.setDefaultColumn();
+    nav.sidenav.clickNavLink(['Compute', 'Nodes']);
   });
 
   after(() => {
@@ -17,7 +18,6 @@ describe('nodes page', () => {
     cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
   });
   it('(OCP-69089,yanpzhan,UserInterface) Add uptime info for node on console',{tags:['@userinterface','@e2e','admin','@rosa','@hypershift-hosted']}, () => {
-    nodesPage.goToNodesPage();
     nodesPage.setAdditionalColumn('Uptime');
     cy.get('th[data-label="Uptime"]').should('exist');
     cy.get('a.co-resource-item__resource-name').first().click();
@@ -30,10 +30,9 @@ describe('nodes page', () => {
     let node_names = [];
     let node_archs = [];
     const node_arch_counts = {};
-    nodesPage.goToNodesPage();
-    cy.get('th[scope="col"]').should('have.length', 9);
+    cy.get('th[data-label]').should('have.length', 10);
     nodesPage.setAdditionalColumn('Architecture');
-    cy.get('td[id="architecture"]').should('exist');
+    cy.get('[data-label="Architecture"]').should('exist');
     function get_node_archs() {
       return cy.exec(`oc get node --no-headers --kubeconfig=${Cypress.env('KUBECONFIG_PATH')} | awk -F ' ' '{print $1}'`).then(result => {
         node_names = result.stdout.split('\n');
@@ -59,7 +58,9 @@ describe('nodes page', () => {
         let archs = Object.keys(node_arch_counts);
         archs.forEach((arch) => {
           nodesPage.filterBy('Architecture', arch);
-          cy.get('tr[data-test-rows="resource-row"]').should('have.length', node_arch_counts[arch]);
+          cy.get(`li[data-test-row-filter="${arch}"] span[class*="c-badge"]`)
+          .invoke('text')
+          .should('contains', node_arch_counts[arch]);
         })
       })
     });
