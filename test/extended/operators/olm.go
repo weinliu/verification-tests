@@ -7026,7 +7026,7 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				displayName: "OLM 1860185 Catalog",
 				publisher:   "QE",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-dep:v1860185-v2-withCache",
+				address:     "quay.io/olmqe/nginx-ok-index:vokv37263",
 				template:    catsrcImageTemplate,
 			}
 			catsrc1 = catalogSourceDescription{
@@ -7048,14 +7048,14 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within a namespac
 				template:    catsrcImageTemplate,
 			}
 			subStrimzi = subscriptionDescription{
-				subName:                "strimzi",
+				subName:                "nginx-ok-v37263",
 				namespace:              "",
-				channel:                "strimzi-0.23.x",
+				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "strimzi-kafka-operator",
+				operatorPackage:        "nginx-ok-v37263",
 				catalogSourceName:      catsrc.name,
 				catalogSourceNamespace: "",
-				startingCSV:            "strimzi-cluster-operator.v0.23.0",
+				startingCSV:            "",
 				currentCSV:             "",
 				installedCSV:           "",
 				template:               subTemplate,
