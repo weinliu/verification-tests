@@ -17,6 +17,7 @@ function run {
   date
   #select_fail_case_for_official_rerun
   execute
+  reprocess_junit
   #result_report
 }
 
@@ -78,6 +79,27 @@ function config_env_for_cluster {
   echo "opm version: "
   opm version
 }
+
+function reprocess_junit {
+  rm -fr handleattribution.py && eval cp -fr ${WORKSPACE}"/private/pipeline/handleattribution.py" .
+  pipelinetype=`python3 handleattribution.py -a get -y "${ADDITIONAL_ATTRIBUTES}" -p pipeline_type || true `
+  cd ${WORKBUILDDIR}
+  resultfile=`ls -rt -1 junit_e2e_* 2>&1 || true`
+  echo $resultfile
+  if (echo $resultfile | grep -E "no matches found") || (echo $resultfile | grep -E "No such file or directory") ; then
+    echo "there is no result file generated"
+    if [[ "X${pipelinetype}X" == "XstagepipelineX" ]]; then
+      echo "this is stage pipeline without case selected"
+      exit 0
+    fi
+    exit 1
+  fi
+  current_time=`date "+%Y-%m-%d-%H-%M-%S"`
+  newresultfile="junit_e2e_"${current_time}".xml"
+  rm -fr handleresult.py && eval cp -fr ${WORKSPACE}"/private/pipeline/handleresult.py" .
+  python3 handleresult.py -a replace -i ${resultfile} -o ${newresultfile} && rm -fr ${resultfile}
+}
+
 function result_report {
   echo "get result and parse it"
   LAUNCHTRIAL="yes"
