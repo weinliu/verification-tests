@@ -12681,15 +12681,15 @@ var _ = g.Describe("[sig-operators] OLM for an end user handle within all namesp
 				displayName: "Test Catsrc 33241 Operators",
 				publisher:   "Red Hat",
 				sourceType:  "grpc",
-				address:     "quay.io/olmqe/olm-api:v4-withCache",
+				address:     "quay.io/olmqe/nginx-ok-index:vokv33241",
 				template:    catsrcImageTemplate,
 			}
 			subCockroachdb = subscriptionDescription{
-				subName:                "cockroachdb33241",
+				subName:                "nginx-ok-v33241",
 				namespace:              "openshift-operators",
-				channel:                "stable-5.x",
+				channel:                "alpha",
 				ipApproval:             "Automatic",
-				operatorPackage:        "cockroachdb",
+				operatorPackage:        "nginx-ok-v33241",
 				catalogSourceName:      catsrc.name,
 				catalogSourceNamespace: catsrc.namespace,
 				startingCSV:            "", //get it from package based on currentCSV if ipApproval is Automatic
