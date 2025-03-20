@@ -40,6 +40,7 @@ objects:
               type: "${FLPMetricServerTLSType}"
           disableAlerts: []
         logTypes: "${LogType}"
+        filters: "${{FLPFilters}}"
         advanced:
           dropUnusedFields: true
           conversationTerminatingTimeout: 5s
@@ -139,6 +140,8 @@ parameters:
     value: "false"
   - name: LogType
     value: "Flows"
+  - name: FLPFilters
+    value: '[]'
   - name: LokiMode
     value: "LokiStack"
   - name: LokiEnable

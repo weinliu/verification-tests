@@ -19,6 +19,7 @@ type Flowcollector struct {
 	MultiClusterDeployment            string
 	AddZone                           string
 	LogType                           string
+	FLPFilters                        string
 	DeploymentModel                   string
 	LokiEnable                        string
 	LokiMode                          string

@@ -2138,6 +2138,83 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flowRecords with 'flowDirection != 1' > 0")
 		verifyNetworkEvents(flowRecords, "drop", "AdminNetworkPolicy", "Ingress")
 	})
+
+	g.It("Author:aramesha-NonPreRelease-High-80090-Verify FLP tail-based filtering [Serial]", func() {
+		namespace := oc.Namespace()
+
+		// Accept flows with Source Namespace = < namespace > and
+		// Source Name containing 'flowlogs-pipeline-' and
+		// NOT Source Port 9401
+		g.By("Deploy FlowCollector with FLP tail-based filter")
+		FLPFiltersConfig := []map[string]interface{}{
+			{
+				"allOf": []map[string]string{
+					{
+						"matchType": "Equal",
+						"field":     "SrcK8S_Namespace",
+						"value":     namespace,
+					},
+					{
+						"matchType": "MatchRegex",
+						"field":     "SrcK8S_Name",
+						"value":     "flowlogs-pipeline-*",
+					},
+					{
+						"matchType": "NotEqual",
+						"field":     "SrcPort",
+						"value":     "9401",
+					},
+				},
+				"outputTarget": "Loki",
+				"sampling":     2,
+			},
+		}
+
+		config, err := json.Marshal(FLPFiltersConfig)
+		o.Expect(err).ToNot(o.HaveOccurred())
+		FLPFilter := string(config)
+
+		flow := Flowcollector{
+			Namespace:     namespace,
+			Template:      flowFixturePath,
+			LokiNamespace: namespace,
+			FLPFilters:    FLPFilter,
+		}
+
+		defer flow.DeleteFlowcollector(oc)
+		flow.CreateFlowcollector(oc)
+
+		// verify logs
+		g.By("Escalate SA to cluster admin")
+		defer func() {
+			g.By("Remove cluster role")
+			err = removeSAFromAdmin(oc, "netobserv-plugin", namespace)
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		err = addSAToAdmin(oc, "netobserv-plugin", namespace)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
+
+		g.By("Wait for a min before logs gets collected and written to loki")
+		startTime := time.Now()
+		time.Sleep(60 * time.Second)
+
+		lokilabels := Lokilabels{
+			App:              "netobserv-flowcollector",
+			SrcK8S_Namespace: namespace,
+		}
+
+		g.By("Verify number of flows > 0")
+		flowRecords, err := lokilabels.getLokiFlowLogs(bearerToken, ls.Route, startTime)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flows > 0")
+
+		for _, r := range flowRecords {
+			o.Expect(r.Flowlog.SrcK8S_Name).Should(o.ContainSubstring("flowlogs-pipeline-"))
+			o.Expect(r.Flowlog.SrcPort).ShouldNot(o.BeNumerically("==", 9401))
+			//o.Expect(r.Flowlog.Sampling).Should(o.BeNumerically("==", 2))
+		}
+	})
 	//Add future NetObserv + Loki test-cases here
 
 	g.Context("with Kafka", func() {
