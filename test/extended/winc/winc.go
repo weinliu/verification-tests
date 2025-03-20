@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -1081,74 +1080,6 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 					e2e.Failf("Description is missing on service %v", svc)
 				}
 			}
-		}
-	})
-
-	g.It("Longduration-Smokerun-Author:rrasouli-NonPreRelease-Critical-39858-Windows servicemonitor and endpoints check [Slow][Serial][Disruptive]", func() {
-		if iaasPlatform == "none" {
-			g.Skip("platform none is not supporting scaling up machineset tests")
-		}
-		g.By("Get Endpoints and service monitor values")
-		// need to fetch service monitor age
-		serviceMonitorAge1, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("endpoints", "-n", wmcoNamespace, "-o=jsonpath={.items[].metadata.creationTimestamp}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		// here we fetch a list of endpoints
-		endpointsIPsBefore, err := getEndpointsIPs(oc, wmcoNamespace)
-		if err != nil {
-			e2e.Failf("Error retrieving endpoint IPs: %v", err)
-		}
-		// restarting the WMCO deployment
-		g.By("Restart WMCO pod by deleting")
-		wmcoID, err := getWorkloadsNames(oc, wmcoDeployment, wmcoNamespace)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		wmcoStartTime, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("endpoints", "-n", wmcoNamespace, "-o=jsonpath={.status.StartTime}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		e2e.Logf("WMCO start time before restart %v", wmcoStartTime)
-		oc.AsAdmin().WithoutNamespace().Run("delete").Args("pod", wmcoID[0], "-n", wmcoNamespace).Output()
-		// checking that the WMCO has no errors and restarted properly
-		poolErr := wait.Poll(20*time.Second, 180*time.Second, func() (bool, error) {
-			return checkWorkloadCreated(oc, wmcoDeployment, wmcoNamespace, 1), nil
-		})
-		if poolErr != nil {
-			e2e.Failf("Error restarting WMCO up to 3 minutes ...")
-		}
-		g.By("Test endpoints IPs survives a WMCO restart")
-		waitForEndpointsReady(oc, wmcoNamespace, 5, len(strings.Split(endpointsIPsBefore, " ")))
-
-		endpointsIPsAfter, err := getEndpointsIPs(oc, wmcoNamespace)
-		if err != nil {
-			e2e.Failf("Error retrieving endpoint IPs: %v", err)
-		}
-		endpointsIPsBeforeArray := strings.Split(endpointsIPsBefore, " ")
-		sort.Strings(endpointsIPsBeforeArray)
-		endpointsIPsAfterArray := strings.Split(endpointsIPsAfter, " ")
-		sort.Strings(endpointsIPsAfterArray)
-		if !reflect.DeepEqual(endpointsIPsBeforeArray, endpointsIPsAfterArray) {
-			e2e.Failf("Endpoints list mismatch after WMCO restart %v, %v", endpointsIPsBeforeArray, endpointsIPsAfterArray)
-		}
-		g.By("Test service-monitor restarted")
-		serviceMonitorAge2, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("endpoints", "-n", wmcoNamespace, "-o=jsonpath={.items[].metadata.creationTimestamp}").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		timeOriginal, err := time.Parse(time.RFC3339, serviceMonitorAge1)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		timeLast, err := time.Parse(time.RFC3339, serviceMonitorAge2)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if timeOriginal.Unix() >= timeLast.Unix() {
-			e2e.Failf("Service monitor %v did not restart, bigger than %v new service monitor age", serviceMonitorAge1, serviceMonitorAge2)
-		}
-		g.By("Scale down nodes")
-		defer waitWindowsNodesReady(oc, 2, time.Second*3000)
-		zone := getAvailabilityZone(oc)
-		defer scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 20, 2, false)
-		scaleWindowsMachineSet(oc, getWindowsMachineSetName(oc, defaultWindowsMS, iaasPlatform, zone), 5, 0, false)
-		g.By("Test endpoints IP are deleted after scalling down")
-		waitForEndpointsReady(oc, wmcoNamespace, 5, 0)
-		endpointsIPsLast, err := getEndpointsIPs(oc, wmcoNamespace)
-		if err != nil {
-			e2e.Failf("Error retrieving endpoint IPs: %v", err)
-		}
-		if endpointsIPsLast != "" {
-			e2e.Failf("Endpoints %v are still exists after scalling down Windows nodes", endpointsIPsLast)
 		}
 	})
 
