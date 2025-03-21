@@ -269,7 +269,7 @@ var _ = g.Describe("[sig-networking] SDN metallb", func() {
 		patchBGPPeer = `{"spec":{"peerPort": -1}}`
 		patchOutput, patchErr = oc.AsAdmin().WithoutNamespace().Run("patch").Args("bgppeer", "peer-46124-2", "-n", opNamespace, "--type=merge", "-p", patchBGPPeer).Output()
 		o.Expect(patchErr).To(o.HaveOccurred())
-		o.Expect(strings.Contains(patchOutput, "spec.peerPort in body should be greater than or equal to 0")).To(o.BeTrue())
+		o.Expect(strings.Contains(patchOutput, "spec.peerPort in body should be greater than or equal to 1")).To(o.BeTrue())
 
 		exutil.By("8. Validate hold timer and keepalive timer without unit is invalid")
 		patchBGPPeer = `{"spec":{"holdTime": "30", "keepaliveTime": "10"}}`
