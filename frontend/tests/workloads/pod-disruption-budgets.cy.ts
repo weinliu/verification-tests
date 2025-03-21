@@ -22,6 +22,8 @@ describe('PDB List Page and Detail Page Test', () => {
   })
 
   it('(OCP-50657,yapei,UserInterface) Add support for PDB(Pod Disruption Budget)',{tags:['@userinterface','@e2e','admin','@hypershift-hosted']}, () => {
+    const columns = ['Name','Namespace','Selector','Availability','Allowed disruptions','Created'];
+    const navs = ['Details', 'YAML', 'Pods'];
     cy.adminCLI(`oc new-project ${testParams.projectName}`)
     cy.adminCLI(`oc create -f ./fixtures/${testParams.fileName}.yaml -n ${testParams.projectName}`);
     const pdbParams = {
@@ -29,17 +31,22 @@ describe('PDB List Page and Detail Page Test', () => {
       value: '6'
     }
     cy.visit('/k8s/all-namespaces/poddisruptionbudgets');
-    cy.get('[data-test-id="resource-title"]').contains('PodDisruptionBudgets');
-    cy.get('thead').contains(/^Name(.*)Namespace(.*)Selector(.*)Availability(.*)Allowed disruptions(.*)Created$/);
+    cy.get('[data-test-id="resource-title"]').contains('PodDisruptionBudgets').should('exist');
+    cy.get('th[data-label]').then(($cols) => {
+      const columns_name_list = Cypress._.map(Cypress.$.makeArray($cols), 'innerText');
+      expect(columns_name_list).to.include.members(columns);
+    })
 
     cy.visit(`/k8s/ns/${testParams.projectName}/deployments/${deploymentParams.name}`);
     cy.byLegacyTestID('actions-menu-button').click({force: true});
     cy.byButtonText('Add PodDisruptionBudget').click({force: true});
     pdbListPage.createPDB(pdbParams);
 
-    cy.visit(`/k8s/ns/${testParams.projectName}/poddisruptionbudgets/${pdbParams.name}`);
-    cy.get('[data-test-selector="details-item-value__Name"]').contains(pdbParams.name);
-    cy.get('.co-m-horizontal-nav__menu').contains(/Details|YAML|Pods/);
+    cy.get('[data-test-section-heading*="PodDisruptionBudget"]').should('exist');
+    cy.get('a[data-test-id*="horizontal-link"]').then($navs => {
+      const columns_name_list = Cypress._.map(Cypress.$.makeArray($navs), 'innerText');
+      expect(columns_name_list).to.have.members(navs);
+    });
 
     cy.visit(`/k8s/ns/${testParams.projectName}/deployments/${deploymentParams.name}`);
     cy.byLegacyTestID('actions-menu-button').click({force: true});
