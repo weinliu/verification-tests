@@ -1203,4 +1203,103 @@ EOF`)
 		o.Expect(env).To(o.ContainSubstring(`ROUTER_CIPHERSUITES=TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256`))
 		o.Expect(env).To(o.ContainSubstring(`ROUTER_CIPHERS=ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384`))
 	})
+
+	// author: shudili@redhat.com
+	// incorporate OCP-80514 and OCP-80516 into one
+	g.It("Author:shudili-MicroShiftOnly-High-80514-supporting Modern tlsSecurityProfile for the ingress controller [Disruptive]", func() {
+		var e2eTestNamespace = "e2e-ne-123456-" + getRandomString()
+
+		exutil.By("1.0: Prepare a namespace for the following testing")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
+		actualGen, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/router-default", "-n", "openshift-ingress", "-o=jsonpath={.metadata.generation}").Output()
+		actualGenerationInt, _ := strconv.Atoi(actualGen)
+
+		exutil.By("2.0: Debug node to backup the config.yaml, and restore it before the test finishes running")
+		nodeName := getByJsonPath(oc, "default", "nodes", "{.items[0].metadata.name}")
+		backupConfig := fmt.Sprintf(`
+if test -f /etc/microshift/config.yaml ; then
+    cp /etc/microshift/config.yaml /etc/microshift/config.yaml.backup80514
+else
+    touch /etc/microshift/config.yaml.no80514
+fi
+`)
+		_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", backupConfig).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		recoverCmd := fmt.Sprintf(`
+if test -f /etc/microshift/config.yaml.no80514; then
+    rm -f /etc/microshift/config.yaml
+    rm -f /etc/microshift/config.yaml.no80514
+elif test -f /etc/microshift/config.yaml.backup80514 ; then
+    rm -f /etc/microshift/config.yaml
+    cp /etc/microshift/config.yaml.backup80514 /etc/microshift/config.yaml
+    rm -f /etc/microshift/config.yaml.backup80514
+fi
+`)
+		defer func() {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", recoverCmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+		}()
+
+		// OCP-80514 - [MicroShift] supporting Modern tlsSecurityProfile for the ingress controller
+		exutil.By("3.0: Configure the config.yaml file with the Modern profile")
+		customConfig := fmt.Sprintf(`
+rm /etc/microshift/config.yaml -f
+if test -f /etc/microshift/config.yaml.backup80514 ; then
+    cp /etc/microshift/config.yaml.backup80514 /etc/microshift/config.yaml
+fi
+cat >> /etc/microshift/config.yaml << EOF
+ingress:
+    tlsSecurityProfile:
+        modern: {}
+        type: Modern
+EOF`)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", customConfig).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+		ensureRouterDeployGenerationIs(oc, "default", strconv.Itoa(actualGenerationInt+1))
+
+		exutil.By("4.0: Check TLS env in a router pod that the SSL_MIN_VERSION and ROUTER_CIPHERSUITES should be as same as the Modern profile defined")
+		newrouterpod := getOneNewRouterPodFromRollingUpdate(oc, "default")
+		env := readRouterPodEnv(oc, newrouterpod, "SSL_MIN_VERSION")
+		o.Expect(env).To(o.ContainSubstring(`SSL_MIN_VERSION=TLSv1.3`))
+		env = readRouterPodEnv(oc, newrouterpod, "ROUTER_CIPHERSUITES")
+		o.Expect(env).To(o.ContainSubstring(`ROUTER_CIPHERSUITES=TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256`))
+
+		exutil.By("5.0: Check the haproxy config on the router pod to ensure the ssl version TLSv1.3 is reflected")
+		tlsVersion := readRouterPodData(oc, newrouterpod, "cat haproxy.config", "ssl-min-ver")
+		o.Expect(tlsVersion).To(o.ContainSubstring(`ssl-default-bind-options ssl-min-ver TLSv1.3`))
+
+		// OCP-80516 - [MicroShift] supporting Custom tlsSecurityProfile for the ingress controller
+		exutil.By("6.0: Configure the config.yaml file with the Custom profile")
+		customConfig = fmt.Sprintf(`
+rm /etc/microshift/config.yaml -f
+if test -f /etc/microshift/config.yaml.backup80514 ; then
+    cp /etc/microshift/config.yaml.backup80514 /etc/microshift/config.yaml
+fi
+cat >> /etc/microshift/config.yaml << EOF
+ingress:
+    tlsSecurityProfile:
+        custom:
+          ciphers:
+            - DHE-RSA-AES256-GCM-SHA384
+            - ECDHE-ECDSA-AES256-GCM-SHA384
+          minTLSVersion: VersionTLS12
+        type: Custom
+EOF`)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", customConfig).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+		ensureRouterDeployGenerationIs(oc, "default", strconv.Itoa(actualGenerationInt+2))
+
+		exutil.By("7.0: Check TLS env in a router pod that the SSL_MIN_VERSION and ROUTER_CIPHER should be as same as the Custom profile defined")
+		newrouterpod = getOneNewRouterPodFromRollingUpdate(oc, "default")
+		env = readRouterPodEnv(oc, newrouterpod, "SSL_MIN_VERSION")
+		o.Expect(env).To(o.ContainSubstring(`SSL_MIN_VERSION=TLSv1.2`))
+		env = readRouterPodEnv(oc, newrouterpod, "ROUTER_CIPHER")
+		o.Expect(env).To(o.ContainSubstring(`ROUTER_CIPHERS=DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384`))
+	})
 })
