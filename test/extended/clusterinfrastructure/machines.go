@@ -949,6 +949,11 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		clusterinfra.SkipConditionally(oc)
 		clusterinfra.SkipTestIfSupportedPlatformNotMatched(oc, clusterinfra.AWS)
 		architecture.SkipNonAmd64SingleArch(oc)
+		region, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws.region}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if region == "us-iso-east-1" || region == "us-gov-east-1" {
+			g.Skip("Not support region " + region + " for the case for now.")
+		}
 		clusterinfra.SkipForAwsOutpostCluster(oc)
 		g.By("Create a new machineset")
 		machinesetName := infrastructureName + "-37497"
@@ -958,7 +963,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		ms.CreateMachineSet(oc)
 
 		g.By("Update machineset to Dedicated Spot Instances")
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"spotMarketOptions":{},"instanceType":"c4.8xlarge","placement": {"tenancy": "dedicated"}}}}}}}`, "--type=merge").Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args(mapiMachineset, machinesetName, "-n", "openshift-machine-api", "-p", `{"spec":{"replicas":1,"template":{"spec":{"providerSpec":{"value":{"spotMarketOptions":{},"instanceType":"c4.8xlarge","placement": {"tenancy": "dedicated"}}}}}}}`, "--type=merge").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		clusterinfra.WaitForMachinesRunning(oc, 1, machinesetName)
 	})
