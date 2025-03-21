@@ -78,7 +78,6 @@ Cypress.Commands.add('uiLogin', (provider: string, username: string, password: s
     .should('be.visible');
   });
   guidedTour.close();
-  cy.switchPerspective('Administrator');
 });
 
 Cypress.Commands.add('uiLogout', () => {

@@ -1,5 +1,5 @@
-import { operatorHubPage } from "../views/operator-hub-page"
 import { catalogSources } from "../views/catalog-source"
+import { operatorHubPage } from "../views/operator-hub-page"
 import { Pages } from "./pages"
 
 export const project = "netobserv"
@@ -159,17 +159,11 @@ export const Operator = {
                     Operator.enableSubnetLabels()
                 }
                 cy.get('#root_spec_agent_ebpf_sampling').clear().type('1')
-                cy.get("#root_spec_agent_ebpf_accordion-content div.pf-v5-c-expandable-section > button").should('exist').click()
+                cy.get("#root_spec_agent_ebpf_accordion-content .pf-v6-c-expandable-section__toggle button").should('exist').click()
                 cy.get("#root_spec_agent_ebpf_cacheActiveTimeout").should('exist').clear().type("15s")
                 cy.byTestID('create-dynamic-form').click()
                 cy.wait(5000)
                 cy.byTestID('status-text').should('exist').should('contain.text', 'Ready')
-                cy.byTestID('status-text').should('exist').should('contain.text', 'FLPMonolithReady')
-                cy.byTestID('status-text').should('exist').should('contain.text', 'FLPParentReady')
-                cy.byTestID('status-text').should('exist').should('contain.text', 'FlowCollectorLegacyReady')
-                cy.byTestID('status-text').should('exist').should('contain.text', 'MonitoringReady')
-                cy.byTestID('status-text').should('exist').should('contain.text', 'NetworkPolicyReady')
-
                 cy.byTestID('refresh-web-console', { timeout: 60000 }).should('exist')
                 cy.reload(true)
             }

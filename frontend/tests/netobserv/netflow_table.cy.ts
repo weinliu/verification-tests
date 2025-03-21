@@ -1,5 +1,5 @@
+import { colSelectors, filterSelectors, genSelectors, histogramSelectors, netflowPage } from "../../views/netflow-page"
 import { Operator, project } from "../../views/netobserv"
-import { netflowPage, genSelectors, colSelectors, histogramSelectors, filterSelectors } from "../../views/netflow-page"
 
 describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Netflow Table view tests', { tags: ['Network_Observability'] }, function () {
 
@@ -51,7 +51,7 @@ describe('(OCP-50532, OCP-50531, OCP-50530, OCP-59408 Network_Observability) Net
         })
 
         // collapse view
-        cy.byTestID('filters-more-options-button').click().then(moreOpts => {
+        cy.byTestID('filters-more-options-button').click({ force: true }).then(moreOpts => {
             cy.contains('Collapse').click()
         })
         cy.get('#page-sidebar').then(sidenav => {

@@ -194,14 +194,14 @@ export const memoryUsage = {
 
 export namespace histogramSelectors {
     export const timeRangeContainer = "#chart-histogram > div.pf-v5-l-flex.pf-m-row.histogram-range-container"
-    export const zoomin = timeRangeContainer + " > div:nth-child(5) > div > div:nth-child(2) > pf-v5-c-button"
-    export const zoomout = timeRangeContainer + "> div:nth-child(5) > div > div:nth-child(1) > pf-v5-c-button"
+    export const zoomin = timeRangeContainer + " > div:nth-child(5) > div > div:nth-child(2) > div > button"
+    export const zoomout = timeRangeContainer + "> div:nth-child(5) > div > div:nth-child(1) > div > button"
     const forwardShift = timeRangeContainer + "> div:nth-child(4)"
-    export const singleRightShift = forwardShift + "> button:nth-child(1)"
-    export const doubleRightShift = forwardShift + "> button:nth-child(2)"
+    export const singleRightShift = forwardShift + "> div:nth-child(1) > button"
+    export const doubleRightShift = forwardShift + "> div:nth-child(2) > button"
     const backwardShift = timeRangeContainer + "> div:nth-child(2)"
-    export const singleLeftShift = backwardShift + "> button:nth-child(2)"
-    export const doubleLeftShift = backwardShift + "> button:nth-child(1)"
+    export const singleLeftShift = backwardShift + "> div:nth-child(2) > button"
+    export const doubleLeftShift = backwardShift + "> div:nth-child(1) > button"
 }
 
 Cypress.Commands.add('showAdvancedOptions', () => {
