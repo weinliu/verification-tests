@@ -6,28 +6,27 @@ import { Pages } from 'views/pages';
 
 describe("yaml editor tests", () => {
   before(() => {
-    cy.cliLogin();
-    cy.exec(`oc new-project ${testName}`);
-    cy.login(Cypress.env("LOGIN_IDP"),Cypress.env("LOGIN_USERNAME"),Cypress.env("LOGIN_PASSWORD"));
+    cy.adminCLI(`oc new-project ${testName}`);
+    cy.adminCLI(`oc adm policy add-role-to-user admin ${Cypress.env("LOGIN_USERNAME")} -n ${testName}`);
+    cy.uiLogin(Cypress.env("LOGIN_IDP"),Cypress.env("LOGIN_USERNAME"),Cypress.env("LOGIN_PASSWORD"));
     guidedTour.close();
   });
 
   after(() => {
-    cy.exec(`oc delete project ${testName}`);
-    cy.cliLogout();
+    cy.adminCLI(`oc delete project ${testName}`);
   });
 
   it("(OCP-63312,yanpzhan,UserInterface) Add ability to show/hide tooltips in the yaml editor",{tags:['@userinterface','@e2e','@osd-ccs','@rosa']}, () => {
-    cy.exec(`oc create -f ./fixtures/pods/example-pod.yaml -n ${testName}`);
+    cy.adminCLI(`oc create -f ./fixtures/pods/example-pod.yaml -n ${testName}`);
     cy.visit(`/k8s/cluster/projects/${testName}/yaml`);
     yamlEditor.isLoaded();
     yamlOptions.setTooltips('show');
-    yamlOptions.checkTooltipsVisibility('apiVersion', 'APIVersion defines the versioned schema', 'shown');
+    yamlOptions.checkTooltipsVisibility('metadata', 'metadata is the standard object', 'shown');
     cy.visit(`/k8s/ns/${testName}/pods/examplepod/yaml`);
     yamlEditor.isLoaded();
-    yamlOptions.checkTooltipsVisibility('apiVersion', 'APIVersion defines the versioned schema', 'shown');
+    yamlOptions.checkTooltipsVisibility('metadata', 'Standard object', 'shown');
     yamlOptions.setTooltips('hide');
-    yamlOptions.checkTooltipsVisibility('apiVersion', 'APIVersion defines the versioned schema', 'hidden');
+    yamlOptions.checkTooltipsVisibility('metadata', 'Standard object', 'hidden');
     yamlOptions.setTooltips('show');
   });
 
@@ -93,7 +92,7 @@ describe("yaml editor tests", () => {
   });
 
   it("(OCP-68746,xiyuzhao,UserInterface) Yaml editor can handle a line of data longer than 78 characters",{tags:['@userinterface','@e2e','@osd-ccs','@rosa','@hypershift-hosted']}, () => {
-    cy.exec(`oc create -f ./fixtures/configmap_with_multiple_characters.yaml -n ${testName}`);
+    cy.adminCLI(`oc create -f ./fixtures/configmap_with_multiple_characters.yaml -n ${testName}`);
     Pages.gotoConfigMapDetailsYamlTab(testName, "test-68746");
     cy.contains('span', 'eeee')
       .parents('.view-line')

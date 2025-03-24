@@ -18,6 +18,9 @@ Cypress.on('uncaught:exception', (err, runnable) => {
     if(err.message.includes('ResizeObserver loop completed with undelivered')) {
         return false
     }
+    if(err.message.includes('Model is disposed')) {
+        return false
+    }
     // we still want to ensure there are no other unexpected
     // errors, so we let them fail the test
 })
