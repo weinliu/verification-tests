@@ -554,7 +554,7 @@ var _ = g.Describe("[sig-cluster-lifecycle] Cluster_Infrastructure MAPI", func()
 		g.By("Check machine with KMS keys")
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args(mapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machinesetName, "-o=jsonpath={.items[0].spec.providerSpec.value.blockDevices[0].ebs.kmsKey.arn}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(out).Should(o.ContainSubstring("arn:aws:kms"))
+		o.Expect(out).Should(o.MatchRegexp("arn:aws.*:kms"))
 	})
 
 	// author: zhsun@redhat.com
