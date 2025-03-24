@@ -35,7 +35,7 @@ export const logsPage = {
       const $checkedstate = $elem.attr('data-checked-state');
       cy.log($checkedstate);
       if(boolvalue != $checkedstate){
-        cy.contains('Wrap lines').click();
+        cy.contains('Wrap lines').click({force: true});
       }
     })
   }

@@ -3,10 +3,10 @@ export const Deployment = {
   checkAlert: () => {
     cy.get('h4')
       .should('include.text', 'DeploymentConfig is being deprecated with OpenShift 4.14');
-    cy.get('div.pf-v5-c-alert__description a')
+    cy.get('a[class*="external-link"]')
       .should('include.text', 'Learn more about Deployments')
-      .should('have.attr', 'href')
-      .and('include', '/deployments')
+      .invoke('attr', 'href')
+      .should('include','/deployments');
   },
   checkDeploymentFilesystem: (deploymentName, nameSpace, containerIndex, readOnlyValue) => {
     cy.exec(`oc get deployment ${deploymentName} --kubeconfig ${Cypress.env('KUBECONFIG_PATH')} -n ${nameSpace} -ojsonpath="{.spec.template.spec.containers[${containerIndex}].securityContext}"`, {failOnNonZeroExit: false}).then(result => {

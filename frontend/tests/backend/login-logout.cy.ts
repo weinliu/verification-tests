@@ -6,8 +6,7 @@ describe('login and logout', () => {
     const login_username = up_pair[up_pair.length - 1].split(':')[0]
     const login_password = up_pair[up_pair.length - 1].split(':')[1]
     const verifyOnLoginPage = () => {
-      cy.contains('Log in').should('exist');
-      cy.get('.idp').its('length').should('be.at.least', 1);
+      cy.get('[data-test-id="login"]').should('exist');
     };
     // oauthaccesstoken not exist before login via console
     // and got cleared after log out

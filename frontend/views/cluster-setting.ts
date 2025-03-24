@@ -36,7 +36,7 @@ export const ClusterSettingPage = {
   },
   editUpstreamConfig: () => {
     cy.get('[data-test-id*="upstream-server-url"]').click();
-    cy.get('[data-test="Custom update service.-radio-input"]').click();
+    cy.get('input#config-custom').click();
     cy.get('[id="cluster-version-custom-upstream-server-url"]')
       .clear()
       .type('https://openshift-release.apps.ci.l2s4.p1.openshiftapps.com/graph');
