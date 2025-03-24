@@ -341,7 +341,7 @@ func (sub *subscriptionDescription) approve(oc *exutil.CLI, itName string, dr de
 func (sub *subscriptionDescription) approveSpecificIP(oc *exutil.CLI, itName string, dr describerResrouce, csvName string, phase string) {
 	// fix https://github.com/openshift/openshift-tests-private/issues/735
 	var state string
-	wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
+	wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 300*time.Second, false, func(ctx context.Context) (bool, error) {
 		state = getResource(oc, asAdmin, withoutNamespace, "sub", sub.subName, "-n", sub.namespace, "-o=jsonpath={.status.state}")
 		if strings.Compare(state, "UpgradePending") == 0 {
 			return true, nil
@@ -1046,10 +1046,10 @@ func (ck checkDescription) check(oc *exutil.CLI) {
 				}
 			}
 			getResource(oc, asAdmin, withoutNamespace, "pod", "-n", "openshift-marketplace")
-			getResource(oc, asAdmin, withoutNamespace, "og", "-n", ns, "-o", "yaml")
+			getResource(oc, asAdmin, withoutNamespace, "operatorgroup", "-n", ns, "-o", "yaml")
 			getResource(oc, asAdmin, withoutNamespace, "catalogsource", "-n", ns, "-o", "yaml")
 			getResource(oc, asAdmin, withoutNamespace, "subscription", "-n", ns, "-o", "yaml")
-			getResource(oc, asAdmin, withoutNamespace, "ip", "-n", ns)
+			getResource(oc, asAdmin, withoutNamespace, "installplan", "-n", ns)
 			getResource(oc, asAdmin, withoutNamespace, "csv", "-n", ns)
 			getResource(oc, asAdmin, withoutNamespace, "pods", "-n", ns)
 		}
