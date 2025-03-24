@@ -46,7 +46,7 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	// 	}
 	// })
 
-	g.It("Author:jiazha-ConnectedOnly-Critical-80458-clustercatalog get x509 error since it cannot get the custom CA automatically [Serial]", func() {
+	g.It("Author:jiazha-NonHyperShiftHOST-ConnectedOnly-Critical-80458-clustercatalog get x509 error since it cannot get the custom CA automatically [Serial]", func() {
 		g.By("1) create a random namespace")
 		oc.SetupProject()
 		g.By("2) create an image registry")
