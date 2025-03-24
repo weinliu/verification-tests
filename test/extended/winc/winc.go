@@ -559,37 +559,33 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 			windowsWorkloads,
 		)
 
-		// Get Linux container image for disconnected environment
+		// Fetch the Linux image from the config map (primarily for disconnected env)
 		linuxWebserverImage := getConfigMapData(oc, wincTestCM, "linux_container_disconnected_image", defaultNamespace)
+		var chosenLinuxImage string
 
-		// Create Linux workload based on environment type
 		if isDisconnectedCluster(oc) {
-			if linuxWebserverImage != "<linux_container_disconnected_image>" {
-				// Use disconnected Linux image
-				e2e.Logf("Using disconnected Linux webserver image: %v", linuxWebserverImage)
+			if linuxWebserverImage != "" && linuxWebserverImage != "<linux_container_disconnected_image>" {
+				chosenLinuxImage = linuxWebserverImage
+				e2e.Logf("Disconnected env: Using Linux webserver image: %v", chosenLinuxImage)
 				createWorkload(oc, namespace, linuxWebserverFileDisconnected,
-					map[string]string{
-						"<linux_webserver_image>": linuxWebserverImage,
-					},
+					map[string]string{"<linux_webserver_image>": chosenLinuxImage},
 					true,
-					linuxWorkloads,
-				)
+					linuxWorkloads)
 			} else {
-				e2e.Logf("Warning: No valid Linux image config found in disconnected environment")
-				// Fallback to default Linux image
+				chosenLinuxImage = linuxNoTagsImage
+				e2e.Logf("Disconnected env: No valid Linux image config found; using fallback image: %v", chosenLinuxImage)
 				createWorkload(oc, namespace, linuxWebserverFile,
-					map[string]string{},
+					map[string]string{"<linux_webserver_image>": chosenLinuxImage},
 					true,
-					linuxWorkloads,
-				)
+					linuxWorkloads)
 			}
 		} else {
-			// Use default Linux image for connected environment
+			chosenLinuxImage = linuxNoTagsImage
+			e2e.Logf("Connected env: Using default Linux webserver image: %v", chosenLinuxImage)
 			createWorkload(oc, namespace, linuxWebserverFile,
-				map[string]string{},
+				map[string]string{"<linux_webserver_image>": chosenLinuxImage},
 				true,
-				linuxWorkloads,
-			)
+				linuxWorkloads)
 		}
 
 		// we scale the deployment to 5 windows pods
