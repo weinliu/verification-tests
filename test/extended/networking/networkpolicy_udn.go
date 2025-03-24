@@ -24,6 +24,11 @@ var _ = g.Describe("[sig-networking] SDN udn networkpolicy", func() {
 	g.BeforeEach(func() {
 
 		SkipIfNoFeatureGate(oc, "NetworkSegmentation")
+
+		networkType := checkNetworkType(oc)
+		if !strings.Contains(networkType, "ovn") {
+			g.Skip("Skip testing on non-ovn cluster!!!")
+		}
 	})
 
 	g.It("Author:asood-High-78292-Validate ingress allow-same-namespace and allow-all-namespaces network policies in Layer 3 NAD.", func() {
