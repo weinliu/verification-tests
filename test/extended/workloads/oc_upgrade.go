@@ -25,8 +25,15 @@ var _ = g.Describe("[sig-cli] Workloads oc command upgrade works fine", func() {
 	g.It("Author:yinzhou-ROSA-OSD_CCS-ARO-NonPreRelease-PreChkUpgrade-Medium-33209-Check some container related oc commands still work after upgrade", func() {
 		err := oc.AsAdmin().WithoutNamespace().Run("create").Args("ns", "workloads-upgrade").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "-n", "workloads-upgrade", "--name=example-ocupgrade").Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
+		err = wait.Poll(10*time.Second, 60*time.Second, func() (bool, error) {
+			err = oc.AsAdmin().WithoutNamespace().Run("new-app").Args("quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83", "--import-mode", "PreserveOriginal", "-n", "workloads-upgrade", "--name=example-ocupgrade").Execute()
+			if err != nil {
+				e2e.Logf("failed to use new-app command: %s. Trying again", err)
+				return false, nil
+			}
+			return true, nil
+		})
+		exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Cannot create the oc-upgrade test app"))
 	})
 
 	g.It("Author:yinzhou-ROSA-OSD_CCS-ARO-NonPreRelease-PstChkUpgrade-Medium-33209-Check some container related oc commands still work after upgrade", func() {
