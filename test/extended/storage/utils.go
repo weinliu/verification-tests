@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -1245,4 +1246,118 @@ func createClusterRole(oc *exutil.CLI, roleName string, verb string, resource st
 func addClusterRoleToUser(oc *exutil.CLI, clusterRoleName string, user string) {
 	err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "add-cluster-role-to-user", clusterRoleName, user).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
+}
+
+// Structs for different JSON formats
+type keyValue struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func normalizeKeyValue(key, value string) (string, string) {
+	return strings.ToLower(key), strings.ToLower(value)
+}
+
+// function to generate key value tags
+func generateKeyValueTags(start int, end int, caseID string) (string, error) {
+	var result []keyValue
+	// Generate count no of key-value pairs
+	for i := start; i <= end; i++ {
+		result = append(result, keyValue{
+			Key:   fmt.Sprintf("storage_case_key%d", i),
+			Value: fmt.Sprintf("%s", caseID),
+		})
+	}
+	// Convert to JSON
+	jsonData, err := json.Marshal(result)
+	if err != nil {
+		fmt.Errorf("Error to convert to json data %w", err)
+	}
+	return string(jsonData), err
+}
+
+// funtion to generates a random string of the specified length
+func generateRandomStringWithSpecifiedLength(length int) (string, error) {
+	bytes := make([]byte, length)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		fmt.Errorf("Error to read the string %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(bytes)[:length], err
+}
+
+// function to get the resource tags from cluster Infrastructure
+func getResourceTagsFromInfrastructure(oc *exutil.CLI) string {
+	resourceTags, err := oc.WithoutNamespace().AsAdmin().Run("get").Args("infrastructure", "cluster", "-o=jsonpath={.status.platformStatus.aws}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	e2e.Logf("The resource tags inside Guest Cluster is %v\n", resourceTags)
+	return resourceTags
+}
+
+// function to check key-value pairs in the output
+func checkKeyValuePairsInOutput(outputPairsData string, keyValuePairsData string, compareCurrentOriginalTags bool) (bool, error) {
+	// Convert JSON string to slice of KeyValue structs
+	var outputPairs, keyValuePairs []keyValue
+	keyValuePairsMap := make(map[string]string)
+
+	if len(keyValuePairsData) == 0 { // In case of scenario 80180
+		e2e.Logf("Empty resource Tags to check in output %v", outputPairsData)
+		return true, nil
+	}
+
+	originalOutputPairsData := outputPairsData
+	if strings.Contains(outputPairsData, "region") { // Guest cluster output
+		outputPairsData = gjson.Get(outputPairsData, `resourceTags`).String()
+		if len(outputPairsData) == 0 {
+			e2e.Logf("Resource tags does not exists in the output %v", outputPairsData)
+			return true, nil
+		}
+	}
+
+	// Unmarshal output data
+	err := json.Unmarshal([]byte(outputPairsData), &outputPairs)
+	if err != nil {
+		return false, fmt.Errorf("error parsing outputPairsData JSON: %v", err)
+	}
+
+	// Unmarshal key-value data
+	err = json.Unmarshal([]byte(keyValuePairsData), &keyValuePairs)
+	if err != nil {
+		return false, fmt.Errorf("error parsing keyValuePairsData JSON: %v", err)
+	}
+
+	// Check if key-value pairs exist
+	if compareCurrentOriginalTags {
+		// Convert to map for quick lookup
+		for _, kv := range keyValuePairs {
+			nKey, nValue := normalizeKeyValue(kv.Key, kv.Value)
+			keyValuePairsMap[nKey] = nValue
+		}
+
+		for _, kv := range outputPairs {
+			nKey, nValue := normalizeKeyValue(kv.Key, kv.Value)
+			if val, exists := keyValuePairsMap[nKey]; !exists || val != nValue {
+				e2e.Logf("The original tags %v is not equal to currentTags %v", keyValuePairsData, outputPairs)
+				return false, nil
+			}
+		}
+		e2e.Logf("The original tags %v equals to currentTags %v", keyValuePairsData, outputPairs)
+		return true, nil
+	} else {
+		// Convert to map for quick lookup
+		for _, kv := range outputPairs {
+			nKey, nValue := normalizeKeyValue(kv.Key, kv.Value)
+			keyValuePairsMap[nKey] = nValue
+		}
+
+		for _, kv := range keyValuePairs {
+			nKey, nValue := normalizeKeyValue(kv.Key, kv.Value)
+			if val, exists := keyValuePairsMap[nKey]; !exists || val != nValue {
+				e2e.Logf("The keyValuePairsData %v does not exists in the output%v\n", keyValuePairsData, originalOutputPairsData)
+				return false, nil
+			}
+		}
+	}
+	e2e.Logf("The keyValuePairsData %v exists in the output %v\n", keyValuePairsData, originalOutputPairsData)
+	return true, nil
 }

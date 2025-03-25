@@ -6,10 +6,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
+	"github.com/aws/aws-sdk-go/service/ec2"
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
+	"github.com/tidwall/gjson"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
@@ -22,6 +25,8 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		hostedClusterNS  string
 		isAKS            bool
 		ctx              context.Context
+		ac               *ec2.EC2
+		hostedcluster    *hostedCluster
 	)
 
 	// aws-csi test suite cloud provider support check
@@ -41,6 +46,10 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		// The tc is skipped if it do not find hypershift operator pod inside cluster
 		guestClusterName, guestClusterKube, hostedClusterNS = exutil.ValidHypershiftAndGetGuestKubeConf(oc)
 		e2e.Logf("Guest cluster name is %s", hostedClusterNS+"-"+guestClusterName)
+		oc.SetGuestKubeconf(guestClusterKube)
+
+		hostedcluster = newHostedCluster(oc, hostedClusterNS, guestClusterName)
+		hostedcluster.setHostedClusterKubeconfigFile(guestClusterKube)
 	})
 
 	// author: ropatil@redhat.com
@@ -314,4 +323,390 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 
 	})
 
+	// author: ropatil@redhat.com
+	// OCP-79815-[HyperShiftMGMT-NonHyperShiftHOST][CSI][HCP] Verify that 25+ tags are not supported
+	g.It("Author:ropatil-HyperShiftMGMT-NonHyperShiftHOST-Medium-79815-[CSI][HCP] Verify that 25+ tags are not supported", func() {
+		if cloudProvider != "aws" {
+			g.Skip("Scenario is supportable only on AWS platform and skipping the tc on other platforms")
+		}
+		exutil.By("******" + cloudProvider + " Hypershift test phase start ******")
+
+		exutil.By("#. Apply patch with 26 tags and check the output message")
+		keyValueData, err := generateKeyValueTags(1, 26, "79815")
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		JSONPatch := `{"spec":{"platform":{"aws":{"resourceTags":` + keyValueData + `}}}}`
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", hostedClusterNS, "hostedclusters/"+guestClusterName, "-p", JSONPatch, "--type=merge").Output()
+		o.Expect(output).Should(o.ContainSubstring("must have at most 25 items"))
+
+		exutil.By("******" + cloudProvider + " Hypershift test phase finished ******")
+	})
+
+	// author: ropatil@redhat.com
+	// OCP-80181-[HyperShiftMGMT-NonHyperShiftHOST][CSI][HCP] Verify that a tag key does not support 128+ characters and tag value does not support 256+ characters
+	g.It("Author:ropatil-HyperShiftMGMT-NonHyperShiftHOST-Medium-80181-[CSI][HCP] Verify that a tag key does not support 128+ characters and tag value does not support 256+ characters", func() {
+		if cloudProvider != "aws" {
+			g.Skip("Scenario is supportable only on AWS platform and skipping the tc on other platforms")
+		}
+		exutil.By("******" + cloudProvider + " Hypershift test phase start ******")
+
+		exutil.By("#. Apply patch with 129 characterd keys and check the output message")
+		keyData, err := generateRandomStringWithSpecifiedLength(129)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		JSONPatch := `{"spec":{"platform":{"aws":{"resourceTags":[{"key":"` + keyData + `","value":"newValue1"}]}}}}`
+		output, _ := oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", hostedClusterNS, "hostedclusters/"+guestClusterName, "-p", JSONPatch, "--type=merge").Output()
+		o.Expect(output).Should(o.ContainSubstring("may not be more than 128 bytes"))
+
+		exutil.By("#. Apply patch with 257 characterd values and check the output message")
+		valueData, err := generateRandomStringWithSpecifiedLength(257)
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		JSONPatch = `{"spec":{"platform":{"aws":{"resourceTags":[{"key":"newKey1","value":"` + valueData + `"}]}}}}`
+		output, _ = oc.AsAdmin().WithoutNamespace().Run("patch").Args("-n", hostedClusterNS, "hostedclusters/"+guestClusterName, "-p", JSONPatch, "--type=merge").Output()
+		o.Expect(output).Should(o.ContainSubstring("may not be more than 256 bytes"))
+
+		exutil.By("******" + cloudProvider + " Hypershift test phase finished ******")
+	})
+
+	// author: ropatil@redhat.com
+	// OCP-80179-[HyperShiftMGMT-NonHyperShiftHOST][CSI][HCP] Verify with multiple tags
+	g.It("Author:ropatil-Longduration-NonPreRelease-HyperShiftMGMT-NonHyperShiftHOST-Medium-80179-[CSI][HCP] Verify with multiple tags [Disruptive]", func() {
+		if cloudProvider != "aws" {
+			g.Skip("Scenario is supportable only on AWS platform and skipping the tc on other platforms")
+		}
+
+		exutil.By("******" + cloudProvider + " Hypershift test phase start ******")
+
+		exutil.By("#. Get the original resource tags of hosted cluster")
+		originalResourceTags := getHostedClusterResourceTags(oc, hostedClusterNS, guestClusterName)
+		e2e.Logf("The original resource Tags for hosted cluster is %v\n", originalResourceTags)
+
+		// Set the guest kubeconfig parameter
+		oc.SetGuestKubeconf(guestClusterKube)
+
+		exutil.By("#. Update the hosted cluster resource Tags and wait for node pools to get ready")
+		keyValueData, err := generateKeyValueTags(1, 2, "80179")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		JSONPatch := `{"spec":{"platform":{"aws":{"resourceTags":` + keyValueData + `}}}}`
+		e2e.Logf("JSONPatch is %v\n", JSONPatch)
+		defer func() {
+			// if original tags and current tags are not equal then it is false and apply patch
+			if !getAndCompareResourceTags(oc, originalResourceTags, hostedClusterNS, guestClusterName) {
+				exutil.By("#. Revert back to original tags")
+				JSONPatch = `{"spec":{"platform":{"aws":{"resourceTags":` + originalResourceTags + `}}}}`
+				patchResourceAsAdmin(oc, hostedClusterNS, "hostedcluster/"+guestClusterName, JSONPatch, "merge")
+				o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), moreLongerMaxWaitingTime, moreLongerMaxWaitingTime/10).Should(o.BeTrue(), "after apply patch check all nodes ready error in defer")
+			}
+			exutil.By("#. Check all cluster operators should be recover healthy")
+			err = waitForAllCOHealthy(oc.AsGuestKubeconf())
+			if err != nil {
+				g.Fail(fmt.Sprintf("Cluster operators health check failed. Abnormality found in cluster operators:: %s ", err))
+			}
+		}()
+		patchResourceAsAdmin(oc, hostedClusterNS, "hostedcluster/"+guestClusterName, JSONPatch, "merge")
+		o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), moreLongerMaxWaitingTime, moreLongerMaxWaitingTime/10).Should(o.BeTrue(), "after apply patch check all nodes ready error in defer")
+		checkTagsInOCPResource(oc, hostedClusterNS, guestClusterName, keyValueData)
+		waitCSOhealthy(oc.AsGuestKubeconf())
+
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			supportProvisioners  = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc.AsGuestKubeconf()))
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		e2eTestNamespace := "storage-80179"
+		oc.AsGuestKubeconf().CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.AsGuestKubeconf().DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		// Set the resource definition
+		var storageClass storageClass
+		var pvc persistentVolumeClaim
+		var scName string
+		for _, provisioner = range supportProvisioners {
+			if provisioner == "ebs.csi.aws.com" {
+				storageClass = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+				storageClass.create(oc.AsGuestKubeconf())
+				defer storageClass.deleteAsAdmin(oc.AsGuestKubeconf())
+				scName = storageClass.name
+			} else {
+				scName = getPresetStorageClassNameByProvisioner(oc.AsGuestKubeconf(), cloudProvider, provisioner)
+			}
+			pvc = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scName), setPersistentVolumeClaimNamespace(e2eTestNamespace))
+
+			exutil.By("#. Create a pvc with the preset csi storageclass")
+			pvc.create(oc.AsGuestKubeconf())
+			defer pvc.deleteAsAdmin(oc.AsGuestKubeconf())
+			pvc.waitStatusAsExpected(oc.AsGuestKubeconf(), "Bound")
+
+			checkTagsInBackEnd(oc, pvc, keyValueData, ac)
+		}
+		exutil.By("******" + cloudProvider + " Hypershift test phase finished ******")
+	})
+
+	// author: ropatil@redhat.com
+	// OCP-79814-[HyperShiftMGMT-NonHyperShiftHOST][CSI][HCP] Verify with single tag and can be update to new tags
+	g.It("Author:ropatil-Longduration-NonPreRelease-HyperShiftMGMT-NonHyperShiftHOST-Medium-79814-[CSI][HCP] Verify with single tag and can be update to new tags [Disruptive]", func() {
+		if cloudProvider != "aws" {
+			g.Skip("Scenario is supportable only on AWS platform and skipping the tc on other platforms")
+		}
+
+		exutil.By("******" + cloudProvider + " Hypershift test phase start ******")
+
+		exutil.By("#. Get the original resource tags of hosted cluster")
+		originalResourceTags := getHostedClusterResourceTags(oc, hostedClusterNS, guestClusterName)
+		e2e.Logf("The original resource Tags for hosted cluster is %v\n", originalResourceTags)
+
+		// Set the guest kubeconfig parameter
+		oc.SetGuestKubeconf(guestClusterKube)
+
+		exutil.By("#. Update the hosted cluster resource Tags and wait for node pools to get ready")
+		keyValueData, err := generateKeyValueTags(1, 1, "79814")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		JSONPatch := `{"spec":{"platform":{"aws":{"resourceTags":` + keyValueData + `}}}}`
+		e2e.Logf("JSONPatch is %v\n", JSONPatch)
+		defer func() {
+			// if original tags and current tags are not equal then it is false and apply patch
+			if !getAndCompareResourceTags(oc, originalResourceTags, hostedClusterNS, guestClusterName) {
+				exutil.By("#. Revert back to original tags")
+				JSONPatch = `{"spec":{"platform":{"aws":{"resourceTags":` + originalResourceTags + `}}}}`
+				patchResourceAsAdmin(oc, hostedClusterNS, "hostedcluster/"+guestClusterName, JSONPatch, "merge")
+				o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), moreLongerMaxWaitingTime, moreLongerMaxWaitingTime/10).Should(o.BeTrue(), "after apply patch check all nodes ready error in defer")
+			}
+			exutil.By("#. Check all cluster operators should be recover healthy")
+			err = waitForAllCOHealthy(oc.AsGuestKubeconf())
+			if err != nil {
+				g.Fail(fmt.Sprintf("Cluster operators health check failed. Abnormality found in cluster operators:: %s ", err))
+			}
+		}()
+		patchResourceAsAdmin(oc, hostedClusterNS, "hostedcluster/"+guestClusterName, JSONPatch, "merge")
+		o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), moreLongerMaxWaitingTime, moreLongerMaxWaitingTime/10).Should(o.BeTrue(), "after apply patch check all nodes ready error in defer")
+		checkTagsInOCPResource(oc, hostedClusterNS, guestClusterName, keyValueData)
+		waitCSOhealthy(oc.AsGuestKubeconf())
+
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			supportProvisioners  = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc.AsGuestKubeconf()))
+		)
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		e2eTestNamespace := "storage-79814"
+		oc.AsGuestKubeconf().CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.AsGuestKubeconf().DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		// Set the resource definition
+		var storageClass storageClass
+		var pvc persistentVolumeClaim
+		var scName, pvcName string
+		mapPvcNameProvisioner := make(map[string]string, 0)
+
+		for _, provisioner = range supportProvisioners {
+			if provisioner == "ebs.csi.aws.com" {
+				storageClass = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+				storageClass.create(oc.AsGuestKubeconf())
+				defer storageClass.deleteAsAdmin(oc.AsGuestKubeconf())
+				scName = storageClass.name
+			} else {
+				scName = getPresetStorageClassNameByProvisioner(oc.AsGuestKubeconf(), cloudProvider, provisioner)
+			}
+			pvc = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scName), setPersistentVolumeClaimNamespace(e2eTestNamespace))
+
+			exutil.By("#. Create a pvc with the preset csi storageclass")
+			pvc.create(oc.AsGuestKubeconf())
+			defer pvc.deleteAsAdmin(oc.AsGuestKubeconf())
+			pvc.waitStatusAsExpected(oc.AsGuestKubeconf(), "Bound")
+
+			mapPvcNameProvisioner[provisioner] = pvc.name
+			checkTagsInBackEnd(oc, pvc, keyValueData, ac)
+		}
+
+		exutil.By("#. Update the hosted cluster resource Tags and wait for node pools to get ready")
+		keyValueData, err = generateKeyValueTags(2, 2, "79814")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		JSONPatch = `{"spec":{"platform":{"aws":{"resourceTags":` + keyValueData + `}}}}`
+		e2e.Logf("JSONPatch is %v\n", JSONPatch)
+		patchResourceAsAdmin(oc, hostedClusterNS, "hostedcluster/"+guestClusterName, JSONPatch, "merge")
+		o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), moreLongerMaxWaitingTime, moreLongerMaxWaitingTime/10).Should(o.BeTrue(), "after apply patch check all nodes ready error in defer")
+		checkTagsInOCPResource(oc, hostedClusterNS, guestClusterName, keyValueData)
+		waitCSOhealthy(oc.AsGuestKubeconf())
+
+		for provisioner, pvcName = range mapPvcNameProvisioner {
+			pvc = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimName(pvcName), setPersistentVolumeClaimNamespace(e2eTestNamespace))
+			checkTagsInBackEnd(oc, pvc, keyValueData, ac)
+		}
+		exutil.By("******" + cloudProvider + " Hypershift test phase finished ******")
+	})
+
+	// author: ropatil@redhat.com
+	// OCP-80180-[HyperShiftMGMT-NonHyperShiftHOST][CSI][HCP] Verify that an existing tags can be removed
+	g.It("Author:ropatil-Longduration-NonPreRelease-HyperShiftMGMT-NonHyperShiftHOST-Medium-80180-[CSI][HCP] Verify that an existing tags can be removed [Disruptive]", func() {
+		if cloudProvider != "aws" {
+			g.Skip("Scenario is supportable only on AWS platform and skipping the tc on other platforms")
+		}
+		exutil.By("******" + cloudProvider + " Hypershift test phase start ******")
+
+		exutil.By("#. Get the original resource tags of hosted cluster")
+		originalResourceTags := getHostedClusterResourceTags(oc, hostedClusterNS, guestClusterName)
+		e2e.Logf("The original resource Tags for hosted cluster is %v\n", originalResourceTags)
+
+		// Set the guest kubeconfig parameter
+		oc.SetGuestKubeconf(guestClusterKube)
+
+		// var keyValueData string
+		exutil.By("#. Update the hosted cluster resource Tags and wait for node pools to get ready")
+		keyValueData, err := generateKeyValueTags(1, 1, "80180")
+		o.Expect(err).NotTo(o.HaveOccurred())
+		JSONPatch := `{"spec":{"platform":{"aws":{"resourceTags":` + keyValueData + `}}}}`
+		e2e.Logf("JSONPatch is %v\n", JSONPatch)
+		defer func() {
+			// if original tags and current tags are not equal apply patch
+			if !getAndCompareResourceTags(oc, originalResourceTags, hostedClusterNS, guestClusterName) {
+				exutil.By("#. Revert back to original tags")
+				JSONPatch = `{"spec":{"platform":{"aws":{"resourceTags":` + originalResourceTags + `}}}}`
+				patchResourceAsAdmin(oc, hostedClusterNS, "hostedcluster/"+guestClusterName, JSONPatch, "merge")
+				o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), moreLongerMaxWaitingTime, moreLongerMaxWaitingTime/10).Should(o.BeTrue(), "after apply patch check all nodes ready error in defer")
+			}
+			exutil.By("#. Check all cluster operators should be recover healthy")
+			err = waitForAllCOHealthy(oc.AsGuestKubeconf())
+			if err != nil {
+				g.Fail(fmt.Sprintf("Cluster operators health check failed. Abnormality found in cluster operators:: %s ", err))
+			}
+		}()
+		patchResourceAsAdmin(oc, hostedClusterNS, "hostedcluster/"+guestClusterName, JSONPatch, "merge")
+		o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), moreLongerMaxWaitingTime, moreLongerMaxWaitingTime/10).Should(o.BeTrue(), "after apply patch check all nodes ready error in defer")
+		checkTagsInOCPResource(oc, hostedClusterNS, guestClusterName, keyValueData)
+		waitCSOhealthy(oc.AsGuestKubeconf())
+
+		// Define the test scenario support provisioners
+		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "efs.csi.aws.com"}
+		// Set the resource template for the scenario
+		var (
+			storageTeamBaseDir   = exutil.FixturePath("testdata", "storage")
+			storageClassTemplate = filepath.Join(storageTeamBaseDir, "storageclass-template.yaml")
+			pvcTemplate          = filepath.Join(storageTeamBaseDir, "pvc-template.yaml")
+			supportProvisioners  = sliceIntersect(scenarioSupportProvisioners, getSupportProvisionersByCloudProvider(oc.AsGuestKubeconf()))
+		)
+
+		if len(supportProvisioners) == 0 {
+			g.Skip("Skip for scenario non-supported provisioner!!!")
+		}
+
+		e2eTestNamespace := "storage-80180"
+		oc.AsGuestKubeconf().CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		defer oc.AsGuestKubeconf().DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+
+		// Set the resource definition
+		var storageClass storageClass
+		var pvc persistentVolumeClaim
+		var scName string
+
+		for _, provisioner = range supportProvisioners {
+			if provisioner == "ebs.csi.aws.com" {
+				storageClass = newStorageClass(setStorageClassTemplate(storageClassTemplate), setStorageClassProvisioner(provisioner), setStorageClassVolumeBindingMode("Immediate"))
+				storageClass.create(oc.AsGuestKubeconf())
+				defer storageClass.deleteAsAdmin(oc.AsGuestKubeconf())
+				scName = storageClass.name
+			} else {
+				scName = getPresetStorageClassNameByProvisioner(oc.AsGuestKubeconf(), cloudProvider, provisioner)
+			}
+			pvc = newPersistentVolumeClaim(setPersistentVolumeClaimTemplate(pvcTemplate), setPersistentVolumeClaimStorageClassName(scName), setPersistentVolumeClaimNamespace(e2eTestNamespace))
+
+			exutil.By("#. Create a pvc with the preset csi storageclass")
+			pvc.create(oc.AsGuestKubeconf())
+			defer pvc.deleteAsAdmin(oc.AsGuestKubeconf())
+			pvc.waitStatusAsExpected(oc.AsGuestKubeconf(), "Bound")
+
+			checkTagsInBackEnd(oc, pvc, keyValueData, ac)
+		}
+
+		exutil.By("#. Update the hosted cluster resource Tags and wait for node pools to get ready")
+		keyValueData = ""
+		JSONPatch = `{"spec":{"platform":{"aws":{"resourceTags":[` + keyValueData + `]}}}}`
+		e2e.Logf("JSONPatch is %v\n", JSONPatch)
+		patchResourceAsAdmin(oc, hostedClusterNS, "hostedcluster/"+guestClusterName, JSONPatch, "merge")
+		o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), moreLongerMaxWaitingTime, moreLongerMaxWaitingTime/10).Should(o.BeTrue(), "after apply patch check all nodes ready error in defer")
+		checkTagsInOCPResource(oc, hostedClusterNS, guestClusterName, keyValueData)
+		waitCSOhealthy(oc.AsGuestKubeconf())
+
+		exutil.By("******" + cloudProvider + " Hypershift test phase finished ******")
+	})
 })
+
+// funcion to check resource tags in hosted cluster and Guest cluster
+func checkTagsInOCPResource(oc *exutil.CLI, hostedClusterNS string, guestClusterName string, keyValueData string) {
+	exutil.By("#. Check the resource tags in hostedcluster ns")
+	o.Eventually(func() bool {
+		outputResourceTags := getHostedClusterResourceTags(oc, hostedClusterNS, guestClusterName)
+		output, err := checkKeyValuePairsInOutput(outputResourceTags, keyValueData, false)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		return output
+	}, 60*time.Second, 5*time.Second).Should(o.BeTrue())
+
+	exutil.By("#. Check the resource tags in Guest cluster")
+	o.Eventually(func() bool {
+		outputResourceTags := getResourceTagsFromInfrastructure(oc.AsGuestKubeconf())
+		output, err := checkKeyValuePairsInOutput(outputResourceTags, keyValueData, false)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		return output
+	}, 60*time.Second, 5*time.Second).Should(o.BeTrue())
+}
+
+// function to check resource tags in backend volumes
+func checkTagsInBackEnd(oc *exutil.CLI, pvc persistentVolumeClaim, keyValueData string, ac *ec2.EC2) {
+	exutil.By("#. Check the volume has tags in backend")
+	getAwsCredentialFromSpecifiedSecret(oc, "kube-system", "aws-creds")
+	if provisioner == "ebs.csi.aws.com" {
+		e2e.Logf("Check the tags in EBS volume")
+		volID := pvc.getVolumeID(oc.AsGuestKubeconf())
+		e2e.Logf("The available volume Id is volID %v\n", volID)
+		volAvailableZone := pvc.getVolumeNodeAffinityAvailableZones(oc.AsGuestKubeconf())
+		myVolume := newEbsVolume(setVolAz(volAvailableZone[0]), setVolID(volID))
+		ac = newAwsClient()
+		o.Eventually(func() bool {
+			volInfo, errinfo := myVolume.getInfo(ac)
+			if errinfo != nil {
+				e2e.Logf("Get ebs volume failed :%v, wait for next round get.", errinfo)
+			}
+			outputResourceTags := gjson.Get(volInfo, `Volumes.0.Tags`).String()
+			output, err := checkKeyValuePairsInOutput(outputResourceTags, keyValueData, false)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return output
+		}, 60*time.Second, 5*time.Second).Should(o.BeTrue())
+	} else {
+		e2e.Logf("Check the tags in EFS Access points")
+		volID := pvc.getVolumeID(oc.AsGuestKubeconf())
+		e2e.Logf("The available volume Id is volID %v\n", volID)
+		o.Eventually(func() bool {
+			accessPointsInfo, errinfo := describeEFSVolumeAccessPoints(oc.AsGuestKubeconf(), volID)
+			if errinfo != nil {
+				e2e.Logf("Get efs access point failed :%v, wait for next round get.", errinfo)
+			}
+			outputResourceTags := gjson.Get(accessPointsInfo, `AccessPoints.0.Tags`).String()
+			output, err := checkKeyValuePairsInOutput(outputResourceTags, keyValueData, false)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			return output
+		}, 60*time.Second, 5*time.Second).Should(o.BeTrue())
+	}
+}
+
+// function to get resource tags from Guest cluster, check if they exists and return accordingly
+func getAndCompareResourceTags(oc *exutil.CLI, originalResourceTags string, hostedClusterNS string, guestClusterName string) bool {
+	outputResourceTags := getHostedClusterResourceTags(oc, hostedClusterNS, guestClusterName)
+	output, err := checkKeyValuePairsInOutput(outputResourceTags, originalResourceTags, true)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	return output
+}

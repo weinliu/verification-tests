@@ -400,6 +400,13 @@ func setVolClusterIDTagKey(clusterIDTagKey string) volOption {
 	}
 }
 
+// Replace the default value of volume ID
+func setVolID(volID string) volOption {
+	return func(vol *ebsVolume) {
+		vol.volumeID = volID
+	}
+}
+
 // Create a new customized pod object
 func newEbsVolume(opts ...volOption) ebsVolume {
 	defaultVol := ebsVolume{
