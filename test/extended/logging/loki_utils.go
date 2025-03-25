@@ -260,6 +260,9 @@ func getGCPAudience(providerName string) (string, error) {
 func generateServiceAccountNameForGCS(clusterName string) string {
 	// Service Account should be between 6-30 characters long
 	name := clusterName + getRandomString()
+	if len(name) > 30 {
+		return (name[0:30])
+	}
 	return name
 }
 
