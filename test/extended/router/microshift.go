@@ -1302,4 +1302,144 @@ EOF`)
 		env = readRouterPodEnv(oc, newrouterpod, "ROUTER_CIPHER")
 		o.Expect(env).To(o.ContainSubstring(`ROUTER_CIPHERS=DHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384`))
 	})
+
+	// author: shudili@redhat.com
+	g.It("Author:shudili-MicroShiftOnly-High-80518-mTLS supporting client certificate with the subject filter [Disruptive]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
+			unSecSvcName        = "service-unsecure"
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
+			e2eTestNamespace    = "e2e-ne-80518-" + getRandomString()
+			baseDomain          = "apps.example.com"
+			dirname             = "/tmp/OCP-80518-ca"
+			caSubj              = "/CN=MS-Test-Root-CA"
+			caCrt               = dirname + "/80518-ca.crt"
+			caKey               = dirname + "/80518-ca.key"
+			userSubj            = "/CN=example-test.com"
+			usrCrt              = dirname + "/80518-usr.crt"
+			usrKey              = dirname + "/80518-usr.key"
+			usrCsr              = dirname + "/80518-usr.csr"
+			userSubj2           = "/CN=example-test2.com"
+			usrCrt2             = dirname + "/80518-usr2.crt"
+			usrKey2             = dirname + "/80518-usr2.key"
+			usrCsr2             = dirname + "/80518-usr2.csr"
+			cmName              = "ocp80518"
+			filter              = userSubj
+			edgeRoute           = "route-edge80518." + baseDomain
+			edgeRoute2          = "route2-edge80518." + baseDomain
+		)
+
+		exutil.By("1.0: Use openssl to create custom client certification, create a new self-signed CA including the ca certification and ca key")
+		defer os.RemoveAll(dirname)
+		err := os.MkdirAll(dirname, 0755)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		opensslNewCa(caKey, caCrt, caSubj)
+
+		exutil.By("1.1: Create a user CSR and the user key for a client")
+		opensslNewCsr(usrKey, usrCsr, userSubj)
+
+		exutil.By("1.2: Sign the user CSR and generate the user certificate")
+		san := "subjectAltName = DNS.1:*." + baseDomain + ",DNS.2:" + edgeRoute
+		opensslSignCsr(san, usrCsr, caCrt, caKey, usrCrt)
+
+		exutil.By("1.3: Create another user CSR and the user key for the client")
+		opensslNewCsr(usrKey2, usrCsr2, userSubj2)
+
+		exutil.By("1.4: Sign the another user CSR and generate the user certificate")
+		san = "subjectAltName = DNS.1:*." + baseDomain + ",DNS.2:" + edgeRoute2
+		opensslSignCsr(san, usrCsr2, caCrt, caKey, usrCrt2)
+
+		exutil.By("2.0: Create a cm with date ca certification")
+		defer deleteConfigMap(oc, "openshift-ingress", cmName)
+		createConfigMapFromFile(oc, "openshift-ingress", cmName, "ca-bundle.pem="+caCrt)
+
+		exutil.By("3.0: Prepare a namespace for the following testing")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
+		actualGen, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/router-default", "-n", "openshift-ingress", "-o=jsonpath={.metadata.generation}").Output()
+		actualGenerationInt, _ := strconv.Atoi(actualGen)
+
+		exutil.By("4.0: Debug node to backup the config.yaml, and restore it before the test finishes running")
+		nodeName := getByJsonPath(oc, "default", "nodes", "{.items[0].metadata.name}")
+		backupConfig := fmt.Sprintf(`
+if test -f /etc/microshift/config.yaml ; then
+    cp /etc/microshift/config.yaml /etc/microshift/config.yaml.backup80518
+else
+    touch /etc/microshift/config.yaml.no80518
+fi
+`)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", backupConfig).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		recoverCmd := fmt.Sprintf(`
+if test -f /etc/microshift/config.yaml.no80518; then
+    rm -f /etc/microshift/config.yaml
+    rm -f /etc/microshift/config.yaml.no80518
+elif test -f /etc/microshift/config.yaml.backup80518 ; then
+    rm -f /etc/microshift/config.yaml
+    cp /etc/microshift/config.yaml.backup80518 /etc/microshift/config.yaml
+    rm -f /etc/microshift/config.yaml.backup80518
+fi
+`)
+		defer func() {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", recoverCmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+		}()
+
+		exutil.By("5.0: Debug node and configure clientTLS with allowedSubjectPatterns in the config.yaml for permitting the first route")
+		customConfig := fmt.Sprintf(`
+rm /etc/microshift/config.yaml -f
+if test -f /etc/microshift/config.yaml.backup80514 ; then
+    cp /etc/microshift/config.yaml.backup80517 /etc/microshift/config.yaml
+fi
+cat >> /etc/microshift/config.yaml << EOF
+ingress:
+    clientTLS:
+        allowedSubjectPatterns: ["%s"]
+        clientCA:
+            name: "%s"
+        clientCertificatePolicy: "Required"
+EOF`, filter, cmName)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", customConfig).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+		ensureRouterDeployGenerationIs(oc, "default", strconv.Itoa(actualGenerationInt+1))
+
+		exutil.By("6.0: Create a client pod, a deployment and the services")
+		createResourceFromFile(oc, e2eTestNamespace, clientPod)
+		ensurePodWithLabelReady(oc, e2eTestNamespace, clientPodLabel)
+		err = oc.AsAdmin().WithoutNamespace().Run("cp").Args("-n", e2eTestNamespace, dirname, e2eTestNamespace+"/"+clientPodName+":"+dirname).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
+		ensurePodWithLabelReady(oc, e2eTestNamespace, "name="+srvrcInfo)
+
+		exutil.By("7.0: Create two edge route for the testing, one mathing allowedSubjectPatterns of the clientTLS")
+		jsonPath := "{.status.ingress[0].conditions[?(@.type==\"Admitted\")].status}"
+		createRoute(oc, e2eTestNamespace, "edge", "route-edge", unSecSvcName, []string{"--hostname=" + edgeRoute, "--cert=" + usrCrt, "--key=" + usrKey})
+		createRoute(oc, e2eTestNamespace, "edge", "route-edge2", unSecSvcName, []string{"--hostname=" + edgeRoute2, "--cert=" + usrCrt2, "--key=" + usrKey2})
+		waitForOutput(oc, e2eTestNamespace, "route/route-edge", jsonPath, "True")
+		waitForOutput(oc, e2eTestNamespace, "route/route-edge2", jsonPath, "True")
+
+		exutil.By("8.0: Check the ROUTER_MUTUAL_TLS_AUTH env in a router pod")
+		routerpod := getOneNewRouterPodFromRollingUpdate(oc, "default")
+		env := readRouterPodEnv(oc, routerpod, "ROUTER_MUTUAL_TLS_AUTH_FILTER")
+		o.Expect(env).To(o.ContainSubstring(filter))
+
+		exutil.By("9.0: Curl the first edge route with the user certification, expect to get 200 OK for mathing the allowedSubjectPatterns of the clientTLS")
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst := edgeRoute + ":443:" + podIP
+		curlCmd := []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "https://" + edgeRoute, "-sI", "--cacert", caCrt, "--cert", usrCrt, "--key", usrKey, "--resolve", toDst, "--connect-timeout", "10"}
+		repeatCmdOnClient(oc, curlCmd, "200 OK", 60, 1)
+
+		exutil.By("10.0: Curl the second edge route with the user2 certification, expect to get 403 Forbidden for not mathing the allowedSubjectPatterns of the clientTLS")
+		toDst = edgeRoute2 + ":443:" + podIP
+		curlCmd = []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "https://" + edgeRoute2, "-sI", "--cacert", caCrt, "--cert", usrCrt2, "--key", usrKey2, "--resolve", toDst, "--connect-timeout", "10"}
+		repeatCmdOnClient(oc, curlCmd, "403 Forbidden", 60, 1)
+	})
 })
