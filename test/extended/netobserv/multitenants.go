@@ -139,13 +139,13 @@ func userCleanup(oc *exutil.CLI, users []*User, usersHTpassFile string, htPassSe
 
 func addUserAsReader(oc *exutil.CLI, username string) {
 	baseDir := exutil.FixturePath("testdata", "netobserv")
-	readerCRBPath := filePath.Join(baseDir, "netobserv-reader-multitenant-crb.yaml")
+	readerCRBPath := filePath.Join(baseDir, "netobserv-loki-reader-multitenant-crb.yaml")
 	parameters := []string{"-f", readerCRBPath, "-p", "USERNAME=" + username}
 	exutil.CreateClusterResourceFromTemplate(oc, parameters...)
 }
 
 func removeUserAsReader(oc *exutil.CLI, username string) {
-	err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "netobserv-reader", username).Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("adm").Args("policy", "remove-cluster-role-from-user", "netobserv-loki-reader", username).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 }
 

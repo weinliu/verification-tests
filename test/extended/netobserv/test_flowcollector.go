@@ -48,6 +48,8 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			OperatorGroup: filePath.Join(subscriptionDir, "allnamespace-og.yaml"),
 			CatalogSource: &NOSource,
 		}
+		imageDigest    = filePath.Join(subscriptionDir, "image-digest-mirror-set.yaml")
+		catSrcTemplate = filePath.Join(subscriptionDir, "catalog-source.yaml")
 
 		// Loki Operator variables
 		lokiNS          = "openshift-operators-redhat"
@@ -70,9 +72,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 			g.Skip("Skipping tests for disconnected profiles")
 		}
 		g.By("Deploy konflux FBC and ImageDigestMirrorSet")
-		imageDigest := filePath.Join(subscriptionDir, "image-digest-mirror-set.yaml")
 		OperatorNS.DeployOperatorNamespace(oc)
-		catSrcTemplate := filePath.Join(subscriptionDir, "catalog-source.yaml")
 		catsrcErr := NOcatSrc.applyFromTemplate(oc, "-n", NOcatSrc.Namespace, "-f", catSrcTemplate, "-p", "NAMESPACE="+NOcatSrc.Namespace)
 		o.Expect(catsrcErr).NotTo(o.HaveOccurred())
 		NOcatSrc.WaitUntilCatSrcReady(oc)
@@ -672,7 +672,11 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		preUpgradePluginVersion = strings.Split(preUpgradePluginVersion, ":")[1]
 
-		g.By("Upgrade NetObserv to latest version")
+		g.By("Deploy latest catalog and upgrade to latest version")
+		NOcatSrc.Name = "netobserv-konflux-fbc"
+		NOcatSrc.Namespace = OperatorNS.Name
+		catsrcErr := NOcatSrc.applyFromTemplate(oc, "-n", NOcatSrc.Namespace, "-f", catSrcTemplate, "-p", "NAMESPACE="+NOcatSrc.Namespace)
+		o.Expect(catsrcErr).NotTo(o.HaveOccurred())
 		oc.AsAdmin().WithoutNamespace().Run("patch").Args("subscription", "netobserv-operator", "-n", netobservNS, "-p", `[{"op": "replace", "path": "/spec/source", "value": `+NOcatSrc.Name+`}, {"op": "replace", "path": "/spec/sourceNamespace", "value": `+NOcatSrc.Namespace+`}]`, "--type=json").Output()
 
 		g.By("Wait for a min for operator upgrade")
@@ -1845,9 +1849,9 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		bearerToken := getSAToken(oc, "netobserv-plugin", namespace)
 
-		g.By("Wait for 2 mins before logs gets collected and written to loki")
+		g.By("Wait for 4 mins before logs gets collected and written to loki")
 		startTime := time.Now()
-		time.Sleep(120 * time.Second)
+		time.Sleep(240 * time.Second)
 
 		lokilabels := Lokilabels{
 			App: "netobserv-flowcollector",
