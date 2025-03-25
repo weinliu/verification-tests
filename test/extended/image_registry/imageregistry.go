@@ -4580,7 +4580,7 @@ var _ = g.Describe("[sig-imageregistry] Image_Registry", func() {
 		longName := "longlonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglonglong"
 		output, err := oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"trustedCA":{"name":"`+longName+`"}}}}}`, "--type=merge").Output()
 		o.Expect(err).To(o.HaveOccurred())
-		if !strings.Contains(output, "may not be longer than 253") {
+		if !strings.Contains(output, "may not be more than 253") {
 			e2e.Failf("The image registry shouldn't update with name longer than 253")
 		}
 		err = oc.WithoutNamespace().AsAdmin().Run("patch").Args("configs.imageregistry/cluster", "-p", `{"spec":{"storage":{"s3":{"trustedCA":{"name":"not-exist-ca"}}}}}`, "--type=merge").Execute()
