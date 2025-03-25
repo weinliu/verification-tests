@@ -11,16 +11,16 @@ objects:
   spec:
     bgp:
       routers:
-      - asn: ${{ASN}}
+      - asn: ${{ASN_LOCAL}}
         neighbors:
         - address: "${FRR_IPv4}"
-          asn: ${{ASN}}
+          asn: ${{ASN_REMOTE}}
           disableMP: true
           toReceive:
             allowed:
               mode: all
         - address: "${FRR_IPv6}"
-          asn: ${{ASN}}
+          asn: ${{ASN_REMOTE}}
           disableMP: true
           toReceive:
             allowed:
@@ -28,6 +28,7 @@ objects:
 parameters:
 - name: NAME 
 - name: NAMESPACE
-- name: ASN
+- name: ASN_LOCAL
+- name: ASN_REMOTE
 - name: FRR_IPv4
 - name: FRR_IPv6

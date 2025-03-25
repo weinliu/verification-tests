@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -37,7 +38,8 @@ type routeAdvertisement struct {
 type frrconfigurationResource struct {
 	name           string
 	namespace      string
-	asn            int
+	asnLocal       int
+	asnRemote      int
 	externalFRRIP1 string
 	template       string
 }
@@ -45,7 +47,8 @@ type frrconfigurationResource struct {
 type frrconfigurationResourceDS struct {
 	name           string
 	namespace      string
-	asn            int
+	asnLocal       int
+	asnRemote      int
 	externalFRRIP1 string
 	externalFRRIP2 string
 	template       string
@@ -419,7 +422,7 @@ func createExternalFrrRouter(host, ssVRF string, allNodesIP1, allNodesIP2, ssNod
 // Create frrconfiguration
 func (frrconfig *frrconfigurationResource) createFRRconfigration(oc *exutil.CLI) {
 	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 20*time.Second, false, func(cxt context.Context) (bool, error) {
-		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", frrconfig.template, "-p", "NAME="+frrconfig.name, "NAMESPACE="+frrconfig.namespace, "ASN="+strconv.Itoa(frrconfig.asn), "FRR_IP="+frrconfig.externalFRRIP1)
+		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", frrconfig.template, "-p", "NAME="+frrconfig.name, "NAMESPACE="+frrconfig.namespace, "ASN_LOCAL="+strconv.Itoa(frrconfig.asnLocal), "ASN_REMOTE="+strconv.Itoa(frrconfig.asnRemote), "FRR_IP="+frrconfig.externalFRRIP1)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -433,7 +436,8 @@ func (frrconfig *frrconfigurationResource) createFRRconfigration(oc *exutil.CLI)
 func (frrconfigDS *frrconfigurationResourceDS) createFRRconfigrationDS(oc *exutil.CLI) {
 	err := wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 20*time.Second, false, func(cxt context.Context) (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", frrconfigDS.template, "-p", "NAME="+frrconfigDS.name,
-			"NAMESPACE="+frrconfigDS.namespace, "ASN="+strconv.Itoa(frrconfigDS.asn), "FRR_IPv4="+frrconfigDS.externalFRRIP1, "FRR_IPv6="+frrconfigDS.externalFRRIP2)
+			"NAMESPACE="+frrconfigDS.namespace, "ASN_LOCAL="+strconv.Itoa(frrconfigDS.asnLocal), "ASN_REMOTE="+strconv.Itoa(frrconfigDS.asnRemote),
+			"FRR_IPv4="+frrconfigDS.externalFRRIP1, "FRR_IPv6="+frrconfigDS.externalFRRIP2)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
 			return false, nil
@@ -608,52 +612,31 @@ func execCommandInFRRPodOnNode(oc *exutil.CLI, nodeName, command string) (string
 func verifyBGPRoutesOnClusterNode(oc *exutil.CLI, thisNode, externalFRRIP2, externalFRRIP1 string, allNodes []string, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map map[string]string, expected bool) bool {
 
 	// external networks are hardcoded in the test
-	externalNetworks := []string{"192.168.1.0/24", "192.169.1.1/32"}
+	externalNetworks := []string{"192.168.1.0/24", "192.169.1.1"}
 
-	var output1, output2 string
-	var err error
-	ipStackType := checkIPStackType(oc)
-	if ipStackType == "ipv4single" || ipStackType == "dualstack" {
-		cmd := `vtysh -c "show ip bgp"`
-		output1, err = execCommandInFRRPodOnNode(oc, thisNode, cmd)
-		if err != nil || output1 == "" {
-			e2e.Logf("Cannot get bgp route when do: %s, errors: %v", cmd, err)
-			return false
-		}
-	}
-
-	if ipStackType == "ipv6single" || ipStackType == "dualstack" {
-		cmd := `vtysh -c "show bgp ipv6"`
-		output2, err = execCommandInFRRPodOnNode(oc, thisNode, cmd)
-		if err != nil || output2 == "" {
-			e2e.Logf("Cannot get bgp route when do: %s, errors: %v", cmd, err)
-			return false
-		}
-	}
+	output2, output1, result := getIProutesWithFilterOnClusterNode(oc, thisNode, "bgp")
+	e2e.Logf("\n on node %s got routesOutput2: \n%s \n got routesOutput1: \n%s\n", thisNode, output2, output1)
+	o.Expect(result).To(o.BeTrue())
 
 	// Verify external routes are being learned to cluster node
-	for _, network := range externalNetworks {
-		expectedBGPRoutePattern := fmt.Sprintf(`%s\s+%s`, regexp.QuoteMeta(network), regexp.QuoteMeta(externalFRRIP1))
-		matched, err := regexp.MatchString(expectedBGPRoutePattern, output1)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if !matched {
-			e2e.Logf("external route %s is not found on node %s as expected", network, thisNode)
-			return false
-		}
+	matched := verifyExternalNetworksLearnedToSpecificClusterNode(oc, thisNode, externalNetworks, externalFRRIP1, true)
+	if !matched {
+		e2e.Logf("External routes %v not found in bgp routing table of node %s", externalNetworks, thisNode)
+		return false
 	}
 
 	// For singlev4 or singlev6 cluster, verify v4 or v6 routes for other cluster nodes are learned to this node
 	for _, eachNode := range allNodes {
 		if eachNode != thisNode {
-			expectedBGPRoutePattern := fmt.Sprintf(`%s\s+%s`, regexp.QuoteMeta(podNetwork1Map[eachNode]), regexp.QuoteMeta(nodesIP1Map[eachNode]))
+			expectedBGPRoutePattern := fmt.Sprintf(`%s.* via %s .* proto bgp`, regexp.QuoteMeta(podNetwork1Map[eachNode]), regexp.QuoteMeta(nodesIP1Map[eachNode]))
 			matched, err := regexp.MatchString(expectedBGPRoutePattern, output1)
 			o.Expect(err).NotTo(o.HaveOccurred())
 			if !matched && expected {
-				e2e.Logf("on singelstack cluster, route for another node %s is not learned to this node %s", eachNode, thisNode)
+				e2e.Logf("route %s for another node %s is not learned to this node %s", expectedBGPRoutePattern, eachNode, thisNode)
 				return false
 			}
 			if matched && !expected {
-				e2e.Logf("on singelstack cluster, route for another node %s should not be learned to this node %s", eachNode, thisNode)
+				e2e.Logf("route %s for another node %s should not be learned to this node %s", expectedBGPRoutePattern, eachNode, thisNode)
 				return false
 			}
 		}
@@ -668,7 +651,7 @@ func verifyBGPRoutesOnClusterNode(oc *exutil.CLI, thisNode, externalFRRIP2, exte
 
 		// // Verify external v6 routes are being learned to cluster node
 		// for _, network := range externalNetworksv6 {
-		// 	expectedBGPRoutePattern := fmt.Sprintf(`%s\s+%s`, regexp.QuoteMeta(network), regexp.QuoteMeta(externalFRRIP2))
+		// 	expectedBGPRoutePattern := fmt.Sprintf(`%s .*via %s .*proto bgp`, regexp.QuoteMeta(network), regexp.QuoteMeta(externalFRRIP2))
 		// 	matched, err := regexp.MatchString(expectedBGPRoutePattern, output1)
 		// 	o.Expect(err).NotTo(o.HaveOccurred())
 		// 	if !matched {
@@ -679,7 +662,7 @@ func verifyBGPRoutesOnClusterNode(oc *exutil.CLI, thisNode, externalFRRIP2, exte
 
 		for _, eachNode := range allNodes {
 			if eachNode != thisNode {
-				expectedBGPRoutePattern := fmt.Sprintf(`%s\s+%s`, regexp.QuoteMeta(podNetwork2Map[eachNode]), regexp.QuoteMeta(nodesIP2Map[eachNode]))
+				expectedBGPRoutePattern := fmt.Sprintf(`%s .*via %s .*proto bgp`, regexp.QuoteMeta(podNetwork2Map[eachNode]), regexp.QuoteMeta(nodesIP2Map[eachNode]))
 				matched, err := regexp.MatchString(expectedBGPRoutePattern, output2)
 				o.Expect(err).NotTo(o.HaveOccurred())
 				if !matched && expected {
@@ -1188,4 +1171,245 @@ func Curlexternal2PodFail(oc *exutil.CLI, host string, namespaceDst string, podN
 		o.Expect(err).To(o.HaveOccurred())
 	}
 	e2e.Logf("curl from external to UDN pod ip Failed")
+}
+
+// createExternalFrrRouterEBGP() will create external frr container in eBGP mode
+func createExternalFrrRouterEBGP(host, ssVRF string, allNodesIP1, allNodesIP2, ssNodesIPv4, ssNodesIPv6 []string) string {
+
+	frrConfTemplateFile := "frr_ebgp.conf.template"
+	frrDaemonsFile := "daemons"
+	frrConfFile := "frr.conf"
+
+	exutil.By("Create frr configuration template first, then create frr.config from the template using external FRR IP and cluster nodes' IPs")
+	fileErr := createEBGPFrrTemplateFile(frrConfTemplateFile)
+	o.Expect(fileErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to create frr template, getting error: %v", fileErr))
+
+	fileErr = generateFrrConfigFile(allNodesIP1, allNodesIP2, ssNodesIPv4, ssNodesIPv6, ssVRF, frrConfTemplateFile, frrConfFile)
+	o.Expect(fileErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to generate frr.conf using frr template, nodeIPs and FRR IP, getting error: %v", fileErr))
+
+	exutil.By("Create frr daemon")
+	fileErr = createFRRDaemon(frrDaemonsFile)
+	o.Expect(fileErr).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to create frr template, getting error: %v", fileErr))
+
+	exutil.By("Create a temporary directory under /tmp on host to hold frr.conf and frr daemon files")
+	tmpdir := "/tmp/bgp-test-frr-" + exutil.GetRandomString()
+	err := sshRunCmd(host, "root", "mkdir "+tmpdir)
+	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to create a tmp directory, getting error: %v", err))
+
+	exutil.By("Scp frr.conf and frr daemon files to host, they will be used to create external frr container in next step")
+	privateKey := os.Getenv("SSH_CLOUD_PRIV_KEY")
+	scpCmd := fmt.Sprintf("scp -i %s %s root@%s:%s", privateKey, frrConfFile, host, tmpdir)
+	_, scpErr := exec.Command("bash", "-c", scpCmd).Output()
+	o.Expect(scpErr).NotTo(o.HaveOccurred(), "Failed to scp frr.conf to host")
+
+	scpCmd = fmt.Sprintf("scp -i %s %s root@%s:%s", privateKey, frrDaemonsFile, host, tmpdir)
+	_, scpErr = exec.Command("bash", "-c", scpCmd).Output()
+	o.Expect(scpErr).NotTo(o.HaveOccurred(), "Failed to scp frr.conf to host")
+
+	defer os.Remove(frrConfTemplateFile)
+	defer os.Remove(frrConfFile)
+	defer os.Remove(frrDaemonsFile)
+	defer sshRunCmd(host, "root", "rm -rf "+tmpdir)
+
+	exutil.By("Create external frr container in iBGP mode, get its container id")
+	frrContainerName := "frr-" + exutil.GetRandomString()
+	externalFrrCreateCmd := fmt.Sprintf("sudo podman run -d --privileged --network host --rm --ulimit core=-1 --name %s --volume %s:/etc/frr quay.io/frrouting/frr:9.1.2", frrContainerName, tmpdir)
+	err = sshRunCmd(host, "root", externalFrrCreateCmd)
+	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Failed to run frr podmand command: %v, \n getting error: %v", externalFrrCreateCmd, err))
+
+	output, err := sshRunCmdOutPut(host, "root", "sudo podman ps | grep frr")
+	o.Expect(err).NotTo(o.HaveOccurred(), fmt.Sprintf("Error when getting external frr container ID: %v", err))
+	o.Expect(output).ShouldNot(o.BeEmpty())
+	frrContainerID := strings.Split(output, " ")[0]
+	e2e.Logf("\n Getting external FRR container ID: %v\n", frrContainerID)
+	return frrContainerID
+}
+
+// createEBGPFrrTemplateFile() create frr config template that will be used to generate frr.config for external frr container in eBGP mode
+func createEBGPFrrTemplateFile(frrConfTemplateFile string) error {
+	frrConfTemplate, err := os.Create(frrConfTemplateFile)
+	o.Expect(err).NotTo(o.HaveOccurred())
+	_, err = frrConfTemplate.WriteString(`router bgp 64515
+	 no bgp ebgp-requires-policy
+	 no bgp default ipv4-unicast
+	 no bgp default ipv6-unicast
+	 no bgp network import-check
+
+	{{- range $r := .NodesIPv4 }}
+	 neighbor {{ . }} remote-as 64512
+	{{- end }}
+
+	{{- range $r := .NodesIPv6 }}
+	 neighbor {{ . }} remote-as 64512
+	{{- end }}
+
+	{{- if .NodesIPv4 }}
+	 address-family ipv4 unicast
+	{{- range $r := .NodesIPv4 }}
+	  neighbor {{ . }} activate
+	  neighbor {{ . }} next-hop-self
+	{{- end }}
+	  network 192.168.1.0/24
+	  network 192.169.1.1/32
+	 exit-address-family
+	{{- end }}
+
+	{{- if .NodesIPv6 }}
+	 address-family ipv6 unicast
+	{{- range $r := .NodesIPv6 }}
+	  neighbor {{ . }} activate
+	  neighbor {{ . }} next-hop-self
+	{{- end }}
+	  network 2001:db8::/128
+	 exit-address-family
+	{{- end }}
+
+	{{- if .SsVRF }}
+	router bgp 64512 vrf {{ .SsVRF }}
+	 no bgp default ipv4-unicast
+	 no bgp default ipv6-unicast
+	 no bgp network import-check
+
+	{{- range $r := .SsNodesIPv4 }}
+	 neighbor {{ . }} remote-as 64512
+	{{- end }}
+
+	{{- range $r := .SsNodesIPv6 }}
+	 neighbor {{ . }} remote-as 64512
+	{{- end }}
+
+	{{- if .SsNodesIPv4 }}
+	 address-family ipv4 unicast
+	{{- range $r := .SsNodesIPv4 }}
+	  neighbor {{ . }} activate
+	  neighbor {{ . }} next-hop-self
+	{{- end }}
+	  network 192.168.1.0/24
+	  network 192.169.1.1/32
+	 exit-address-family
+	{{- end }}
+
+	{{- if .SsNodesIPv6 }}
+	 address-family ipv6 unicast
+	{{- range $r := .SsNodesIPv6 }}
+	  neighbor {{ . }} activate
+	  neighbor {{ . }} next-hop-self
+	{{- end }}
+	  network 2001:db8::/128
+	 exit-address-family
+	{{- end }}
+	{{- end }}
+	`)
+
+	if err != nil {
+		e2e.Logf("When writing to frr config template file, getting error: %v", err)
+		return err
+	}
+	frrConfTemplate.Close()
+	e2e.Logf("\n FRR configuration template created\n")
+	return nil
+}
+
+func verifyRouteAdvertisementEBGP(oc *exutil.CLI, host, externalFRRIP2, externalFRRIP1, frrContainerID string, allNodes []string, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map map[string]string) bool {
+	exutil.By("1. Verify BGP neighbor is established between external frr container and cluster nodes")
+	for _, node := range allNodes {
+		result := verifyBGPNeighborOnExternalFrr(host, frrContainerID, nodesIP1Map[node], nodesIP2Map[node], true)
+		if !result {
+			e2e.Logf("BGP neighborhood is NOT established for node %s", node)
+			return false
+		}
+	}
+
+	exutil.By("2. Verify cluster default podnetwork routes are advertised to external frr router")
+	// Verify from BGP route table on external frr
+	result := verifyBGPRoutesOnExternalFrr(host, frrContainerID, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
+	if !result {
+		e2e.Logf("Not all podNetwork are advertised to external frr router")
+		return false
+	}
+
+	exutil.By("3. Verify external routes are learned into each cluster node")
+	ipStackType := checkIPStackType(oc)
+	exutil.By("Verify external routes are learned into each cluster node")
+	//external network are pre-defined and hardcoded
+	externalNetworksv4 := []string{"192.168.1.0/24", "192.169.1.1"}
+	// externalNetworksv6 := []string{"2001:db8::"}
+	// var result1, result2 bool
+	var result1 bool
+	for _, node := range allNodes {
+		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
+			result1 = verifyExternalNetworksLearnedToSpecificClusterNode(oc, node, externalNetworksv4, externalFRRIP1, true)
+			if !result1 {
+				e2e.Logf("External routes %v not found in bgp routing table of node %s", externalNetworksv4, node)
+				return false
+			}
+		}
+
+		// Due to https://redhat-internal.slack.com/archives/C07AT0XP4J0/p1741111478883009?thread_ts=1741107414.399279&cid=C07AT0XP4J0
+		// Temporarily comment out checking external v6 route learning into cluster
+		// if ipStackType == "ipv6single" || ipStackType == "dualstack" {
+		// 	result2 = verifySingleBGPRouteOnSpecificClusterNode(oc, node, externalNetworksv6, externalFRRIP2, true)
+		// 	if !result2 {
+		// 		e2e.Logf("External routes %v  not found in bgp routing table of node %s", externalNetworksv6, node)
+		// 		return false
+		// 	}
+		// }
+
+	}
+
+	return true
+}
+
+// Verify external route(s) be learned into ip routing table for a specific node
+func verifyExternalNetworksLearnedToSpecificClusterNode(oc *exutil.CLI, node string, networks []string, nexthop string, expected bool) bool {
+
+	ipStackType := checkIPStackType(oc)
+
+	var matched bool
+	var err error
+
+	routesOutput2, routesOutput1, result := getIProutesWithFilterOnClusterNode(oc, node, "bgp")
+	e2e.Logf("\n on node %s got routesOutput2: \n%s \n got routesOutput1: \n%s\n", node, routesOutput2, routesOutput1)
+	o.Expect(result).To(o.BeTrue())
+
+	// Verify the route is being learned to the cluster nodes' ip routing table
+	for _, network := range networks {
+		expectedBGPRoutePattern := fmt.Sprintf(`%s .* via %s .* proto bgp`, regexp.QuoteMeta(network), regexp.QuoteMeta(nexthop))
+		e2e.Logf("route to be verified on cluster node: %s", expectedBGPRoutePattern)
+		if ipStackType == "ipv4single" || ipStackType == "ipv6single" || (ipStackType == "dualstack" && netutils.IsIPv4String(network)) {
+			matched, err = regexp.MatchString(expectedBGPRoutePattern, routesOutput1)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !matched && expected {
+				e2e.Logf("route for %s is not learned to ip route table of this node %s as expected", network, node)
+				return false
+			}
+			if matched && !expected {
+				e2e.Logf("route for %s shows up in ip route tabe of node %s while it is not expected", network, node)
+				return false
+			}
+		}
+		if ipStackType == "dualstack" && netutils.IsIPv6String(network) {
+			matched, err = regexp.MatchString(expectedBGPRoutePattern, routesOutput2)
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !matched && expected {
+				e2e.Logf("route for %s is not learned to ip route table of this node %s as expected", network, node)
+				return false
+			}
+			if matched && !expected {
+				e2e.Logf("route for %s shows up in ip route tabe of node %s while it is not expected", network, node)
+				return false
+			}
+		}
+
+	}
+	return true
+
+}
+
+// skip test if there is an existing external frr container running
+func SkipIfExternalFRRExists(host string) {
+	frrContainerOutput, _ := sshRunCmdOutPut(host, "root", "sudo podman ps | grep frr")
+	if frrContainerOutput != "" {
+		g.Skip("There is an existing external frr container running, skip the test!!!")
+	}
 }
