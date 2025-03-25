@@ -1229,9 +1229,24 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 		clusterextension.Create(oc)
 		o.Expect(clusterextension.InstalledBundle).To(o.ContainSubstring("v1.0.1"))
 
+		exutil.By("update version to be 1.0.3")
+		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": "1.0.3"}}}}`)
+		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+			conditions, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.conditions}")
+			if !strings.Contains(conditions, "error upgrading") {
+				e2e.Logf("error message is not raised")
+				return false, nil
+			}
+			return true, nil
+		})
+		if errWait != nil {
+			olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
+			exutil.AssertWaitPollNoErr(errWait, "error message is not raised")
+		}
+
 		exutil.By("update version to be >=1.0.1")
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"version": ">=1.0.1"}}}}`)
-		errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+		errWait = wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
 			resolvedBundle, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.install.bundle.name}")
 			if !strings.Contains(resolvedBundle, "v1.0.2") {
 				e2e.Logf("clusterextension.resolvedBundle is %s, not v1.0.2, and try next", resolvedBundle)
@@ -1243,6 +1258,9 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 			olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o=jsonpath-as-json={.status}")
 			exutil.AssertWaitPollNoErr(errWait, "clusterextension resolvedBundle is not v1.0.2")
 		}
+		conditions, _ := olmv1util.GetNoEmpty(oc, "clusterextension", clusterextension.Name, "-o", "jsonpath={.status.conditions}")
+		o.Expect(conditions).To(o.ContainSubstring("desired state reached"))
+		o.Expect(conditions).NotTo(o.ContainSubstring("error"))
 
 		exutil.By("update channel to be candidate-v1.1")
 		clusterextension.Patch(oc, `{"spec":{"source":{"catalog":{"channels": ["candidate-v1.1"]}}}}`)
