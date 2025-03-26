@@ -1442,4 +1442,123 @@ EOF`, filter, cmName)
 		curlCmd = []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "https://" + edgeRoute2, "-sI", "--cacert", caCrt, "--cert", usrCrt2, "--key", usrKey2, "--resolve", toDst, "--connect-timeout", "10"}
 		repeatCmdOnClient(oc, curlCmd, "403 Forbidden", 60, 1)
 	})
+
+	// author: shudili@redhat.com
+	g.It("Author:shudili-MicroShiftOnly-NonPreRelease-High-80520-supporting wildcard routeAdmissionPolicy for the Ingress Controller [Disruptive]", func() {
+		var (
+			buildPruningBaseDir = exutil.FixturePath("testdata", "router")
+			testPodSvc          = filepath.Join(buildPruningBaseDir, "web-server-deploy.yaml")
+			srvrcInfo           = "web-server-deploy"
+			unsecSvcName        = "service-unsecure"
+			clientPod           = filepath.Join(buildPruningBaseDir, "test-client-pod-withprivilege.yaml")
+			clientPodName       = "hello-pod"
+			clientPodLabel      = "app=hello-pod"
+			e2eTestNamespace    = "e2e-ne-80520-" + getRandomString()
+			baseDomain          = "apps.example.com"
+		)
+
+		exutil.By("1.0: Prepare a namespace for the following testing")
+		defer oc.DeleteSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		oc.CreateSpecifiedNamespaceAsAdmin(e2eTestNamespace)
+		exutil.SetNamespacePrivileged(oc, e2eTestNamespace)
+
+		exutil.By("2.0: Create a client pod, a deployment and the services")
+		createResourceFromFile(oc, e2eTestNamespace, clientPod)
+		ensurePodWithLabelReady(oc, e2eTestNamespace, clientPodLabel)
+		createResourceFromFile(oc, e2eTestNamespace, testPodSvc)
+		ensurePodWithLabelReady(oc, e2eTestNamespace, "name="+srvrcInfo)
+
+		exutil.By("3.0: For the default WildcardsDisallowed wildcardPolicy of routeAdmission, check the ROUTER_ALLOW_WILDCARD_ROUTES env variable, which should be false")
+		routerpod := getOneRouterPodNameByIC(oc, "default")
+		namespaceOwnershipEnv := readRouterPodEnv(oc, routerpod, "ROUTER_ALLOW_WILDCARD_ROUTES")
+		o.Expect(namespaceOwnershipEnv).To(o.ContainSubstring("ROUTER_ALLOW_WILDCARD_ROUTES=false"))
+
+		exutil.By("4.0: Create a route with wildcard-policy Subdomain, which should Not be Admitted")
+		routehost := "wildcard." + baseDomain
+		anyhost := "any." + baseDomain
+		jsonPath := "{.status.ingress[0].conditions[?(@.type==\"Admitted\")].status}"
+		createRoute(oc, e2eTestNamespace, "http", "unsecure80520", unsecSvcName, []string{"--wildcard-policy=Subdomain", "--hostname=" + routehost})
+		waitForOutput(oc, e2eTestNamespace, "route/unsecure80520", jsonPath, "False")
+
+		exutil.By("5.0: Debug node to backup the config.yaml, and restore it before the test finishes running")
+		nodeName := getByJsonPath(oc, "default", "nodes", "{.items[0].metadata.name}")
+		backupConfig := fmt.Sprintf(`
+if test -f /etc/microshift/config.yaml ; then
+    cp /etc/microshift/config.yaml /etc/microshift/config.yaml.backup80520
+else
+    touch /etc/microshift/config.yaml.no80520
+fi
+`)
+		_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", backupConfig).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+
+		recoverCmd := fmt.Sprintf(`
+if test -f /etc/microshift/config.yaml.no80520; then
+    rm -f /etc/microshift/config.yaml
+    rm -f /etc/microshift/config.yaml.no80520
+elif test -f /etc/microshift/config.yaml.backup80520 ; then
+    rm -f /etc/microshift/config.yaml
+    cp /etc/microshift/config.yaml.backup80520 /etc/microshift/config.yaml
+    rm -f /etc/microshift/config.yaml.backup80520
+fi
+`)
+		defer func() {
+			_, err := oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", recoverCmd).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+		}()
+
+		exutil.By("6.0: Debug node to set WildcardsAllowed wildcardPolicy in the config.yaml file")
+		actualGen, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("deployment/router-default", "-n", "openshift-ingress", "-o=jsonpath={.metadata.generation}").Output()
+		actualGenerationInt, _ := strconv.Atoi(actualGen)
+		customConfig := fmt.Sprintf(`
+cat >> /etc/microshift/config.yaml << EOF
+ingress:
+    routeAdmissionPolicy:
+        wildcardPolicy: "WildcardsAllowed"
+EOF`)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", customConfig).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+		ensureRouterDeployGenerationIs(oc, "default", strconv.Itoa(actualGenerationInt+1))
+
+		exutil.By("7.0. Check the ROUTER_ALLOW_WILDCARD_ROUTES env variable, which should be true")
+		routerpod = getOneNewRouterPodFromRollingUpdate(oc, "default")
+		namespaceOwnershipEnv = readRouterPodEnv(oc, routerpod, "ROUTER_ALLOW_WILDCARD_ROUTES")
+		o.Expect(namespaceOwnershipEnv).To(o.ContainSubstring("ROUTER_ALLOW_WILDCARD_ROUTES=true"))
+
+		exutil.By("8.0: Curl the route with the two hostnames again, both should get 200 ok reponse")
+		podIP := getPodv4Address(oc, routerpod, "openshift-ingress")
+		toDst := routehost + ":80:" + podIP
+		curlCmd := []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "http://" + routehost, "-sI", "--resolve", toDst, "--connect-timeout", "10"}
+		waitForOutput(oc, e2eTestNamespace, "route/unsecure80520", jsonPath, "True")
+		repeatCmdOnClient(oc, curlCmd, "200 OK", 60, 1)
+		toDst = anyhost + ":80:" + podIP
+		curlCmd = []string{"-n", e2eTestNamespace, clientPodName, "--", "curl", "http://" + anyhost, "-sI", "--resolve", toDst, "--connect-timeout", "10"}
+		repeatCmdOnClient(oc, curlCmd, "200 OK", 60, 1)
+
+		exutil.By("9.0: Debug node to set WildcardsDisabllowed wildcardPolicy in the config.yaml file")
+		customConfig = fmt.Sprintf(`
+rm /etc/microshift/config.yaml -f
+if test -f /etc/microshift/config.yaml.backup80520 ; then
+    cp /etc/microshift/config.yaml.backup80520 /etc/microshift/config.yaml
+fi
+cat >> /etc/microshift/config.yaml << EOF
+ingress:
+    routeAdmissionPolicy:
+        wildcardPolicy: "WildcardsDisallowed"
+EOF`)
+		_, err = oc.AsAdmin().WithoutNamespace().Run("debug").Args("-n", e2eTestNamespace, "--quiet=true", "node/"+nodeName, "--", "chroot", "/host", "bash", "-c", customConfig).Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		restartMicroshiftService(oc, e2eTestNamespace, nodeName)
+		ensureRouterDeployGenerationIs(oc, "default", strconv.Itoa(actualGenerationInt+2))
+
+		exutil.By("10.0: For the configured WildcardsDisallowed wildcardPolicy of routeAdmission, check the ROUTER_ALLOW_WILDCARD_ROUTES env variable, which should be false")
+		routerpod = getOneNewRouterPodFromRollingUpdate(oc, "default")
+		namespaceOwnershipEnv = readRouterPodEnv(oc, routerpod, "ROUTER_ALLOW_WILDCARD_ROUTES")
+		o.Expect(namespaceOwnershipEnv).To(o.ContainSubstring("ROUTER_ALLOW_WILDCARD_ROUTES=false"))
+
+		exutil.By(`11.0: Check the route's status, which should Not be Admitted`)
+		waitForOutput(oc, e2eTestNamespace, "route/unsecure80520", jsonPath, "False")
+	})
 })
