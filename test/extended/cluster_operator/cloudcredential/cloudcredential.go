@@ -278,12 +278,51 @@ data:
 		o.Expect(seccompProfileType).To(o.Equal("RuntimeDefault"))
 		//Check IAAS platform type
 		iaasPlatform := exutil.CheckPlatform(oc)
-		if iaasPlatform == "aws" || iaasPlatform == "azure" || iaasPlatform == "gcp" {
+		if iaasPlatform == "aws" || (iaasPlatform == "azure" && exutil.IsWorkloadIdentityCluster(oc)) || iaasPlatform == "gcp" {
 			exutil.By(fmt.Sprintf("2.Check pod-identity-webhook pod for %s", iaasPlatform))
 			if exutil.IsSNOCluster(oc) {
 				checkWebhookSecurityContext(oc, 1)
 			} else {
 				checkWebhookSecurityContext(oc, 2)
+			}
+		}
+	})
+
+	// Author: mihuang@redhat.com
+	// The feature is supported starting from version 4.19.
+	g.It("Author:mihuang-NonHyperShiftHOST-ROSA-OSD_CCS-ARO-High-80542- Enable readOnlyRootFilesystem on all containers", func() {
+		exutil.By("Check if SCC Security readOnlyRootFilesystem is correctly configured for the cloud-credential-operator")
+		ccoOperatorPods, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=cloud-credential-operator", "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.items[*].metadata.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		ccoOperatorPodList := strings.Fields(ccoOperatorPods)
+
+		podsToCheck := ccoOperatorPodList
+		iaasPlatform := exutil.CheckPlatform(oc)
+		if iaasPlatform == "aws" || iaasPlatform == "gcp" || (iaasPlatform == "azure" && exutil.IsWorkloadIdentityCluster(oc)) {
+			e2e.Logf("Checking pod-identity-webhook pod for readOnlyRootFilesystem enable")
+			podIdentityWebhookPods, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", "-l", "app=pod-identity-webhook", "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.items[*].metadata.name}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			podIdentityWebhookPodList := strings.Fields(podIdentityWebhookPods)
+			podsToCheck = append(podsToCheck, podIdentityWebhookPodList...)
+		}
+
+		for _, podName := range podsToCheck {
+			containers, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.spec.containers[*].name}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			containerList := strings.Fields(containers)
+
+			for _, container := range containerList {
+				e2e.Logf("Testing Pod: %s | Container: %s", podName, container)
+				_, err := exec.Command("oc", "exec", "-n", "openshift-cloud-credential-operator", "-c", container, podName, "--", "sh", "-c", "touch /testfile").CombinedOutput()
+				o.Expect(err).To(o.HaveOccurred())
+
+				readOnlyRootFilesystem, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pod", podName, "-n", "openshift-cloud-credential-operator", "-o=jsonpath={.spec.containers[*].securityContext.readOnlyRootFilesystem}").Output()
+				o.Expect(err).NotTo(o.HaveOccurred())
+				o.Expect(readOnlyRootFilesystem).To(o.ContainSubstring("true"))
+
+				e2e.Logf("Check tls-ca-bundle.pem mount in Pod %s", podName)
+				_, err = exec.Command("oc", "exec", "-n", "openshift-cloud-credential-operator", "-c", container, podName, "--", "ls", "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem").CombinedOutput()
+				o.Expect(err).NotTo(o.HaveOccurred())
 			}
 		}
 	})
