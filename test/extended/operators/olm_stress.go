@@ -1,13 +1,16 @@
 package operators
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"path/filepath"
+	"strings"
 	"time"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/util/wait"
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
@@ -90,7 +93,37 @@ var _ = g.Describe("[sig-operators] OLM for stress", func() {
 				for _, ns := range namespaces {
 					exutil.By(fmt.Sprintf("check the installed csv is ok in %s", ns))
 					sub.namespace = ns
-					newCheck("expect", asAdmin, withoutNamespace, compare, "Succeeded+2+InstallSucceeded", ok, []string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}).check(oc)
+
+					errWait := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 150*time.Second, false, func(ctx context.Context) (bool, error) {
+						phase, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}").Output()
+						if err != nil {
+							if strings.Contains(phase, "NotFound") || strings.Contains(phase, "No resources found") {
+								e2e.Logf("the existing csv does not exist, and try to get new csv")
+								sub.findInstalledCSV(oc, itName, dr)
+							} else {
+								e2e.Logf("the error: %v, and try next", err)
+							}
+							return false, nil
+						}
+
+						e2e.Logf("---> we expect value: %s, in returned value: %s", "Succeeded+2+InstallSucceeded", phase)
+						if strings.Compare(phase, "Succeeded") == 0 || strings.Compare(phase, "InstallSucceeded") == 0 {
+							e2e.Logf("the output %s matches one of the content %s, expected", phase, "Succeeded+2+InstallSucceeded")
+							return true, nil
+						}
+						e2e.Logf("the output %s does not matche one of the content %s, unexpected", phase, "Succeeded+2+InstallSucceeded")
+						return false, nil
+					})
+					if errWait != nil {
+						getResource(oc, asAdmin, withoutNamespace, "pod", "-n", "openshift-marketplace")
+						getResource(oc, asAdmin, withoutNamespace, "operatorgroup", "-n", sub.namespace, "-o", "yaml")
+						getResource(oc, asAdmin, withoutNamespace, "subscription", "-n", sub.namespace, "-o", "yaml")
+						getResource(oc, asAdmin, withoutNamespace, "installplan", "-n", sub.namespace)
+						getResource(oc, asAdmin, withoutNamespace, "csv", "-n", sub.namespace)
+						getResource(oc, asAdmin, withoutNamespace, "pods", "-n", sub.namespace)
+					}
+					exutil.AssertWaitPollNoErr(errWait, fmt.Sprintf("expected content %s not found by %v", "Succeeded+2+InstallSucceeded", strings.Join([]string{"csv", sub.installedCSV, "-n", sub.namespace, "-o=jsonpath={.status.phase}"}, " ")))
+
 				}
 
 			}()
@@ -141,7 +174,7 @@ var _ = g.Describe("[sig-operators] OLM for stress", func() {
 		defer catsrc.delete(itName, dr)
 		catsrc.create(oc, itName, dr)
 
-		for i := 0; i < 200; i++ {
+		for i := 0; i < 150; i++ { // for 200, it is more than 150m
 			// for i := 0; i < 100; i++ { //1h21m
 			e2e.Logf("=================it is round %v=================", i)
 			func() {
