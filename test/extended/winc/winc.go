@@ -135,8 +135,8 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		for _, winhost := range winInternalIP {
 			for _, svc := range svcs {
 				g.By(fmt.Sprintf("Check %v service is running in worker %v", svc, winhost))
-				msg, _ = runPSCommand(bastionHost, winhost, fmt.Sprintf("Get-Service %v", svc), privateKey, iaasPlatform)
-				if !strings.Contains(msg, "Running") {
+				msg, _ = runPSCommand(bastionHost, winhost, fmt.Sprintf("Get-Service %v | Select-Object -ExpandProperty Status", svc), privateKey, iaasPlatform)
+				if strings.TrimSpace(msg) != "Running" {
 					e2e.Failf("Failed to check %v service is running in %v: %s", svc, winhost, msg)
 				}
 			}
