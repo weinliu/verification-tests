@@ -4461,9 +4461,9 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			return pvcInfo
 		}, 120*time.Second, 5*time.Second).Should(o.ContainSubstring("VolumeResizeFailed"))
 		o.Consistently(func() string {
-			pvcStatus, _ := getPersistentVolumeClaimStatusType(oc, pvc.namespace, pvc.name)
+			pvcStatus, _ := getPersistentVolumeClaimConditionStatus(oc, pvc.namespace, pvc.name, "Resizing")
 			return pvcStatus
-		}, 60*time.Second, 5*time.Second).Should(o.Equal("Resizing"))
+		}, 60*time.Second, 5*time.Second).Should(o.Equal("True"))
 
 		exutil.By("Update the pv persistentVolumeReclaimPolicy to Retain")
 		pvPatchRetain := `{"spec":{"persistentVolumeReclaimPolicy":"Retain"}}`
@@ -6367,9 +6367,9 @@ func resizeOfflineCommonTestSteps(oc *exutil.CLI, pvc persistentVolumeClaim, dep
 
 	exutil.By("#. Check the pvc resizing status type and wait for the backend volume resized")
 	if dep.typepath == "mountPath" {
-		getPersistentVolumeClaimStatusMatch(oc, dep.namespace, pvc.name, "FileSystemResizePending")
+		waitPersistentVolumeClaimConditionStatusAsExpected(oc, dep.namespace, pvc.name, "FileSystemResizePending", "True")
 	} else {
-		getPersistentVolumeClaimStatusType(oc, dep.namespace, dep.pvcname)
+		getPersistentVolumeClaimConditionStatus(oc, dep.namespace, dep.pvcname, "FileSystemResizePending")
 	}
 	waitPVVolSizeToGetResized(oc, pvc.namespace, pvc.name, pvc.capacity)
 

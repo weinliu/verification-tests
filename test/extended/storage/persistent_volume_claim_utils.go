@@ -340,9 +340,9 @@ func describePersistentVolumeClaim(oc *exutil.CLI, namespace string, pvcName str
 	return output, err
 }
 
-// Get specified PersistentVolumeClaim status type during Resize
-func getPersistentVolumeClaimStatusType(oc *exutil.CLI, namespace string, pvcName string) (string, error) {
-	pvcStatus, err := oc.WithoutNamespace().Run("get").Args("pvc", pvcName, "-n", namespace, "-o=jsonpath={.status.conditions[0].type}").Output()
+// getPersistentVolumeClaimConditionStatus gets specified PersistentVolumeClaim conditions status during Resize
+func getPersistentVolumeClaimConditionStatus(oc *exutil.CLI, namespace string, pvcName string, conditionType string) (string, error) {
+	pvcStatus, err := oc.WithoutNamespace().Run("get").Args("pvc", pvcName, "-n", namespace, fmt.Sprintf(`-o=jsonpath={.status.conditions[?(@.type=="%s")].status}`, conditionType)).Output()
 	e2e.Logf("The PVC  %s status in namespace %s is %q", pvcName, namespace, pvcStatus)
 	return pvcStatus, err
 }
@@ -431,21 +431,21 @@ func waitPVCVolSizeToGetResized(oc *exutil.CLI, namespace string, pvcName string
 	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("Wait for the PVC :%s expand successfully timeout.", pvcName))
 }
 
-// Wait for PVC Volume Size to match with Resizing status
-func getPersistentVolumeClaimStatusMatch(oc *exutil.CLI, namespace string, pvcName string, expectedValue string) {
+// waitPersistentVolumeClaimConditionStatusAsExpected waits for PVC Volume resize condition status as expected
+func waitPersistentVolumeClaimConditionStatusAsExpected(oc *exutil.CLI, namespace string, pvcName string, conditionType string, expectedConditionStatus string) {
 	err := wait.Poll(10*time.Second, 180*time.Second, func() (bool, error) {
-		status, err := getPersistentVolumeClaimStatusType(oc, namespace, pvcName)
+		status, err := getPersistentVolumeClaimConditionStatus(oc, namespace, pvcName, conditionType)
 		if err != nil {
-			e2e.Logf("the err:%v, to get volume status Type %v .", err, pvcName)
-			return false, err
+			e2e.Logf("Failed to get pvc %q condition status %v , try again.", pvcName, err)
+			return false, nil
 		}
-		if status == expectedValue {
-			e2e.Logf("The volume size Reached to expected status:%v", status)
+		if status == expectedConditionStatus {
+			e2e.Logf("The pvc resize condition %q changed to expected status:%q", conditionType, expectedConditionStatus)
 			return true, nil
 		}
 		return false, nil
 	})
-	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The volume:%v, did not reached expected status.", err))
+	exutil.AssertWaitPollNoErr(err, fmt.Sprintf("The pvc %q did not reach the expected condition status in time.", pvcName))
 }
 
 // Get pvc list using selector label
