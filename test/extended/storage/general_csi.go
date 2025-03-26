@@ -3,7 +3,6 @@ package storage
 import (
 	"fmt"
 	"io/ioutil"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -6196,6 +6195,14 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 	// author: ropatil@redhat.com
 	// OCP-79557-[CSI-Driver] [Dynamic PV] [Filesystem default] CLI option to display filesystem usage of PVC
 	g.It("Author:ropatil-ROSA-OSD_CCS-ARO-Medium-79557-[CSI-Driver] [Dynamic PV] [Filesystem default] CLI option to display filesystem usage of PVC", func() {
+		// known Limitation: https://issues.redhat.com/browse/OCM-14088
+		isExternalOIDCCluster, odcErr := exutil.IsExternalOIDCCluster(oc)
+		o.Expect(odcErr).NotTo(o.HaveOccurred())
+		if isExternalOIDCCluster {
+			// https://github.com/openshift/release/pull/42250/files#diff-8f1e971323cb1821595fd1633ab701de55de169795027930c53aa5e736d7301dR38-R52
+			g.Skip("Skipping the test as we are running against an external OIDC cluster")
+		}
+
 		// Define the test scenario support provisioners
 		scenarioSupportProvisioners := []string{"ebs.csi.aws.com", "disk.csi.azure.com", "cinder.csi.openstack.org", "pd.csi.storage.gke.io", "csi.vsphere.vmware.com", "vpc.block.csi.ibm.io"}
 		// Set the resource template for the scenario
@@ -6208,13 +6215,6 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 		if len(supportProvisioners) == 0 {
 			g.Skip("Skip for scenario non-supported provisioner!!!")
 		}
-
-		output, err := exec.Command("oc", "version").Output()
-		if err != nil {
-			e2e.Logf("err %v\n", err)
-		}
-		e2e.Logf("here oc version is %v\n", string(output))
-		//g.Skip("Skipping the case")
 
 		// Use the framework created project as default, if use your own, exec the follow code setupProject
 		exutil.By("#. Create new project for the scenario")
