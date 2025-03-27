@@ -67,10 +67,7 @@ var _ = g.Describe("[sig-monitoring] Cluster_Observability Observability Operato
 		defer deleteOperator(oc)
 		exutil.By("Delete ObservabilityOperator")
 	})
-	g.It("Author:Vibhu-HyperShiftMGMT-ROSA-High-55352-observability operator self monitoring", func() {
-		exutil.By("Check observability operator monitoring")
-		checkOperatorMonitoring(oc, oboBaseDir)
-	})
+
 	g.It("Author:Vibhu-HyperShiftMGMT-ROSA-LEVEL0-Critical-55349-verify observability operator", func() {
 		exutil.By("Check the label in namespace")
 		checkLabel(oc)

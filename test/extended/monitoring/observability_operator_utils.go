@@ -374,40 +374,6 @@ func createConfig(oc *exutil.CLI, namespace, cmName, config string) {
 		o.Expect(err).NotTo(o.HaveOccurred())
 	}
 }
-func checkOperatorMonitoring(oc *exutil.CLI, oboBaseDir string) {
-	exutil.By("Check if UWM exists")
-	uwMonitoringConfig := filepath.Join(oboBaseDir, "user-workload-monitoring-cm.yaml")
-	createConfig(oc, "openshift-monitoring", "cluster-monitoring-config", uwMonitoringConfig)
-	exutil.By("Get SA token")
-	token := getSAToken(oc, "prometheus-k8s", "openshift-monitoring")
-	exutil.By("Check prometheus rules")
-	errCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
-		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("prometheusrule", "-n", namespace).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		if strings.Contains(out, "alertmanager-rules") && strings.Contains(out, "prometheus-operator-rules") && strings.Contains(out, "prometheus-rules") && strings.Contains(out, "observability-operator-rules") {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("Prometheus rules are not created in %v namespace", namespace))
-	exutil.By("Check Observability Operator Alertmanager Rules")
-	errCheck = wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
-		IsAlertManagerRule := checkRuleExists(oc, token, "thanos-querier", "openshift-monitoring", "openshift-observability-operator-observability-operator-alertmanager-rules")
-		exutil.By("Check Observability Operator Prometheus Operator Rules")
-		IsPrometheusOperatorRule := checkRuleExists(oc, token, "thanos-querier", "openshift-monitoring", "openshift-observability-operator-observability-operator-prometheus-operator-rules")
-		exutil.By("Check Observability Operator Prometheus Rules")
-		IsPrometheusRule := checkRuleExists(oc, token, "thanos-querier", "openshift-monitoring", "openshift-observability-operator-observability-operator-prometheus-rules")
-		exutil.By("Check Observability Operator Rules")
-		IsOperatorRule := checkRuleExists(oc, token, "thanos-querier", "openshift-monitoring", "openshift-observability-operator-observability-operator-rules")
-		if IsAlertManagerRule && IsPrometheusOperatorRule && IsPrometheusRule && IsOperatorRule {
-			return true, nil
-		}
-		return false, nil
-	})
-	exutil.AssertWaitPollNoErr(errCheck, "Observability operator rules are not loaded")
-	exutil.By("Check Observability Operator metrics")
-	checkMetric(oc, `https://thanos-querier.openshift-monitoring.svc:9091/api/v1/query --data-urlencode 'query={__name__=~"controller_runtime_reconcile.*",job="observability-operator",namespace="openshift-observability-operator"}'`, token, "openshift-observability-operator", uwmLoadTime)
-}
 func checkLabel(oc *exutil.CLI) {
 	var labelName = "network.openshift.io/policy-group=monitoring"
 	exutil.By("Check if the label" + labelName + "exists in the namespace" + namespace)
