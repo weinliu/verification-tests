@@ -1311,8 +1311,8 @@ func createAWSCreds(oc *exutil.CLI, namespace string) {
 }
 
 // Create Route53 AWS credentials in hive namespace
-func createRoute53AWSCreds(oc *exutil.CLI, namespace string) {
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", "route53-aws-creds", "-n", HiveNamespace).Output()
+func createRoute53AWSCreds(oc *exutil.CLI, secretName, namespace string) {
+	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("secret", secretName, "-n", namespace).Output()
 	if strings.Contains(output, "NotFound") || err != nil {
 		e2e.Logf("No route53-aws-creds, Create it.")
 		dirname := "/tmp/" + oc.Namespace() + "-route53-creds"
@@ -1321,7 +1321,7 @@ func createRoute53AWSCreds(oc *exutil.CLI, namespace string) {
 		defer os.RemoveAll(dirname)
 		err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/aws-creds", "-n", "kube-system", "--to="+dirname, "--confirm").Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", "route53-aws-creds", "--from-file="+dirname+"/aws_access_key_id", "--from-file="+dirname+"/aws_secret_access_key", "-n", HiveNamespace).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("secret", "generic", secretName, "--from-file="+dirname+"/aws_access_key_id", "--from-file="+dirname+"/aws_secret_access_key", "-n", namespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 	} else {
 		e2e.Logf("route53-aws-creds already exists.")
@@ -2094,7 +2094,6 @@ func extractHiveutil(oc *exutil.CLI, dir string) string {
 	o.Expect(err).NotTo(o.HaveOccurred())
 	o.Expect(string(out)).To(o.ContainSubstring("Available Commands"))
 	o.Expect(string(out)).To(o.ContainSubstring("awsprivatelink"))
-
 	return hiveutilPath
 }
 
@@ -2509,4 +2508,62 @@ func getLatestHiveVersion() string {
 
 	e2e.Logf("The latest Hive image version is %v ", latestImgTagStr)
 	return latestImgTagStr
+}
+
+func getAWSCredsPathByEnv(oc *exutil.CLI) (string, string) {
+	var credsDirNameForLocalTest string
+
+	//set AWS_SHARED_CREDENTIALS_FILE from CLUSTER_PROFILE_DIR as the first priority"
+	prowConfigDir, present := os.LookupEnv("CLUSTER_PROFILE_DIR")
+	if present {
+		awsCredFile := filepath.Join(prowConfigDir, ".awscred")
+		if _, err := os.Stat(awsCredFile); err == nil {
+			err := os.Setenv("AWS_SHARED_CREDENTIALS_FILE", awsCredFile)
+			if err == nil {
+				e2e.Logf("use CLUSTER_PROFILE_DIR/.awscred")
+				awsCredsFilePath := os.Getenv("AWS_SHARED_CREDENTIALS_FILE")
+				return awsCredsFilePath, credsDirNameForLocalTest
+			}
+		}
+	}
+	e2e.Logf("get AWS Creds from hub cluster")
+	credsDirNameForLocalTest = "/tmp/" + oc.Namespace() + "-managed-creds"
+	err := os.MkdirAll(credsDirNameForLocalTest, 0777)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/aws-creds", "-n", "kube-system", "--to="+credsDirNameForLocalTest, "--confirm").Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	awsAccessKeyID, err := os.ReadFile(filepath.Join(credsDirNameForLocalTest, "aws_access_key_id"))
+	o.Expect(err).NotTo(o.HaveOccurred())
+	awsSecretAccessKey, err := os.ReadFile(filepath.Join(credsDirNameForLocalTest, "aws_secret_access_key"))
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	finalCreds := fmt.Sprintf("[default]\naws_access_key_id = %s\naws_secret_access_key = %s\n",
+		strings.TrimSpace(string(awsAccessKeyID)),
+		strings.TrimSpace(string(awsSecretAccessKey)),
+	)
+
+	finalCredsPath := filepath.Join(credsDirNameForLocalTest, "merged_aws_credentials")
+	err = os.WriteFile(finalCredsPath, []byte(finalCreds), 0600)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	return finalCredsPath, credsDirNameForLocalTest
+}
+
+func enableManagedDNS(oc *exutil.CLI, hiveutilPath string) {
+	dirname := "/tmp/" + oc.Namespace() + "-managedns-creds"
+	defer os.RemoveAll(dirname)
+	err := os.MkdirAll(dirname, 0777)
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	awsCredsFilePath, credsDirNameForLocalTest := getAWSCredsPathByEnv(oc)
+	defer os.RemoveAll(credsDirNameForLocalTest)
+	enableManageDNSCmd := fmt.Sprintf("%v adm manage-dns enable %v --cloud=aws --creds-file=%v", hiveutilPath, AWSBaseDomain, awsCredsFilePath)
+	err = exec.Command("bash", "-c", enableManageDNSCmd).Run()
+	o.Expect(err).NotTo(o.HaveOccurred())
+
+	time.Sleep(5 * time.Second)
+	checkManagedDNSOutput, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("hiveconfig", "hive", "-o=jsonpath={.spec.managedDomains}").Output()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	o.Expect(checkManagedDNSOutput).To(o.ContainSubstring(AWSBaseDomain))
 }

@@ -1218,11 +1218,36 @@ spec:
 	})
 
 	//author: sguo@redhat.com
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "43029"|./bin/extended-platform-tests run --timeout 20m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "43029"|./bin/extended-platform-tests run --timeout 10m -f -
 	g.It("NonHyperShiftHOST-NonPreRelease-Longduration-ConnectedOnly-Author:sguo-High-43029-Hive should abandon deprovision when preserveOnDelete is true when clusters with managed DNS [Serial]", func() {
 		testCaseID := "43029"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
-		oc.SetupProject()
+
+		exutil.By("Extracting Hiveutil")
+		tmpDir := "/tmp/" + testCaseID + "-" + getRandomString()
+		defer func(tempdir string) {
+			_ = os.RemoveAll(tempdir)
+		}(tmpDir)
+		err := os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		hiveutilPath := extractHiveutil(oc, tmpDir)
+		e2e.Logf("hiveutil extracted to %v", hiveutilPath)
+
+		exutil.By("Setting up managed dns")
+		defer func() {
+			e2e.Logf("Delete the manage dns secret created by Hive")
+			manageDNSCredsName, err := oc.AsAdmin().Run("get").Args("hiveconfig", "hive", "-o=jsonpath={.spec.managedDomains[0].aws.credentialsSecretRef.name}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(oc.AsAdmin().Run("get").Args("secret", manageDNSCredsName, "-n", HiveNamespace).Output()).Should(o.ContainSubstring(manageDNSCredsName))
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", manageDNSCredsName, "-n", HiveNamespace).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			e2e.Logf("Restoring managedDomains in HiveConfig")
+			restorePatch := `[{"op": "remove", "path": "/spec/managedDomains"}]`
+			_, err = oc.AsAdmin().Run("patch").Args("hiveconfig", "hive", "--type", "json", "-p", restorePatch).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		enableManagedDNS(oc, hiveutilPath)
 
 		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
@@ -1233,9 +1258,6 @@ spec:
 			region:     AWSRegion,
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-
-		exutil.By("Create Route53-aws-creds in hive namespace")
-		createRoute53AWSCreds(oc, oc.Namespace())
 
 		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
@@ -1261,7 +1283,7 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, FakeClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
 		exutil.By("Edit secret aws-creds and change the data to an invalid value")
-		err := oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret", "aws-creds", "--type", `merge`, `--patch={"data": {"aws_access_key_id": "MTIzNDU2"}}`, "-n", oc.Namespace()).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("secret", "aws-creds", "--type", `merge`, `--patch={"data": {"aws_access_key_id": "MTIzNDU2"}}`, "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Delete the cd, and then hive will hit DeprovisionLaunchError=AuthenticationFailed, and stuck in deprovision process")
@@ -1287,7 +1309,6 @@ spec:
 		o.Eventually(waitForDeprovisionLaunchError).WithTimeout(ClusterUninstallTimeout * time.Second).WithPolling(30 * time.Second).Should(o.BeTrue())
 
 		exutil.By("Set cd.spec.preserveOnDelete = true on cd")
-		defer oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, "--type", "json", "-p", "[{\"op\": \"remove\", \"path\": \"/spec/preserveOnDelete\"}]").Execute()
 		err = oc.AsAdmin().WithoutNamespace().Run("patch").Args("ClusterDeployment", cdName, "--type", `merge`, `--patch={"spec": {"preserveOnDelete": true}}`, "-n", oc.Namespace()).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -4436,11 +4457,34 @@ spec:
 	})
 
 	//author: mihuang@redhat.com jshu@redhat.com sguo@redhat.com
-	//example: ./bin/extended-platform-tests run all --dry-run|grep "24088"|./bin/extended-platform-tests run --timeout 90m -f -
+	//example: ./bin/extended-platform-tests run all --dry-run|grep "24088"|./bin/extended-platform-tests run --timeout 75m -f -
 	g.It("Author:mihuang-NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-High-24088-Medium-33045-[HiveSpec] Provisioning clusters on AWS with managed dns [Serial]", func() {
 		testCaseID := "24088"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
-		oc.SetupProject()
+
+		exutil.By("Extracting Hiveutil")
+		tmpDir := "/tmp/" + testCaseID + "-" + getRandomString()
+		defer func(tempdir string) {
+			_ = os.RemoveAll(tempdir)
+		}(tmpDir)
+		err := os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		hiveutilPath := extractHiveutil(oc, tmpDir)
+		e2e.Logf("hiveutil extracted to %v", hiveutilPath)
+
+		exutil.By("Setting up managed dns")
+		defer func() {
+			e2e.Logf("Restoring managedDomains in HiveConfig")
+			restorePatch := `[{"op": "remove", "path": "/spec/managedDomains"}]`
+			_, err := oc.AsAdmin().Run("patch").Args("hiveconfig", "hive", "--type", "json", "-p", restorePatch).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		enableManagedDNS(oc, hiveutilPath)
+
+		exutil.By("Get the created managed DNS credentials secret name")
+		manageDNSCredsName, err := oc.AsAdmin().Run("get").Args("hiveconfig", "hive", "-o=jsonpath={.spec.managedDomains[0].aws.credentialsSecretRef.name}").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		o.Expect(oc.AsAdmin().Run("get").Args("secret", manageDNSCredsName, "-n", HiveNamespace).Output()).Should(o.ContainSubstring(manageDNSCredsName))
 
 		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
@@ -4451,9 +4495,6 @@ spec:
 			region:     AWSRegion,
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-
-		exutil.By("Create Route53-aws-creds in hive namespace")
-		createRoute53AWSCreds(oc, oc.Namespace())
 
 		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{
@@ -4479,8 +4520,8 @@ spec:
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, "true", ok, ClusterInstallTimeout, []string{"ClusterDeployment", cdName, "-n", oc.Namespace(), "-o=jsonpath={.spec.installed}"}).check(oc)
 
 		exutil.By("OCP-33045 - Prevent ClusterDeployment deletion until managed DNSZone is gone")
-		exutil.By("Delete route53-aws-creds in hive namespace")
-		err := oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", "route53-aws-creds", "-n", HiveNamespace).Execute()
+		exutil.By("Delete manage dns creds in hive namespace")
+		err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", manageDNSCredsName, "-n", HiveNamespace).Execute()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		exutil.By("Try to delete cd")
 		cmd, _, _, _ := oc.AsAdmin().WithoutNamespace().Run("delete").Args("cd", cdName, "-n", oc.Namespace()).Background()
@@ -4494,12 +4535,16 @@ spec:
 		exutil.By("Check the dnszone is not removed")
 		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, ok, DefaultTimeout, []string{"dnszone", "-n", oc.Namespace()}).check(oc)
 
-		exutil.By("Create route53-aws-creds in hive namespace")
-		createRoute53AWSCreds(oc, oc.Namespace())
+		exutil.By("Create manage dns creds in hive namespace")
+		defer func() {
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", manageDNSCredsName, "-n", HiveNamespace).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		createRoute53AWSCreds(oc, manageDNSCredsName, HiveNamespace)
 
 		exutil.By("Wait until dnszone controller next reconcile, verify dnszone and cd are removed.")
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, nok, DefaultTimeout, []string{"ClusterDeployment", "-n", oc.Namespace()}).check(oc)
-		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, nok, DefaultTimeout, []string{"dnszone", "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, nok, 5*DefaultTimeout, []string{"ClusterDeployment", "-n", oc.Namespace()}).check(oc)
+		newCheck("expect", "get", asAdmin, withoutNamespace, contain, cdName, nok, 2*DefaultTimeout, []string{"dnszone", "-n", oc.Namespace()}).check(oc)
 	})
 
 	//author: mihuang@redhat.com
@@ -4507,7 +4552,6 @@ spec:
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:mihuang-High-51195-DNSNotReadyTimeout should be terminal[Disruptive]", func() {
 		testCaseID := "51195"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
-		oc.SetupProject()
 
 		exutil.By("Remove Route53-aws-creds in hive namespace if exists to make DNSNotReady")
 		cleanupObjects(oc, objectTableRef{"secret", HiveNamespace, "route53-aws-creds"})
@@ -5859,7 +5903,32 @@ spec:
 	g.It("NonHyperShiftHOST-Longduration-NonPreRelease-ConnectedOnly-Author:kcui-High-29907-Hive handles owner references after Velero restore[Serial]", func() {
 		testCaseID := "29907"
 		cdName := "cluster-" + testCaseID + "-" + getRandomString()[:ClusterSuffixLen]
-		oc.SetupProject()
+
+		exutil.By("Extracting Hiveutil")
+		tmpDir := "/tmp/" + testCaseID + "-" + getRandomString()
+		defer func(tempdir string) {
+			_ = os.RemoveAll(tempdir)
+		}(tmpDir)
+		err := os.MkdirAll(tmpDir, 0777)
+		o.Expect(err).NotTo(o.HaveOccurred())
+		hiveutilPath := extractHiveutil(oc, tmpDir)
+		e2e.Logf("hiveutil extracted to %v", hiveutilPath)
+
+		exutil.By("Setting up managed dns")
+		defer func() {
+			e2e.Logf("Delete the manage dns secret created by Hive")
+			manageDNSCredsName, err := oc.AsAdmin().Run("get").Args("hiveconfig", "hive", "-o=jsonpath={.spec.managedDomains[0].aws.credentialsSecretRef.name}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			o.Expect(oc.AsAdmin().Run("get").Args("secret", manageDNSCredsName, "-n", HiveNamespace).Output()).Should(o.ContainSubstring(manageDNSCredsName))
+			err = oc.AsAdmin().WithoutNamespace().Run("delete").Args("secret", manageDNSCredsName, "-n", HiveNamespace).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+
+			e2e.Logf("Restoring managedDomains in HiveConfig")
+			restorePatch := `[{"op": "remove", "path": "/spec/managedDomains"}]`
+			_, err = oc.AsAdmin().Run("patch").Args("hiveconfig", "hive", "--type", "json", "-p", restorePatch).Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+		}()
+		enableManagedDNS(oc, hiveutilPath)
 
 		exutil.By("Config Install-Config Secret...")
 		installConfigSecret := installConfig{
@@ -5870,9 +5939,6 @@ spec:
 			region:     AWSRegion,
 			template:   filepath.Join(testDataDir, "aws-install-config.yaml"),
 		}
-
-		exutil.By("Create Route53-aws-creds in hive namespace")
-		createRoute53AWSCreds(oc, oc.Namespace())
 
 		exutil.By("Config ClusterDeployment...")
 		cluster := clusterDeployment{

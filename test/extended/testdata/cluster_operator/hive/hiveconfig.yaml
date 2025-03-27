@@ -9,12 +9,6 @@ objects:
     name: hive
   spec:
     logLevel: "${LOGLEVEL}"
-    managedDomains:
-      - aws:
-          credentialsSecretRef:
-            name: route53-aws-creds
-        domains:
-          - qe.devcluster.openshift.com
     targetNamespace: "${TARGETNAMESPACE}"
 parameters:
 - name: LOGLEVEL
