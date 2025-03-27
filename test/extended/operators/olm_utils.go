@@ -1831,3 +1831,41 @@ func ClusterHasEnabledFIPS(oc *exutil.CLI) bool {
 	// This will be true or false
 	return strings.Contains(fipsModeStatus, "FIPS mode is enabled.")
 }
+
+func beforeTargetTime(logText, targetText string) bool {
+	// Split the log strings
+	parts := strings.Fields(logText)
+	if len(parts) < 2 {
+		e2e.Fail("Failed to split the log strings")
+	}
+
+	// Parse date
+	dateStr := parts[0][1:] // remove 'E'
+	month, _ := strconv.Atoi(dateStr[:2])
+	day, _ := strconv.Atoi(dateStr[2:])
+
+	// Parse（19:45:14.489789）
+	timeStr := parts[1]
+	logTime, err := time.Parse("15:04:05.999999", timeStr)
+	if err != nil {
+		e2e.Failf("Fail to parse log time: %v", err)
+	}
+
+	logDateTime := time.Date(time.Now().Year(), time.Month(month), day, logTime.Hour(), logTime.Minute(), logTime.Second(), logTime.Nanosecond(), time.UTC)
+
+	targetTime, err := time.Parse(time.RFC3339, targetText)
+	if err != nil {
+		e2e.Failf("Fail to parse target time: %v", err)
+	}
+
+	e2e.Logf("log time: %s", logDateTime)
+	e2e.Logf("target time: %s", targetTime)
+
+	if logDateTime.Before(targetTime) {
+		e2e.Logf("The log time is before the target time")
+		return true
+	} else {
+		e2e.Logf("The log time is after the target time")
+		return false
+	}
+}

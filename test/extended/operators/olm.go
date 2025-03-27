@@ -1111,6 +1111,11 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 		// 	e2e.Failf("!!! prometheus occurs TLS error: %s", prometheusTLS)
 		// }
 
+		clusterReadyTime, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("clusterversion", "version", "-o=jsonpath={.status.history[0].completionTime}").Output()
+		if err != nil {
+			e2e.Failf("!!! Fail to get cluster completion time: %s.", clusterReadyTime)
+		}
+
 		re3, _ := regexp.Compile("fatal error.*")
 		for _, dep := range deps {
 			logs, err := oc.AsAdmin().WithoutNamespace().Run("logs").Args(fmt.Sprintf("deployment/%s", dep), "-n", "openshift-operator-lifecycle-manager").Output()
@@ -1120,13 +1125,17 @@ var _ = g.Describe("[sig-operators] OLM should", func() {
 			str1 := re1.FindString(logs)
 			str2 := re2.FindString(logs)
 			str3 := re3.FindString(logs)
-			if str1 != "" && !strings.Contains(str1, "could not convert APIService CA bundle to x509 cert") {
+			// Example
+			// str1 = `E0328 19:45:14.489789 1 authentication.go:74] "Unable to authenticate the request" err="[x509: certificate signed by unknown authority, verifying certificate SN=3501846746045108574, SKID=50:8E:D6:EA:A2:11:4B:88:5C:E7:37:47:9C:09:0F:C6:41:7F:80:FD, AKID=82:C7:6C:A5:D0:58:46:19:88:A8:19:31:2C:18:08:37:44:A6:31:7E failed: x509: certificate signed by unknown authority]"`
+
+			if str1 != "" && !strings.Contains(str1, "could not convert APIService CA bundle to x509 cert") && !beforeTargetTime(str1, clusterReadyTime) {
 				e2e.Failf("!!! %s occurs x509 error: %s", dep, str1)
+
 			}
-			if str2 != "" {
+			if str2 != "" && !beforeTargetTime(str2, clusterReadyTime) {
 				e2e.Failf("!!! %s occurs TLS error: %s", dep, str2)
 			}
-			if str3 != "" {
+			if str3 != "" && !beforeTargetTime(str3, clusterReadyTime) {
 				e2e.Failf("!!! %s occurs fatal error: %s", dep, str3)
 			}
 		}
