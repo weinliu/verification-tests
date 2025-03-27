@@ -239,7 +239,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		waitForOutput(oc, oc.Namespace(), "route/12506-no-cert", "{.spec.tls}", "destinationCACertificate")
 
 		exutil.By("4. Check the router pod and ensure the routes are loaded in haproxy.config of default controller")
-		searchOutput := readRouterPodData(oc, defaultContPod, "cat haproxy.config", "12506-no-cert")
+		searchOutput := readHaproxyConfig(oc, defaultContPod, project1, "-A8", "12506-no-cert")
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_secure:" + project1 + ":12506-no-cert"))
 
 		exutil.By("5. Check the reachability of the host in the default controller")
@@ -286,7 +286,7 @@ var _ = g.Describe("[sig-network-edge] Network_Edge Component_Router", func() {
 		waitForOutput(oc, oc.Namespace(), "route/12564-reencrypt", "{.spec.tls}", "destinationCACertificate")
 
 		exutil.By("4. Check the router pod and ensure the routes are loaded in haproxy.config of default controller")
-		searchOutput := readRouterPodData(oc, defaultContPod, "cat haproxy.config", "12564-reencrypt")
+		searchOutput := readHaproxyConfig(oc, defaultContPod, project1, "-A8", "12564-reencrypt")
 		o.Expect(searchOutput).To(o.ContainSubstring("backend be_secure:" + project1 + ":12564-reencrypt"))
 
 		exutil.By("5. Check the reachability of the  in the specified path")
