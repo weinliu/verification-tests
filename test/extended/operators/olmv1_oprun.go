@@ -46,6 +46,26 @@ var _ = g.Describe("[sig-operators] OLM v1 oprun should", func() {
 	// 	}
 	// })
 
+	// since OCP4.19
+	g.It("Author:jiazha-NonHyperShiftHOST-High-80078-Downstream feature gate promotion mechanics", func() {
+		args, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("deploy", "catalogd-controller-manager", "-o=jsonpath={.spec.template.spec.containers[0].args}", "-n", "openshift-catalogd").Output()
+		o.Expect(err).NotTo(o.HaveOccurred())
+		if exutil.IsTechPreviewNoUpgrade(oc) {
+			enabledFeatures, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("featuregate", "cluster", "-o=jsonpath={.status.featureGates[0].enabled}").Output()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			if !strings.Contains(enabledFeatures, "NewOLMCatalogdAPIV1Metas") {
+				e2e.Failf("the NewOLMCatalogdAPIV1Metas feature wasn't enabled in the TP cluster: %v", enabledFeatures)
+			}
+			if !strings.Contains(args, "APIV1MetasHandler=true") {
+				e2e.Failf("the APIV1MetasHandler argument wasn't enabled in the TP cluster: %v", args)
+			}
+		} else {
+			if strings.Contains(args, "APIV1MetasHandler=true") {
+				e2e.Failf("the APIV1MetasHandler argument enabled in the general cluster: %v", args)
+			}
+		}
+	})
+
 	g.It("Author:jiazha-NonHyperShiftHOST-ConnectedOnly-Critical-80458-clustercatalog get x509 error since it cannot get the custom CA automatically [Serial]", func() {
 		g.By("1) create a random namespace")
 		oc.SetupProject()
