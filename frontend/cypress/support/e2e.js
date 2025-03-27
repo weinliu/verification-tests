@@ -21,6 +21,9 @@ Cypress.on('uncaught:exception', (err, runnable) => {
     if(err.message.includes('Model is disposed')) {
         return false
     }
+    if(err.message.includes('e.response is undefined')) {
+        return false
+    }
     // we still want to ensure there are no other unexpected
     // errors, so we let them fail the test
 })

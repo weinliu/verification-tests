@@ -42,16 +42,22 @@ export const namespaceDropdown = {
           .type(name, { force: true });
     },
     addFavoriteNamespace: (name: string) => {
-        cy.byTestID('dropdown-menu-item-link')
-          .contains(name)
-          .next('[aria-label="not starred"]')
-          .click()
+        cy.get('span').contains(name)
+          .parent()
+          .parent()
+          .parent('li[data-test="dropdown-menu-item-link"]')
+          .within($li => {
+            cy.get('button[aria-label="not starred"]').click()
+          });
     },
     removeFavoriteNamespace: (name: string) => {
-        cy.byTestID('dropdown-menu-item-link')
-          .contains(name)
-          .next('[aria-label="starred"]')
-          .click()
+        cy.get('span').contains(name)
+          .parent()
+          .parent()
+          .parent('li[data-test="dropdown-menu-item-link"]')
+          .within($li => {
+            cy.get('button[aria-label="starred"]').click()
+          });
     },
     selectNamespace: (name: string) => {
         namespaceDropdown.clickTheDropdown();
