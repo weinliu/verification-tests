@@ -1650,6 +1650,51 @@ func repeatCmdOnClient(oc *exutil.CLI, cmd, expectOutput interface{}, duration t
 	return output, matchedTimesList
 }
 
+// used to execute a command on the internal or external client repeatly until the expected error occurs
+// the return was the whole output of executing the command with the error occuring
+func waitForErrorOccur(oc *exutil.CLI, cmd interface{}, expectedErrorInfo string, duration time.Duration) string {
+	var (
+		clientType = "Internal"
+		output     = ""
+	)
+
+	cmdStr, ok := cmd.(string)
+	if ok {
+		clientType = "External"
+	}
+	cmdList, _ := cmd.([]string)
+
+	e2e.Logf("the command is: %v", cmd)
+	waitErr := wait.Poll(3*time.Second, duration*time.Second, func() (bool, error) {
+		if clientType == "Internal" {
+			info, err := oc.AsAdmin().WithoutNamespace().Run("exec").Args(cmdList...).Output()
+			output = info
+			if err == nil {
+				e2e.Logf("expected error %v not happened, retrying...", expectedErrorInfo)
+				return false, nil
+			}
+		} else {
+			info, err := exec.Command("bash", "-c", cmdStr).Output()
+			output = string(info)
+			if err == nil {
+				e2e.Logf("expected error %v not happened, retrying...", expectedErrorInfo)
+				return false, nil
+			}
+		}
+
+		searchInfo := regexp.MustCompile(expectedErrorInfo).FindStringSubmatch(output)
+		if len(searchInfo) > 0 {
+			return true, nil
+		} else {
+			e2e.Logf("expected error %v not happened, retrying...", expectedErrorInfo)
+			return false, nil
+		}
+	})
+
+	exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("max time reached but can't execute the cmd successfully in the desired time duration"))
+	return output
+}
+
 // this function is to check whether given string is present or not in a list
 func checkGivenStringPresentOrNot(shouldContain bool, iterateObject []string, searchString string) {
 	if shouldContain {
