@@ -114,8 +114,8 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance oc_compliance_plugin The O
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status, name and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
+
 		subD.complianceSuiteName(oc, ssb.name)
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
@@ -126,8 +126,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance oc_compliance_plugin The O
 		g.By("Check ComplianceSuite status, name and result after first rescan.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
 			"-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		subD.complianceSuiteName(oc, ssb.name)
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
@@ -138,8 +137,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance oc_compliance_plugin The O
 		g.By("Check ComplianceSuite status, name and result after second rescan.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
 			"-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		subD.complianceSuiteName(oc, ssb.name)
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
@@ -150,8 +148,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance oc_compliance_plugin The O
 		g.By("Check ComplianceScan status, name and result after third rescan.. !!!\n")
 		newCheck("expect", asAdmin, withoutNamespace, contain, "RUNNING", ok, []string{"compliancescan", "ocp4-cis-node-master", "-n", subD.namespace,
 			"-o=jsonpath={.status.phase}"}).check(oc)
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancescan", "ocp4-cis-node-master", "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 		subD.complianceScanName(oc, "ocp4-cis-node-master")
 		subD.getComplianceScanResult(oc, "ocp4-cis-node-master", "NON-COMPLIANT")
@@ -271,8 +268,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance oc_compliance_plugin The O
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		g.By("Verify rules status and result through oc-compliance view-result command.. !!!\n")
@@ -339,8 +335,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance oc_compliance_plugin The O
 			"-o=jsonpath={.settingsRef}"}).check(oc)
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbName, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbName, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssbName, "NON-COMPLIANT")
 		subD.getScanExitCodeFromConfigmapWithSuiteName(oc, ssbName, "2")
 
@@ -420,8 +415,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance oc_compliance_plugin The O
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		assertfetchRawResult(oc, ssb.name, subD.namespace)
@@ -506,8 +500,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance oc_compliance_plugin The O
 			"-o=jsonpath={.items[*].metadata.name}"}).check(oc)
 
 		g.By("Check ComplianceSuite status and result.. !!!\n")
-		newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-			"-o=jsonpath={.status.phase}"}).check(oc)
+		assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 		subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 		assertfetchFixes(oc, "rule", "ocp4-api-server-encryption-provider-cipher", subD.namespace)

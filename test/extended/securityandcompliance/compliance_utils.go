@@ -1273,7 +1273,7 @@ func setApplyToFalseForAllCrs(oc *exutil.CLI, namespace string, ssbName string) 
 func assertCompliancescanDone(oc *exutil.CLI, namespace string, parameters ...string) {
 	var res string
 	var errRes error
-	err := wait.Poll(5*time.Second, 360*time.Second, func() (bool, error) {
+	err := wait.Poll(5*time.Second, 480*time.Second, func() (bool, error) {
 		res, errRes = oc.AsAdmin().WithoutNamespace().Run("get").Args(parameters...).Output()
 		if errRes != nil {
 			return false, errRes

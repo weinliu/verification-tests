@@ -3259,8 +3259,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			g.By("Rerun scan and check ComplianceSuite status & result.. !!!\n")
 			_, err = OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssb.name, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssb.name, "-n", subD.namespace,
-				"-o=jsonpath={.status.phase}"}).check(oc)
+			assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssb.name, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 			subD.complianceSuiteResult(oc, ssb.name, "NON-COMPLIANT")
 
 			g.By("Verify 'file-integrity-exists' & 'file-integrity-notification-enabled' rules status again through compliancecheck result.. !!!\n")
@@ -4868,8 +4867,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			g.By("Perform scan using oc-compliance plugin.. !!!\n")
 			_, err := OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbHigh, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbHigh, "-n", subD.namespace,
-				"-o=jsonpath={.status.phase}"}).check(oc)
+			assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbHigh, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 			g.By("Check complianceSuite name and result.. !!!\n")
 			subD.complianceSuiteResult(oc, ssbHigh, "NON-COMPLIANT")
@@ -5024,8 +5022,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			g.By("Performing second scan using oc-compliance plugin.. !!!\n")
 			_, err := OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbNercCip, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbNercCip, "-n", subD.namespace,
-				"-o=jsonpath={.status.phase}"}).check(oc)
+			assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbNercCip, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 			g.By("Check complianceSuite name and result.. !!!\n")
 			subD.complianceSuiteResult(oc, ssbNercCip, "NON-COMPLIANT")
@@ -5190,8 +5187,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			g.By("Performing second scan using oc-compliance plugin.. !!!\n")
 			_, err := OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbModerate, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbModerate, "-n", subD.namespace,
-				"-o=jsonpath={.status.phase}"}).check(oc)
+			assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbModerate, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 			g.By("Check complianceSuite name and result.. !!!\n")
 			subD.complianceSuiteResult(oc, ssbModerate, "NON-COMPLIANT")
@@ -6240,8 +6236,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			g.By("Performing second scan using oc-compliance plugin.. !!!\n")
 			_, err := OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbStig, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbStig, "-n", subD.namespace,
-				"-o=jsonpath={.status.phase}"}).check(oc)
+			assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbStig, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 			g.By("Check complianceSuite name and result.. !!!\n")
 			subD.complianceSuiteResult(oc, ssbStig, "NON-COMPLIANT")
@@ -7009,8 +7004,7 @@ var _ = g.Describe("[sig-isc] Security_and_Compliance Compliance_Operator The Co
 			g.By("Performing second scan using oc-compliance plugin.. !!!\n")
 			_, err := OcComplianceCLI().Run("rerun-now").Args("compliancesuite", ssbE8, "-n", subD.namespace).Output()
 			o.Expect(err).NotTo(o.HaveOccurred())
-			newCheck("expect", asAdmin, withoutNamespace, contain, "DONE", ok, []string{"compliancesuite", ssbE8, "-n", subD.namespace,
-				"-o=jsonpath={.status.phase}"}).check(oc)
+			assertCompliancescanDone(oc, subD.namespace, "compliancesuite", ssbE8, "-n", subD.namespace, "-o=jsonpath={.status.phase}")
 
 			g.By("Check complianceSuite name and result.. !!!\n")
 			subD.complianceSuiteResult(oc, ssbE8, "NON-COMPLIANT")
