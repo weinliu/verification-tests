@@ -1,26 +1,22 @@
-import { guidedTour } from "./tour";
 
 export const netflowPage = {
-    visit: () => {
+    visit: (clearfilters: boolean = true) => {
         cy.clearLocalStorage()
         cy.intercept('**/backend/api/flow/metrics*').as('call1')
         cy.visit('/netflow-traffic')
         // wait for all calls to complete
         cy.wait('@call1', { timeout: 60000 })
 
-        netflowPage.clearAllFilters()
-
+        cy.wrap(clearfilters).then(cf => {
+            if (clearfilters) {
+                netflowPage.clearAllFilters()
+            }
+        })
         // set the page to auto refresh
         netflowPage.setAutoRefresh()
 
         cy.byTestID('no-results-found').should('not.exist')
         cy.get('#overview-container').should('exist')
-    },
-    visitDeveloper: (project) => {
-        cy.clearLocalStorage()
-        cy.switchPerspective('Developer');
-        guidedTour.close()
-        cy.visit(`/dev-monitoring/ns/${project}/netflow-traffic`)
     },
     toggleFullScreen: () => {
         cy.byTestID(genSelectors.moreOpts).should('exist').click().then(moreOpts => {
@@ -28,11 +24,8 @@ export const netflowPage = {
         })
     },
     setAutoRefresh: () => {
-        cy.byTestID(genSelectors.refreshDrop).then(btn => {
-            expect(btn).to.exist
-            cy.wrap(btn).click().then(drop => {
-                cy.get('[data-test="15s"]').should('exist').click()
-            })
+        cy.byTestID(genSelectors.refreshDrop).should('exist').click().then(btn => {
+            cy.get('[data-test="15s"]', { timeout: 60000 }).should('exist').click()
         })
     },
     stopAutoRefresh: () => {
@@ -298,8 +291,6 @@ Cypress.Commands.add('visitNetflowTrafficTab', (page) => {
 Cypress.Commands.add('checkNetflowTraffic', (loki = "Enabled") => {
     // overview panels
     cy.get('li.overviewTabButton').should('exist').click({ force: true })
-    netflowPage.setAutoRefresh()
-    cy.wait(2000)
     cy.checkPanel(overviewSelectors.defaultPanels)
 
     // table view

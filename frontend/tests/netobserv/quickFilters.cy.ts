@@ -1,5 +1,5 @@
+import { filterSelectors, netflowPage } from "../../views/netflow-page"
 import { Operator, project } from "../../views/netobserv"
-import { netflowPage, filterSelectors } from "../../views/netflow-page"
 
 const CLIENT_NS = "test-client-56222"
 const SERVER_NS = "test-server-56222"

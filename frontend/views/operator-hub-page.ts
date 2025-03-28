@@ -3,20 +3,20 @@ import { listPage } from "../upstream/views/list-page";
 import { Pages } from "./pages";
 
 const sourceActions = (name: string, action: string) => {
-  cy.get('form[data-test-group-name="source"]', {timeout: 60000})
-  .then($source => {
-    const hasMoreButton = $source.find('button:contains("more")').length > 0;
-    if (hasMoreButton) {
-      cy.wrap($source).find('button').contains('more').click();
-    }
-    if (action === 'check') {
-      cy.wrap($source).find(`[data-test="source-${name}"] input[type="checkbox"]`).check()
-    } else if (action === 'uncheck') {
-      cy.wrap($source).find(`[data-test="source-${name}"] input[type="checkbox"]`).uncheck()
-    } else {
-      cy.wrap($source).find(`[data-test="source-${name}"]`);
-    }
-  })
+  cy.get('form[data-test-group-name="source"]', { timeout: 60000 })
+    .then($source => {
+      const hasMoreButton = $source.find('button:contains("more")').length > 0;
+      if (hasMoreButton) {
+        cy.wrap($source).find('button').contains('more').click();
+      }
+      if (action === 'check') {
+        cy.wrap($source).find(`[data-test="source-${name}"] input[type="checkbox"]`).check()
+      } else if (action === 'uncheck') {
+        cy.wrap($source).find(`[data-test="source-${name}"] input[type="checkbox"]`).uncheck()
+      } else {
+        cy.wrap($source).find(`[data-test="source-${name}"]`);
+      }
+    })
 };
 export const installedOperators = {
   clickCSVName: (csv_name) => {
@@ -62,24 +62,21 @@ export const operatorHubPage = {
   filter: (name: string) => {
     cy.get('[data-test="search-operatorhub"]').within(() => {
       cy.get('input[type="text"]')
-      .clear()
-      .type(name)
+        .clear()
+        .type(name)
     })
   },
   // pass operator name that matches the Title on UI
-  install: (name: string, metrics: boolean = false) => {
-    cy.get('input[type="text"]').type(name + "{enter}")
-    cy.get('[role="gridcell"]').first().within(noo => {
-      cy.contains(name).should('exist').click()
-    })
+  install: (name: string, csName: string, metrics: boolean = false) => {
+    cy.visit(`/operatorhub/subscribe?pkg=${name}&catalog=${csName}&catalogNamespace=openshift-marketplace&targetNamespace=undefined`);
     // ignore warning pop up for community operators
     cy.get('body').then(body => {
       if (body.find('.modal-content').length) {
         cy.byTestID('confirm-action').click()
       }
     })
-    cy.get('[data-test-id="operator-install-btn"]').should('exist').click({ force: true });
-    if(metrics){
+    // cy.get('[data-test-id="operator-install-btn"]').should('exist').click({ force: true });
+    if (metrics) {
       cy.get('#enable-monitoring-checkbox').should('exist').check()
     }
     cy.byTestID('Enable-radio-input').click()
@@ -116,7 +113,7 @@ export const operatorHubPage = {
       .type(`${csvName}`)
       .then(() => {
         cy.get('input[data-test="name-filter-input"]').should('have.value', `${csvName}`);
-    });
+      });
     cy.get(`[data-test-operator-row="${csvName}"]`, { timeout: 120000 })
       .parents('tr')
       .children()
@@ -144,7 +141,7 @@ export const operatorHubPage = {
     cy.visit(`/operatorhub/all-namespaces?keyword=${operatorName}&source=%5B"${catalogSource}"%5D`);
     cy.get('.co-catalog-tile').click();
     operatorHubPage.checkWarningInfo(warningInfo);
-    cy.get('a[data-test-id="operator-install-btn"]').click({force: true});
+    cy.get('a[data-test-id="operator-install-btn"]').click({ force: true });
     operatorHubPage.checkWarningInfo(warningInfo);
     // Check manual installation Mode is subscribe by default
     cy.get('input[value="Manual"]').should('have.attr', 'data-checked-state', 'true');
@@ -174,36 +171,36 @@ export const operatorHubPage = {
       cy.contains('span', `${installNamespace}`).click();
     }
     cy.get('[data-test="install-operator"]').click();
-    cy.contains('Approve', {timeout: 240000}).click();
+    cy.contains('Approve', { timeout: 240000 }).click();
   },
   cancel: () => {
-    cy.get('button').contains('Cancel').click({force: true});
+    cy.get('button').contains('Cancel').click({ force: true });
   },
   checkRecommenedMonitoring: (packageName, catalogSource, operatorName, enableStatus) => {
     cy.visit(`/operatorhub/subscribe?pkg=${packageName}&catalog=${catalogSource}&catalogNamespace=openshift-marketplace&targetNamespace=undefined`);
-    cy.contains(`${operatorName}`, {timeout: 30000}).should('exist');
+    cy.contains(`${operatorName}`, { timeout: 30000 }).should('exist');
     cy.get('input#enable-monitoring-checkbox').should('have.attr', 'data-checked-state', `${enableStatus}`);
   }
 };
 
 export const operatorHubModal = {
   clickInstall: () => {
-    cy.get('[data-test-id="operator-install-btn"]').click({force: true});
+    cy.get('[data-test-id="operator-install-btn"]').click({ force: true });
   },
   selectChannel: (channel) => {
     cy.get('h5').contains('Channel').parent('div').within(() => {
       // click on button instead of div
-      cy.get('button[data-test="operator-channel-select-toggle"]').click({force: true});
+      cy.get('button[data-test="operator-channel-select-toggle"]').click({ force: true });
     });
     cy.get(`li[data-test="channel-option-${channel}"]`).should('be.visible');
-    cy.get(`button[id="${channel}"]`).click({force: true});
+    cy.get(`button[id="${channel}"]`).click({ force: true });
   },
   selectVersion: (version) => {
     cy.get('h5').contains('Version').parent('div').within(() => {
-      cy.get('button[data-test="operator-version-select-toggle"]').click({force: true});
+      cy.get('button[data-test="operator-version-select-toggle"]').click({ force: true });
     });
     cy.get(`li[data-test*="${version}"]`).should('be.visible');
-    cy.get(`button[id="${version}"]`).click({force: true});
+    cy.get(`button[id="${version}"]`).click({ force: true });
   },
 };
 
@@ -380,7 +377,7 @@ export const Operand = {
     };
 
     const { header, rowsinfo } = columnSelectors[columnName] || {};
-    if (!header || ! rowsinfo) {
+    if (!header || !rowsinfo) {
       throw new Error(`Invalid column name: ${columnName}, it is not define in columnSelectors`);
     }
 

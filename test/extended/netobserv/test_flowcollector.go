@@ -2089,7 +2089,7 @@ var _ = g.Describe("[sig-netobserv] Network_Observability", func() {
 		time.Sleep(60 * time.Second)
 
 		g.By("check flows have NW Events")
-		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, time.Now().Add(-2*time.Minute), lokiParams...)
+		flowRecords, err = lokilabels.getLokiFlowLogs(bearerToken, ls.Route, time.Now().Add(-45*time.Second), lokiParams...)
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(len(flowRecords)).Should(o.BeNumerically(">", 0), "expected number of flowRecords with 'flowDirection != 1' > 0")
 		verifyNetworkEvents(flowRecords, "drop", "BaselineAdminNetworkPolicy", "Ingress")

@@ -1,11 +1,11 @@
+import { colSelectors, netflowPage, topologyPage, topologySelectors } from "../../views/netflow-page"
 import { Operator, project } from "../../views/netobserv"
-import { netflowPage, colSelectors, topologySelectors, topologyPage } from "../../views/netflow-page"
 
 function getTopologyScopeURL(scope: string): string {
     return `**/flow/metrics**aggregateBy=${scope}*`
 }
 
-describe('(OCP-71525, OCP-71524 Network_Observability) Netflow Zone and multiCluster test', { tags: ['Network_Observability'] }, function () {
+describe('Netflow Zone and multiCluster test', { tags: ['Network_Observability'] }, function () {
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`)
@@ -19,7 +19,7 @@ describe('(OCP-71525, OCP-71524 Network_Observability) Netflow Zone and multiClu
         netflowPage.visit()
     })
 
-    it("(OCP-71525, OCP-71524, aramesha, Network_Observability) should validate zone and multiCluster related columns", function () {
+    it("(OCP-71525, aramesha, Network_Observability) should validate zone/multiCluster columns", function () {
         cy.get('#tabs-container li:nth-child(2)').click()
         cy.byTestID("table-composable").should('exist')
 
@@ -44,7 +44,7 @@ describe('(OCP-71525, OCP-71524 Network_Observability) Netflow Zone and multiClu
         })
     })
 
-    it("(OCP-71525, OCP-71524, aramesha, Network_Observability) should verify zone and cluster scope in topology view", function () {
+    it("(OCP-71524, aramesha, Network_Observability) should verify zone/cluster scope topology", function () {
         cy.get('#tabs-container li:nth-child(3)').click()
         // check if topology view exists, if not clear filters.
         // this can be removed when multiple page loads are fixed.

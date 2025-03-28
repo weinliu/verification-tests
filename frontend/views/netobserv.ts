@@ -1,14 +1,13 @@
 import { catalogSources } from "../views/catalog-source"
 import { operatorHubPage } from "../views/operator-hub-page"
-import { Pages } from "./pages"
 
 export const project = "netobserv"
 
 export namespace flowcollectorFormSelectors {
-    export const ebpfPrivilegedToggle = '#root_spec_agent_ebpf_privileged_field > .pf-v5-c-switch > .pf-v5-c-switch__toggle'
-    export const zonesToggle = '#root_spec_processor_addZone_field > .pf-v5-c-switch > .pf-v5-c-switch__toggle'
-    export const multiClusterToggle = '#root_spec_processor_multiClusterDeployment_field > .pf-v5-c-switch > .pf-v5-c-switch__toggle'
-    export const lokiEnableToggle = '#root_spec_loki_enable_field > .pf-v5-c-switch > .pf-v5-c-switch__toggle'
+    export const ebpfPrivilegedToggle = '#root_spec_agent_ebpf_privileged_field > .pf-v6-c-switch > .pf-v6-c-switch__toggle'
+    export const zonesToggle = '#root_spec_processor_addZone_field > .pf-v6-c-switch > .pf-v6-c-switch__toggle'
+    export const multiClusterToggle = '#root_spec_processor_multiClusterDeployment_field > .pf-v6-c-switch > .pf-v6-c-switch__toggle'
+    export const lokiEnableToggle = '#root_spec_loki_enable_field > .pf-v6-c-switch > .pf-v6-c-switch__toggle'
 }
 
 export const Operator = {
@@ -24,26 +23,26 @@ export const Operator = {
         var catalogDisplayName = "Production Operators"
         const catSrc = Cypress.env('NOO_CATALOG_SOURCE')
         if (catSrc == "upstream") {
-            let catalogImg = 'quay.io/netobserv/network-observability-operator-catalog:v0.0.0-main'
-            let catalogSource = "netobserv-test"
+            var catalogImg = 'quay.io/netobserv/network-observability-operator-catalog:v0.0.0-main'
+            var catalogSource = "netobserv-test"
             catalogDisplayName = "NetObserv QE"
             catalogSources.createCustomCatalog(catalogImg, catalogSource, catalogDisplayName)
         }
         else {
-            let catalogImg = "quay.io/redhat-user-workloads/ocp-network-observab-tenant/netobserv-operator/network-observability-operator-fbc:latest"
-            let catalogSource = "netobserv-konflux-fbc"
+            var catalogImg = "quay.io/redhat-user-workloads/ocp-network-observab-tenant/netobserv-operator/network-observability-operator-fbc:latest"
+            var catalogSource = "netobserv-konflux-fbc"
             catalogDisplayName = "NetObserv Konflux"
             catalogSources.createCustomCatalog(catalogImg, catalogSource, catalogDisplayName)
             // deploy ImageDigetMirrorSet
             cy.adminCLI('oc apply -f ./fixtures/netobserv/image-digest-mirror-set.yaml')
         }
-        return catalogDisplayName
+        return catalogSource
     },
     install: () => {
         if (`${Cypress.env('SKIP_NOO_INSTALL')}` == "true") {
             return null
         }
-        var catalogSourceDisplayName = Operator.install_catalogsource()
+        var catalogSource = Operator.install_catalogsource()
 
         cy.visit(`/k8s/ns/openshift-netobserv-operator/operators.coreos.com~v1alpha1~ClusterServiceVersion`);
         // if user still does not have admin access
@@ -65,10 +64,7 @@ export const Operator = {
         // don't install operator if its already installed
         cy.get("div.loading-box").should('be.visible').then(loading => {
             if (Cypress.$('td[role="gridcell"]').length == 0) {
-                Pages.gotoOperatorHubPage();
-                const catalogSourceSelectorCheckbox = `input[title="${catalogSourceDisplayName}"]`
-                cy.get(catalogSourceSelectorCheckbox).check()
-                operatorHubPage.install(Operator.name(), true)
+                operatorHubPage.install("netobserv-operator", catalogSource, true)
             }
         })
     },
@@ -242,7 +238,7 @@ export const Operator = {
         // Enable zones
         cy.get(flowcollectorFormSelectors.zonesToggle).click()
         // Enable multiCluster
-        cy.get("#root_spec_processor_accordion-content div.pf-v5-c-expandable-section > button").should('exist').click()
+        cy.get("#root_spec_processor_accordion-content div.pf-v6-c-expandable-section__toggle > button").should('exist').click()
         cy.get(flowcollectorFormSelectors.multiClusterToggle).click()
     },
     deleteFlowCollector: () => {

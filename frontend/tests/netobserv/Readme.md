@@ -14,8 +14,7 @@ To help with memory utilization when cypress tests are run, follow below guideli
 ## Flaky tests
 - [netflow_cluster_admin_group.cy.ts](netflow_cluster_admin_group.cy.ts) can be a flaky test because when user is added to group and when cluster-admin role is added to the group it takes longer indeterministic amount of time for user to have admin privileges.
 - [netflow_export.cy.ts](netflow_export.cy.ts) `should validate exporting table view step` can be flaky because loki query could take longer and file download doesn't start until loki query finishes.
-- [dns_dashboards.cy.ts](dns_dashboards.cy.ts) `Validate DNS over TCP and UDP` step can be flaky because DstNamespace filter can sometimes reload the page causing the filter to be not applied properly.
-- [flowRTT.cy.ts](flowRTT.cy.ts) `Verify flowRTT panels` can be flaky because deffault flowRTT panels may not be rendered the first time overview page is visited by the tests
+- [netflow_developer_view.cy.ts](netflow_developer_view.cy.ts) Developer view tests can be flaky as tests runs longer and logs in/out multiple times with different user ids.
 
 ## Topology tests API data
 - When topology tests fail with UI error `undefined` for topology view and if tests uses an API fixture data, it may be a sign the API data may need an update.

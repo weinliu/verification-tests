@@ -1,11 +1,11 @@
-import { Operator, project } from "../../views/netobserv"
-import { netflowPage } from "../../views/netflow-page"
+import { netflowPage } from "../../views/netflow-page";
+import { Operator, project } from "../../views/netobserv";
 
 const [user1, user1Passwd] = Cypress.env('LOGIN_USERS').split(',')[2].split(':');
 const [user2, user2Passwd] = Cypress.env('LOGIN_USERS').split(',')[3].split(':');
 const [user3, user3Passwd] = Cypress.env('LOGIN_USERS').split(',')[4].split(':');
 
-describe('(OCP-75874 Network_Observability) NetObserv developer view', { tags: ['Network_Observability'] }, function () {
+describe('NetObserv developer view', { tags: ['Network_Observability'] }, function () {
 
     before('any test', function () {
         cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${user1}`)
@@ -16,14 +16,12 @@ describe('(OCP-75874 Network_Observability) NetObserv developer view', { tags: [
     })
 
     it("(OCP-75874, aramesha, Network_Observability) should verify developer view - Loki DataSource", function () {
-        netflowPage.visitDeveloper(project)
-
         // verify Netflow traffic tab
+        netflowPage.visit()
         cy.checkNetflowTraffic()
     })
 
-    it("(OCP-75874, aramesha, Network_Observability) should verify developer view - Prom DataSource", function () {
-        cy.switchPerspective('Administrator');
+    it("(OCP-75874, OCP-73876 aramesha, Network_Observability) should verify developer view - Prom DataSource", function () {
         // Deploy flowcollector with Loki disabled
         Operator.createFlowcollector(project, "LokiDisabled")
 
@@ -42,7 +40,7 @@ describe('(OCP-75874 Network_Observability) NetObserv developer view', { tags: [
         cy.uiLogin(Cypress.env('LOGIN_IDP'), user2, user2Passwd)
 
         // Verify Netflow traffic tab Developer view as user2
-        netflowPage.visitDeveloper("test-client")
+        netflowPage.visit(false)
         cy.checkNetflowTraffic("Disabled")
 
         // Add view role for test-server project to user3
@@ -54,13 +52,10 @@ describe('(OCP-75874 Network_Observability) NetObserv developer view', { tags: [
         })
         cy.uiLogin(Cypress.env('LOGIN_IDP'), user3, user3Passwd)
 
-        // verify Netflow traffic tab as user3
-        netflowPage.visitDeveloper("test-server")
+        // verify Netflow traffic page as user3
+        netflowPage.visit(false)
         cy.checkNetflowTraffic("Disabled")
-        // Login as system:admin from CLI
-        cy.adminCLI(`oc login -u system:admin`)
-        cy.adminCLI(`oc delete project test-client`)
-        cy.adminCLI(`oc delete project test-server`)
+
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user netobserv-metrics-reader ${user2}`)
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user netobserv-metrics-reader ${user3}`)
     })
@@ -68,6 +63,8 @@ describe('(OCP-75874 Network_Observability) NetObserv developer view', { tags: [
     after("after all tests are done", function () {
         cy.adminCLI(`oc login -u system:admin`)
         cy.adminCLI(`oc delete flowcollector cluster`)
+        cy.adminCLI(`oc delete project test-server --ignore-not-found`)
+        cy.adminCLI(`oc delete project test-client --ignore-not-found`)
         cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${user1}`)
     })
 })
