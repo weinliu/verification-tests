@@ -135,9 +135,10 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		for _, winhost := range winInternalIP {
 			for _, svc := range svcs {
 				g.By(fmt.Sprintf("Check %v service is running in worker %v", svc, winhost))
-				msg, _ = runPSCommand(bastionHost, winhost, fmt.Sprintf("Get-Service %v | Select-Object -ExpandProperty Status", svc), privateKey, iaasPlatform)
-				if strings.TrimSpace(msg) != "Running" {
-					e2e.Failf("Failed to check %v service is running in %v: %s", svc, winhost, msg)
+				cmd := fmt.Sprintf("Get-Service %v | Select-Object -ExpandProperty Status", svc)
+				ok, err := runWindowsCheck(bastionHost, winhost, cmd, "Running", privateKey, iaasPlatform)
+				if err != nil || !ok {
+					e2e.Failf("Service %s is not running on %v: %v", svc, winhost, err)
 				}
 			}
 		}
@@ -1181,6 +1182,7 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		g.By("Check configmap services running on Windows workers")
 		windowsServicesCM, err := popItemFromList(oc, "cm", wicdConfigMap, wmcoNamespace)
 		o.Expect(err).NotTo(o.HaveOccurred())
+
 		payload, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("cm", windowsServicesCM, "-n", wmcoNamespace, "-o=jsonpath={.data.services}").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1189,10 +1191,13 @@ var _ = g.Describe("[sig-windows] Windows_Containers", func() {
 		bastionHost := getSSHBastionHost(oc, iaasPlatform)
 		winInternalIP := getWindowsInternalIPs(oc)
 		for _, winhost := range winInternalIP {
-			for _, svc := range services {
-				g.By(fmt.Sprintf("Check %v service is running in worker %v", svc.Name, winhost))
-				msg, _ := runPSCommand(bastionHost, winhost, fmt.Sprintf("Get-Service %v", svc.Name), privateKey, iaasPlatform)
-				o.Expect(msg).Should(o.ContainSubstring("Running"), "Failed to check %v service is running in %v: %s", svc.Name, winhost, msg)
+			for _, svc := range svcs {
+				g.By(fmt.Sprintf("Check %v service is running in worker %v", svc, winhost))
+				cmd := fmt.Sprintf("Get-Service %v | Select-Object -ExpandProperty Status", svc)
+				ok, err := runWindowsCheck(bastionHost, winhost, cmd, "Running", privateKey, iaasPlatform)
+				if err != nil || !ok {
+					e2e.Failf("Service %s is not running on %v: %v", svc, winhost, err)
+				}
 			}
 		}
 	})

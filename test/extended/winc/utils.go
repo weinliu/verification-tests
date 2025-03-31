@@ -1805,3 +1805,14 @@ func extractInstanceID(jsonData, resourceType string) (map[string]string, error)
 	e2e.Logf("Successfully retrieved %s provider IDs", resourceType)
 	return providerIDs, nil
 }
+
+func runWindowsCheck(bastionHost, winhost, command, expectedOutput, privateKey, iaasPlatform string) (bool, error) {
+	msg, err := runPSCommand(bastionHost, winhost, command, privateKey, iaasPlatform)
+	if err != nil {
+		return false, fmt.Errorf("failed to run command on %v: %v", winhost, err)
+	}
+	if strings.TrimSpace(msg) != expectedOutput {
+		return false, fmt.Errorf("unexpected output on %v.\nExpected: %q\nGot: %q", winhost, expectedOutput, msg)
+	}
+	return true, nil
+}
