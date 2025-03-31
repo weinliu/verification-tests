@@ -244,6 +244,10 @@ func WaitForMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetName st
 			if strings.Contains(phase, "Failed") {
 				output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=yaml").Output()
 				e2e.Logf("%v", output)
+				if strings.Contains(output, "error launching instance: Instances in the pgcluster Placement Group") {
+					e2e.Logf("%v", output)
+					return false, fmt.Errorf("error launching instance in the pgcluster Placement Group")
+				}
 				return false, fmt.Errorf("Some machine go into Failed phase!")
 			}
 			if strings.Contains(phase, "Provisioning") {
@@ -269,6 +273,9 @@ func WaitForMachinesRunning(oc *exutil.CLI, machineNumber int, machineSetName st
 		}
 		if pollErr.Error() == "InsufficientResources" {
 			g.Skip("InsufficientResources, skip this test")
+		}
+		if pollErr.Error() == "error launching instance in the pgcluster Placement Group" {
+			g.Skip("launching instance in the pgcluster Placement Group Zone is not suppoted, skip this test")
 		}
 		output, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args(MapiMachine, "-n", "openshift-machine-api", "-l", "machine.openshift.io/cluster-api-machineset="+machineSetName, "-o=yaml").Output()
 		e2e.Logf("%v", output)
