@@ -6,8 +6,8 @@ global:
   tlsDisable: false
 server:
   image:
-    repository: "registry.connect.redhat.com/hashicorp/vault"
-    tag: "latest"
+    repository: "quay.io/openshifttest/vault"
+    tag: "1.19.0"
   dataStorage:
     enabled: true
     size: 1Gi

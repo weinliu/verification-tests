@@ -41,7 +41,7 @@ spec:
               - key: pebble-config.json
                 path: pebble-config.json
       containers:
-        - image: ghcr.io/letsencrypt/pebble:2.7.0
+        - image: quay.io/openshifttest/letsencrypt-pebble:2.7.0
           imagePullPolicy: IfNotPresent
           name: pebble
           ports:

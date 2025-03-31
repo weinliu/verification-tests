@@ -832,7 +832,7 @@ func setupVaultServer(oc *exutil.CLI, ns, release string) (string, string) {
 	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "configmap", configMapName, "--from-file=custom-values.yaml="+helmConfigFile).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	// install a standalone TLS-enabled Vault with agent injector service disabled
-	cmd := fmt.Sprintf(`helm repo add hashicorp https://helm.releases.hashicorp.com && helm install %s hashicorp/vault -n %s --set injector.enabled=false --set global.openshift=true --values /helm/custom-values.yaml`, release, ns)
+	cmd := fmt.Sprintf(`helm install %s hashicorp/vault -n %s --set injector.enabled=false --set global.openshift=true --values /helm/custom-values.yaml`, release, ns)
 	helmHelperFile := filepath.Join(buildPruningBaseDir, "exec-helm-helper.yaml")
 	params = []string{"-f", helmHelperFile, "-p", "SA_NAME=" + installerSA, "ROLEBINDING_NAME=" + installerRolebinding, "POD_NAME=" + installerPodName, "HELM_CMD=" + cmd, "CONFIGMAP_NAME=" + configMapName, "NAMESPACE=" + ns, "HTTP_PROXY=" + httpProxy, "HTTPS_PROXY=" + httpsProxy, "NO_PROXY=" + noProxy}
 	exutil.ApplyClusterResourceFromTemplate(oc, params...)
@@ -990,7 +990,7 @@ func installGoogleCASIssuer(oc *exutil.CLI, ns string) {
 	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "configmap", configMapName).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	// install the external issuer through Helm charts
-	cmd := fmt.Sprintf(`helm repo add jetstack https://charts.jetstack.io && helm install cas jetstack/cert-manager-google-cas-issuer -n %s`, casNamespace)
+	cmd := fmt.Sprintf(`helm install cas jetstack/cert-manager-google-cas-issuer -n %s`, casNamespace)
 	helmHelperFile := filepath.Join(buildPruningBaseDir, "exec-helm-helper.yaml")
 	params := []string{"-f", helmHelperFile, "-p", "SA_NAME=" + installerSA, "ROLEBINDING_NAME=" + installerRolebinding, "POD_NAME=" + installerPodName, "HELM_CMD=" + cmd, "CONFIGMAP_NAME=" + configMapName, "NAMESPACE=" + ns, "HTTP_PROXY=" + httpProxy, "HTTPS_PROXY=" + httpsProxy, "NO_PROXY=" + noProxy}
 	exutil.ApplyClusterResourceFromTemplate(oc, params...)

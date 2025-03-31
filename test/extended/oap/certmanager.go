@@ -1473,7 +1473,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-High-74267-can manage Route external TLS secret", func() {
 		var (
-			appImage        = "quay.io/openshifttest/hello-openshift@sha256:4200f438cf2e9446f6bcff9d67ceea1f69ed07a2f83363b7fb52529f7ddd8a83"
+			appImage        = "quay.io/openshifttest/hello-openshift:1.2.0"
 			serviceName     = "hello-openshift"
 			routeType       = "edge"
 			routeName       = "myroute"
