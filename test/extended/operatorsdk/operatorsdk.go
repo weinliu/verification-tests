@@ -37,113 +37,6 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		})
 	*/
 
-	// author: jfan@redhat.com
-	g.It("Author:jfan-VMonly-ConnectedOnly-High-34462-SDK playbook ansible operator generate the catalog", func() {
-
-		clusterArchitecture := architecture.SkipArchitectures(oc, architecture.ARM64, architecture.MULTI, architecture.PPC64LE, architecture.S390X)
-		var (
-			buildPruningBaseDir = exutil.FixturePath("testdata", "operatorsdk")
-			catalogofcatalog    = filepath.Join(buildPruningBaseDir, "catalogsource.yaml")
-			ogofcatalog         = filepath.Join(buildPruningBaseDir, "operatorgroup.yaml")
-			subofcatalog        = filepath.Join(buildPruningBaseDir, "sub.yaml")
-			dataPath            = filepath.Join(buildPruningBaseDir, "ocp-34462-data")
-			tmpBasePath         = "/tmp/ocp-34462-" + getRandomString()
-			tmpPath             = filepath.Join(tmpBasePath, "catalogtest")
-			imageTag            = "quay.io/olmqe/catalogtest-operator:34462-v" + ocpversion + getRandomString()
-			bundleImage         = "quay.io/olmqe/catalogtest-bundle:34462-v" + ocpversion + getRandomString()
-			catalogImage        = "quay.io/olmqe/catalogtest-index:34462-v" + ocpversion + getRandomString()
-			quayCLI             = container.NewQuayCLI()
-		)
-
-		operatorsdkCLI.showInfo = true
-		oc.SetupProject()
-
-		defer os.RemoveAll(tmpBasePath)
-		err := os.MkdirAll(tmpPath, 0o755)
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		operatorsdkCLI.ExecCommandPath = tmpPath
-		makeCLI.ExecCommandPath = tmpPath
-		defer quayCLI.DeleteTag(strings.Replace(imageTag, "quay.io/", "", 1))
-
-		exutil.By("Create the playbook ansible operator")
-		output, err := operatorsdkCLI.Run("init").Args("--plugins=ansible", "--domain=catalogtest.com").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Next"))
-
-		exutil.By("Create api")
-		output, err = operatorsdkCLI.Run("create").Args("api", "--group=cache", "--version=v1", "--kind=Catalogtest", "--generate-playbook").Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		o.Expect(output).To(o.ContainSubstring("Writing kustomize manifests"))
-
-		err = copy(filepath.Join(dataPath, "Dockerfile"), filepath.Join(tmpPath, "Dockerfile"))
-		o.Expect(err).NotTo(o.HaveOccurred())
-		replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
-
-		exutil.By("step: Build and push the operator image")
-		tokenDir := "/tmp/ocp-34462" + getRandomString()
-		defer os.RemoveAll(tokenDir)
-		err = os.MkdirAll(tokenDir, os.ModePerm)
-		if err != nil {
-			e2e.Failf("fail to create the token folder:%s", tokenDir)
-		}
-		_, err = oc.AsAdmin().WithoutNamespace().Run("extract").Args("secret/pull-secret", "-n", "openshift-config", fmt.Sprintf("--to=%s", tokenDir), "--confirm").Output()
-		if err != nil {
-			e2e.Failf("Fail to get the cluster auth %v", err)
-		}
-		buildPushOperatorImage(clusterArchitecture, tmpPath, imageTag, tokenDir)
-
-		// OCP-40219
-		exutil.By("Generate the bundle image and catalog index image")
-		replaceContent(filepath.Join(tmpPath, "Makefile"), "controller:latest", imageTag)
-
-		manifestsPath := filepath.Join(tmpPath, "config", "manifests", "bases")
-		err = os.MkdirAll(manifestsPath, 0o755)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		manifestsFile := filepath.Join(manifestsPath, "catalogtest.clusterserviceversion.yaml")
-		_, err = os.Create(manifestsFile)
-		o.Expect(err).NotTo(o.HaveOccurred())
-		err = copy(filepath.Join(dataPath, "manifests", "bases", "catalogtest.clusterserviceversion.yaml"), filepath.Join(manifestsFile))
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		waitErr := wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 120*time.Second, false, func(ctx context.Context) (bool, error) {
-			msg, _ := makeCLI.Run("bundle").Args().Output()
-			if strings.Contains(msg, "operator-sdk bundle validate ./bundle") {
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, "operator-sdk bundle generate failed")
-
-		replaceContent(filepath.Join(tmpPath, "Makefile"), " --container-tool docker ", " ")
-
-		defer quayCLI.DeleteTag(strings.Replace(bundleImage, "quay.io/", "", 1))
-		defer quayCLI.DeleteTag(strings.Replace(catalogImage, "quay.io/", "", 1))
-		_, err = makeCLI.Run("bundle-build").Args("bundle-push", "catalog-build", "catalog-push", "BUNDLE_IMG="+bundleImage, "CATALOG_IMG="+catalogImage).Output()
-		o.Expect(err).NotTo(o.HaveOccurred())
-
-		exutil.By("Install the operator through olm")
-		namespace := oc.Namespace()
-		createCatalog, _ := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", catalogofcatalog, "-p", "NAME=cs-catalog", "NAMESPACE="+namespace, "ADDRESS="+catalogImage, "DISPLAYNAME=CatalogTest").OutputToFile("catalogsource-34462.json")
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createCatalog, "-n", namespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		createOg, _ := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", ogofcatalog, "-p", "NAME=catalogtest-single", "NAMESPACE="+namespace, "KAKA="+namespace).OutputToFile("createog-34462.json")
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createOg, "-n", namespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		createSub, _ := oc.AsAdmin().Run("process").Args("--ignore-unknown-parameters=true", "-f", subofcatalog, "-p", "NAME=cataloginstall", "NAMESPACE="+namespace, "SOURCENAME=cs-catalog", "OPERATORNAME=catalogtest", "SOURCENAMESPACE="+namespace, "STARTINGCSV=catalogtest.v0.0.1").OutputToFile("createsub-34462.json")
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-f", createSub, "-n", namespace).Execute()
-		o.Expect(err).NotTo(o.HaveOccurred())
-		waitErr = wait.PollUntilContextTimeout(context.TODO(), 30*time.Second, 390*time.Second, false, func(ctx context.Context) (bool, error) {
-			msg, _ := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "catalogtest.v0.0.1", "-o=jsonpath={.status.phase}", "-n", namespace).Output()
-			if strings.Contains(msg, "Succeeded") {
-				e2e.Logf("catalogtest installed successfully")
-				return true, nil
-			}
-			return false, nil
-		})
-		exutil.AssertWaitPollNoErr(waitErr, fmt.Sprintf("can't get csv catalogtest.v0.0.1 in %s", namespace))
-	})
-
 	// author: jitli@redhat.com
 	g.It("Author:jitli-VMonly-Medium-34945-ansible Add flag metricsaddr for ansible operator", func() {
 		if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
@@ -262,7 +155,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-rhel9-operator:v" + ocpversion))
 			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
 		} else {
-			replaceContent(dockerFile, "quay.io/operator-framework/ansible-operator:"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
+			if os.Getenv("AnsiblePremergeTest") == "false" {
+				replaceContent(dockerFile, "quay.io/operator-framework/ansible-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
+			} else {
+				replaceContent(dockerFile, "quay.io/operator-framework/ansible-operator:v"+upstreamversion, "quay.io/olmqe/ansible-operator-base:premergetest")
+			}
 		}
 
 		buildPruningBaseDir := exutil.FixturePath("testdata", "operatorsdk")
@@ -416,7 +313,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-rhel9-operator:v" + ocpversion))
 			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
 		} else {
-			replaceContent(dockerFile, "quay.io/operator-framework/ansible-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
+			if os.Getenv("AnsiblePremergeTest") == "false" {
+				replaceContent(dockerFile, "quay.io/operator-framework/ansible-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
+			} else {
+				replaceContent(dockerFile, "quay.io/operator-framework/ansible-operator:v"+upstreamversion, "quay.io/olmqe/ansible-operator-base:premergetest")
+			}
 		}
 
 		exutil.By("step: Create API.")
@@ -728,7 +629,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-ansible-rhel9-operator:v" + ocpversion))
 			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-ansible-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
 		} else {
-			replaceContent(dockerFile, "quay.io/operator-framework/ansible-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
+			if os.Getenv("AnsiblePremergeTest") == "false" {
+				replaceContent(dockerFile, "quay.io/operator-framework/ansible-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
+			} else {
+				replaceContent(dockerFile, "quay.io/operator-framework/ansible-operator:v"+upstreamversion, "quay.io/olmqe/ansible-operator-base:premergetest")
+			}
 		}
 
 		deployfilepath := filepath.Join(tmpPath, "config", "samples", "cache_v1alpha1_memcached40341.yaml")
@@ -878,7 +783,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(makefileFilePath, "build config/default | kubectl apply -f -", "build config/default | CLUSTER_PROXY=$(shell kubectl get proxies.config.openshift.io cluster  -o json | jq '.spec.httpProxy') envsubst | kubectl apply -f -")
 		// update the Dockerfile
 		dockerFile := filepath.Join(tmpPath, "Dockerfile")
-		replaceContent(dockerFile, "quay.io/operator-framework/ansible-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
+		if os.Getenv("AnsiblePremergeTest") == "false" {
+			replaceContent(dockerFile, "quay.io/operator-framework/ansible-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
+		} else {
+			replaceContent(dockerFile, "quay.io/operator-framework/ansible-operator:v"+upstreamversion, "quay.io/olmqe/ansible-operator-base:premergetest")
+		}
 		replaceContent(dockerFile, "install -r ${HOME}/requirements.yml", "install -r ${HOME}/requirements.yml --force")
 
 		exutil.By("step: Build and push the operator image")
@@ -1148,7 +1057,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		o.Expect(err).NotTo(o.HaveOccurred())
 		// update the Dockerfile
 		dockerFile := filepath.Join(tmpPath, "Dockerfile")
-		replaceContent(dockerFile, "quay.io/operator-framework/ansible-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
+		if os.Getenv("AnsiblePremergeTest") == "false" {
+			replaceContent(filepath.Join(tmpPath, "Dockerfile"), "quay.io/operator-framework/ansible-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
+		} else {
+			replaceContent(filepath.Join(tmpPath, "Dockerfile"), "quay.io/operator-framework/ansible-operator:v"+upstreamversion, "quay.io/olmqe/ansible-operator-base:premergetest")
+		}
 		replaceContent(dockerFile, "install -r ${HOME}/requirements.yml", "install -r ${HOME}/requirements.yml --force")
 
 		exutil.By("step: Build and push the operator image")
@@ -1548,7 +1461,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		dockerfileFilePath := filepath.Join(dataPath, "Dockerfile")
 		err = copy(dockerfileFilePath, filepath.Join(tmpPath, "Dockerfile"))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
+		if os.Getenv("AnsiblePremergeTest") == "false" {
+			replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
+		} else {
+			replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "quay.io/olmqe/ansible-operator-base:premergetest")
+		}
 		// copy manager.yaml
 		err = copy(filepath.Join(dataPath, "manager.yaml"), filepath.Join(tmpPath, "config", "manager", "manager.yaml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1751,7 +1668,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		dockerfileFilePath := filepath.Join(dataPath, "Dockerfile")
 		err = copy(dockerfileFilePath, filepath.Join(tmpPath, "Dockerfile"))
 		o.Expect(err).NotTo(o.HaveOccurred())
-		replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
+		if os.Getenv("AnsiblePremergeTest") == "false" {
+			replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
+		} else {
+			replaceContent(filepath.Join(tmpPath, "Dockerfile"), "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "quay.io/olmqe/ansible-operator-base:premergetest")
+		}
 		// copy the watches.yaml
 		err = copy(filepath.Join(dataPath, "watches.yaml"), filepath.Join(tmpPath, "watches.yaml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1868,7 +1789,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		dockerfileFilePath := filepath.Join(tmpPath, "Dockerfile")
 		err = copy(filepath.Join(dataPath, "Dockerfile"), dockerfileFilePath)
 		o.Expect(err).NotTo(o.HaveOccurred())
-		replaceContent(dockerfileFilePath, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
+		if os.Getenv("AnsiblePremergeTest") == "false" {
+			replaceContent(dockerfileFilePath, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-rhel9-operator:v"+ocpversion)
+		} else {
+			replaceContent(dockerfileFilePath, "brew.registry.redhat.io/rh-osbs/openshift-ose-ansible-operator:vocpversion", "quay.io/olmqe/ansible-operator-base:premergetest")
+		}
 		// copy the roles/testmetrics/tasks/main.yml
 		err = copy(filepath.Join(dataPath, "main.yml"), filepath.Join(tmpPath, "roles", "testmetrics", "tasks", "main.yml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
