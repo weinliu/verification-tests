@@ -14,7 +14,7 @@ describe('Display All Namespace Operands for Global Operators', () => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${Cypress.env('LOGIN_USERNAME')}`);
     cy.adminCLI(`oc new-project ${params.ns68180}`);
     cy.adminCLI(`oc new-project ${params.ns50153}`);
-    cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
+    cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'))
     // Base data for case OCP-68180 & OCP-50153
     operatorHubPage.installOperator(params.operatorPkgName, "redhat-operators");
     cy.get('[aria-valuetext="Loading..."]').should('exist');

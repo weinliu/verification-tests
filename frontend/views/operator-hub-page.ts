@@ -372,7 +372,7 @@ export const Operand = {
       },
       Kind: {
         header: '[data-label="Kind"]',
-        rowsinfo: '[data-test-rows="resource-row"] [class*="-screen-reader"]'
+        rowsinfo: '[data-test-rows="resource-row"] [class*="-on-md"]'
       }
     };
 
@@ -381,11 +381,11 @@ export const Operand = {
       throw new Error(`Invalid column name: ${columnName}, it is not define in columnSelectors`);
     }
 
-    cy.get(header)
+    cy.get(header + ' button')
       .click()
       .then(($el) => {
         if ($el.attr('aria-sort') !== 'descending') {
-          cy.get(header).click().should('have.attr', 'aria-sort', 'descending');
+          cy.get(header+ ' button').click().parent().should('have.attr', 'aria-sort', 'descending');
         }
       });
     cy.get(rowsinfo)
