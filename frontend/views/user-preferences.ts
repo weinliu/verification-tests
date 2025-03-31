@@ -94,7 +94,7 @@ export const userPreferences = {
   },
   checkLightspeedModal: (userRole: string) => {
     cy.get('.lightspeed__popover-button').click();
-    cy.contains('h1', 'Meet Openshift Lightspeed').should('exist');
+    cy.contains('h1', 'Meet OpenShift Lightspeed').should('exist');
     cy.contains('Benefits').should('exist');
     if(userRole === 'normal-user') {
       cy.contains('Must have administrator access').should('exist');
