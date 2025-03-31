@@ -20,7 +20,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		loggingBaseDir string
 	)
 
-	g.Context("Loki Stack testing", func() {
+	g.Context("LokiStack testing", func() {
 		g.BeforeEach(func() {
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
@@ -44,7 +44,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			oc.SetupProject()
 		})
 
-		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-Critical-48607-High-66088-High-64961-Loki Operator - Verify replica support and PodDisruptionBudget 1x.extra-small, 1x.small and 1x.medium t-shirt size[Serial]", func() {
+		g.It("Author:kbharti-CPaasrunOnly-ConnectedOnly-Critical-48607-High-66088-High-64961-Loki Operator - Verify replica support and PodDisruptionBudget 1x.extra-small, 1x.small and 1x.medium t-shirt size[Serial]", func() {
 			// This test needs m5.8xlarge (AWS) instance type and similar instance requirement for other public clouds
 			objectStorage := getStorageType(oc)
 			if len(objectStorage) == 0 {
@@ -245,7 +245,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("Loki Configmaps are reconciled \n")
 
 		})
-		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-High-48679-High-48616-Define limits and overrides per tenant for Loki and restart loki components on config change[Serial]", func() {
+		g.It("Author:kbharti-CPaasrunOnly-ConnectedOnly-High-48679-High-48616-Define limits and overrides per tenant for Loki and restart loki components on config change[Serial]", func() {
 
 			objectStorage := getStorageType(oc)
 			if len(objectStorage) == 0 {

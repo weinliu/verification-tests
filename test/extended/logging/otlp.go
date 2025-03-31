@@ -12,7 +12,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease otlp output testing", func() {
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Otlp output testing", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc             = exutil.NewCLI("vector-otlp", exutil.KubeConfigPath())
@@ -128,7 +128,7 @@ retry_max_duration_secs = 20`,
 	})
 
 	//author: qitang@redhat.com
-	g.It("Author:qitang-CPaasrunOnly-ConnectedOnly-High-76728-Add stream info to data model OTEL[Serial][Slow]", func() {
+	g.It("Author:qitang-CPaasrunOnly-ConnectedOnly-High-76728-Add stream info to data model OTEL LokiStack[Serial][Slow]", func() {
 		s := getStorageType(oc)
 		if len(s) == 0 {
 			g.Skip("Current cluster doesn't have a proper object storage for this test!")
@@ -258,7 +258,7 @@ retry_max_duration_secs = 20`,
 		}
 	})
 
-	g.It("Author:qitang-CPaasrunOnly-Medium-75351-Tech preview annotation should be enabled when forwarding logs via otlp", func() {
+	g.It("Author:qitang-CPaasrunOnly-Medium-75351-Tech preview annotation should be enabled when forwarding logs via Otlp", func() {
 		exutil.By("Deploy collector pods")
 		clf := clusterlogforwarder{
 			name:                      "otlp-68961",

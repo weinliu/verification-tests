@@ -23,7 +23,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		loggingBaseDir string
 	)
 
-	g.Context("Log Forward to Kafka via Vector as Collector", func() {
+	g.Context("Log Forward to Kafka", func() {
 		g.BeforeEach(func() {
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			CLO := SubscriptionObjects{

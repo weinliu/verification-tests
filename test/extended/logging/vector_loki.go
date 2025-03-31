@@ -28,7 +28,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		loggingBaseDir string
 	)
 
-	g.Context("test forward logs to external loki log store", func() {
+	g.Context("Log Forward to ExternalLoki log store", func() {
 		g.BeforeEach(func() {
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			CLO := SubscriptionObjects{
@@ -43,7 +43,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			oc.SetupProject()
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-High-47760-Vector Forward logs to Loki using default value via HTTP", func() {
+		g.It("Author:ikanse-CPaasrunOnly-High-47760-Vector Forward logs using default value via HTTP", func() {
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
@@ -108,7 +108,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-48922-Vector Forward logs to Loki using correct loki.tenantKey.kubernetes.namespace_name via HTTP", func() {
+		g.It("Author:ikanse-CPaasrunOnly-Medium-48922-Vector Forward logs using correct loki.tenantKey.kubernetes.namespace_name via HTTP", func() {
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
@@ -157,7 +157,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-48060-Medium-47801-Vector Forward logs to Loki using loki.labelKeys", func() {
+		g.It("Author:ikanse-CPaasrunOnly-Medium-48060-Medium-47801-Vector Forward logs using loki.labelKeys", func() {
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
@@ -226,7 +226,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("Author:ikanse-CPaasrunOnly-Medium-48925-Vector Forward logs to Loki using correct loki.tenantKey.kubernetes.container_name via HTTP", func() {
+		g.It("Author:ikanse-CPaasrunOnly-Medium-48925-Vector Forward logs using correct loki.tenantKey.kubernetes.container_name via HTTP", func() {
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
@@ -263,7 +263,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("Application Logs Query using kubernetes.container_name as tenantKey is a success")
 		})
 
-		g.It("CPaasrunOnly-Author:qitang-High-71001-Collect or exclude logs by container[Slow]", func() {
+		g.It("Author:qitang-CPaasrunOnly-High-71001-Collect or exclude logs by container[Slow]", func() {
 			exutil.By("Create Loki project and deploy Loki Server")
 			lokiNS := oc.Namespace()
 			loki := externalLoki{
@@ -378,7 +378,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		loggingBaseDir, s, sc string
 	)
 
-	g.Context("test forward logs to lokistack with vector", func() {
+	g.Context("Log Forward to LokiStack", func() {
 		g.BeforeEach(func() {
 			s = getStorageType(oc)
 			if len(s) == 0 {
@@ -414,7 +414,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author qitang@redhat.com
-		g.It("Author:qitang-CPaasrunOnly-ConnectedOnly-Medium-48646-Medium-49486-Deploy lokistack under different namespace and Vector Forward logs to LokiStack using CLF with gateway[Serial]", func() {
+		g.It("Author:qitang-CPaasrunOnly-ConnectedOnly-Medium-48646-Medium-49486-Deploy LokiStack under different namespace and Vector Forward logs to LokiStack using CLF with gateway[Serial]", func() {
 			var (
 				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
@@ -479,7 +479,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			lc.waitForLogsAppearByProject("application", appProj)
 		})
 
-		g.It("Author:kbharti-CPaasrunOnly-ConnectedOnly-Medium-54663-Medium-48628-unique cluster identifier in all type of the log record and Expose Loki metrics to Prometheus[Serial]", func() {
+		g.It("Author:kbharti-CPaasrunOnly-ConnectedOnly-Medium-54663-Medium-48628-unique cluster identifier in all type of the log record and Expose LokiStack metrics to Prometheus[Serial]", func() {
 			var (
 				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			)
@@ -570,7 +570,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-ConnectedOnly-Author:kbharti-High-57063-Forward app logs to Loki with namespace selectors (vector)[Serial]", func() {
+		g.It("Author:kbharti-CPaasrunOnly-ConnectedOnly-High-57063-Forward app logs to LokiStack with namespace selectors (vector)[Serial]", func() {
 			g.By("Creating 2 applications..")
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 
@@ -782,7 +782,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
-		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Medium-71144-Collect or exclude infrastructure logs.[Serial][Slow]", func() {
+		g.It("Author:qitang-CPaasrunOnly-ConnectedOnly-Medium-71144-Collect or exclude infrastructure logs[Serial][Slow]", func() {
 			exutil.By("Deploying LokiStack CR for 1x.demo tshirt size")
 
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
@@ -870,7 +870,7 @@ exclude_paths_glob_patterns = ["/var/log/pods/*/*/*.gz", "/var/log/pods/*/*/*.lo
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-High-71749-Drop logs based on test of fields and their values[Serial][Slow]", func() {
+		g.It("Author:qitang-CPaasrunOnly-ConnectedOnly-High-71749-Drop logs based on test of fields and their values[Serial][Slow]", func() {
 			exutil.By("Deploying LokiStack CR for 1x.demo tshirt size")
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
@@ -955,7 +955,7 @@ exclude_paths_glob_patterns = ["/var/log/pods/*/*/*.gz", "/var/log/pods/*/*/*.lo
 
 		})
 
-		g.It("Author:anli-CPaasrunOnly-Critical-71049-Inputs.receiver.syslog to lokistack[Serial][Slow]", func() {
+		g.It("Author:anli-CPaasrunOnly-Critical-71049-Inputs.receiver.syslog[Serial][Slow]", func() {
 			g.By("deploy loki stack")
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
@@ -1142,7 +1142,7 @@ exclude_paths_glob_patterns = ["/var/log/pods/*/*/*.gz", "/var/log/pods/*/*/*.lo
 			}
 		})
 
-		g.It("Author:qitang-CPaasrunOnly-High-78380-Collector should collect logs from all log sources.[Serial]", func() {
+		g.It("Author:qitang-CPaasrunOnly-High-78380-Collector should collect logs from all log sources[Serial]", func() {
 			exutil.By("Deploying LokiStack")
 			lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
 			ls := lokiStack{
@@ -1219,7 +1219,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		loggingBaseDir string
 	)
 
-	g.Context("Test forward logs to external Grafana Loki log store", func() {
+	g.Context("Log Forward to external GrafanaLoki log store", func() {
 		g.BeforeEach(func() {
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			CLO := SubscriptionObjects{
@@ -1291,7 +1291,7 @@ max_size = 268435488`,
 			o.Expect(result).Should(o.BeTrue())
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-48490-Vector Forward logs to Grafana Loki using HTTPS and existing loki.tenantKey kubernetes.labels.test", func() {
+		g.It("Author:ikanse-CPaasrunOnly-Medium-48490-Vector Forward logs to Grafana Loki using HTTPS and existing loki.tenantKey kubernetes.labels.test", func() {
 
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -1349,7 +1349,7 @@ max_size = 268435488`,
 			e2e.Logf("Application Logs Query is a success")
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-48923-Vector Forward logs to Grafana Loki using HTTPS and existing loki.tenantKey kubernetes.namespace_name", func() {
+		g.It("Author:ikanse-CPaasrunOnly-Medium-48923-Vector Forward logs to Grafana Loki using HTTPS and existing loki.tenantKey kubernetes.namespace_name", func() {
 
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -1407,7 +1407,7 @@ max_size = 268435488`,
 			e2e.Logf("Application Logs Query is a success")
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-High-62975-Collector connects to the remote output using the cipher defined in the tlsSecurityPrfoile [Slow][Disruptive]", func() {
+		g.It("Author:ikanse-CPaasrunOnly-High-62975-Collector connects to the remote output using the cipher defined in the tlsSecurityPrfoile [Slow][Disruptive]", func() {
 			g.By("Make sure that all the Cluster Operators are in healthy state before progressing.")
 			waitForOperatorsRunning(oc)
 
@@ -1505,7 +1505,7 @@ ciphersuites = "TLS_CHACHA20_POLY1305_SHA256"`
 			lc.waitForLogsAppearByProject("", appProj)
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Low-61476-Collector-External Loki output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
+		g.It("Author:ikanse-CPaasrunOnly-Low-61476-Collector-External Loki output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
 
 			var (
 				loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -1642,7 +1642,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		loggingBaseDir, s, sc string
 	)
 
-	g.Context("ClusterLogging LokiStack tlsSecurityProfile tests", func() {
+	g.Context("LokiStack tlsSecurityProfile tests loki-operator", func() {
 
 		g.BeforeEach(func() {
 			s = getStorageType(oc)
@@ -1678,7 +1678,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			oc.SetupProject()
 		})
 
-		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-High-54523-LokiStack Cluster Logging comply with the intermediate TLS security profile when global API Server has no tlsSecurityProfile defined[Slow][Disruptive]", func() {
+		g.It("Author:ikanse-CPaasrunOnly-ConnectedOnly-High-54523-LokiStack comply with the intermediate TLS security profile when global API Server has no tlsSecurityProfile defined[Slow][Disruptive]", func() {
 
 			var (
 				jsonLogFile = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -1794,7 +1794,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
-		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Medium-54525-LokiStack Cluster Logging comply with the old tlsSecurityProfile when configured in the global API server configuration[Slow][Disruptive]", func() {
+		g.It("Author:ikanse-CPaasrunOnly-ConnectedOnly-Medium-54525-LokiStack comply with the old tlsSecurityProfile when configured in the global API server configuration[Slow][Disruptive]", func() {
 			if isFipsEnabled(oc) {
 				g.Skip("skip old tlsSecurityProfile on FIPS enabled cluster")
 			}
@@ -2028,7 +2028,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			}
 		})
 
-		g.It("CPaasrunOnly-ConnectedOnly-Author:ikanse-Medium-54527-LokiStack Cluster Logging comply with the global tlsSecurityProfile - old to intermediate[Slow][Disruptive]", func() {
+		g.It("Author:ikanse-CPaasrunOnly-ConnectedOnly-Medium-54527-LokiStack comply with the global tlsSecurityProfile - old to intermediate[Slow][Disruptive]", func() {
 			if isFipsEnabled(oc) {
 				g.Skip("skip old tlsSecurityProfile on FIPS enabled cluster")
 			}
@@ -2213,7 +2213,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		loggingBaseDir, s string
 	)
 
-	g.Context("Loki Log Alerts testing", func() {
+	g.Context("LokiStack Log Alerts testing loki-operator", func() {
 		g.BeforeEach(func() {
 			s = getStorageType(oc)
 			if len(s) == 0 {
@@ -2244,7 +2244,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			oc.SetupProject()
 		})
 
-		g.It("CPaasrunOnly-Author:kbharti-High-52779-High-55393-Loki Operator - Validate alert and recording rules in LokiRuler configmap and Rules API(cluster-admin)[Serial]", func() {
+		g.It("Author:kbharti-CPaasrunOnly-High-52779-High-55393-Validate alert and recording rules in LokiRuler configmap and Rules API(cluster-admin)[Serial]", func() {
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			appProj := oc.Namespace()
 			oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", appProj, "openshift.io/cluster-monitoring=true").Execute()
@@ -2361,7 +2361,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			e2e.Logf("Rules API response validated succesfully")
 		})
 
-		g.It("CPaasrunOnly-Author:kbharti-Critical-55415-Loki Operator - Validate AlertManager support for cluster-monitoring is decoupled from User-workload monitoring[Serial]", func() {
+		g.It("Author:kbharti-CPaasrunOnly-Critical-55415-Validate AlertManager support for cluster-monitoring is decoupled from User-workload monitoring[Serial]", func() {
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			appProj := oc.Namespace()
 			oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", appProj, "openshift.io/cluster-monitoring=true").Execute()
@@ -2460,7 +2460,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			queryAlertManagerForActiveAlerts(oc, bearerToken, false, "MyAppLogVolumeIsHigh", 5)
 		})
 
-		g.It("CPaasrunOnly-Author:kbharti-Medium-61435-Loki Operator - Validate AlertManager support for User-workload monitoring[Serial]", func() {
+		g.It("Author:kbharti-CPaasrunOnly-Medium-61435-Validate AlertManager support for User-workload monitoring[Serial]", func() {
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			appProj := oc.Namespace()
 			oc.AsAdmin().WithoutNamespace().Run("label").Args("namespace", appProj, "openshift.io/cluster-monitoring=true").Execute()
@@ -2612,7 +2612,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 		oc.SetupProject()
 	})
 
-	g.It("Author:qitang-CPaasrunOnly-Medium-76114-Controlling log flow rates per container from selected containers by containerLimit.[Serial][Slow]", func() {
+	g.It("Author:qitang-CPaasrunOnly-Medium-76114-Controlling log flow rates per container from selected containers by containerLimit LokiStack[Serial][Slow]", func() {
 		if !validateInfraForLoki(oc) {
 			g.Skip("Current platform not supported!")
 		}
@@ -2742,7 +2742,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 		}
 	})
 
-	g.It("Author:qitang-CPaasrunOnly-Medium-76115-Controlling the flow rate per destination to selected outputs.[Serial][Slow]", func() {
+	g.It("Author:qitang-CPaasrunOnly-Medium-76115-Controlling the flow rate per destination to selected outputs LokiStack [Serial][Slow]", func() {
 		if !validateInfraForLoki(oc) {
 			g.Skip("Current platform not supported!")
 		}
@@ -2844,7 +2844,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Flow control t
 		}
 	})
 
-	g.It("Author:qitang-CPaasrunOnly-Medium-65195-Controlling log flow rates - different output with different rate", func() {
+	g.It("Author:qitang-CPaasrunOnly-Medium-65195-Controlling log flow rates - different output with different rate Loki Elasticsearch Syslog", func() {
 		exutil.By("Create pod to generate some logs")
 		appProj := oc.Namespace()
 		err := oc.WithoutNamespace().Run("new-app").Args("-n", appProj, "-f", jsonLogFile, "-p", "RATE=3000").Execute()
@@ -2988,7 +2988,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Audit Policy T
 		oc.SetupProject()
 	})
 
-	g.It("Author:qitang-CPaasrunOnly-Critical-75841-Filter audit logs and forward to log store.[Serial]", func() {
+	g.It("Author:qitang-CPaasrunOnly-Critical-75841-Filter audit logs and forward to log store LokiStack[Serial]", func() {
 		exutil.By("Deploying LokiStack")
 		ls := lokiStack{
 			name:          "loki-75841",
@@ -3147,7 +3147,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Audit Policy T
 		o.Expect(len(log.Data.Result) > 0).Should(o.BeTrue())
 	})
 
-	g.It("CPaasrunOnly-Author:qitang-High-67421-Separate policies can be applied on separate pipelines.[Serial]", func() {
+	g.It("Author:qitang-CPaasrunOnly-High-67421-Separate policies can be applied on separate pipelines LokiStack.[Serial]", func() {
 		exutil.By("Deploying an external log store")
 		es := externalES{
 			namespace:  oc.Namespace(),
@@ -3242,7 +3242,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Audit Policy T
 		o.Expect(len(log.Data.Result) == 0).Should(o.BeTrue())
 	})
 
-	g.It("CPaasrunOnly-Author:qitang-Medium-68318-Multiple policies can be applied to one pipeline.[Serial]", func() {
+	g.It("Author:qitang-CPaasrunOnly-Medium-68318-Multiple policies can be applied to one pipeline LokiStack.[Serial]", func() {
 		exutil.By("Deploying LokiStack")
 		ls := lokiStack{
 			name:          "loki-68318",
@@ -3333,7 +3333,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Audit Policy T
 
 })
 
-var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grained logs access testing", func() {
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grained logs access testing loki-operator", func() {
 	defer g.GinkgoRecover()
 
 	var (
@@ -3375,7 +3375,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grai
 		LO.SubscribeOperator(oc)
 	})
 
-	g.It("CPaasrunOnly-Author:kbharti-Critical-67565-High-55388-Verify that non-admin/regular user can access logs and query rules as per rolebindings assigned to the user[Serial][Slow]", func() {
+	g.It("Author:kbharti-CPaasrunOnly-Critical-67565-High-55388-Verify that non-admin/regular user can access LokiStack logs and query rules as per rolebindings assigned to the user[Serial][Slow]", func() {
 
 		var (
 			loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -3472,7 +3472,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grai
 
 	})
 
-	g.It("CPaasrunOnly-Author:kbharti-Critical-67643-Verify logs access for LokiStack adminGroups[Serial][Slow]", func() {
+	g.It("Author:kbharti-CPaasrunOnly-Critical-67643-Verify logs access for LokiStack adminGroups[Serial][Slow]", func() {
 
 		g.By("Create Groups with users")
 		oc.SetupProject()
@@ -3559,7 +3559,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki Fine grai
 	})
 })
 
-var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Efficient OTEL Support", func() {
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease LokiStack - Efficient OTEL Support", func() {
 	defer g.GinkgoRecover()
 
 	var (
@@ -3601,7 +3601,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Efficie
 		LO.SubscribeOperator(oc)
 	})
 
-	g.It("CPaasrunOnly-Author:kbharti-High-70683-Medium-70684-Validate new Loki installations support TSDBv3 and v13 storage schema and automatic stream sharding[Serial]", func() {
+	g.It("Author:kbharti-CPaasrunOnly-High-70683-Medium-70684-Validate new Loki installations support TSDBv3 and v13 storage schema and automatic stream sharding[Serial]", func() {
 
 		g.By("Deploy Loki stack with v13 schema and tsdb store")
 		lokiStackTemplate := filepath.Join(loggingBaseDir, "lokistack", "lokistack-simple.yaml")
@@ -3625,7 +3625,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Efficie
 		o.Expect(err).NotTo(o.HaveOccurred())
 		ls.waitForLokiStackToBeReady(oc)
 
-		exutil.By("create a CLF to test forward to lokistack")
+		exutil.By("create a CLF to test forward to LokiStack")
 		clf := clusterlogforwarder{
 			name:                      "instance-70683",
 			namespace:                 loggingNS,
@@ -3725,7 +3725,7 @@ spec:
 		e2e.Logf("Overrides validated successfully!")
 	})
 
-	g.It("CPaasrunOnly-Author:kbharti-High-70714-Show warning to user for upgrading to TSDBv3 store and v13 schema[Serial]", func() {
+	g.It("Author:kbharti-CPaasrunOnly-High-70714-Show warning to user for upgrading to LokStack TSDBv3 store and v13 schema[Serial]", func() {
 
 		// The Alert will be only be shown on a tshirt size of 1x.extra-small and greater
 		if !validateInfraAndResourcesForLoki(oc, "35Gi", "16") {
@@ -3763,7 +3763,7 @@ spec:
 		e2e.Logf("Alert LokistackSchemaUpgradesRequired is firing...")
 	})
 
-	g.It("Author:kbharti-CPaasrunOnly-Medium-70685-Validate support for blocking queries on Loki[Serial]", func() {
+	g.It("Author:kbharti-CPaasrunOnly-Medium-70685-Validate support for blocking queries on LokiStack[Serial]", func() {
 
 		g.By("Create 3 application generator projects")
 		oc.SetupProject()
@@ -3901,7 +3901,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease - LokiStack wi
 		LO.SubscribeOperator(oc)
 	})
 
-	g.It("Author:kbharti-CPaasrunOnly-Critical-75334-Forward logs to lokiStack via clusterLogForwarder.observability.openshift.io API using per tenant and global labelKeys[Serial]", func() {
+	g.It("Author:kbharti-CPaasrunOnly-Critical-75334-Forward logs via clusterLogForwarder.observability.openshift.io API using per tenant and global labelKeys[Serial]", func() {
 
 		var (
 			loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
@@ -4066,7 +4066,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease - LokiStack wi
 		e2e.Logf("Validation with infrastructure labelKeys is success")
 	})
 
-	g.It("Author:kbharti-CPaasrunOnly-High-75369-Forward logs to lokiStack via ClusterLogForwarder.observability.openshift.io API using per tenant keys and no global overrides[Serial]", func() {
+	g.It("Author:kbharti-CPaasrunOnly-High-75369-Forward logs via ClusterLogForwarder.observability.openshift.io API using per tenant keys and no global overrides[Serial]", func() {
 
 		var (
 			loglabeltemplate = filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")

@@ -34,7 +34,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	//author anli@redhat.com
-	g.It("CPaasrunOnly-ConnectedOnly-Author:anli-High-71770-Forward logs to Azure Log Analytics -- Minimal Options", func() {
+	g.It("Author:anli-CPaasrunOnly-ConnectedOnly-High-71770-Forward logs to AZMonitor -- Minimal Options", func() {
 		if exutil.IsWorkloadIdentityCluster(oc) {
 			g.Skip("Skip on the workload identity enabled cluster!")
 		}

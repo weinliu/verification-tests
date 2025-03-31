@@ -21,7 +21,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		oc             = exutil.NewCLI("vector-splunk", exutil.KubeConfigPath())
 		loggingBaseDir string
 	)
-	g.Context("Log Forward to splunk", func() {
+	g.Context("Log Forward to Splunk", func() {
 		// author anli@redhat.com
 		g.BeforeEach(func() {
 			nodes, err := oc.AdminKubeClient().CoreV1().Nodes().List(context.Background(), metav1.ListOptions{LabelSelector: "kubernetes.io/os=linux,kubernetes.io/arch=amd64"})

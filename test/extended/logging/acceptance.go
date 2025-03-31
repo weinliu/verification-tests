@@ -52,7 +52,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 	})
 
 	// author qitang@redhat.com
-	g.It("Author:qitang-CPaasrunBoth-Critical-74397-[InterOps] Forward logs to lokistack.[Slow][Serial]", func() {
+	g.It("Author:qitang-CPaasrunBoth-Critical-74397-[InterOps] Forward logs to LokiStack.[Slow][Serial]", func() {
 		g.By("deploy LO")
 		LO.SubscribeOperator(oc)
 		s := getStorageType(oc)
@@ -171,7 +171,7 @@ var _ = g.Describe("[sig-openshift-logging] LOGGING Logging", func() {
 		ls.validateExternalObjectStorageForLogs(oc, []string{"application", "audit", "infrastructure"})
 	})
 
-	g.It("Author:qitang-CPaasrunBoth-ConnectedOnly-Critical-74926-[InterOps] Forward logs to cloudwatch.", func() {
+	g.It("Author:qitang-CPaasrunBoth-ConnectedOnly-Critical-74926-[InterOps] Forward logs to Cloudwatch.", func() {
 		clfNS := oc.Namespace()
 		cw := cloudwatchSpec{
 			collectorSAName: "cloudwatch-" + getRandomString(),
@@ -299,7 +299,7 @@ retry_max_duration_secs = 20`,
 	})
 
 	//author anli@redhat.com
-	g.It("Author:anli-CPaasrunBoth-ConnectedOnly-Critical-71772-Forward logs to az Log Analytics -- full options", func() {
+	g.It("Author:anli-CPaasrunBoth-ConnectedOnly-Critical-71772-Forward logs to AZMonitor -- full options", func() {
 		platform := exutil.CheckPlatform(oc)
 		if platform == "azure" && exutil.IsWorkloadIdentityCluster(oc) {
 			g.Skip("Skip on the workload identity enabled cluster!")

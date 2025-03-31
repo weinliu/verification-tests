@@ -17,7 +17,7 @@ import (
 	e2e "k8s.io/kubernetes/test/e2e/framework"
 )
 
-var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki upgrade testing", func() {
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki Upgrade testing loki-operator", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc             = exutil.NewCLI("logging-loki-upgrade", exutil.KubeConfigPath())
@@ -56,7 +56,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 	})
 
 	// author qitang@redhat.com
-	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53407-Cluster Logging upgrade with Vector as collector - minor version.[Serial][Slow]", func() {
+	g.It("Author:qitang-Longduration-CPaasrunOnly-Critical-53407-Upgrade with Vector as collector - minor version.[Serial][Slow]", func() {
 		g.Skip("Skip for logging 6.2 is not released!")
 		var targetchannel = "stable-6.2"
 		var oh OperatorHub
@@ -221,7 +221,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease vector-loki up
 	})
 
 	// author: qitang@redhat.com
-	g.It("Longduration-CPaasrunOnly-Author:qitang-Critical-53404-Cluster Logging upgrade with Vector as collector - major version.[Serial][Slow]", func() {
+	g.It("Author:qitang-Longduration-CPaasrunOnly-Critical-53404-Upgrade with Vector as collector - major version LokiStack [Serial][Slow]", func() {
 		// to add logging 6.0, create a new catalog source with image: quay.io/openshift-qe-optional-operators/aosqe-index
 		catsrcTemplate := exutil.FixturePath("testdata", "logging", "subscription", "catsrc.yaml")
 		catsrc := resource{"catsrc", "logging-upgrade-" + getRandomString(), "openshift-marketplace"}
@@ -402,7 +402,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease operator deplo
 		loggingBaseDir = exutil.FixturePath("testdata", "logging")
 	})
 
-	g.It("CPaasrunOnly-Author:anli-Low-65518-deploy cluster-logging-operator after datadog-agent is deployed [Disruptive]", func() {
+	g.It("Author:anli-CPaasrunOnly-Low-65518-deploy cluster-logging-operator after Datadog-Agent is deployed [Disruptive]", func() {
 		oc.SetupProject()
 		datadogNS := oc.Namespace()
 		subTemplate := filepath.Join(loggingBaseDir, "subscription", "sub-template.yaml")
@@ -480,7 +480,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 	})
 
 	// author: qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Medium-64147-Deploy Logfilesmetricexporter as an independent pod.[Serial]", func() {
+	g.It("Author:qitang-CPaasrunOnly-Medium-64147-Deploy LFME as an independent pod[Serial]", func() {
 		template := filepath.Join(loggingBaseDir, "logfilemetricexporter", "lfme.yaml")
 		lfme := logFileMetricExporter{
 			name:          "instance",
@@ -571,7 +571,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 	})
 
 	// author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Medium-65407-ClusterLogForwarder validation for the serviceaccount.[Slow]", func() {
+	g.It("Author:qitang-CPaasrunOnly-Medium-65407-ClusterLogForwarder validation for the serviceaccount[Slow]", func() {
 		clfNS := oc.Namespace()
 		exutil.By("Deploy ES server")
 		ees := externalES{
@@ -656,7 +656,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 	})
 
 	// author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Medium-65408-ClusterLogForwarder validation when roles don't match.", func() {
+	g.It("Author:qitang-CPaasrunOnly-Medium-65408-ClusterLogForwarder validation when roles don't match.", func() {
 		clfNS := oc.Namespace()
 		loki := externalLoki{"loki-server", clfNS}
 		defer loki.remove(oc)
@@ -735,7 +735,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 	})
 
 	// author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-High-65685-Deploy CLO to all namespaces and verify prometheusrule/collector and cm/grafana-dashboard-cluster-logging are created along with the CLO.", func() {
+	g.It("Author:qitang-CPaasrunOnly-High-65685-Deploy CLO to all namespaces and verify prometheusrule/collector and cm/grafana-dashboard-cluster-logging are created along with the CLO.", func() {
 		csvs, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("csv", "-n", "default", "-oname").Output()
 		o.Expect(err).NotTo(o.HaveOccurred())
 		o.Expect(strings.Contains(csvs, "cluster-logging")).Should(o.BeTrue())
@@ -755,7 +755,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease multi-mode tes
 		configmap.WaitForResourceToAppear(oc)
 	})
 
-	g.It("Author:qitang-CPaasrunOnly-Critical-74398-Manage logging collector pods via CLF.[Serial]", func() {
+	g.It("Author:qitang-CPaasrunOnly-Critical-74398-Manage logging collector pods via CLF[Serial]", func() {
 		s := getStorageType(oc)
 		sc, err := getStorageClassName(oc)
 		if err != nil || len(sc) == 0 {
@@ -878,7 +878,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease rapidast scan"
 		}
 	})
 	// author anli@redhat.com
-	g.It("Author:anli-CPaasrunOnly-Critical-67424-Loki Operator should pass DAST test", func() {
+	g.It("Author:anli-CPaasrunOnly-Critical-67424-loki-operator should pass DAST test", func() {
 		LO := SubscriptionObjects{
 			OperatorName:  "loki-operator-controller-manager",
 			Namespace:     loNS,

@@ -13,7 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 )
 
-var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Forward to GCL", func() {
 	defer g.GinkgoRecover()
 	var (
 		oc             = exutil.NewCLI("vector-to-google-cloud-logging", exutil.KubeConfigPath())
@@ -94,7 +94,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 	})
 
 	//author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-High-71003-Collect or exclude logs by matching pod expressions[Slow]", func() {
+	g.It("Author:qitang-CPaasrunOnly-High-71003-Collect or exclude logs by matching pod expressions[Slow]", func() {
 		clfNS := oc.Namespace()
 		projectID, err := exutil.GetGcpProjectID(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -192,7 +192,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		}
 	})
 
-	g.It("CPaasrunOnly-Author:ikanse-High-61602-Collector external Google Cloud logging complies with the tlsSecurityProfile configuration. [Slow][Disruptive]", func() {
+	g.It("Author:ikanse-CPaasrunOnly-High-61602-Collector external to GCL complies with the tlsSecurityProfile configuration. [Slow][Disruptive]", func() {
 
 		g.By("Configure the global tlsSecurityProfile to use Intermediate profile")
 		ogTLS, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiserver/cluster", "-o", "jsonpath={.spec.tlsSecurityProfile}").Output()
@@ -299,7 +299,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 	})
 
 	//author qitang@redhat.com
-	g.It("CPaasrunOnly-Author:qitang-Medium-71777-Include or exclude logs by combining namespace and container selectors.[Slow]", func() {
+	g.It("Author:qitang-CPaasrunOnly-Medium-71777-Include or exclude logs by combining namespace and container selectors.[Slow]", func() {
 		clfNS := oc.Namespace()
 		projectID, err := exutil.GetGcpProjectID(oc)
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -474,7 +474,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 	})
 
 	// author qitang@redhat.com
-	g.It("CPaasrunOnly-ConnectedOnly-Author:qitang-Medium-71753-Prune fields from log messages", func() {
+	g.It("Author:qitang-CPaasrunOnly-ConnectedOnly-Medium-71753-Prune fields from log messages", func() {
 		exutil.By("Create CLF")
 		clfNS := oc.Namespace()
 		projectID, err := exutil.GetGcpProjectID(oc)

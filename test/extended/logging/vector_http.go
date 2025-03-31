@@ -20,7 +20,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		loggingBaseDir string
 	)
 
-	g.Context("vector forward logs to external store over http", func() {
+	g.Context("Log Forward to Http", func() {
 		g.BeforeEach(func() {
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			g.By("deploy CLO")

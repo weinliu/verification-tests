@@ -22,7 +22,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		infraName      string
 	)
 
-	g.Context("Log Forward to Cloudwatch using Vector as Collector", func() {
+	g.Context("Log Forward to Cloudwatch", func() {
 
 		g.BeforeEach(func() {
 			platform := exutil.CheckPlatform(oc)
@@ -159,7 +159,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			o.Expect(cw.auditLogsFound(false)).To(o.BeTrue())
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-High-61600-Collector External Cloudwatch output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
+		g.It("Author:ikanse-CPaasrunOnly-High-61600-Collector External Cloudwatch output complies with the tlsSecurityProfile configuration.[Slow][Disruptive]", func() {
 			g.By("init Cloudwatch test spec")
 			clfNS := oc.Namespace()
 			cw := cloudwatchSpec{
@@ -278,7 +278,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-Medium-71778-Collect or exclude logs by matching pod labels and namespaces.[Slow]", func() {
+		g.It("Author:qitang-CPaasrunOnly-Medium-71778-Collect or exclude logs by matching pod labels and namespaces.[Slow]", func() {
 			g.By("init Cloudwatch test spec")
 			clfNS := oc.Namespace()
 			cw := cloudwatchSpec{
@@ -358,7 +358,7 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-High-71488-Collect container logs from infrastructure projects in an application input.", func() {
+		g.It("Author:qitang-CPaasrunOnly-High-71488-Collect container logs from infrastructure projects in an application input.", func() {
 			g.By("init Cloudwatch test spec")
 			clfNS := oc.Namespace()
 			cw := cloudwatchSpec{
@@ -576,5 +576,4 @@ ciphersuites = "TLS_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1
 		})
 
 	})
-
 })

@@ -22,7 +22,8 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		loggingBaseDir string
 	)
 
-	g.Context("Test logforwarding to syslog via vector as collector", func() {
+	g.Context("Log Forward to Syslog", func() {
+
 		g.BeforeEach(func() {
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			CLO := SubscriptionObjects{

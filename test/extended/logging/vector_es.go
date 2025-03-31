@@ -27,7 +27,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		loggingBaseDir string
 	)
 
-	g.Context("Vector User-Managed-ES tests", func() {
+	g.Context("Log Forward to User-Managed-ES", func() {
 		g.BeforeEach(func() {
 			loggingBaseDir = exutil.FixturePath("testdata", "logging")
 			g.By("deploy CLO")
@@ -42,7 +42,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			oc.SetupProject()
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Critical-49390-Vector Collecting Kubernetes events using event router", func() {
+		g.It("Author:ikanse-CPaasrunOnly-Critical-49390-Vector Collecting Kubernetes events using event router", func() {
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
 			es := externalES{
@@ -252,7 +252,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 		})
 
 		// author qitang@redhat.com
-		g.It("CPaasrunOnly-Author:qitang-Medium-52131-Vector Logs from different projects are forwarded to the same index if the pods have same annotation", func() {
+		g.It("Author:qitang-CPaasrunOnly-Medium-52131-Vector Logs from different projects are forwarded to the same index if the pods have same annotation", func() {
 			containerName := "log-52131-" + getRandomString()
 			jsonLogFile := filepath.Join(loggingBaseDir, "generatelog", "container_json_log_template.json")
 			app1 := oc.Namespace()
@@ -361,7 +361,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-48593-Vector ClusterLogForwarder Label each message type differently and send all to the same output", func() {
+		g.It("Author:ikanse-CPaasrunOnly-Medium-48593-Vector ClusterLogForwarder Label each message type differently and send all to the same output", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
@@ -416,7 +416,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-High-46882-High-47061-Vector ClusterLogForwarder forward logs to Elasticsearch insecure forward and metadata check", func() {
+		g.It("Author:ikanse-CPaasrunOnly-High-46882-High-47061-Vector ClusterLogForwarder forward logs to Elasticsearch insecure forward and metadata check", func() {
 
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
@@ -540,7 +540,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 			checkAlert(oc, getSAToken(oc, "prometheus-k8s", "openshift-monitoring"), "CollectorNodeDown", "firing/pending", 5)
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-55200-Medium-47753-Vector Forward logs to external Elasticsearch with username password HTTP ES 6.x", func() {
+		g.It("Author:ikanse-CPaasrunOnly-Medium-55200-Medium-47753-Vector Forward logs to external Elasticsearch with username password HTTP ES 6.x", func() {
 			g.By("Create external Elasticsearch instance")
 			esProj := oc.Namespace()
 			ees := externalES{
@@ -585,7 +585,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-Medium-55199-Medium-47755-Vector Forward logs to external Elasticsearch with username password HTTPS ES 7.x", func() {
+		g.It("Author:ikanse-CPaasrunOnly-Medium-55199-Medium-47755-Vector Forward logs to external Elasticsearch with username password HTTPS ES 7.x", func() {
 			oc.SetupProject()
 			clfNS := oc.Namespace()
 
@@ -635,7 +635,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease", func() {
 
 		})
 
-		g.It("CPaasrunOnly-Author:ikanse-High-61450-Collector-External Elasticsearch output complies with the tlsSecurityProfile config.[Slow][Disruptive]", func() {
+		g.It("Author:ikanse-CPaasrunOnly-High-61450-Collector-External Elasticsearch output complies with the tlsSecurityProfile config.[Slow][Disruptive]", func() {
 
 			g.By("Configure the global tlsSecurityProfile to use custom profile")
 			ogTLS, er := oc.AsAdmin().WithoutNamespace().Run("get").Args("apiserver/cluster", "-o", "jsonpath={.spec.tlsSecurityProfile}").Output()
@@ -742,7 +742,7 @@ ca_file = "/var/run/ocp-collector/secrets/ees-https/ca-bundle.crt"`
 
 		})
 
-		g.It("CPaasrunOnly-Author:qitang-High-71000-Collect or exclude logs by namespace[Slow]", func() {
+		g.It("Author:qitang-CPaasrunOnly-High-71000-Collect or exclude logs by namespace[Slow]", func() {
 			exutil.By("Deploy Elasticsearch")
 			esProj := oc.Namespace()
 			ees := externalES{

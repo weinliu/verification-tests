@@ -9,7 +9,7 @@ import (
 	exutil "github.com/openshift/openshift-tests-private/test/extended/util"
 )
 
-var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed auth/STS mode", func() {
+var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease loki-operator - Managed auth/STS mode", func() {
 	defer g.GinkgoRecover()
 
 	var (
@@ -52,7 +52,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 		LO.SubscribeOperator(oc)
 	})
 
-	g.It("Author:kbharti-CPaasrunOnly-Critical-71534-Verify CCO support on AWS STS cluster and forward logs to default Loki[Serial]", func() {
+	g.It("Author:kbharti-CPaasrunOnly-Critical-71534-Verify CCO support on AWSSTS cluster and forward logs to default LokiStack[Serial]", func() {
 		currentPlatform := exutil.CheckPlatform(oc)
 		if strings.ToLower(currentPlatform) != "aws" {
 			g.Skip("The platform is not AWS. Skipping case..")
@@ -126,7 +126,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 	})
 
 	// Case for Microsoft Azure WIF cluster
-	g.It("Author:kbharti-CPaasrunOnly-Critical-71773-Verify CCO support with custom region on a WIF cluster and forward logs to lokiStack logstore[Serial]", func() {
+	g.It("Author:kbharti-CPaasrunOnly-Critical-71773-Verify CCO support with custom region on a AZWIF cluster and forward logs to LokiStack logstore[Serial]", func() {
 
 		currentPlatform := exutil.CheckPlatform(oc)
 		if currentPlatform != "azure" {
@@ -199,7 +199,7 @@ var _ = g.Describe("[sig-openshift-logging] Logging NonPreRelease Loki - Managed
 	})
 
 	// Case for Microsoft Azure WIF cluster
-	g.It("Author:kbharti-CPaasrunOnly-Critical-71794-Verify CCO support with default region on a WIF cluster and forward logs to lokiStack logstore[Serial]", func() {
+	g.It("Author:kbharti-CPaasrunOnly-Critical-71794-Verify CCO support with default region on a AZWIF cluster and forward logs to LokiStack logstore[Serial]", func() {
 
 		currentPlatform := exutil.CheckPlatform(oc)
 		if currentPlatform != "azure" {
