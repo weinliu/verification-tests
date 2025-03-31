@@ -18,7 +18,7 @@ describe('show warning info for resources', () => {
     });
     cy.adminCLI(`oc create -f ./fixtures/warning-policy/podrequiredlabel.yaml`, {failOnNonZeroExit: false});
     cy.adminCLI(`oc create -f ./fixtures/warning-policy/deployrequiredlabel.yaml`, {failOnNonZeroExit: false});
-    cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+    cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     guidedTour.close();
     cy.createProject(testName);
   });
@@ -46,7 +46,7 @@ describe('show warning info for resources', () => {
     cy.visit(`/k8s/cluster/projects/${testName}/yaml`);
     importYamlPage.open();
     cy.wait(3000);
-    cy.get('.ocs-yaml-editor__root')
+    cy.get('.view-line')
         .selectFile('./fixtures/warning-policy/multiple-import.yaml', {action: 'drag-drop'});
     cy.byTestID('save-changes').should('exist');
     cy.wait(2000);

@@ -19,7 +19,7 @@ describe('Dynamic plugins features', () => {
     cy.adminCLI('oc apply -f ./fixtures/console-customization-plugin-manifests.yaml');
     cy.adminCLI('oc apply -f ./fixtures/console-demo-plugin-manifests.yaml');
     cy.checkCommandResult(query_console_dmeo_plugin_pod, 'True', { retries: 3, interval: 15000 }).then(() => {
-      cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+      cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
       return;
     });
   });
