@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 
 	g "github.com/onsi/ginkgo/v2"
 	o "github.com/onsi/gomega"
@@ -1833,25 +1834,38 @@ func ClusterHasEnabledFIPS(oc *exutil.CLI) bool {
 }
 
 func beforeTargetTime(logText, targetText string) bool {
-	// Split the log strings
-	parts := strings.Fields(logText)
-	if len(parts) < 2 {
-		e2e.Fail("Failed to split the log strings")
+	// logText = `2025-04-01T03:03:56.545422887Z 2025/03/30 03:03:56 http: TLS handshake error from 10.131.0.8:39932: tls: failed to verify certificate: x509: certificate signed by unknown authority`
+	e2e.Logf("Get the x509 log text: %s", logText)
+	var logDateTime time.Time
+	var err error
+
+	reRFC3339 := regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z`)
+	match := reRFC3339.FindString(logText)
+
+	if match != "" {
+		logDateTime, err = time.Parse(time.RFC3339Nano, match)
+		if err != nil {
+			e2e.Failf("fail to parse time: %v", err)
+		}
+	} else {
+		reK8s := regexp.MustCompile(`E(\d{4}) (\d{2}:\d{2}:\d{2}\.\d+)`)
+		matches := reK8s.FindStringSubmatch(logText)
+
+		if len(matches) < 3 {
+			e2e.Failf("fail to parse time: %v", err)
+		}
+
+		dateStr := matches[1]
+		month, _ := strconv.Atoi(dateStr[:2])
+		day, _ := strconv.Atoi(dateStr[2:])
+
+		timeStr := matches[2]
+		logTime, err := time.Parse("15:04:05.999999", timeStr)
+		if err != nil {
+			e2e.Failf("fail to parse time: %v", err)
+		}
+		logDateTime = time.Date(time.Now().Year(), time.Month(month), day, logTime.Hour(), logTime.Minute(), logTime.Second(), logTime.Nanosecond(), time.UTC)
 	}
-
-	// Parse date
-	dateStr := parts[0][1:] // remove 'E'
-	month, _ := strconv.Atoi(dateStr[:2])
-	day, _ := strconv.Atoi(dateStr[2:])
-
-	// Parse（19:45:14.489789）
-	timeStr := parts[1]
-	logTime, err := time.Parse("15:04:05.999999", timeStr)
-	if err != nil {
-		e2e.Failf("Fail to parse log time: %v", err)
-	}
-
-	logDateTime := time.Date(time.Now().Year(), time.Month(month), day, logTime.Hour(), logTime.Minute(), logTime.Second(), logTime.Nanosecond(), time.UTC)
 
 	targetTime, err := time.Parse(time.RFC3339, targetText)
 	if err != nil {
