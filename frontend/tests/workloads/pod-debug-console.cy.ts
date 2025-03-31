@@ -11,10 +11,10 @@ describe('Debug console for pods', () => {
   }
 
   before(() => {
-    cy.cliLogin();
-    cy.exec(`oc new-project ${testParams.namespace}`);
-    cy.exec(`oc apply -f ./fixtures/deployments/${testParams.filename}.yaml -n ${testParams.namespace}`);
-    cy.login(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
+    cy.adminCLI(`oc new-project ${testParams.namespace}`);
+    cy.adminCLI(`oc apply -f ./fixtures/deployments/${testParams.filename}.yaml -n ${testParams.namespace}`);
+    cy.adminCLI(`oc adm policy add-role-to-user admin ${Cypress.env('LOGIN_USERNAME')} -n ${testParams.namespace}`);
+    cy.uiLogin(Cypress.env('LOGIN_IDP'), Cypress.env('LOGIN_USERNAME'), Cypress.env('LOGIN_PASSWORD'));
     guidedTour.close();
   })
 
@@ -38,9 +38,7 @@ describe('Debug console for pods', () => {
     // Get pod name via cli
     cy.visit(`/k8s/ns/${testParams.namespace}/pods/`);
     listPage.filter.by('CrashLoopBackOff');
-    //Due to bug OCPBUGS-43652, add step to avoid pod cannot be clicked on Pod List page
-    cy.get('[data-test-id="dropdown-button"]').click();
-    cy.get(`#name [data-test*=crash-loop]`).should('exist').click();
+    cy.get(`[data-test*=crash-loop]`).first().should('exist').click();
     cy.get('[data-test-id="horizontal-link-Logs"]').should('exist').click();
     cy.get(`[data-test="debug-container-link"]`).then($a => {
       const message = $a.text();
