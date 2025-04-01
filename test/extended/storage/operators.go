@@ -285,10 +285,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 			o.Expect(exeErr).ShouldNot(o.HaveOccurred())
 
 			e2e.Logf("Check all cluster operators should be recover healthy")
-			err = waitForAllCOHealthy(oc)
-			if err != nil {
-				g.Fail(fmt.Sprintf("Cluster operators health check failed. Abnormality found in cluster operators:: %s ", err))
-			}
+			waitForAllCOHealthy(oc)
 
 		}()
 

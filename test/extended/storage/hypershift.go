@@ -399,10 +399,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), moreLongerMaxWaitingTime, moreLongerMaxWaitingTime/10).Should(o.BeTrue(), "after apply patch check all nodes ready error in defer")
 			}
 			exutil.By("#. Check all cluster operators should be recover healthy")
-			err = waitForAllCOHealthy(oc.AsGuestKubeconf())
-			if err != nil {
-				g.Fail(fmt.Sprintf("Cluster operators health check failed. Abnormality found in cluster operators:: %s ", err))
-			}
+			waitForAllCOHealthy(oc.AsGuestKubeconf())
 		}()
 		patchResourceAsAdmin(oc, hostedClusterNS, "hostedcluster/"+guestClusterName, JSONPatch, "merge")
 		o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), moreLongerMaxWaitingTime, moreLongerMaxWaitingTime/10).Should(o.BeTrue(), "after apply patch check all nodes ready error in defer")
@@ -481,10 +478,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), moreLongerMaxWaitingTime, moreLongerMaxWaitingTime/10).Should(o.BeTrue(), "after apply patch check all nodes ready error in defer")
 			}
 			exutil.By("#. Check all cluster operators should be recover healthy")
-			err = waitForAllCOHealthy(oc.AsGuestKubeconf())
-			if err != nil {
-				g.Fail(fmt.Sprintf("Cluster operators health check failed. Abnormality found in cluster operators:: %s ", err))
-			}
+			waitForAllCOHealthy(oc.AsGuestKubeconf())
 		}()
 		patchResourceAsAdmin(oc, hostedClusterNS, "hostedcluster/"+guestClusterName, JSONPatch, "merge")
 		o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), moreLongerMaxWaitingTime, moreLongerMaxWaitingTime/10).Should(o.BeTrue(), "after apply patch check all nodes ready error in defer")
@@ -581,10 +575,7 @@ var _ = g.Describe("[sig-storage] STORAGE", func() {
 				o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), moreLongerMaxWaitingTime, moreLongerMaxWaitingTime/10).Should(o.BeTrue(), "after apply patch check all nodes ready error in defer")
 			}
 			exutil.By("#. Check all cluster operators should be recover healthy")
-			err = waitForAllCOHealthy(oc.AsGuestKubeconf())
-			if err != nil {
-				g.Fail(fmt.Sprintf("Cluster operators health check failed. Abnormality found in cluster operators:: %s ", err))
-			}
+			waitForAllCOHealthy(oc.AsGuestKubeconf())
 		}()
 		patchResourceAsAdmin(oc, hostedClusterNS, "hostedcluster/"+guestClusterName, JSONPatch, "merge")
 		o.Eventually(hostedcluster.pollCheckAllNodepoolReady(), moreLongerMaxWaitingTime, moreLongerMaxWaitingTime/10).Should(o.BeTrue(), "after apply patch check all nodes ready error in defer")

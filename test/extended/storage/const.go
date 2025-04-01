@@ -12,6 +12,7 @@ const (
 	longerMaxWaitingTime     = 15 * time.Minute
 	moreLongerMaxWaitingTime = 30 * time.Minute
 	longestMaxWaitingTime    = 1 * time.Hour
+	defaultIntervalTime      = 5 * time.Second
 )
 
 const (

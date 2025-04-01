@@ -1209,28 +1209,57 @@ func getCONames(oc *exutil.CLI) ([]string, error) {
 	return strings.Fields(coNamesOutput), err
 }
 
-// Ensure all cluster operators reach a healthy state
-func waitForAllCOHealthy(oc *exutil.CLI) error {
-	var coNames []string
-	err := wait.PollImmediate(10*time.Second, 2*time.Minute, func() (bool, error) {
-		var err error
-		coNames, err = getCONames(oc)
-		if err != nil {
-			e2e.Logf("Failed to fetch all cluster operators names: %v", err)
-			return false, nil // continue polling if error occurs
-		}
-		return len(coNames) > 0, nil
-	})
-	if err != nil {
-		return fmt.Errorf("Failed to fetch cluster operators names within the timeout")
-	}
+// waitForAllCOHealthy waits for all cluster operators become healthy
+func waitForAllCOHealthy(oc *exutil.CLI) {
 
-	for _, coName := range coNames {
-		if err := waitCOHealthy(oc, coName); err != nil {
-			return fmt.Errorf("Cluster operator %q failed to become healthy: %w", coName, err)
+	var (
+		unHealthyCos []configv1.ClusterOperator
+		n            = 1
+		ctx          = context.TODO()
+	)
+
+	err := wait.PollUntilContextTimeout(ctx, 3*defaultIntervalTime, moreLongerMaxWaitingTime, true, func(ctx context.Context) (bool, error) {
+
+		e2e.Logf("****************** %d iteration ******************\n", n)
+		n++
+		coList, getCoListErr := oc.AdminConfigClient().ConfigV1().ClusterOperators().List(ctx, metav1.ListOptions{})
+		if getCoListErr != nil {
+			e2e.Logf("Failed to get cluster operators list: %v. Retrying...", getCoListErr)
+			return false, nil
 		}
+
+		unHealthyCos = []configv1.ClusterOperator{}
+		allHealthy := true
+		for _, co := range coList.Items {
+			available, progressing, degraded := false, false, false
+
+			for _, cond := range co.Status.Conditions {
+				switch cond.Type {
+				case configv1.OperatorAvailable:
+					available = (cond.Status == configv1.ConditionTrue)
+				case configv1.OperatorProgressing:
+					progressing = (cond.Status == configv1.ConditionTrue)
+				case configv1.OperatorDegraded:
+					degraded = (cond.Status == configv1.ConditionTrue)
+				}
+			}
+
+			if available && !progressing && !degraded {
+				debugLogf("ClusterOperator %q is healthy\n", co.Name)
+			} else {
+				unHealthyCos = append(unHealthyCos, co)
+				e2e.Logf("ClusterOperator %q is NOT healthy, available:%t, progressing:%t, degraded:%t\n", co.Name, available, progressing, degraded)
+				allHealthy = false
+			}
+		}
+		e2e.Logf("**************************************************\n")
+		return allHealthy, nil
+	})
+
+	if err != nil {
+		e2e.Logf("Unhealthy cluster operators are: %v", unHealthyCos)
+		exutil.AssertWaitPollNoErr(err, "Waiting for all cluster operators to be healthy timeout")
 	}
-	return nil
 }
 
 // function to create cluster role
