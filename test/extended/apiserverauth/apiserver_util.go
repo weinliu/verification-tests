@@ -239,7 +239,14 @@ func CheckIfResourceAvailable(oc *exutil.CLI, resource string, resourceNames []s
 	return "", true
 }
 
-func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus map[string]string) error {
+func waitCoBecomes(oc *exutil.CLI, coName string, baseWaitTime int, expectedStatus map[string]string) error {
+	waitTime := baseWaitTime
+	stableDelay := 100 * time.Second
+
+	// Override for SNO clusters if needed
+	if isSNOCluster(oc) {
+		waitTime = baseWaitTime * 3
+	}
 	errCo := wait.PollUntilContextTimeout(context.Background(), 20*time.Second, time.Duration(waitTime)*time.Second, false, func(cxt context.Context) (bool, error) {
 		gottenStatus := getCoStatus(oc, coName, expectedStatus)
 		eq := reflect.DeepEqual(expectedStatus, gottenStatus)
@@ -247,7 +254,7 @@ func waitCoBecomes(oc *exutil.CLI, coName string, waitTime int, expectedStatus m
 			eq := reflect.DeepEqual(expectedStatus, map[string]string{"Available": "True", "Progressing": "False", "Degraded": "False"})
 			if eq {
 				// For True False False, we want to wait some bit more time and double check, to ensure it is stably healthy
-				time.Sleep(100 * time.Second)
+				time.Sleep(stableDelay)
 				gottenStatus := getCoStatus(oc, coName, expectedStatus)
 				eq := reflect.DeepEqual(expectedStatus, gottenStatus)
 				if eq {
