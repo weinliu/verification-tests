@@ -26,7 +26,7 @@ parameters:
   - name: NAME
   - name: POOL
   - name: IGNITION_VERSION
-    value: 3.4.0
+    value: 3.5.0
   - name: FILES
     value: "[]"
   - name: UNITS

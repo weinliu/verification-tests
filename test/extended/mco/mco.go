@@ -3317,12 +3317,12 @@ nulla pariatur.`
 		logger.Infof("OK!\n")
 	})
 
-	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-63477-[P2] Deploy files using all available ignition configs. Default 3.4.0[Disruptive]", func() {
+	g.It("Author:sregidor-NonHyperShiftHOST-NonPreRelease-Longduration-Medium-63477-[P2] Deploy files using all available ignition configs. Default 3.5.0[Disruptive]", func() {
 		var (
 			wMcp                   = NewMachineConfigPool(oc.AsAdmin(), MachineConfigPoolWorker)
 			mcNames                = "mc-tc-63477"
-			allVersions            = []string{"2.2.0", "3.0.0", "3.1.0", "3.2.0", "3.3.0", "3.4.0"}
-			defaultIgnitionVersion = "3.4.0" // default version is 3.4.0 for OCP > 4.13
+			allVersions            = []string{"2.2.0", "3.0.0", "3.1.0", "3.2.0", "3.3.0", "3.4.0", "3.5.0"}
+			defaultIgnitionVersion = "3.5.0" // default version is 3.5.0 for OCP > 4.19
 		)
 		defer wMcp.waitForComplete()
 
