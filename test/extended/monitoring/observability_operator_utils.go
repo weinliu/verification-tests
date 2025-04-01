@@ -207,12 +207,18 @@ func checkOperatorPods(oc *exutil.CLI) {
 	exutil.By("Check " + namespace + " namespace pods liveliness")
 	errCheck := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 180*time.Second, false, func(ctx context.Context) (bool, error) {
 		out, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("pods", "-n", namespace, "-o", "jsonpath={.items[*].status.phase}").Output()
-		if strings.Compare(out, "Running Running Running Running") == 0 {
-			return true, nil
+		if err != nil {
+			return false, err
 		}
-		return false, err
+		podStatuses := strings.Fields(out)
+		for _, status := range podStatuses {
+			if status != "Running" {
+				return false, nil
+			}
+		}
+		return true, nil
 	})
-	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v namespace does not contain pods", namespace))
+	exutil.AssertWaitPollNoErr(errCheck, fmt.Sprintf("%v namespace does not contain pods or not ready", namespace))
 }
 func checkRemoteWriteConfig(oc *exutil.CLI, msD monitoringStackDescription) {
 	var (
