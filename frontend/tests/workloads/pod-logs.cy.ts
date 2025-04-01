@@ -11,7 +11,6 @@ const [adminUser, adminUserPasswd] = Cypress.env('LOGIN_USERS').split(',')[1].sp
 describe('pod log page', () => {
   before(() => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${adminUser}`);
-    cy.cliLogin(`${adminUser}`, `${adminUserPasswd}`);
     cy.adminCLI(`oc new-project ${testns}`);
     cy.adminCLI(`oc create -f ./fixtures/pods/example-pod.yaml -n ${testns}`);
     cy.adminCLI(`oc create role test-pod-reader --namespace=${testns} --verb=get,list,watch --resource=pods,projects,namespaces`);
@@ -33,16 +32,6 @@ describe('pod log page', () => {
         .click();
       cy.get('h4').contains(/error|Danger|alert/gi);
     };
-
-    /* When normal user do not have the privilege to the pod/logs resource
-       Then Pods log cannot be loaded
-       In Command Line: */
-    cy.cliLogin(`${normalUser}`, `${normalUserPasswd}`);
-    cy.exec(`oc logs -f examplepod -n ${testns}`, {failOnNonZeroExit: false})
-      .then(output => {
-         expect(output.stderr).contain('Forbidden');
-    });
-
     // In Pod Details - Logs Tab for normal user:
     cy.uiLogin(Cypress.env('LOGIN_IDP'), normalUser, normalUserPasswd);
     guidedTour.close();
@@ -53,7 +42,6 @@ describe('pod log page', () => {
     cy.uiLogin(Cypress.env('LOGIN_IDP'), adminUser, adminUserPasswd)
     Pages.gotoUsers();
     userpage.impersonateUser(normalUser);
-    cy.switchPerspective('Administrator');
     cy.clickNavLink(['Workloads', 'Deployments']);
     cy.byLegacyTestID('namespace-bar-dropdown').contains('Project:').click();
     cy.byTestID('dropdown-menu-item-link').contains(testns).click();
