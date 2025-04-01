@@ -751,19 +751,17 @@ func waitForPodsToBeRedeployed(oc *exutil.CLI, namespace, label string, oldPodLi
 	exutil.AssertWaitPollNoErr(statusErr, fmt.Sprintf("timed out after %v waiting all pods to be redeployed", timeout))
 }
 
-// setupVaultServer setups a single pod in-cluster Vault server, returns server pod name and root token
-func setupVaultServer(oc *exutil.CLI, ns, release string) (string, string) {
+// setupVaultServer setups a containerized Vault server in the given namespace, returns server pod name and root token
+// 'release' is the name of the Vault instance that is going to be installed
+// 'helmValueFilePath' is the path of the custom Helm values file
+// 'enableTLS' is a boolean to indicate enable TLS traffic nor not
+func setupVaultServer(oc *exutil.CLI, ns, release, helmValueFilePath string, enableTLS bool) (string, string) {
 	var (
-		issuerName           = "default-ca"
-		certName             = "vault-server-cert"
 		configMapName        = "helm-vault-tls-config"
 		installerSA          = "vault-installer-sa"
 		installerRolebinding = "vault-installer-binding-" + ns
 		installerPodName     = "vault-installer"
 		vaultPodLabel        = "app.kubernetes.io/name=vault"
-		httpProxy            = ""
-		httpsProxy           = ""
-		noProxy              = ""
 	)
 
 	// explicitly skip since image 'hashicorp/vault' doesn't support ppc64le and s390x arches
@@ -780,44 +778,9 @@ func setupVaultServer(oc *exutil.CLI, ns, release string) (string, string) {
 		g.Skip("Skipping as the default storage class is not applicable for the vault server to consume.")
 	}
 
-	e2e.Logf("=> perpare TLS certs to secure HTTPS traffic of Vault server")
-	createIssuer(oc, ns)
-	createCertificate(oc, ns)
-
-	e2e.Logf("create a CA issuer")
-	buildPruningBaseDir := exutil.FixturePath("testdata", "oap/certmanager")
-	issuerFile := filepath.Join(buildPruningBaseDir, "issuer-ca.yaml")
-	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "-f", issuerFile).Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	err = waitForResourceReadiness(oc, ns, "issuer", issuerName, 10*time.Second, 120*time.Second)
-	if err != nil {
-		dumpResource(oc, ns, "issuer", issuerName, "-o=yaml")
-	}
-	exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
-
-	e2e.Logf("create a certificate using the CA issuer")
-	certFile := filepath.Join(buildPruningBaseDir, "cert-selfsigned-vault.yaml")
-	params := []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "VAULT_SERVICE=" + release, "VAULT_NAMESPACE=" + ns, "ISSUER_NAME=" + issuerName}
-	exutil.ApplyNsResourceFromTemplate(oc, ns, params...)
-	err = waitForResourceReadiness(oc, ns, "certificate", certName, 10*time.Second, 300*time.Second)
-	if err != nil {
-		dumpResource(oc, ns, "certificate", certName, "-o=yaml")
-	}
-	exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
-
-	// set proxy envs for the Vault installer pod to access the Helm chart repository when running on a proxy-enabled cluster
-	e2e.Logf("=> inject trusted-ca bundle for HTTPS proxy traffic")
-	err = oc.AsAdmin().Run("create").Args("configmap", "trusted-ca").Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	err = oc.AsAdmin().Run("label").Args("configmap", "trusted-ca", "config.openshift.io/inject-trusted-cabundle=true").Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	output, err = oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Contains(output, "httpProxy") {
-		e2e.Logf("=> retrieve the proxy configurations for Vault installer pod to inject")
-		httpProxy = gjson.Get(output, "httpProxy").String()
-		httpsProxy = gjson.Get(output, "httpsProxy").String()
-		noProxy = gjson.Get(output, "noProxy").String()
+	if enableTLS {
+		e2e.Logf("=> perpare TLS certs to secure HTTPS traffic of Vault server")
+		createCertificateForVaultServer(oc, ns, release)
 	}
 
 	e2e.Logf("=> create a pod to install Vault through Helm charts")
@@ -827,14 +790,14 @@ func setupVaultServer(oc *exutil.CLI, ns, release string) (string, string) {
 		e2e.Logf("remove added privileged labels from the namespace")
 		exutil.RecoverNamespaceRestricted(oc, ns)
 	}()
-	// store the Helm values regarding Vault TLS config into a configmap
-	helmConfigFile := filepath.Join(buildPruningBaseDir, "helm-vault-tls-config.yaml")
-	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "configmap", configMapName, "--from-file=custom-values.yaml="+helmConfigFile).Execute()
+	// store the Helm values config into a configmap
+	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "configmap", configMapName, "--from-file=custom-values.yaml="+helmValueFilePath).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	// install a standalone TLS-enabled Vault with agent injector service disabled
-	cmd := fmt.Sprintf(`helm install %s hashicorp/vault -n %s --set injector.enabled=false --set global.openshift=true --values /helm/custom-values.yaml`, release, ns)
+	// install the Vault with custom Helm values
+	cmd := fmt.Sprintf(`helm install %s ./vault -n %s --values /helm/custom-values.yaml`, release, ns)
+	buildPruningBaseDir := exutil.FixturePath("testdata", "oap/certmanager")
 	helmHelperFile := filepath.Join(buildPruningBaseDir, "exec-helm-helper.yaml")
-	params = []string{"-f", helmHelperFile, "-p", "SA_NAME=" + installerSA, "ROLEBINDING_NAME=" + installerRolebinding, "POD_NAME=" + installerPodName, "HELM_CMD=" + cmd, "CONFIGMAP_NAME=" + configMapName, "NAMESPACE=" + ns, "HTTP_PROXY=" + httpProxy, "HTTPS_PROXY=" + httpsProxy, "NO_PROXY=" + noProxy}
+	params := []string{"-f", helmHelperFile, "-p", "SA_NAME=" + installerSA, "ROLEBINDING_NAME=" + installerRolebinding, "POD_NAME=" + installerPodName, "HELM_CMD=" + cmd, "CONFIGMAP_NAME=" + configMapName, "NAMESPACE=" + ns}
 	exutil.ApplyClusterResourceFromTemplate(oc, params...)
 	defer func() {
 		e2e.Logf("cleanup created clusterrolebinding resource")
@@ -897,6 +860,38 @@ func setupVaultServer(oc *exutil.CLI, ns, release string) (string, string) {
 	exutil.AssertWaitPollNoErr(err, "timeout waiting for Vault server pod to become ready")
 	e2e.Logf("Vault server setup successfully! (version %s)", version)
 	return vaultPodName, vaultRootToken
+}
+
+// createCertificateForVaultServer creates TLS certificates for Vault server using cert-manager
+func createCertificateForVaultServer(oc *exutil.CLI, ns, release string) {
+	var (
+		issuerName = "default-ca"
+		certName   = "vault-server-cert"
+	)
+
+	createIssuer(oc, ns)
+	createCertificate(oc, ns)
+
+	e2e.Logf("create a CA issuer")
+	buildPruningBaseDir := exutil.FixturePath("testdata", "oap/certmanager")
+	issuerFile := filepath.Join(buildPruningBaseDir, "issuer-ca.yaml")
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "-f", issuerFile).Execute()
+	o.Expect(err).NotTo(o.HaveOccurred())
+	err = waitForResourceReadiness(oc, ns, "issuer", issuerName, 10*time.Second, 120*time.Second)
+	if err != nil {
+		dumpResource(oc, ns, "issuer", issuerName, "-o=yaml")
+	}
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for issuer to become Ready")
+
+	e2e.Logf("create a certificate using the CA issuer")
+	certFile := filepath.Join(buildPruningBaseDir, "cert-selfsigned-vault.yaml")
+	params := []string{"-f", certFile, "-p", "CERT_NAME=" + certName, "VAULT_SERVICE=" + release, "VAULT_NAMESPACE=" + ns, "ISSUER_NAME=" + issuerName}
+	exutil.ApplyNsResourceFromTemplate(oc, ns, params...)
+	err = waitForResourceReadiness(oc, ns, "certificate", certName, 10*time.Second, 300*time.Second)
+	if err != nil {
+		dumpResource(oc, ns, "certificate", certName, "-o=yaml")
+	}
+	exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 }
 
 // configVaultPKI configs Vault server to enable PKI secrets engine
@@ -964,35 +959,17 @@ func installGoogleCASIssuer(oc *exutil.CLI, ns string) {
 		installerPodName     = "cas-issuer-installer"
 		casPodLabel          = "app=cert-manager-google-cas-issuer"
 		casNamespace         = "cert-manager"
-		httpProxy            = ""
-		httpsProxy           = ""
-		noProxy              = ""
 	)
-
-	// set proxy envs for the Issuer installer pod to access the Helm chart repository when running on a proxy-enabled cluster
-	e2e.Logf("=> inject trusted-ca bundle for HTTPS proxy traffic")
-	err := oc.AsAdmin().Run("create").Args("configmap", "trusted-ca").Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	err = oc.AsAdmin().Run("label").Args("configmap", "trusted-ca", "config.openshift.io/inject-trusted-cabundle=true").Execute()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	output, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("proxy", "cluster", "-o=jsonpath={.status}").Output()
-	o.Expect(err).NotTo(o.HaveOccurred())
-	if strings.Contains(output, "httpProxy") {
-		e2e.Logf("=> retrieve the proxy configurations for Vault installer pod to inject")
-		httpProxy = gjson.Get(output, "httpProxy").String()
-		httpsProxy = gjson.Get(output, "httpsProxy").String()
-		noProxy = gjson.Get(output, "noProxy").String()
-	}
 
 	e2e.Logf("=> create a pod to install Google CAS Issuer through Helm charts")
 	// create a dummy configmap as a placeholder to reuse 'exec-helm-helper.yaml' template
 	buildPruningBaseDir := exutil.FixturePath("testdata", "oap/certmanager")
-	err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "configmap", configMapName).Execute()
+	err := oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", ns, "configmap", configMapName).Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
 	// install the external issuer through Helm charts
-	cmd := fmt.Sprintf(`helm install cas jetstack/cert-manager-google-cas-issuer -n %s`, casNamespace)
+	cmd := fmt.Sprintf(`helm install cas ./cert-manager-google-cas-issuer -n %s`, casNamespace)
 	helmHelperFile := filepath.Join(buildPruningBaseDir, "exec-helm-helper.yaml")
-	params := []string{"-f", helmHelperFile, "-p", "SA_NAME=" + installerSA, "ROLEBINDING_NAME=" + installerRolebinding, "POD_NAME=" + installerPodName, "HELM_CMD=" + cmd, "CONFIGMAP_NAME=" + configMapName, "NAMESPACE=" + ns, "HTTP_PROXY=" + httpProxy, "HTTPS_PROXY=" + httpsProxy, "NO_PROXY=" + noProxy}
+	params := []string{"-f", helmHelperFile, "-p", "SA_NAME=" + installerSA, "ROLEBINDING_NAME=" + installerRolebinding, "POD_NAME=" + installerPodName, "HELM_CMD=" + cmd, "CONFIGMAP_NAME=" + configMapName, "NAMESPACE=" + ns}
 	exutil.ApplyClusterResourceFromTemplate(oc, params...)
 	defer func() {
 		e2e.Logf("cleanup created clusterrolebinding resource")
@@ -1025,14 +1002,14 @@ func installGoogleCASIssuer(oc *exutil.CLI, ns string) {
 	exutil.AssertWaitPollNoErr(err, "timeout waiting for CAS Issuer controller pod to be up and running")
 }
 
-// setupPebbleServer setups a single pod in-cluster Pebble ACME server in the given namespace
+// setupPebbleServer setups a containerized Pebble ACME server in the given namespace
 func setupPebbleServer(oc *exutil.CLI, ns string) string {
 	var (
 		deploymentName = "pebble"
 	)
 
 	// explicitly skip since image 'letsencrypt/pebble' doesn't support ppc64le and s390x arches
-	architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X)
+	architecture.SkipArchitectures(oc, architecture.PPC64LE, architecture.S390X, architecture.MULTI)
 
 	e2e.Logf("create a deployment and expose service for Pebble")
 	buildPruningBaseDir := exutil.FixturePath("testdata", "oap/certmanager")

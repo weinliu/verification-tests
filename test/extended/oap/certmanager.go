@@ -1151,27 +1151,30 @@ var _ = g.Describe("[sig-oap] OAP cert-manager Vault issuer", func() {
 	var (
 		oc                  = exutil.NewCLI("cert-manager-vault", exutil.KubeConfigPath())
 		buildPruningBaseDir = exutil.FixturePath("testdata", "oap/certmanager")
+		vaultReleaseName    = "vault-" + getRandomString(4)
+		vaultPodName        string
+		vaultRootToken      string
 	)
 	g.BeforeEach(func() {
 		if !isDeploymentReady(oc, operatorNamespace, operatorDeploymentName) {
 			e2e.Logf("Creating Cert Manager Operator...")
 			createCertManagerOperator(oc)
 		}
+
+		exutil.By("setup a Vault server in cluster with PKI secrets enigne enabled")
+		helmConfigFile := filepath.Join(buildPruningBaseDir, "helm-vault-tls-config.yaml")
+		vaultPodName, vaultRootToken = setupVaultServer(oc, oc.Namespace(), vaultReleaseName, helmConfigFile, true)
+		configVaultPKI(oc, oc.Namespace(), vaultReleaseName, vaultPodName, vaultRootToken)
 	})
 
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-High-65028-should work well when authenticating with Vault AppRole", func() {
 		var (
-			vaultReleaseName = "vault-" + getRandomString(4)
-			vaultRoleName    = "cert-manager"
-			vaultSecretName  = "cert-manager-vault-approle"
-			issuerName       = "issuer-vault-approle"
-			certName         = "cert-from-" + issuerName
+			vaultRoleName   = "cert-manager"
+			vaultSecretName = "cert-manager-vault-approle"
+			issuerName      = "issuer-vault-approle"
+			certName        = "cert-from-" + issuerName
 		)
-
-		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
-		vaultPodName, vaultRootToken := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
-		configVaultPKI(oc, oc.Namespace(), vaultReleaseName, vaultPodName, vaultRootToken)
 
 		exutil.By("configure auth with Vault AppRole")
 		cmd := fmt.Sprintf(`vault auth enable approle && vault write auth/approle/role/%s token_policies="cert-manager" token_ttl=1h token_max_ttl=4h`, vaultRoleName)
@@ -1216,15 +1219,10 @@ var _ = g.Describe("[sig-oap] OAP cert-manager Vault issuer", func() {
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-High-65029-should work well when authenticating with Vault token", func() {
 		var (
-			vaultReleaseName = "vault-" + getRandomString(4)
-			vaultSecretName  = "cert-manager-vault-token"
-			issuerName       = "issuer-vault-token"
-			certName         = "cert-from-" + issuerName
+			vaultSecretName = "cert-manager-vault-token"
+			issuerName      = "issuer-vault-token"
+			certName        = "cert-from-" + issuerName
 		)
-
-		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
-		vaultPodName, vaultToken := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
-		configVaultPKI(oc, oc.Namespace(), vaultReleaseName, vaultPodName, vaultToken)
 
 		exutil.By("configure auth with Vault token")
 		cmd := `vault token create -policy=cert-manager -ttl=720h`
@@ -1233,7 +1231,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager Vault issuer", func() {
 
 		exutil.By("create the auth secret")
 		oc.NotShowInfo()
-		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", oc.Namespace(), "secret", "generic", vaultSecretName, "--from-literal=token="+vaultToken).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("create").Args("-n", oc.Namespace(), "secret", "generic", vaultSecretName, "--from-literal=token="+vaultRootToken).Execute()
 		oc.SetShowInfo()
 		o.Expect(err).NotTo(o.HaveOccurred())
 
@@ -1261,15 +1259,10 @@ var _ = g.Describe("[sig-oap] OAP cert-manager Vault issuer", func() {
 	// author: yuewu@redhat.com
 	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-Low-65030-should work well when authenticating with Kubernetes static service account", func() {
 		var (
-			vaultReleaseName   = "vault-" + getRandomString(4)
 			serviceAccountName = "cert-manager-vault-static-serviceaccount"
 			issuerName         = "issuer-vault-static-serviceaccount"
 			certName           = "cert-from-" + issuerName
 		)
-
-		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
-		vaultPodName, vaultToken := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
-		configVaultPKI(oc, oc.Namespace(), vaultReleaseName, vaultPodName, vaultToken)
 
 		exutil.By("create a long-lived API token for a service account")
 		err := oc.Run("create").Args("serviceaccount", serviceAccountName).Execute()
@@ -1309,17 +1302,12 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-High-66907-should work well when authenticating with Kubernetes bound service account through Kubernetes auth", func() {
 		var (
 			minSupportedVersion = "1.12.0"
-			vaultReleaseName    = "vault-" + getRandomString(4)
 			serviceAccountName  = "cert-manager-vault-bound-serviceaccount"
 			issuerName          = "issuer-vault-bound-serviceaccount"
 			certName            = "cert-from-" + issuerName
 		)
 
 		skipUnsupportedVersion(oc, minSupportedVersion)
-
-		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
-		vaultPodName, vaultToken := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
-		configVaultPKI(oc, oc.Namespace(), vaultReleaseName, vaultPodName, vaultToken)
 
 		exutil.By("create RBAC resources for the service account to get tokens")
 		err := oc.Run("create").Args("serviceaccount", serviceAccountName).Execute()
@@ -1359,17 +1347,12 @@ vault write auth/kubernetes/role/issuer bound_service_account_names=%s bound_ser
 	g.It("Author:yuewu-ROSA-ARO-OSD_CCS-High-76515-should work well when authenticating with Kubernetes bound service account through JWT/OIDC auth", func() {
 		var (
 			minSupportedVersion = "1.12.0"
-			vaultReleaseName    = "vault-" + getRandomString(4)
 			serviceAccountName  = "cert-manager-vault-bound-serviceaccount"
 			issuerName          = "issuer-vault-bound-serviceaccount"
 			certName            = "cert-from-" + issuerName
 		)
 
 		skipUnsupportedVersion(oc, minSupportedVersion)
-
-		exutil.By("setup an in-cluster Vault server with PKI secrets enigne enabled")
-		vaultPodName, vaultToken := setupVaultServer(oc, oc.Namespace(), vaultReleaseName)
-		configVaultPKI(oc, oc.Namespace(), vaultReleaseName, vaultPodName, vaultToken)
 
 		exutil.By("create RBAC resources for the service account to get tokens")
 		err := oc.Run("create").Args("serviceaccount", serviceAccountName).Execute()
@@ -1442,7 +1425,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 	})
 
 	// author: geliu@redhat.com
-	g.It("Author:geliu-ROSA-ARO-OSD_CCS-Medium-62006-operator can be uninstalled from CLI and then reinstalled [Serial]", func() {
+	g.It("Author:geliu-ROSA-ARO-OSD_CCS-Medium-62006-operator can be uninstalled from CLI and then reinstalled [Disruptive]", func() {
 		e2e.Logf("uninstall the cert-manager operator and cleanup its operand resources")
 		cleanupCertManagerOperator(oc)
 
@@ -1893,6 +1876,7 @@ var _ = g.Describe("[sig-oap] OAP cert-manager", func() {
 		err = waitForResourceReadiness(oc, sharedNamespace, "certificate", acmeCertName, 10*time.Second, 300*time.Second)
 		if err != nil {
 			dumpResource(oc, sharedNamespace, "certificate", acmeCertName, "-o=yaml")
+			oc.AsAdmin().WithoutNamespace().Run("get").Args("event", "-n", sharedNamespace).Execute()
 		}
 		exutil.AssertWaitPollNoErr(err, "timeout waiting for certificate to become Ready")
 	})

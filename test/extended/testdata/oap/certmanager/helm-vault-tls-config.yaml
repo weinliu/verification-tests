@@ -4,6 +4,9 @@
 global:
   enabled: true
   tlsDisable: false
+  openshift: true
+injector:
+  enabled: false
 server:
   image:
     repository: "quay.io/openshifttest/vault"
