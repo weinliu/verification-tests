@@ -449,7 +449,7 @@ func (frrconfigDS *frrconfigurationResourceDS) createFRRconfigrationDS(oc *exuti
 
 // Check status of routeAdvertisement applied
 func checkRAStatus(oc *exutil.CLI, RAName string, expectedStatus string) error {
-	return wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 30*time.Second, false, func(cxt context.Context) (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), 2*time.Second, 30*time.Second, false, func(cxt context.Context) (bool, error) {
 		e2e.Logf("Checking status of routeAdvertisement %s", RAName)
 		reason, err1 := oc.AsAdmin().WithoutNamespace().Run("get").Args("ra", RAName, "-ojsonpath={.status.conditions[0].reason}").Output()
 		if err1 != nil {
@@ -833,7 +833,7 @@ func getIProutesWithFilterOnClusterNode(oc *exutil.CLI, node, filter string) (st
 
 // Create routeadvertisement resource
 func (ra *routeAdvertisement) createRA(oc *exutil.CLI) {
-	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", ra.template, "-p", "NAME="+ra.name, "NETWORKSELECTORKEY="+ra.networkLabelKey, "NETWORKSELECTORVALUE="+ra.networkLabelVaule)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
@@ -899,15 +899,15 @@ func Curlexternal2UDNPodFail(oc *exutil.CLI, host string, namespaceDst string, p
 	e2e.Logf("curl from external to UDN pod ip Failed")
 }
 
-func setUDNLabel(oc *exutil.CLI, namespace string, name string, label string) {
-	err := oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", namespace, "UserDefinedNetwork", name, label, "--overwrite=true").Execute()
+func setUDNLabel(oc *exutil.CLI, name string, label string) {
+	err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ClusterUserDefinedNetwork", name, label, "--overwrite=true").Execute()
 	o.Expect(err).NotTo(o.HaveOccurred())
-	labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("-n", namespace, "UserDefinedNetwork", name, "--show-labels").Output()
+	labels, err := oc.AsAdmin().WithoutNamespace().Run("get").Args("ClusterUserDefinedNetwork", name, "--show-labels").Output()
 	if err != nil {
-		e2e.Failf("fail to get UserDefinedNetwork labels, error:%v", err)
+		e2e.Failf("fail to get ClusterUserDefinedNetwork labels, error:%v", err)
 	}
 	if !strings.Contains(labels, label) {
-		e2e.Failf("UserDefinedNetwork do not have correct label: %s", label)
+		e2e.Failf("ClusterUserDefinedNetwork do not have correct label: %s", label)
 	}
 
 }

@@ -298,7 +298,7 @@ func (udncrd *udnCRDResource) createUdnCRDDualStack(oc *exutil.CLI) {
 }
 
 func (cudncrd *cudnCRDResource) createCUDNCRDSingleStack(oc *exutil.CLI) {
-	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", cudncrd.template, "-p", "CRDNAME="+cudncrd.crdname, "LABELKEY="+cudncrd.labelkey, "LABELVALUE="+cudncrd.labelvalue,
 			"CIDR="+cudncrd.cidr, "PREFIX="+strconv.Itoa(int(cudncrd.prefix)), "MTU="+strconv.Itoa(int(cudncrd.mtu)), "ROLE="+cudncrd.role)
 		if err1 != nil {
@@ -311,7 +311,7 @@ func (cudncrd *cudnCRDResource) createCUDNCRDSingleStack(oc *exutil.CLI) {
 }
 
 func (cudncrd *cudnCRDResource) createCUDNCRDDualStack(oc *exutil.CLI) {
-	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", cudncrd.template, "-p", "CRDNAME="+cudncrd.crdname, "LABELKEY="+cudncrd.labelkey, "LABELVALUE="+cudncrd.labelvalue,
 			"IPv4CIDR="+cudncrd.IPv4cidr, "IPv4PREFIX="+strconv.Itoa(int(cudncrd.IPv4prefix)), "IPv6CIDR="+cudncrd.IPv6cidr, "IPv6PREFIX="+strconv.Itoa(int(cudncrd.IPv6prefix)), "MTU="+strconv.Itoa(int(cudncrd.mtu)), "ROLE="+cudncrd.role)
 		if err1 != nil {
@@ -324,7 +324,7 @@ func (cudncrd *cudnCRDResource) createCUDNCRDDualStack(oc *exutil.CLI) {
 }
 
 func (cudncrd *cudnCRDResource) createCUDNCRDMatchExpSingleStack(oc *exutil.CLI) {
-	err := wait.PollUntilContextTimeout(context.TODO(), 5*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(context.TODO(), 2*time.Second, 20*time.Second, false, func(ctx context.Context) (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", cudncrd.template, "-p", "CRDNAME="+cudncrd.crdname, "KEY="+cudncrd.key, "OPERATOR="+cudncrd.operator, "VALUE1="+cudncrd.values[0], "VALUE2="+cudncrd.values[1],
 			"CIDR="+cudncrd.cidr, "PREFIX="+strconv.Itoa(int(cudncrd.prefix)), "MTU="+strconv.Itoa(int(cudncrd.mtu)), "ROLE="+cudncrd.role)
 		if err1 != nil {
@@ -370,7 +370,7 @@ func waitUDNCRDApplied(oc *exutil.CLI, ns, crdName string) error {
 }
 
 func waitCUDNCRDApplied(oc *exutil.CLI, crdName string) error {
-	checkErr := wait.PollUntilContextTimeout(context.TODO(), 10*time.Second, 60*time.Second, false, func(ctx context.Context) (bool, error) {
+	checkErr := wait.PollUntilContextTimeout(context.TODO(), 3*time.Second, 30*time.Second, false, func(ctx context.Context) (bool, error) {
 		output, efErr := oc.AsAdmin().WithoutNamespace().Run("wait").Args("ClusterUserDefinedNetwork/"+crdName, "--for", "condition=NetworkCreated=True").Output()
 		if efErr != nil {
 			e2e.Logf("Failed to get CUDN %v, error: %s. Trying again", crdName, efErr)

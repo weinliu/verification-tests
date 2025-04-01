@@ -294,7 +294,7 @@ func (pod *pingPodResource) createPingPod(oc *exutil.CLI) {
 }
 
 func (pod *pingPodResourceNode) createPingPodNode(oc *exutil.CLI) {
-	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+	err := wait.Poll(3*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", pod.template, "-p", "NAME="+pod.name, "NAMESPACE="+pod.namespace, "NODENAME="+pod.nodename)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
@@ -509,7 +509,7 @@ func (ipBlock_cidrs_policy *ipBlockCIDRsSingle) createIPBlockMultipleCIDRsObject
 }
 
 func (service *genericServiceResource) createServiceFromParams(oc *exutil.CLI) {
-	err := wait.Poll(5*time.Second, 20*time.Second, func() (bool, error) {
+	err := wait.Poll(3*time.Second, 20*time.Second, func() (bool, error) {
 		err1 := applyResourceFromTemplateByAdmin(oc, "--ignore-unknown-parameters=true", "-f", service.template, "-p", "SERVICENAME="+service.servicename, "NAMESPACE="+service.namespace, "PROTOCOL="+service.protocol, "SELECTOR="+service.selector, "serviceType="+service.serviceType, "ipFamilyPolicy="+service.ipFamilyPolicy, "internalTrafficPolicy="+service.internalTrafficPolicy, "externalTrafficPolicy="+service.externalTrafficPolicy)
 		if err1 != nil {
 			e2e.Logf("the err:%v, and try next round", err1)
@@ -660,7 +660,7 @@ func contains(s []string, str string) bool {
 }
 
 func waitPodReady(oc *exutil.CLI, namespace string, podName string) {
-	err := wait.Poll(10*time.Second, 100*time.Second, func() (bool, error) {
+	err := wait.Poll(5*time.Second, 60*time.Second, func() (bool, error) {
 		status, err1 := checkPodReady(oc, namespace, podName)
 		if err1 != nil {
 			e2e.Logf("the err:%v, wait for pod %v to become ready.", err1, podName)
@@ -1595,12 +1595,12 @@ func CurlPod2SvcPass(oc *exutil.CLI, namespaceSrc string, namespaceSvc string, p
 func CurlPod2SvcFail(oc *exutil.CLI, namespaceSrc string, namespaceSvc string, podNameSrc string, svcName string) {
 	svcIP1, svcIP2 := getSvcIP(oc, namespaceSvc, svcName)
 	if svcIP2 != "" {
-		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 3 -s "+net.JoinHostPort(svcIP1, "27017"))
 		o.Expect(err).To(o.HaveOccurred())
-		_, err = e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP2, "27017"))
+		_, err = e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 3 -s "+net.JoinHostPort(svcIP2, "27017"))
 		o.Expect(err).To(o.HaveOccurred())
 	} else {
-		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 5 -s "+net.JoinHostPort(svcIP1, "27017"))
+		_, err := e2eoutput.RunHostCmd(namespaceSrc, podNameSrc, "curl --connect-timeout 3 -s "+net.JoinHostPort(svcIP1, "27017"))
 		o.Expect(err).To(o.HaveOccurred())
 	}
 }

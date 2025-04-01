@@ -17,7 +17,7 @@ import (
 	e2eoutput "k8s.io/kubernetes/test/e2e/framework/pod/output"
 )
 
-var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
+var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-cudn", func() {
 	defer g.GinkgoRecover()
 
 	var (
@@ -86,19 +86,24 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 	})
 
 	// author: zzhao@redhat.com
-	g.It("Author:zzhao-NonHyperShiftHOST-ConnectedOnly-Critical-78806-UDN network can be accessed once the it's advertised by BGP in LGW and SGW [Serial]", func() {
+	g.It("Author:zzhao-NonHyperShiftHOST-ConnectedOnly-Critical-78806-CUDN network can be accessed once the it's advertised by BGP in LGW and SGW [Serial]", func() {
 
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
 			raTemplate          = filepath.Join(buildPruningBaseDir, "bgp/ra_template.yaml")
-			udnName             = "udn-network-78806"
+			matchLabelKey       = "cudn-bgp"
+			matchValue          = "cudn-network-" + getRandomString()
+			cudnName            = "cudn-network-78806"
 		)
 
 		ipStackType := checkIPStackType(oc)
 		exutil.By("Create namespace")
 		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, fmt.Sprintf("%s-", matchLabelKey)).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, fmt.Sprintf("%s=%s", matchLabelKey, matchValue)).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Create CRD for UDN")
 		var cidr, ipv4cidr, ipv6cidr string
@@ -113,10 +118,12 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			}
 		}
 
-		createGeneralUDNCRD(oc, ns1, udnName, ipv4cidr, ipv6cidr, cidr, "layer3")
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", cudnName)
+		_, err = applyCUDNtoMatchLabelNS(oc, matchLabelKey, matchValue, cudnName, ipv4cidr, ipv6cidr, cidr, "layer3")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//label userdefinednetwork with label app=udn
-		setUDNLabel(oc, ns1, udnName, "app=udn")
+		setUDNLabel(oc, cudnName, "app=udn")
 
 		exutil.By("Create RA to advertise the UDN network")
 
@@ -133,17 +140,18 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 
 		exutil.By("Check the UDN network was advertised to external router")
 
-		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, ns1+"_"+udnName)
+		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, "cluster_udn"+"_"+cudnName)
 		o.Eventually(func() bool {
 			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
 			return result
 		}, "60s", "10s").Should(o.BeTrue(), "BGP UDN route advertisement did not succeed!!")
 
-		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertise!!!", udnName, ns1)
+		e2e.Logf("SUCCESS - BGP CUDN network %s for namespace %s advertise!!!", cudnName, ns1)
 
 		exutil.By("Create replica pods in ns1")
+		defer removeResource(oc, true, true, "rc", "test-rc", "-n", ns1)
 		createResourceFromFile(oc, ns1, testPodFile)
-		err := waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
 		testpodNS1Names := getPodName(oc, ns1, "name=test-pods")
 		Curlexternal2UDNPodPass(oc, host, ns1, testpodNS1Names[1])
@@ -186,6 +194,8 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			pingPodTemplate      = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
 			networkselectorkey   = "app"
 			networkselectorvalue = "udn"
+			matchLabelKey        = []string{"cudn-bgp", "cudn-bgp2", "cudn-bgp3"}
+			matchValue           = []string{"cudn-network1-" + getRandomString(), "cudn-network2-" + getRandomString(), "cudn-network3-" + getRandomString()}
 			udnNames             = []string{"layer3-udn-78339-1", "layer3-udn-78339-2", "layer3-udn-78339-3"}
 			udnNS                []string
 		)
@@ -203,15 +213,16 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		for i := 0; i < 3; i++ {
 			oc.CreateNamespaceUDN()
 			ns := oc.Namespace()
-			udnNS = append(udnNS, ns)
-			createGeneralUDNCRD(oc, ns, udnNames[i], ipv4cidr[i], ipv6cidr[i], cidr[i], "layer3")
-		}
-
-		exutil.By("2. Only label the first two UDNs with label that matches networkSelector in routeAdvertisement")
-		for i := 0; i < 2; i++ {
-			defer oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", udnNS[i], "userdefinednetwork", udnNames[i], networkselectorkey+"-").Execute()
-			err := oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", udnNS[i], "userdefinednetwork", udnNames[i], networkselectorkey+"="+networkselectorvalue).Execute()
+			err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns, fmt.Sprintf("%s=%s", matchLabelKey[i], matchValue[i])).Execute()
 			o.Expect(err).NotTo(o.HaveOccurred())
+			udnNS = append(udnNS, ns)
+			defer removeResource(oc, true, true, "clusteruserdefinednetwork", udnNames[i])
+			_, err = applyCUDNtoMatchLabelNS(oc, matchLabelKey[i], matchValue[i], udnNames[i], ipv4cidr[i], ipv6cidr[i], cidr[i], "layer3")
+			o.Expect(err).NotTo(o.HaveOccurred())
+			//label clusteruserdefinednetwork with label app=udn for frist two CUDN that matches networkSelector in routeAdvertisement
+			if i != 2 {
+				setUDNLabel(oc, udnNames[i], "app=udn")
+			}
 		}
 
 		exutil.By("3. Apply a routeAdvertisement with matching networkSelector")
@@ -226,7 +237,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		exutil.By("4. Verify the first two UDNs with matching networkSelector are advertised")
 		var UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 map[string]string
 		for i := 0; i < 2; i++ {
-			UDNnetwork_ipv6_ns, UDNnetwork_ipv4_ns := getHostPodNetwork(oc, allNodes, udnNS[i]+"_"+udnNames[i])
+			UDNnetwork_ipv6_ns, UDNnetwork_ipv4_ns := getHostPodNetwork(oc, allNodes, "cluster_udn"+"_"+udnNames[i])
 
 			// save pod nework info of first UDN, it will be be used in step 8
 			if i == 0 {
@@ -240,7 +251,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		}
 
 		exutil.By("5. Verify the third UDN without matching networkSelector is NOT advertised")
-		UDNnetwork_ipv6_ns3, UDNnetwork_ipv4_ns3 := getHostPodNetwork(oc, allNodes, udnNS[2]+"_"+udnNames[2])
+		UDNnetwork_ipv6_ns3, UDNnetwork_ipv4_ns3 := getHostPodNetwork(oc, allNodes, "cluster_udn"+"_"+udnNames[2])
 		result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns3, UDNnetwork_ipv6_ns3, nodesIP1Map, nodesIP2Map, false)
 		o.Expect(result).To(o.BeTrue(), "Unlablled UDN should not be advertised, but their routes are in routing table")
 
@@ -252,6 +263,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 				namespace: udnNS[i],
 				template:  pingPodTemplate,
 			}
+			defer removeResource(oc, true, true, "pod", testpods[i].name, "-n", udnNS[i])
 			testpods[i].createPingPod(oc)
 			waitPodReady(oc, testpods[i].namespace, testpods[i].name)
 		}
@@ -277,7 +289,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 
 		exutil.By("8. Delete the UDN pod of first UDN, then delete the first UDN, verify the first UDN is not longer advertised")
 		removeResource(oc, true, true, "pod", testpods[0].name, "-n", testpods[0].namespace)
-		removeResource(oc, true, true, "userdefinednetwork", udnNames[0], "-n", udnNS[0])
+		removeResource(oc, true, true, "clusteruserdefinednetwork", udnNames[0])
 
 		o.Eventually(func() bool {
 			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, false)
@@ -294,7 +306,9 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			testPodFile            = filepath.Join(buildPruningBaseDir, "testpod.yaml")
 			hostNetworkPodTemplate = filepath.Join(buildPruningBaseDir, "ping-for-pod-hostnetwork-specific-node-template.yaml")
 			raTemplate             = filepath.Join(buildPruningBaseDir, "bgp/ra_template.yaml")
-			udnName                = "udn-network-78809"
+			matchLabelKey          = "cudn-bgp"
+			matchValue             = "cudn-network-" + getRandomString()
+			cudnName               = "cudn-network-78809"
 		)
 		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
@@ -319,6 +333,9 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		exutil.By("Create namespace")
 		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, fmt.Sprintf("%s-", matchLabelKey)).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, fmt.Sprintf("%s=%s", matchLabelKey, matchValue)).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Create CRD for UDN")
 		var cidr, ipv4cidr, ipv6cidr string
@@ -333,10 +350,12 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			}
 		}
 
-		createGeneralUDNCRD(oc, ns1, udnName, ipv4cidr, ipv6cidr, cidr, "layer3")
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", cudnName)
+		_, err = applyCUDNtoMatchLabelNS(oc, matchLabelKey, matchValue, cudnName, ipv4cidr, ipv6cidr, cidr, "layer3")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		//label userdefinednetwork with label app=udn
-		setUDNLabel(oc, ns1, udnName, "app=udn")
+		setUDNLabel(oc, cudnName, "app=udn")
 
 		exutil.By("Create RA to advertise the UDN network")
 
@@ -353,15 +372,16 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 
 		exutil.By("Check the UDN network was advertised to external router")
 
-		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, ns1+"_"+udnName)
+		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, "cluster_udn"+"_"+cudnName)
 		o.Eventually(func() bool {
 			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
 			return result
 		}, "60s", "5s").Should(o.BeTrue(), "BGP UDN route advertisement did not succeed!!")
 
-		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertise!!!", udnName, ns1)
+		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertise!!!", cudnName, ns1)
 
 		exutil.By("Create replica pods in ns1")
+		defer removeResource(oc, true, true, "rc", "test-rc", "-n", ns1)
 		createResourceFromFile(oc, ns1, testPodFile)
 		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
@@ -394,7 +414,9 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			testPodFile         = filepath.Join(buildPruningBaseDir, "testpod.yaml")
 			raTemplate          = filepath.Join(buildPruningBaseDir, "bgp/ra_template.yaml")
-			udnName             = "udn-network-78810"
+			matchLabelKey       = "cudn-bgp"
+			matchValue          = "cudn-network-" + getRandomString()
+			cudnName            = "udn-network-78810"
 		)
 		nodeList, nodeErr := e2enode.GetReadySchedulableNodes(context.TODO(), oc.KubeFramework().ClientSet)
 		o.Expect(nodeErr).NotTo(o.HaveOccurred())
@@ -405,8 +427,11 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		exutil.By("Create namespace")
 		oc.CreateNamespaceUDN()
 		ns1 := oc.Namespace()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, fmt.Sprintf("%s-", matchLabelKey)).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns1, fmt.Sprintf("%s=%s", matchLabelKey, matchValue)).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 
-		exutil.By("Create CRD for UDN")
+		exutil.By("Create CRD for CUDN")
 		var cidr, ipv4cidr, ipv6cidr string
 		if ipStackType == "ipv4single" {
 			cidr = "10.150.0.0/16"
@@ -419,12 +444,13 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			}
 		}
 
-		createGeneralUDNCRD(oc, ns1, udnName, ipv4cidr, ipv6cidr, cidr, "layer3")
-
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", cudnName)
+		_, err = applyCUDNtoMatchLabelNS(oc, matchLabelKey, matchValue, cudnName, ipv4cidr, ipv6cidr, cidr, "layer3")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		//label userdefinednetwork with label app=udn
-		setUDNLabel(oc, ns1, udnName, "app=udn")
+		setUDNLabel(oc, cudnName, "app=udn")
 
-		exutil.By("Create RA to advertise the UDN network")
+		exutil.By("Create RA to advertise the CUDN network")
 
 		ra := routeAdvertisement{
 			name:              "udn",
@@ -439,17 +465,18 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 
 		exutil.By("Check the UDN network was advertised on worker node")
 
-		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, ns1+"_"+udnName)
+		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, "cluster_udn"+"_"+cudnName)
 		o.Eventually(func() bool {
 			result := verifyBGPRoutesOnClusterNode(oc, nodeList.Items[0].Name, externalFRRIP2, externalFRRIP1, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
 			return result
 		}, "60s", "10s").Should(o.BeTrue(), "BGP UDN route advertisement did not succeed!!")
 
-		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertise!!!", udnName, ns1)
+		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertise!!!", cudnName, ns1)
 
 		exutil.By("Create replica pods in ns1")
+		defer removeResource(oc, true, true, "rc", "test-rc", "-n", ns1)
 		createResourceFromFile(oc, ns1, testPodFile)
-		err := waitForPodWithLabelReady(oc, ns1, "name=test-pods")
+		err = waitForPodWithLabelReady(oc, ns1, "name=test-pods")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
 		testpodNS1Names := getPodName(oc, ns1, "name=test-pods")
 
@@ -490,7 +517,9 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			raTemplate          = filepath.Join(buildPruningBaseDir, "bgp/ra_template.yaml")
 			pingPodTemplate     = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
-			udnName             = "udn-network-78342"
+			matchLabelKey       = "cudn-bgp"
+			matchValue          = "cudn-network-" + getRandomString()
+			cudnName            = "udn-network-78342"
 			ipStackType         = checkIPStackType(oc)
 		)
 
@@ -512,6 +541,9 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 
 		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, fmt.Sprintf("%s-", matchLabelKey)).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, fmt.Sprintf("%s=%s", matchLabelKey, matchValue)).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		allNS := []string{ns1, ns2}
 
 		var cidr, ipv4cidr, ipv6cidr string
@@ -525,10 +557,11 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 				ipv6cidr = "2010:100:200::0/48"
 			}
 		}
-		createGeneralUDNCRD(oc, ns2, udnName, ipv4cidr, ipv6cidr, cidr, "layer3")
-
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", cudnName)
+		_, err = applyCUDNtoMatchLabelNS(oc, matchLabelKey, matchValue, cudnName, ipv4cidr, ipv6cidr, cidr, "layer3")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		//label userdefinednetwork with label app=udn
-		setUDNLabel(oc, ns2, udnName, "app=udn")
+		setUDNLabel(oc, cudnName, "app=udn")
 
 		exutil.By("4. Create RA to advertise the UDN network")
 		ra := routeAdvertisement{
@@ -543,18 +576,18 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		ra.createRA(oc)
 
 		exutil.By("5.  Verify  UDN network is advertised to external and other cluster nodes")
-		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, ns2+"_"+udnName)
+		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, "cluster_udn"+"_"+cudnName)
 		o.Eventually(func() bool {
 			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
 			return result
 		}, "60s", "10s").Should(o.BeTrue(), "BGP UDN route advertisement did not succeed!!")
-		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertised to external !!!", udnName, ns2)
+		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertised to external !!!", cudnName, ns2)
 
 		for _, node := range allNodes {
 			result := verifyBGPRoutesOnClusterNode(oc, node, externalFRRIP2, externalFRRIP1, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
 			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes as expected", node))
 		}
-		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertised to other cluster nodes !!!", udnName, ns2)
+		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertised to other cluster nodes !!!", cudnName, ns2)
 
 		exutil.By("6. Create a test pod in each namespace, verify each pod can be accessed from external because their default network and UDN are advertised")
 		testpods := make([]pingPodResource, len(allNS))
@@ -564,6 +597,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 				namespace: allNS[i],
 				template:  pingPodTemplate,
 			}
+			defer removeResource(oc, true, true, "pod", testpods[i].name, "-n", allNS[i])
 			testpods[i].createPingPod(oc)
 			waitPodReady(oc, testpods[i].namespace, testpods[i].name)
 		}
@@ -588,14 +622,14 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
 			return result
 		}, "60s", "10s").Should(o.BeTrue(), "BGP UDN route advertisement did not succeed!!")
-		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s is still correctly advertised to external after node reboot !!!", udnName, ns2)
+		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s is still correctly advertised to external after node reboot !!!", cudnName, ns2)
 
 		exutil.By("8.2. Verify from cluster nodes")
 		for _, node := range allNodes {
 			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP1, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
 			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table check for routes of defaulet network on node %s failed after rebooting a node", node))
 			result = verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
-			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes for UDN %s as expected", node, udnName))
+			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes for UDN %s as expected", node, cudnName))
 		}
 		e2e.Logf("SUCCESS - BGP default network and UDN are still correctly advertised to other cluster nodes after node reboot !!!")
 
@@ -606,12 +640,14 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-High-78343-route advertisement recovery for default network and UDN after OVNK restart [Disruptive]", func() {
+	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-Longduration-High-78343-route advertisement recovery for default network and UDN after OVNK restart [Disruptive]", func() {
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			raTemplate          = filepath.Join(buildPruningBaseDir, "bgp/ra_template.yaml")
 			pingPodTemplate     = filepath.Join(buildPruningBaseDir, "ping-for-pod-template.yaml")
-			udnName             = "udn-network-78343"
+			matchLabelKey       = "cudn-bgp"
+			matchValue          = "cudn-network-" + getRandomString()
+			cudnName            = "udn-network-78343"
 			ipStackType         = checkIPStackType(oc)
 		)
 
@@ -625,6 +661,9 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		ns1 := oc.Namespace()
 		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, fmt.Sprintf("%s-", matchLabelKey)).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, fmt.Sprintf("%s=%s", matchLabelKey, matchValue)).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		allNS := []string{ns1, ns2}
 
 		var cidr, ipv4cidr, ipv6cidr string
@@ -639,10 +678,11 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			}
 		}
 
-		createGeneralUDNCRD(oc, ns2, udnName, ipv4cidr, ipv6cidr, cidr, "layer3")
-
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", cudnName)
+		_, err = applyCUDNtoMatchLabelNS(oc, matchLabelKey, matchValue, cudnName, ipv4cidr, ipv6cidr, cidr, "layer3")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		//label userdefinednetwork with label app=udn
-		setUDNLabel(oc, ns2, udnName, "app=udn")
+		setUDNLabel(oc, cudnName, "app=udn")
 
 		exutil.By("3. Create RA to advertise the UDN network")
 
@@ -658,18 +698,18 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		ra.createRA(oc)
 
 		exutil.By("4.  Verify  UDN network is advertised to external and other cluster nodes")
-		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, ns2+"_"+udnName)
+		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, "cluster_udn"+"_"+cudnName)
 		o.Eventually(func() bool {
 			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
 			return result
 		}, "60s", "10s").Should(o.BeTrue(), "BGP UDN route advertisement did not succeed!!")
-		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertised to external !!!", udnName, ns2)
+		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertised to external !!!", cudnName, ns2)
 
 		for _, node := range allNodes {
 			result := verifyBGPRoutesOnClusterNode(oc, node, externalFRRIP2, externalFRRIP1, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
 			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes as expected", node))
 		}
-		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertised to other cluster nodes !!!", udnName, ns2)
+		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertised to other cluster nodes !!!", cudnName, ns2)
 
 		exutil.By("5. Create a test pod in each namespace, verify each pod can be accessed from external because their default network and UDN are advertised")
 		testpods := make([]pingPodResource, len(allNS))
@@ -679,6 +719,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 				namespace: allNS[i],
 				template:  pingPodTemplate,
 			}
+			defer removeResource(oc, true, true, "pod", testpods[i].name, "-n", allNS[i])
 			testpods[i].createPingPod(oc)
 			waitPodReady(oc, testpods[i].namespace, testpods[i].name)
 		}
@@ -704,14 +745,14 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
 			return result
 		}, "60s", "10s").Should(o.BeTrue(), "BGP UDN route advertisement did not succeed!!")
-		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s is still correctly advertised to external after OVNK restart !!!", udnName, ns2)
+		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s is still correctly advertised to external after OVNK restart !!!", cudnName, ns2)
 
 		exutil.By("7.2. Verify from cluster nodes")
 		for _, node := range allNodes {
 			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP1, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
 			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table check for routes of defaulet network on node %s failed after OVNK restart", node))
 			result = verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
-			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes for UDN %s as expected after OVNK restart", node, udnName))
+			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes for UDN %s as expected after OVNK restart", node, cudnName))
 		}
 		e2e.Logf("SUCCESS - BGP default network and UDN are still correctly advertised to other cluster nodes after OVNK restart !!!")
 
@@ -722,13 +763,15 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 	})
 
 	// author: jechen@redhat.com
-	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-NonPreRelease-High-78344-route advertisement recovery for default network and UDN after frr-k8s pods restart [Disruptive]", func() {
+	g.It("Author:jechen-NonHyperShiftHOST-ConnectedOnly-Longduration-High-78344-route advertisement recovery for default network and UDN after frr-k8s pods restart [Disruptive]", func() {
 
 		var (
 			buildPruningBaseDir = exutil.FixturePath("testdata", "networking")
 			raTemplate          = filepath.Join(buildPruningBaseDir, "bgp/ra_template.yaml")
 			statefulSetHelloPod = filepath.Join(buildPruningBaseDir, "statefulset-hello.yaml")
-			udnName             = "udn-network-78344"
+			matchLabelKey       = "cudn-bgp"
+			matchValue          = "cudn-network-" + getRandomString()
+			cudnName            = "udn-network-78344"
 			ipStackType         = checkIPStackType(oc)
 		)
 
@@ -742,6 +785,9 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		ns1 := oc.Namespace()
 		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, fmt.Sprintf("%s-", matchLabelKey)).Execute()
+		err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, fmt.Sprintf("%s=%s", matchLabelKey, matchValue)).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		allNS := []string{ns1, ns2}
 
 		var cidr, ipv4cidr, ipv6cidr string
@@ -756,10 +802,11 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			}
 		}
 
-		createGeneralUDNCRD(oc, ns2, udnName, ipv4cidr, ipv6cidr, cidr, "layer3")
-
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", cudnName)
+		_, err = applyCUDNtoMatchLabelNS(oc, matchLabelKey, matchValue, cudnName, ipv4cidr, ipv6cidr, cidr, "layer3")
+		o.Expect(err).NotTo(o.HaveOccurred())
 		//label userdefinednetwork with label app=udn
-		setUDNLabel(oc, ns2, udnName, "app=udn")
+		setUDNLabel(oc, cudnName, "app=udn")
 
 		exutil.By("3. Create RA to advertise the UDN network")
 		ra := routeAdvertisement{
@@ -774,22 +821,23 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		ra.createRA(oc)
 
 		exutil.By("4.  Verify  UDN network is advertised to external and other cluster nodes")
-		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, ns2+"_"+udnName)
+		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, "cluster_udn"+"_"+cudnName)
 		o.Eventually(func() bool {
 			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
 			return result
 		}, "60s", "10s").Should(o.BeTrue(), "BGP UDN route advertisement did not succeed!!")
-		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertised to external !!!", udnName, ns2)
+		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertised to external !!!", cudnName, ns2)
 
 		for _, node := range allNodes {
 			result := verifyBGPRoutesOnClusterNode(oc, node, externalFRRIP2, externalFRRIP1, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
 			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes as expected", node))
 		}
-		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertised to other cluster nodes !!!", udnName, ns2)
+		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertised to other cluster nodes !!!", cudnName, ns2)
 
 		exutil.By("5. Create a test pod in each namespace, verify each pod can be accessed from external because their default network and UDN are advertised")
 		var testpods []string
 		for _, ns := range allNS {
+			defer removeResource(oc, true, true, "StatefulSet", "hello", "-n", ns)
 			createResourceFromFile(oc, ns, statefulSetHelloPod)
 			podErr := waitForPodWithLabelReady(oc, ns, "app=hello")
 			exutil.AssertWaitPollNoErr(podErr, "The statefulSet pod is not ready")
@@ -831,14 +879,14 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
 			return result
 		}, "60s", "10s").Should(o.BeTrue(), "BGP UDN route advertisement did not succeed!!")
-		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s is still correctly advertised to external after frr-k8s pods restart !!!", udnName, ns2)
+		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s is still correctly advertised to external after frr-k8s pods restart !!!", cudnName, ns2)
 
 		exutil.By("7.2. Verify from cluster nodes")
 		for _, node := range allNodes {
 			result := verifyIPRoutesOnClusterNode(oc, node, externalFRRIP1, allNodes, podNetwork1Map, podNetwork2Map, nodesIP1Map, nodesIP2Map, true)
 			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table check for routes of defaulet network on node %s failed after frr-k8s pods restart", node))
 			result = verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
-			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes for UDN %s as expected after frr-k8s pods restart", node, udnName))
+			o.Expect(result).To(o.BeTrue(), fmt.Sprintf("ip routing table of node %s did not have all bgp routes for UDN %s as expected after frr-k8s pods restart", node, cudnName))
 		}
 		e2e.Logf("SUCCESS - BGP default network and UDN are still correctly advertised to other cluster nodes after frr-k8s pods restart !!!")
 
@@ -854,14 +902,16 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		Curlexternal2PodPass(oc, host, allNS[0], testpods2[0])
 		Curlexternal2UDNPodPass(oc, host, allNS[1], testpods2[1])
 	})
-	g.It("Author:zzhao-Critical-79214-UDN pod with NodePort and externalTrafficPolicy is Local/cluster service when BGP is advertise in LGW and SGW mode (UDN layer3)", func() {
+	g.It("Author:zzhao-Critical-79214-UDN pod with NodePort and externalTrafficPolicy is Local/cluster service when BGP is advertise in LGW and SGW mode (UDN layer3)[Serial]", func() {
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
 			pingPodNodeTemplate    = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
 			raTemplate             = filepath.Join(buildPruningBaseDir, "bgp/ra_template.yaml")
 			ipFamilyPolicy         = "SingleStack"
-			udnName                = "udn-79214-l3"
+			matchLabelKey          = "cudn-bgp"
+			matchValue             = "cudn-network-" + getRandomString()
+			cudnName               = "udn-79214-l3"
 		)
 
 		exutil.By("0. Get three worker nodes")
@@ -875,6 +925,9 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		ns1 := oc.Namespace()
 		oc.CreateNamespaceUDN()
 		ns2 := oc.Namespace()
+		defer oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, fmt.Sprintf("%s-", matchLabelKey)).Execute()
+		err = oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", ns2, fmt.Sprintf("%s=%s", matchLabelKey, matchValue)).Execute()
+		o.Expect(err).NotTo(o.HaveOccurred())
 		ns := []string{ns1, ns2}
 		for _, namespace := range ns {
 			err = exutil.SetNamespacePrivileged(oc, namespace)
@@ -895,11 +948,13 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 				ipFamilyPolicy = "PreferDualStack"
 			}
 		}
-		createGeneralUDNCRD(oc, ns2, udnName, ipv4cidr, ipv6cidr, cidr, "layer3")
+		defer removeResource(oc, true, true, "clusteruserdefinednetwork", cudnName)
+		_, err = applyCUDNtoMatchLabelNS(oc, matchLabelKey, matchValue, cudnName, ipv4cidr, ipv6cidr, cidr, "layer3")
+		o.Expect(err).NotTo(o.HaveOccurred())
 
 		exutil.By("Create RA to advertise the UDN")
 
-		setUDNLabel(oc, ns2, udnName, "app=udn")
+		setUDNLabel(oc, cudnName, "app=udn")
 		ra := routeAdvertisement{
 			name:              "udn",
 			networkLabelKey:   "app",
@@ -913,13 +968,13 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 
 		exutil.By("Check the UDN network was advertised on worker node")
 
-		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, ns2+"_"+udnName)
+		UDNnetwork_ipv6_ns1, UDNnetwork_ipv4_ns1 := getHostPodNetwork(oc, allNodes, "cluster_udn"+"_"+cudnName)
 		o.Eventually(func() bool {
 			result := verifyBGPRoutesOnClusterNode(oc, nodeList.Items[0].Name, externalFRRIP2, externalFRRIP1, allNodes, UDNnetwork_ipv4_ns1, UDNnetwork_ipv6_ns1, nodesIP1Map, nodesIP2Map, true)
 			return result
 		}, "60s", "10s").Should(o.BeTrue(), "BGP UDN route advertisement did not succeed!!")
 
-		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertise!!!", udnName, ns2)
+		e2e.Logf("SUCCESS - BGP UDN network %s for namespace %s advertise!!!", cudnName, ns2)
 		exutil.By("3. Create two pods and nodeport service with externalTrafficPolicy=Local in ns1 and ns2")
 		nodeportsLocal := []string{}
 		pods := make([]pingPodResourceNode, 2)
@@ -933,6 +988,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 					nodename:  nodeList.Items[j].Name,
 					template:  pingPodNodeTemplate,
 				}
+				defer removeResource(oc, true, true, "pod", pods[j].name, "-n", ns[i])
 				pods[j].createPingPodNode(oc)
 				waitPodReady(oc, ns[i], pods[j].name)
 			}
@@ -1001,14 +1057,16 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		CurlPod2NodePortFail(oc, ns[1], pods[1].name, nodeList.Items[1].Name, nodeportsLocal[0])
 	})
 
-	g.It("Author:meinli-Critical-79212-Validate pod2Service by BGP UDN in LGW and SGW (Layer3)", func() {
+	g.It("Author:meinli-NonPreRelease-Critical-79212-Validate pod2Service by BGP UDN in LGW and SGW (Layer3)[Serial]", func() {
 		var (
 			buildPruningBaseDir    = exutil.FixturePath("testdata", "networking")
 			pingPodTemplate        = filepath.Join(buildPruningBaseDir, "ping-for-pod-specific-node-template.yaml")
 			genericServiceTemplate = filepath.Join(buildPruningBaseDir, "service-generic-template.yaml")
 			testPodFile            = filepath.Join(buildPruningBaseDir, "testpod.yaml")
 			raTemplate             = filepath.Join(buildPruningBaseDir, "bgp/ra_template.yaml")
-			udnNames               = []string{"udn-network-ns1", "udn-network-ns2"}
+			matchLabelKey          = []string{"cudn-bgp", "cudn-bgp2"}
+			matchValue             = []string{"cudn-network1-" + getRandomString(), "cudn-network2-" + getRandomString()}
+			cudnNames              = []string{"udn-network-ns1", "udn-network-ns2"}
 			ipFamilyPolicy         = "SingleStack"
 		)
 
@@ -1039,10 +1097,14 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			cidr = []string{"2010:100:200::0/48", "2010:200:200::0/48"}
 		}
 
-		for i, ns := range udnNS {
-			createGeneralUDNCRD(oc, ns, udnNames[i], ipv4cidr[i], ipv6cidr[i], cidr[i], "layer3")
+		for i := 0; i < 2; i++ {
+			err := oc.AsAdmin().WithoutNamespace().Run("label").Args("ns", udnNS[i], fmt.Sprintf("%s=%s", matchLabelKey[i], matchValue[i])).Execute()
+			o.Expect(err).NotTo(o.HaveOccurred())
+			defer removeResource(oc, true, true, "clusteruserdefinednetwork", cudnNames[i])
+			_, err = applyCUDNtoMatchLabelNS(oc, matchLabelKey[i], matchValue[i], cudnNames[i], ipv4cidr[i], ipv6cidr[i], cidr[i], "layer3")
+			o.Expect(err).NotTo(o.HaveOccurred())
 			//label userdefinednetwork with label app=udn
-			setUDNLabel(oc, ns, udnNames[i], "app=udn")
+			setUDNLabel(oc, cudnNames[i], "app=udn")
 		}
 
 		exutil.By("3. Create RA to advertise the UDN network")
@@ -1059,7 +1121,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 
 		exutil.By("4. Verify two UDNs with matching networkSelector are advertised")
 		for i := 0; i < 2; i++ {
-			UDNnetwork_ipv6_ns, UDNnetwork_ipv4_ns := getHostPodNetwork(oc, allNodes, udnNS[i]+"_"+udnNames[i])
+			UDNnetwork_ipv6_ns, UDNnetwork_ipv4_ns := getHostPodNetwork(oc, allNodes, "cluster_udn"+"_"+cudnNames[i])
 			o.Eventually(func() bool {
 				result := verifyIPRoutesOnExternalFrr(host, allNodes, UDNnetwork_ipv4_ns, UDNnetwork_ipv6_ns, nodesIP1Map, nodesIP2Map, true)
 				return result
@@ -1073,6 +1135,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 			nodename:  nodeList.Items[0].Name,
 			template:  pingPodTemplate,
 		}
+		defer removeResource(oc, true, true, "pod", pod1ns1.name, "-n", udnNS[0])
 		pod1ns1.createPingPodNode(oc)
 		waitPodReady(oc, pod1ns1.namespace, pod1ns1.name)
 
@@ -1084,6 +1147,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 				nodename:  nodeList.Items[i].Name,
 				template:  pingPodTemplate,
 			}
+			defer removeResource(oc, true, true, "pod", pods[i].name, "-n", udnNS[0])
 			pods[i].createPingPodNode(oc)
 			waitPodReady(oc, pods[i].namespace, pods[i].name)
 			err := oc.AsAdmin().WithoutNamespace().Run("label").Args("-n", udnNS[0], "pod", pods[i].name, "name=hello-pod-"+strconv.Itoa(i), "--overwrite=true").Execute()
@@ -1113,6 +1177,7 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		}
 
 		exutil.By("8. Create udn pods in ns2")
+		defer removeResource(oc, true, true, "rc", "test-rc", "-n", udnNS[1])
 		createResourceFromFile(oc, udnNS[1], testPodFile)
 		err = waitForPodWithLabelReady(oc, udnNS[1], "name=test-pods")
 		exutil.AssertWaitPollNoErr(err, "this pod with label name=test-pods not ready")
@@ -1149,11 +1214,11 @@ var _ = g.Describe("[sig-networking] SDN ovn-kubernetes ibgp-udn", func() {
 		externalPublicHost := "www.google.com"
 		var tcpdumpCmd, cmdOnPod string
 		if ipStackType == "ipv4single" || ipStackType == "dualstack" {
-			tcpdumpCmd = fmt.Sprintf("timeout 60s tcpdump -c 2 -nni %s host %s", primaryInf, externalPublicHost)
+			tcpdumpCmd = fmt.Sprintf("timeout 30s tcpdump -c 2 -nni %s host %s", primaryInf, externalPublicHost)
 			cmdOnPod = "curl -I -k " + externalPublicHost
 		}
 		if ipStackType == "ipv6single" {
-			tcpdumpCmd = fmt.Sprintf("timeout 60s tcpdump -c 2 -nni %s ip6 host %s", primaryInf, externalPublicHost)
+			tcpdumpCmd = fmt.Sprintf("timeout 30s tcpdump -c 2 -nni %s ip6 host %s", primaryInf, externalPublicHost)
 			cmdOnPod = "curl -I -6 -k " + externalPublicHost
 		}
 		tcpdumOutput := getTcpdumpOnNodeCmdFromPod(oc, nodeNameNS3, tcpdumpCmd, ns3, testPodNameNS3[0], cmdOnPod)
