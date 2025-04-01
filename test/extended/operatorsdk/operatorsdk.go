@@ -448,7 +448,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-helm-rhel9-operator:v" + ocpversion))
 			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-operator-rhel9:v"+ocpversion)
 		} else {
-			replaceContent(dockerFile, "quay.io/operator-framework/helm-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-operator-rhel9:v"+ocpversion)
+			if os.Getenv("HelmPremergeTest") == "false" {
+				replaceContent(dockerFile, "quay.io/operator-framework/helm-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-rhel9-operator:v"+ocpversion)
+			} else {
+				replaceContent(dockerFile, "quay.io/operator-framework/helm-operator:v"+upstreamversion, "quay.io/olmqe/helm-operator-base:premergetest")
+			}
 		}
 
 		exutil.By("step: modify namespace")
@@ -907,7 +911,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		exutil.By("step: modify files to generate the quay.io/olmqe images.")
 		// update the Dockerfile
 		dockerFile := filepath.Join(tmpPath, "Dockerfile")
-		replaceContent(dockerFile, "quay.io/operator-framework/helm-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-operator-rhel9:v"+ocpversion)
+		if os.Getenv("HelmPremergeTest") == "false" {
+			replaceContent(dockerFile, "quay.io/operator-framework/helm-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-rhel9-operator:v"+ocpversion)
+		} else {
+			replaceContent(dockerFile, "quay.io/operator-framework/helm-operator:v"+upstreamversion, "quay.io/olmqe/helm-operator-base:premergetest")
+		}
 		// update the Makefile
 		makefileFilePath := filepath.Join(tmpPath, "Makefile")
 		replaceContent(makefileFilePath, "controller:latest", imageTag)
@@ -1255,7 +1263,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 		replaceContent(deployFilepath, ".Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion", ".Values.relatedImage")
 		// update the Dockerfile
 		dockerFile := filepath.Join(tmpPath, "Dockerfile")
-		replaceContent(dockerFile, "quay.io/operator-framework/helm-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-operator-rhel9:v"+ocpversion)
+		if os.Getenv("HelmPremergeTest") == "false" {
+			replaceContent(dockerFile, "quay.io/operator-framework/helm-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-rhel9-operator:v"+ocpversion)
+		} else {
+			replaceContent(dockerFile, "quay.io/operator-framework/helm-operator:v"+upstreamversion, "quay.io/olmqe/helm-operator-base:premergetest")
+		}
 		// copy the manager
 		err = copy(filepath.Join(dataPath, "manager.yaml"), filepath.Join(tmpPath, "config", "manager", "manager.yaml"))
 		o.Expect(err).NotTo(o.HaveOccurred())
@@ -1933,7 +1945,11 @@ var _ = g.Describe("[sig-operators] Operator_SDK should", func() {
 			o.Expect(content).To(o.ContainSubstring("registry.redhat.io/openshift4/ose-helm-rhel9-operator:v" + ocpversion))
 			replaceContent(dockerFile, "registry.redhat.io/openshift4/ose-helm-rhel9-operator:v"+ocpversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-operator-rhel9:v"+ocpversion)
 		} else {
-			replaceContent(dockerFile, "quay.io/operator-framework/helm-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-operator-rhel9:v"+ocpversion)
+			if os.Getenv("HelmPremergeTest") == "false" {
+				replaceContent(dockerFile, "quay.io/operator-framework/helm-operator:v"+upstreamversion, "brew.registry.redhat.io/rh-osbs/openshift-ose-helm-rhel9-operator:v"+ocpversion)
+			} else {
+				replaceContent(dockerFile, "quay.io/operator-framework/helm-operator:v"+upstreamversion, "quay.io/olmqe/helm-operator-base:premergetest")
+			}
 		}
 
 		exutil.By("modify namespace")

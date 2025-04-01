@@ -139,6 +139,43 @@ else
     export AnsiblePremergeTest="false"
 fi
 
+#get helmplugin
+if echo $INSTALL_TOOLS | grep -i 'helm' > /dev/null; then
+    unset http_proxy https_proxy
+    echo "------------------get helm------------------------"
+    array=(${INSTALL_TOOLS//;/ })  
+    for tool_name_index in ${array[@]}
+    do
+        if echo $tool_name_index | grep -i 'helm' > /dev/null; then
+            echo $tool_name_index
+            echo "get helm PR"
+            PR=`echo $INSTALL_TOOLS | tr -cd "[0-9]"`
+            echo "PR is ${PR}"
+        fi
+    done
+#    buildhelmimage $PR $WORKDIR
+
+    echo "get downstream code from PR ${PR} "
+    mkdir ${WORKSPACE}/helm
+    git clone https://github.com/openshift/ocp-release-operator-sdk.git ${WORKSPACE}/helm
+    cd ${WORKSPACE}/helm
+    git remote add downstream https://github.com/openshift/ocp-release-operator-sdk.git
+    git fetch downstream pull/${PR}/head:downstreamPR
+    git checkout downstreamPR
+    git status
+    sed -i 's#golang:1.22#quay.io/olmqe/golang:1.22#g' images/helm-operator/Dockerfile
+    podman build --quiet -t quay.io/olmqe/helm-operator-base:premergetest -f images/helm-operator/Dockerfile .
+    podman push quay.io/olmqe/helm-operator-base:premergetest
+    echo "build the helm image finished"
+    cd $WORKDIR
+    export HelmPremergeTest="true"
+    cd $WORKDIR
+    echo "------------------get helm Done------------------------"
+else
+    echo "skip get helm"
+    export HelmPremergeTest="false"
+fi
+
 #get hypershift
 if echo $INSTALL_TOOLS | grep -i 'hypershift' > /dev/null; then
     unset http_proxy https_proxy
