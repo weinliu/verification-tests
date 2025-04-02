@@ -40,18 +40,24 @@ describe('Content Security Policy tests', () => {
     cy.adminCLI(`oc adm policy add-cluster-role-to-user cluster-admin ${login_user}`);
   });
   after(() => {
-    ClusterSettingPage.goToConsolePlugins();
-    ClusterSettingPage.toggleConsolePlugin('console-customization', 'Disable');
-    cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
-      expect(result.stdout).not.include('"console-customization"')
+    cy.isTechPreviewNoUpgradeEnabled().then(value => {
+      if (value === false) {
+        cy.log('Skip the case clean up because TP not enabled!!');
+      } else {
+        ClusterSettingPage.goToConsolePlugins();
+        ClusterSettingPage.toggleConsolePlugin('console-customization', 'Disable');
+        cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
+          expect(result.stdout).not.include('"console-customization"')
+        });
+        ClusterSettingPage.toggleConsolePlugin('console-demo-plugin', 'Disable');
+        cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
+          expect(result.stdout).not.include('"console-demo-plugin"')
+        });
+        cy.adminCLI('oc delete -f ./fixtures/contentsecuritypolicy/console-demo-plugin-manifests-csp.yaml',{failOnNonZeroExit: false});
+        cy.adminCLI('oc delete -f ./fixtures/contentsecuritypolicy/console-customization-manifests-csp.yaml',{failOnNonZeroExit: false});
+        cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${login_user}`);
+      }
     });
-    ClusterSettingPage.toggleConsolePlugin('console-demo-plugin', 'Disable');
-    cy.adminCLI(`oc get console.operator cluster -o jsonpath='{.spec.plugins}'`).then((result) => {
-      expect(result.stdout).not.include('"console-demo-plugin"')
-    });
-    cy.adminCLI('oc delete -f ./fixtures/contentsecuritypolicy/console-demo-plugin-manifests-csp.yaml',{failOnNonZeroExit: false});
-    cy.adminCLI('oc delete -f ./fixtures/contentsecuritypolicy/console-customization-manifests-csp.yaml',{failOnNonZeroExit: false});
-    cy.adminCLI(`oc adm policy remove-cluster-role-from-user cluster-admin ${login_user}`);
   });
 
   // Content Security Policy basic functionality
